@@ -7,7 +7,6 @@ BIN_DIR="$PLUGIN_ROOT/bin"
 MCP_BINARY="$BIN_DIR/redit-mcp"
 
 REPO="bang9/ai-tools"
-VERSION="v1.0.0"
 
 # Check if binary exists and is executable
 if [ -x "$MCP_BINARY" ]; then
@@ -37,21 +36,30 @@ if [ "$OS" = "windows" ]; then
     BINARY_NAME="${BINARY_NAME}.exe"
 fi
 
+# Get latest release version from GitHub API
+echo "Fetching latest release version..." >&2
+VERSION=$(curl -sfSL "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name"' | head -1 | cut -d'"' -f4)
+
+if [ -z "$VERSION" ]; then
+    echo "Failed to fetch latest version, using fallback v1.0.0" >&2
+    VERSION="v1.0.0"
+fi
+
 DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/${BINARY_NAME}"
 
-echo "Downloading redit-mcp from ${DOWNLOAD_URL}..." >&2
+echo "Downloading redit-mcp ${VERSION} from ${DOWNLOAD_URL}..." >&2
 
 # Try to download pre-built binary
 if command -v curl &> /dev/null; then
     if curl -fsSL -o "$MCP_BINARY" "$DOWNLOAD_URL"; then
         chmod +x "$MCP_BINARY"
-        echo "redit-mcp downloaded successfully" >&2
+        echo "redit-mcp ${VERSION} downloaded successfully" >&2
         exit 0
     fi
 elif command -v wget &> /dev/null; then
     if wget -q -O "$MCP_BINARY" "$DOWNLOAD_URL"; then
         chmod +x "$MCP_BINARY"
-        echo "redit-mcp downloaded successfully" >&2
+        echo "redit-mcp ${VERSION} downloaded successfully" >&2
         exit 0
     fi
 fi

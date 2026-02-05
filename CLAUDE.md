@@ -42,8 +42,8 @@ Each plugin MUST include an `ensure-binary.sh` script that:
 ### Version Management
 
 - Use semantic versioning: `vMAJOR.MINOR.PATCH`
-- Update version in `ensure-binary.sh` when creating new releases
 - Tag format: `v1.0.0`, `v1.0.1`, etc.
+- `ensure-binary.sh` automatically fetches latest version from GitHub API (no manual update needed)
 
 ### Adding New Tools
 
