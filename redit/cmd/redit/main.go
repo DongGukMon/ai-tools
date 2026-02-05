@@ -5,7 +5,7 @@ import (
 	"os"
 	"text/tabwriter"
 
-	"github.com/anthropics/ai-tools/redit/internal/redit"
+	"github.com/bang9/ai-tools/redit/internal/redit"
 )
 
 const usage = `redit - Remote Edit Layer for AI-assisted document editing
