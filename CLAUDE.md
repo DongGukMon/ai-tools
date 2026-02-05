@@ -24,11 +24,11 @@ GOOS=linux GOARCH=amd64 go build -o dist/<tool>-linux-amd64 ./cmd/<tool>
 GOOS=windows GOARCH=amd64 go build -o dist/<tool>-windows-amd64.exe ./cmd/<tool>
 ```
 
-**Release Process:**
-1. Build binaries for all platforms
-2. Create git tag with semantic version (e.g., `v1.0.0`)
-3. Create GitHub Release with the tag
-4. Upload all platform binaries to the Release
+**Release Process (Automated via GitHub Actions):**
+1. Update version in `ensure-binary.sh`
+2. Commit changes
+3. Create and push tag: `git tag v1.x.x && git push --tags`
+4. GitHub Actions automatically builds all platforms and creates Release
 
 ### Auto-Download Script
 
