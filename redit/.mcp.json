@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "redit": {
+      "command": "${CLAUDE_PLUGIN_ROOT}/bin/redit-mcp",
+      "env": {
+        "REDIT_HOME": "${HOME}/.redit"
+      }
+    }
+  }
+}

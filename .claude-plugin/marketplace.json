@@ -1,0 +1,26 @@
+{
+  "name": "ai-tools",
+  "owner": {
+    "name": "Airen Kang",
+    "email": "bang9@users.noreply.github.com"
+  },
+  "metadata": {
+    "description": "A collection of tools for Claude Code to operate more efficiently",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "redit",
+      "source": "./redit",
+      "description": "Remote Edit Layer - Local cache for efficiently editing remote documents that don't support partial updates",
+      "version": "1.0.0",
+      "author": {
+        "name": "Airen Kang"
+      },
+      "repository": "https://github.com/bang9/ai-tools",
+      "license": "MIT",
+      "keywords": ["remote", "edit", "cache", "confluence", "notion", "document"],
+      "category": "productivity"
+    }
+  ]
+}
