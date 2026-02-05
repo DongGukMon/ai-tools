@@ -1,157 +1,157 @@
-# redit - Claude 사용 가이드
+# redit - Claude Usage Guide
 
-## 개요
+## Overview
 
-`redit`은 원격 문서(Confluence, Notion 등)를 효율적으로 편집하기 위한 로컬 캐시 레이어입니다.
-부분 수정이 불가능한 API에 대해, 로컬에서 효율적으로 편집 후 한 번의 업데이트만 수행합니다.
+`redit` is a local cache layer for efficiently editing remote documents (Confluence, Notion, etc.).
+For APIs that don't support partial updates, edit locally and perform a single update.
 
-## 핵심 원칙
+## Core Principles
 
-1. **MCP로 가져오고, redit으로 편집하고, MCP로 업데이트**
-2. **Edit 도구로 부분 수정** - 전체 재생성 없이 필요한 부분만 수정
-3. **dirty일 때만 커밋** - 변경 없으면 API 호출 스킵
+1. **Fetch via MCP, edit with redit, update via MCP**
+2. **Use Edit tool for partial modifications** - no need to regenerate entire content
+3. **Commit only when dirty** - skip API call if no changes
 
-## 명령어
+## Commands
 
 ```bash
-redit init <key>     # stdin → 원본+사본 생성, 사본 경로 반환
-redit get <key>      # 사본 경로 반환
-redit read <key>     # 사본 내용 출력 (stdout)
-redit status <key>   # dirty/clean 상태
-redit diff <key>     # 원본 vs 사본 차이
-redit reset <key>    # 사본을 원본으로 복원
-redit drop <key>     # 삭제
-redit list           # 목록
+redit init <key>     # stdin → create origin + working, return working path
+redit get <key>      # return working path
+redit read <key>     # output working content to stdout
+redit status <key>   # dirty/clean status
+redit diff <key>     # diff between origin and working
+redit reset <key>    # restore working to origin
+redit drop <key>     # delete all files
+redit list           # list all keys
 ```
 
-## 워크플로우
+## Workflow
 
-### 기본 패턴
+### Basic Pattern
 
 ```
-1. MCP로 문서 가져오기
+1. Fetch document via MCP
    content = mcp__xxx__get_document(id)
 
-2. redit에 저장
+2. Store in redit
    path = $(echo "$content" | redit init "<service>:<id>")
 
-3. Edit 도구로 부분 수정 (여러 번 가능)
+3. Partial edit with Edit tool (can repeat)
    Edit <path>: old_string → new_string
 
-4. 상태 확인
-   redit status "<service>:<id>"  # dirty면 계속
+4. Check status
+   redit status "<service>:<id>"  # if dirty, continue
 
-5. 최종 내용으로 MCP 업데이트
+5. Update via MCP with final content
    final = $(redit read "<service>:<id>")
    mcp__xxx__update_document(id, final)
 
-6. 정리
+6. Cleanup
    redit drop "<service>:<id>"
 ```
 
-### key 네이밍 규칙
+### Key Naming Convention
 
-AI가 자유롭게 결정하되, 일관성 유지:
-- `<service>:<id>` - 기본 형식
-- `<service>:<id>:<version>` - 버전/캐시 구분 필요시
+AI decides freely, but maintain consistency:
+- `<service>:<id>` - basic format
+- `<service>:<id>:<version>` - when version/cache distinction needed
 
-예시:
+Examples:
 - `confluence:12345`
 - `notion:page-abc-def`
-- `confluence:12345:1705312200` (updated_at 포함)
+- `confluence:12345:1705312200` (with updated_at)
 
-## 사용 케이스
+## Use Cases
 
-### Case 1: Confluence 문서 특정 섹션 수정
+### Case 1: Edit Specific Section in Confluence
 
-사용자: "Confluence 페이지 12345의 '개요' 섹션을 업데이트해줘"
+User: "Update the 'Overview' section in Confluence page 12345"
 
 ```bash
-# 1. 문서 가져오기
+# 1. Fetch document
 content=$(mcp__atlassian__get_page --id "12345")
 
-# 2. redit에 저장
+# 2. Store in redit
 path=$(echo "$content" | redit init "confluence:12345")
 # → /Users/xxx/.redit/abc123/working
 
-# 3. 부분 수정 (Edit 도구 사용)
-# Edit path: "## 개요\n기존 내용" → "## 개요\n새로운 내용"
+# 3. Partial edit (using Edit tool)
+# Edit path: "## Overview\nold content" → "## Overview\nnew content"
 
-# 4. 변경 확인
+# 4. Verify changes
 redit diff "confluence:12345"
 
-# 5. 커밋
+# 5. Commit
 final=$(redit read "confluence:12345")
 mcp__atlassian__update_page --id "12345" --content "$final"
 
-# 6. 정리
+# 6. Cleanup
 redit drop "confluence:12345"
 ```
 
-### Case 2: 여러 섹션 순차 수정
+### Case 2: Sequential Multi-Section Edits
 
 ```bash
-# init 후
+# After init
 path=$(echo "$content" | redit init "confluence:12345")
 
-# 여러 번 Edit
-# Edit: Section 1 수정
-# Edit: Section 2 수정
-# Edit: Section 3 수정
+# Multiple edits
+# Edit: Section 1
+# Edit: Section 2
+# Edit: Section 3
 
-# 한 번에 커밋
+# Single commit
 redit status "confluence:12345"  # dirty
 final=$(redit read "confluence:12345")
 mcp__atlassian__update_page(...)
 ```
 
-### Case 3: 수정 중 실수 → 복구
+### Case 3: Mistake During Editing → Recovery
 
 ```bash
-# 수정하다가 망침
+# Made a mistake
 redit status "confluence:12345"  # dirty
 
-# 원본으로 되돌리기
+# Restore to original
 redit reset "confluence:12345"
 redit status "confluence:12345"  # clean
 
-# 다시 수정 시작
+# Start editing again
 ```
 
-### Case 4: 변경 없음 → 스킵
+### Case 4: No Changes → Skip
 
 ```bash
-# 확인만 하고 수정 안 함
+# Reviewed but made no edits
 redit status "confluence:12345"  # clean
 
-# API 호출 불필요 - drop만
+# No API call needed - just drop
 redit drop "confluence:12345"
 ```
 
-## 주의사항
+## Important Notes
 
-1. **init 전에 기존 key 확인**
-   - 이미 존재하면 에러 발생
-   - 필요시 먼저 `drop` 후 `init`
+1. **Check existing key before init**
+   - Error if already exists
+   - `drop` first if needed, then `init`
 
-2. **커밋 후 반드시 drop**
-   - 메모리/디스크 정리
-   - 다음 편집 사이클 준비
+2. **Always drop after commit**
+   - Clean up memory/disk
+   - Prepare for next edit cycle
 
-3. **긴 문서는 Edit의 context 활용**
-   - 충분한 surrounding context로 unique match 보장
+3. **Use sufficient context for long documents**
+   - Ensure unique match with surrounding context in Edit
 
-4. **캐시 전략은 AI가 판단**
-   - updated_at 변경 감지 시 새 key로 init
-   - 같은 key 재사용은 drop 후 init
+4. **AI decides caching strategy**
+   - Init with new key when updated_at changes
+   - Drop first before reusing same key
 
-## 바이너리 위치
+## Binary Location
 
 ```
 /Users/airenkang/Desktop/side/ai-tools/redit/redit
 ```
 
-또는 PATH에 추가 후:
+Or after adding to PATH:
 ```
 redit <command>
 ```
