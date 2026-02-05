@@ -1,6 +1,11 @@
 # Binaries
 redit/redit
 redit/bin/
+redit/dist/
+
+# Local files
+blog-post.md
+.claude/
 *.exe
 *.dll
 *.so
