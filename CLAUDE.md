@@ -45,6 +45,14 @@ Each plugin MUST include an `ensure-binary.sh` script that:
 - Update version in `ensure-binary.sh` when creating new releases
 - Tag format: `v1.0.0`, `v1.0.1`, etc.
 
+### Adding New Tools
+
+When adding a new tool to this repository:
+1. Create tool directory with the standard plugin structure
+2. Add build commands to `.github/workflows/release.yml`
+3. Add binary files to the release files list in the workflow
+4. Update root `README.md` with the new tool
+
 ## Plugin Structure
 
 Each tool should follow this structure:
