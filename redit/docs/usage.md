@@ -1,114 +1,114 @@
-# redit 사용법
+# redit Usage
 
-## 설치
+## Installation
 
 ```bash
 cd ai-tools/redit
 go build -o redit ./cmd/redit
 
-# (선택) PATH에 추가
+# (Optional) Add to PATH
 sudo ln -s $(pwd)/redit /usr/local/bin/redit
 ```
 
-## 명령어 레퍼런스
+## Command Reference
 
 ### init
 
-stdin에서 내용을 읽어 원본과 작업 사본을 생성합니다.
+Reads content from stdin and creates origin and working copy.
 
 ```bash
 echo "content" | redit init <key>
-# 출력: 작업 파일 경로
+# Output: working file path
 ```
 
-- 이미 존재하는 key면 에러
-- 원본(origin)과 사본(working) 두 파일 생성
+- Error if key already exists
+- Creates two files: origin and working
 
 ### get
 
-작업 파일 경로를 반환합니다.
+Returns the working file path.
 
 ```bash
 redit get <key>
-# 출력: /Users/xxx/.redit/hash/working
+# Output: /Users/xxx/.redit/hash/working
 ```
 
 ### read
 
-작업 파일 내용을 stdout으로 출력합니다.
+Outputs working file content to stdout.
 
 ```bash
 redit read <key>
-# 출력: 파일 내용
+# Output: file content
 ```
 
 ### status
 
-원본 대비 변경 여부를 확인합니다.
+Checks if modified compared to origin.
 
 ```bash
 redit status <key>
-# 출력: dirty 또는 clean
+# Output: dirty or clean
 ```
 
 ### diff
 
-원본과 작업 파일의 차이를 unified diff 형식으로 출력합니다.
+Shows difference between origin and working in unified diff format.
 
 ```bash
 redit diff <key>
-# 출력: unified diff 또는 "no changes"
+# Output: unified diff or "no changes"
 ```
 
 ### reset
 
-작업 파일을 원본으로 되돌립니다.
+Restores working file to origin.
 
 ```bash
 redit reset <key>
-# 출력: reset complete
+# Output: reset complete
 ```
 
 ### drop
 
-key에 해당하는 모든 파일을 삭제합니다.
+Deletes all files for the key.
 
 ```bash
 redit drop <key>
-# 출력: dropped
+# Output: dropped
 ```
 
 ### list
 
-관리 중인 모든 key 목록을 출력합니다.
+Lists all managed keys.
 
 ```bash
 redit list
-# 출력:
+# Output:
 # KEY            STATUS  PATH
 # confluence:123 dirty   /Users/xxx/.redit/abc/working
 # notion:456     clean   /Users/xxx/.redit/def/working
 ```
 
-## 저장 구조
+## Storage Structure
 
 ```
 ~/.redit/
 └── <key-hash>/
     ├── meta.json   # {"key": "...", "created_at": "..."}
-    ├── origin      # 원본 (불변)
-    └── working     # 작업 사본 (Edit 대상)
+    ├── origin      # Original (immutable)
+    └── working     # Working copy (Edit target)
 ```
 
-## 에러 처리
+## Error Handling
 
-| 에러 | 원인 | 해결 |
-|------|------|------|
-| key already exists | 이미 init된 key | drop 후 다시 init |
-| key not found | 존재하지 않는 key | init 먼저 실행 |
+| Error | Cause | Solution |
+|-------|-------|----------|
+| key already exists | Key already initialized | drop first, then init again |
+| key not found | Key doesn't exist | Run init first |
 
-## 팁
+## Tips
 
-1. **key는 의미있게**: `service:id` 형식 권장
-2. **버전 구분 필요시**: `service:id:version` 형식
-3. **작업 완료 후 정리**: 항상 drop으로 마무리
+1. **Use meaningful keys**: `service:id` format recommended
+2. **When version distinction needed**: `service:id:version` format
+3. **Clean up after work**: Always finish with drop
