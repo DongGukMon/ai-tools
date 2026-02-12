@@ -145,13 +145,13 @@ redit drop "confluence:12345"
    - Init with new key when updated_at changes
    - Drop first before reusing same key
 
-## Binary Location
+## Installation
 
-```
-/Users/airenkang/Desktop/side/ai-tools/redit/redit
+```bash
+curl -fsSL https://raw.githubusercontent.com/bang9/ai-tools/main/redit/install.sh | bash
 ```
 
-Or after adding to PATH:
-```
-redit <command>
+Or build locally:
+```bash
+make build-cli
 ```
