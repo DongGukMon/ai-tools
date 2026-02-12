@@ -1,16 +1,15 @@
-name: Release
+name: "redit: Release"
 
 on:
   push:
     tags:
-      - 'v*'
+      - 'redit/v*'
 
 permissions:
   contents: write
 
 jobs:
-  redit:
-    name: redit
+  release:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

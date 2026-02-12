@@ -47,7 +47,7 @@ detect_arch() {
 # Get latest version from GitHub API
 get_latest_version() {
     local version
-    version=$(curl -sfSL "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name"' | head -1 | cut -d'"' -f4)
+    version=$(curl -sfSL "https://api.github.com/repos/${REPO}/releases" | grep '"tag_name"' | grep '"redit/' | head -1 | cut -d'"' -f4)
     if [ -z "$version" ]; then
         error "Failed to fetch latest version from GitHub"
     fi

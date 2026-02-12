@@ -38,11 +38,11 @@ fi
 
 # Get latest release version from GitHub API
 echo "Fetching latest release version..." >&2
-VERSION=$(curl -sfSL "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name"' | head -1 | cut -d'"' -f4)
+VERSION=$(curl -sfSL "https://api.github.com/repos/${REPO}/releases" | grep '"tag_name"' | grep '"redit/' | head -1 | cut -d'"' -f4)
 
 if [ -z "$VERSION" ]; then
-    echo "Failed to fetch latest version, using fallback v1.0.0" >&2
-    VERSION="v1.0.0"
+    echo "Failed to fetch latest version, using fallback redit/v1.0.0" >&2
+    VERSION="redit/v1.0.0"
 fi
 
 DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/${BINARY_NAME}"

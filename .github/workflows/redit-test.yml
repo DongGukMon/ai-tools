@@ -1,4 +1,4 @@
-name: Test
+name: "redit: Test"
 
 on:
   push:
@@ -11,8 +11,7 @@ on:
       - 'redit/**'
 
 jobs:
-  redit:
-    name: redit
+  test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
