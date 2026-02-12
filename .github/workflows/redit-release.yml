@@ -3,7 +3,7 @@ name: "redit: Release"
 on:
   push:
     tags:
-      - 'redit/v*'
+      - 'v*'
 
 permissions:
   contents: write

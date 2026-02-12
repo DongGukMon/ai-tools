@@ -18,15 +18,15 @@ All tools with compiled binaries MUST provide pre-built binaries for users witho
 
 ### Version Management
 
-- Tag format: `<tool>/v<MAJOR>.<MINOR>.<PATCH>` (e.g., `redit/v1.0.0`)
-- Each tool has its own independent version
-- `ensure-binary.sh` and `install.sh` fetch the latest version for their tool from GitHub API
+- Tag format: `v<MAJOR>.<MINOR>.<PATCH>` (e.g., `v1.2.0`)
+- All tools share the same version and are released together
+- `ensure-binary.sh` and `install.sh` fetch the latest version from GitHub API
 
 ### Release Process
 
 1. Commit changes
-2. Create and push tool-specific tag: `git tag <tool>/v1.x.x && git push --tags`
-3. GitHub Actions automatically builds all platforms and creates Release
+2. Create and push tag: `git tag v1.x.x && git push --tags`
+3. GitHub Actions automatically builds all tools and creates Release
 
 ## CI/CD
 
@@ -45,15 +45,14 @@ Each tool has its own dedicated workflow files:
 - Runs `go test ./...`
 
 **Release workflow** (`<tool>-release.yml`):
-- Triggers on tag push matching `<tool>/v*`
-- Builds cross-platform binaries
-- Creates GitHub Release
+- Triggers on tag push matching `v*`
+- Builds cross-platform binaries and attaches to GitHub Release
 
 ### Adding New Workflows
 
 When adding a new tool:
 1. Create `<tool>-test.yml` with path filter for `<tool>/**`
-2. Create `<tool>-release.yml` with tag filter for `<tool>/v*`
+2. Create `<tool>-release.yml` with tag trigger `v*`
 
 ## Plugin Structure
 
