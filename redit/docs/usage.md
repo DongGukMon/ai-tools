@@ -2,6 +2,16 @@
 
 ## Installation
 
+### Quick Install (Recommended)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/bang9/ai-tools/main/redit/install.sh | bash
+```
+
+### Build from Source
+
+Requires Go 1.21+.
+
 ```bash
 cd ai-tools/redit
 go build -o redit ./cmd/redit

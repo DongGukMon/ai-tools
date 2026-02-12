@@ -62,10 +62,12 @@ Each tool should follow this structure:
 ├── .claude-plugin/
 │   └── plugin.json       # Plugin manifest
 ├── .mcp.json             # MCP server configuration
+├── install.sh            # One-liner install script (curl | bash)
 ├── skills/               # Skills for guided workflows
 ├── scripts/
 │   └── ensure-binary.sh  # Auto-download script
 ├── cmd/
+│   ├── <tool>/           # CLI entry point
 │   └── <tool>-mcp/       # MCP server entry point
 ├── internal/             # Shared logic
 └── dist/                 # Built binaries (gitignored)
