@@ -94,7 +94,11 @@ export async function analyzeSession(
   apiKey?: string,
   model?: string,
 ): Promise<AnalysisResult> {
-  const { query } = await import("@anthropic-ai/claude-agent-sdk");
+  // Use require() instead of dynamic import() — esbuild's ESM banner creates
+  // a require function bound to the bundle location, which correctly resolves
+  // node_modules. Dynamic import() resolves from the caller's URL, which may
+  // differ from the bundle location in plugin environments.
+  const { query } = require("@anthropic-ai/claude-agent-sdk");
 
   const prompt = buildAnalysisPrompt(newTurns, sessionSummary, cwd);
 
@@ -121,7 +125,9 @@ export async function analyzeSession(
       prompt,
       options: {
         allowedTools: [],
-        maxTurns: 1,
+        // maxTurns must be > 1 — Agent SDK structured output validation
+        // consumes additional turns for schema retry.
+        maxTurns: 3,
         tools: [],
         model: model ?? "claude-haiku-4-5-20251001",
         effort: "low" as const,
