@@ -167,6 +167,7 @@ export class Store {
         }
         cfg.hook_mode = value;
         break;
+      case "debug": cfg.debug = value === "true"; break;
       default: throw new Error(`Unknown config key: ${key}`);
     }
     atomicWrite(join(this.baseDir, "config.json"), JSON.stringify(cfg, null, 2), 0o600);

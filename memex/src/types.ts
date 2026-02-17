@@ -33,6 +33,7 @@ export interface Config {
   embedding_enabled: boolean;
   model: string;
   hook_mode: HookMode;
+  debug: boolean;
 }
 
 export function defaultConfig(): Config {
@@ -40,6 +41,7 @@ export function defaultConfig(): Config {
     embedding_enabled: true,
     model: "claude-haiku-4-5-20251001",
     hook_mode: "session_end",
+    debug: false,
   };
 }
 

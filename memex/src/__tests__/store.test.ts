@@ -270,6 +270,7 @@ describe("Config", () => {
     assert.equal(cfg.model, "claude-haiku-4-5-20251001");
     assert.equal(cfg.embedding_enabled, true);
     assert.equal(cfg.hook_mode, "session_end");
+    assert.equal(cfg.debug, false);
   });
 
   it("set and get", () => {
@@ -278,12 +279,14 @@ describe("Config", () => {
     store.setConfig("embedding_enabled", "true");
     store.setConfig("model", "claude-sonnet-4-5-20250929");
     store.setConfig("hook_mode", "realtime");
+    store.setConfig("debug", "true");
 
     const cfg = store.getConfig();
     assert.equal(cfg.auth_token, "test-token");
     assert.equal(cfg.embedding_enabled, true);
     assert.equal(cfg.model, "claude-sonnet-4-5-20250929");
     assert.equal(cfg.hook_mode, "realtime");
+    assert.equal(cfg.debug, true);
   });
 
   it("unknown key throws", () => {
