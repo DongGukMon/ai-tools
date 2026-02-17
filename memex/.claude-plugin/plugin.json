@@ -1,0 +1,38 @@
+{
+  "name": "memex",
+  "version": "1.0.0",
+  "description": "Local Knowledge Graph for AI — stores, connects, and retrieves knowledge across conversations",
+  "author": {
+    "name": "Airen Kang",
+    "url": "https://github.com/bang9"
+  },
+  "repository": "https://github.com/bang9/ai-tools",
+  "keywords": ["knowledge", "graph", "memory", "search", "notes"],
+  "mcpServers": "./.mcp.json",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/ensure-binary.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PLUGIN_ROOT}/dist/hook.js",
+            "async": true,
+            "timeout": 120
+          }
+        ]
+      }
+    ]
+  }
+}

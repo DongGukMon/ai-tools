@@ -2,6 +2,8 @@
 redit/redit
 redit/bin/
 redit/dist/
+memex/dist/
+memex/node_modules/
 
 # Local files
 blog-post.md
@@ -32,3 +34,4 @@ Thumbs.db
 
 # Local data
 ~/.redit/
+~/.memex/
