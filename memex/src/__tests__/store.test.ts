@@ -269,6 +269,7 @@ describe("Config", () => {
     const cfg = store.getConfig();
     assert.equal(cfg.model, "claude-haiku-4-5-20251001");
     assert.equal(cfg.embedding_enabled, true);
+    assert.equal(cfg.hook_mode, "session_end");
   });
 
   it("set and get", () => {
@@ -276,16 +277,23 @@ describe("Config", () => {
     store.setConfig("auth_token", "test-token");
     store.setConfig("embedding_enabled", "true");
     store.setConfig("model", "claude-sonnet-4-5-20250929");
+    store.setConfig("hook_mode", "realtime");
 
     const cfg = store.getConfig();
     assert.equal(cfg.auth_token, "test-token");
     assert.equal(cfg.embedding_enabled, true);
     assert.equal(cfg.model, "claude-sonnet-4-5-20250929");
+    assert.equal(cfg.hook_mode, "realtime");
   });
 
   it("unknown key throws", () => {
     const { store } = newTestStore();
     assert.throws(() => store.setConfig("unknown", "value"));
+  });
+
+  it("invalid hook_mode throws", () => {
+    const { store } = newTestStore();
+    assert.throws(() => store.setConfig("hook_mode", "invalid"), /Invalid hook_mode/);
   });
 
   it("hook_min_turns is no longer a valid config key", () => {

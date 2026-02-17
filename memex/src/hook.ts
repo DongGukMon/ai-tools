@@ -26,7 +26,7 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
-  const { session_id, transcript_path, cwd } = hookInput;
+  const { session_id, transcript_path, cwd, hook_event_name } = hookInput;
   if (!session_id || !transcript_path) {
     console.error("hook: missing session_id or transcript_path");
     process.exit(0);
@@ -34,6 +34,12 @@ async function main(): Promise<void> {
 
   const store = new Store();
   const cfg = store.getConfig();
+
+  // Check hook mode: only run on matching event
+  const expectedEvent = cfg.hook_mode === "realtime" ? "Stop" : "SessionEnd";
+  if (hook_event_name && hook_event_name !== expectedEvent) {
+    process.exit(0);
+  }
 
   // Read cursor for this session
   const cursor = readCursor(store.getBaseDir(), session_id);

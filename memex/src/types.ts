@@ -25,17 +25,21 @@ export interface Relation {
   type: string; // relates_to, depends_on, contradicts, supersedes, elaborates, blocks
 }
 
+export type HookMode = "realtime" | "session_end";
+
 export interface Config {
   auth_token?: string;
   api_key?: string;
   embedding_enabled: boolean;
   model: string;
+  hook_mode: HookMode;
 }
 
 export function defaultConfig(): Config {
   return {
     embedding_enabled: true,
     model: "claude-haiku-4-5-20251001",
+    hook_mode: "session_end",
   };
 }
 
