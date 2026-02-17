@@ -24,12 +24,13 @@ This happens automatically in the background — no manual intervention needed.
 ## MCP Tools Reference
 
 ### `mcp__memex__search`
-Search notes by filters. When a query is provided, results are ranked by semantic (cosine) similarity.
+Search notes by filters. When a query is provided, results are ranked by semantic (cosine) similarity and include a `similarity` score (0-1).
 - `tag` (string, optional) — filter by tag
 - `source` (string, optional) — filter by source key ("project:path")
 - `query` (string, optional) — semantic similarity search query
 - `type` (string, optional) — filter by type
 - `status` (string, optional) — filter by status
+- `min_score` (string, optional) — minimum similarity score threshold (0-1). Only applies when `query` is provided.
 
 ### `mcp__memex__context`
 BFS graph traversal from notes matching a source path.

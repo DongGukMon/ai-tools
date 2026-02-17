@@ -118,7 +118,9 @@ describe("Search", () => {
     store.add({ content: "typescript note", tags: ["typescript"] });
     store.add({ content: "python note", tags: ["python"] });
     store.add({ content: "both", tags: ["typescript", "python"] });
-    assert.equal((await search(store, { tag: "typescript" })).length, 2);
+    const results = await search(store, { tag: "typescript" });
+    assert.equal(results.length, 2);
+    assert.equal(results[0].score, undefined, "no score without query");
   });
 
   it("by source prefix", async () => {
@@ -144,7 +146,7 @@ describe("Search", () => {
     assert.equal((await search(store, { status: "open" })).length, 1);
   });
 
-  it("by query (cosine similarity)", async () => {
+  it("by query (cosine similarity) includes scores", async () => {
     const { store } = newTestStore();
     const id1 = store.add({ content: "gRPC was chosen for its type safety and code generation" });
     const id2 = store.add({ content: "REST API is simpler but lacks type safety" });
@@ -157,11 +159,37 @@ describe("Search", () => {
 
     const results = await search(store, { query: "type safety" });
     assert.equal(results.length, 3);
+    // All results should have scores
+    for (const r of results) {
+      assert.ok(r.score != null, "query results should include score");
+    }
     // type safety related notes should rank higher
     assert.ok(
-      results[0].content.includes("type safety") || results[1].content.includes("type safety"),
+      results[0].note.content.includes("type safety") || results[1].note.content.includes("type safety"),
       "type safety notes should rank near top",
     );
+    // scores should be descending
+    assert.ok(results[0].score! >= results[1].score!, "scores should be descending");
+  });
+
+  it("min_score filters low-scoring results", async () => {
+    const { store } = newTestStore();
+    const id1 = store.add({ content: "gRPC type safety" });
+    const id2 = store.add({ content: "completely unrelated database migration" });
+
+    store.setEmbedding(id1, bowEmbedding("gRPC type safety"));
+    store.setEmbedding(id2, bowEmbedding("completely unrelated database migration"));
+
+    const all = await search(store, { query: "type safety" });
+    assert.equal(all.length, 2);
+
+    // Use a threshold that should filter out the unrelated note
+    const highScore = all[0].score!;
+    const filtered = await search(store, { query: "type safety", min_score: highScore });
+    assert.ok(filtered.length >= 1);
+    for (const r of filtered) {
+      assert.ok(r.score! >= highScore, `score ${r.score} should be >= ${highScore}`);
+    }
   });
 
   it("combined filters", async () => {

@@ -1,8 +1,8 @@
-import type { Note, NoteWithRelations, SearchParams, Relation } from "./types.js";
+import type { Note, NoteWithRelations, SearchParams, SearchResult, Relation } from "./types.js";
 import { Store } from "./store.js";
 import { computeEmbedding } from "./embedder.js";
 
-export async function search(store: Store, params: SearchParams): Promise<Note[]> {
+export async function search(store: Store, params: SearchParams): Promise<SearchResult[]> {
   const tags = store.tagsIndex();
   const sources = store.sourcesIndex();
 
@@ -64,23 +64,34 @@ export async function search(store: Store, params: SearchParams): Promise<Note[]
     const queryEmb = await computeEmbedding(params.query);
     const allEmbs = store.allEmbeddings();
 
-    const scored: { note: Note; score: number }[] = [];
+    const scored: SearchResult[] = [];
     for (const note of candidates) {
       const emb = allEmbs[note.id];
-      if (emb) {
-        const sim = cosineSimilarity(queryEmb, emb);
-        scored.push({ note, score: sim });
-      } else {
-        // Notes without embeddings get score 0 (migration safety)
-        scored.push({ note, score: 0 });
-      }
+      const score = emb ? cosineSimilarity(queryEmb, emb) : 0;
+      scored.push({ note, score });
     }
 
-    scored.sort((a, b) => b.score - a.score);
-    candidates = scored.map((s) => s.note);
+    scored.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+
+    // Apply min_score filter
+    let results: SearchResult[] = scored;
+    if (params.min_score != null) {
+      results = results.filter((r) => (r.score ?? 0) >= params.min_score!);
+    }
+
+    // Apply limit
+    if (params.limit != null && params.limit > 0) {
+      return results.slice(0, params.limit);
+    }
+
+    return results;
   }
 
-  return candidates;
+  let results = candidates.map((note) => ({ note }));
+  if (params.limit != null && params.limit > 0) {
+    return results.slice(0, params.limit);
+  }
+  return results;
 }
 
 export function context(store: Store, source: string, maxHops = 3): NoteWithRelations[] {

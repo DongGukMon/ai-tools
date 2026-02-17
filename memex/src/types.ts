@@ -77,9 +77,9 @@ export interface NoteCandidate {
 }
 
 export const SIMILARITY_THRESHOLDS = {
-  SUPERSEDE: 0.9,
-  UPDATE: 0.7,
-  RELATE: 0.4,
+  SUPERSEDE: 0.8,
+  UPDATE: 0.55,
+  RELATE: 0.2,
 } as const;
 
 export type RoutingDecision =
@@ -88,12 +88,19 @@ export type RoutingDecision =
   | { action: "add_related"; existingId: string; similarity: number }
   | { action: "add_independent" };
 
+export interface SearchResult {
+  note: Note;
+  score?: number;
+}
+
 export interface SearchParams {
   tag?: string;
   source?: string;
   query?: string;
   type?: string;
   status?: string;
+  min_score?: number;
+  limit?: number;
 }
 
 export function nowRFC3339(): string {

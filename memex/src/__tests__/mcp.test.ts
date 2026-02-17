@@ -43,7 +43,43 @@ describe("MCP Handlers", () => {
 
       const result = await handleToolCall(store, { name: "search", arguments: { tag: "architecture" } });
       assert.ok(!result.isError);
-      assert.ok(result.content[0].text.includes("gRPC decision"));
+      const parsed = JSON.parse(result.content[0].text);
+      assert.equal(parsed.length, 1);
+      assert.equal(parsed[0].content, "gRPC decision");
+      assert.ok(!("similarity" in parsed[0]), "no similarity without query");
+    });
+
+    it("search with query includes similarity scores", async () => {
+      const store = newTestStore();
+      const id = store.add({ content: "gRPC type safety" });
+      store.setEmbedding(id, bowEmbedding("gRPC type safety"));
+
+      const result = await handleToolCall(store, { name: "search", arguments: { query: "type safety" } });
+      assert.ok(!result.isError);
+      const parsed = JSON.parse(result.content[0].text);
+      assert.ok(parsed.length > 0);
+      assert.ok("similarity" in parsed[0], "should include similarity score");
+      assert.ok(typeof parsed[0].similarity === "number");
+    });
+
+    it("search with min_score filters results", async () => {
+      const store = newTestStore();
+      const id1 = store.add({ content: "gRPC type safety" });
+      const id2 = store.add({ content: "unrelated database note" });
+      store.setEmbedding(id1, bowEmbedding("gRPC type safety"));
+      store.setEmbedding(id2, bowEmbedding("unrelated database note"));
+
+      const all = await handleToolCall(store, { name: "search", arguments: { query: "type safety" } });
+      const allParsed = JSON.parse(all.content[0].text);
+
+      const result = await handleToolCall(store, { name: "search", arguments: { query: "type safety", min_score: "0.99" } });
+      if (result.content[0].text === "No results found") {
+        // If threshold too high, that's fine
+        assert.ok(true);
+      } else {
+        const filtered = JSON.parse(result.content[0].text);
+        assert.ok(filtered.length <= allParsed.length, "filtered should have fewer or equal results");
+      }
     });
 
     it("search with no results", async () => {

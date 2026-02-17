@@ -16,6 +16,8 @@ export function getTools() {
           query: { type: "string", description: "Semantic similarity search query" },
           type: { type: "string", description: "Filter by type" },
           status: { type: "string", description: "Filter by status" },
+          min_score: { type: "string", description: "Minimum similarity score (0-1). Only applies when query is provided." },
+          limit: { type: "string", description: "Maximum number of results to return." },
         },
       },
     },
@@ -64,9 +66,20 @@ export async function handleToolCall(store: Store, params: ToolCallParams) {
 }
 
 async function handleSearch(store: Store, a: Record<string, string>) {
-  const results = await search(store, { tag: a.tag, source: a.source, query: a.query, type: a.type, status: a.status });
+  const minScore = a.min_score ? parseFloat(a.min_score) : undefined;
+  const limit = a.limit ? parseInt(a.limit, 10) : undefined;
+  const results = await search(store, {
+    tag: a.tag, source: a.source, query: a.query,
+    type: a.type, status: a.status,
+    min_score: minScore != null && !isNaN(minScore) ? minScore : undefined,
+    limit: limit != null && !isNaN(limit) && limit > 0 ? limit : undefined,
+  });
   if (results.length === 0) return toolSuccess("No results found");
-  return toolSuccess(JSON.stringify(results, null, 2));
+  const output = results.map((r) => ({
+    ...r.note,
+    ...(r.score != null ? { similarity: Math.round(r.score * 1000) / 1000 } : {}),
+  }));
+  return toolSuccess(JSON.stringify(output, null, 2));
 }
 
 function handleContext(store: Store, a: Record<string, string>) {
