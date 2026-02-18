@@ -318,8 +318,6 @@ describe("Active Embeddings", () => {
     store.setEmbedding(id2, [0, 1, 0]);
 
     // Manually remove note file but leave stale embedding
-    const { rmSync } = require("fs");
-    const { join } = require("path");
     rmSync(join(store.getBaseDir(), "notes", `${id1}.json`));
 
     assert.equal(Object.keys(store.activeEmbeddings()).length, 1);

@@ -21,7 +21,7 @@ Claude Code Session
           ├─ Analyzer: Agent SDK extracts knowledge → NoteCandidate[]
           ├─ Embedding Router: for each candidate:
           │   ├─ computeEmbedding(keywords + content)
-          │   ├─ cosine similarity against all existing note embeddings
+          │   ├─ cosine similarity against active (non-superseded) embeddings
           │   └─ threshold-based routing:
           │       ├─ sim ≥ 0.8 → supersede (mark old superseded, add new)
           │       ├─ sim ≥ 0.55 → update (replace content, merge tags/sources)
@@ -46,7 +46,7 @@ Claude Code Session
 ### MCP Server (Query-Only)
 
 The MCP server provides tools for **querying** the knowledge graph:
-- `search` — filter by tag, source, type, status; semantic similarity ranking with scores; `min_score` and `limit` filters
+- `search` — filter by tag, source, status; semantic similarity ranking with scores; `min_score` and `limit` filters
 - `context` — BFS graph traversal from a source path
 - `list` — list all notes as summaries
 - `get` — retrieve a single note

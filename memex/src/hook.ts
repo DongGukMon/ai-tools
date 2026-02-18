@@ -244,7 +244,6 @@ async function applyCandidate(
       const id = store.add({
         content: candidate.content,
         keywords,
-
         tags: candidate.tags,
         sources: candidate.sources,
         relations: [{ target_id: decision.existingId, type: "supersedes" }],
@@ -272,7 +271,6 @@ async function applyCandidate(
       const id = store.add({
         content: candidate.content,
         keywords,
-
         tags: candidate.tags,
         sources: candidate.sources,
         relations: [{ target_id: decision.existingId, type: "relates_to" }],
@@ -285,7 +283,6 @@ async function applyCandidate(
       const id = store.add({
         content: candidate.content,
         keywords,
-
         tags: candidate.tags,
         sources: candidate.sources,
       });

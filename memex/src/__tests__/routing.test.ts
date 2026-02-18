@@ -141,16 +141,17 @@ describe("Embedding-based routing (integration)", () => {
     });
     store.setEmbedding(new1Id, emb1);
 
-    // Next pass: similar content — using allEmbeddings would match origId
+    // Next pass: similar content
     const content2 = "MCP server Store embedding cache bug — now reloads on each tool call";
     const emb2 = bowEmbedding(content2);
 
-    // With allEmbeddings: may target superseded origId (the bug)
-    const dAll = routeByEmbedding(emb2, store.allEmbeddings());
-
-    // With activeEmbeddings: must NOT target superseded origId
+    // With activeEmbeddings: superseded origId is excluded, must route to new1Id
     const dActive = routeByEmbedding(emb2, store.activeEmbeddings());
-    if (dActive.action === "supersede" || dActive.action === "update" || dActive.action === "add_related") {
+    assert.ok(
+      dActive.action === "supersede" || dActive.action === "update" || dActive.action === "add_related",
+      `expected non-independent action, got ${dActive.action}`,
+    );
+    if (dActive.action !== "add_independent") {
       assert.notEqual(dActive.existingId, origId, "should not target superseded note");
       assert.equal(dActive.existingId, new1Id, "should target the active successor");
     }
