@@ -91,13 +91,12 @@ describe("MCP Handlers", () => {
 
     it("get returns note by ID", async () => {
       const store = newTestStore();
-      const id = store.add({ content: "get this note", type: "decision" });
+      const id = store.add({ content: "get this note" });
 
       const result = await handleToolCall(store, { name: "get", arguments: { id } });
       assert.ok(!result.isError);
       const note = JSON.parse(result.content[0].text);
       assert.equal(note.content, "get this note");
-      assert.equal(note.type, "decision");
     });
 
     it("get without id returns error", async () => {

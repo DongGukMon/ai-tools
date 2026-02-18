@@ -14,7 +14,6 @@ export function getTools() {
           tag: { type: "string", description: "Filter by tag" },
           source: { type: "string", description: "Filter by source path prefix" },
           query: { type: "string", description: "Semantic similarity search query" },
-          type: { type: "string", description: "Filter by type" },
           status: { type: "string", description: "Filter by status" },
           min_score: { type: "string", description: "Minimum similarity score (0-1). Only applies when query is provided." },
           limit: { type: "string", description: "Maximum number of results to return." },
@@ -51,6 +50,7 @@ export function getTools() {
 }
 
 export async function handleToolCall(store: Store, params: ToolCallParams) {
+  store.reload();
   const a = params.arguments ?? {};
   try {
     switch (params.name) {
@@ -70,7 +70,7 @@ async function handleSearch(store: Store, a: Record<string, string>) {
   const limit = a.limit ? parseInt(a.limit, 10) : undefined;
   const results = await search(store, {
     tag: a.tag, source: a.source, query: a.query,
-    type: a.type, status: a.status,
+    status: a.status,
     min_score: minScore != null && !isNaN(minScore) ? minScore : undefined,
     limit: limit != null && !isNaN(limit) && limit > 0 ? limit : undefined,
   });

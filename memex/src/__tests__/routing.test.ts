@@ -15,7 +15,7 @@ describe("Embedding-based routing (integration)", () => {
   it("supersedes identical notes", () => {
     const store = newTestStore();
     const content = "Authentication uses JWT with RS256 signing algorithm";
-    const id = store.add({ content, type: "decision", tags: ["auth"] });
+    const id = store.add({ content, tags: ["auth"] });
     store.setEmbedding(id, bowEmbedding(content));
 
     // Same content should trigger supersede
@@ -32,7 +32,7 @@ describe("Embedding-based routing (integration)", () => {
   it("updates similar notes", () => {
     const store = newTestStore();
     const existing = "gRPC chosen for type safety between services";
-    const id = store.add({ content: existing, type: "decision", tags: ["architecture"] });
+    const id = store.add({ content: existing, tags: ["architecture"] });
     store.setEmbedding(id, bowEmbedding(existing));
 
     // Very similar but with some differences — should trigger update
@@ -50,7 +50,7 @@ describe("Embedding-based routing (integration)", () => {
   it("adds independent for unrelated content", () => {
     const store = newTestStore();
     const existing = "Authentication uses JWT with RS256 signing";
-    const id = store.add({ content: existing, type: "decision", tags: ["auth"] });
+    const id = store.add({ content: existing, tags: ["auth"] });
     store.setEmbedding(id, bowEmbedding(existing));
 
     // Completely unrelated
@@ -90,7 +90,7 @@ describe("Embedding-based routing (integration)", () => {
 
     // Add original note
     const original = "API rate limiting set to 100 requests per minute";
-    const origId = store.add({ content: original, type: "decision", tags: ["api"] });
+    const origId = store.add({ content: original, tags: ["api"] });
     store.setEmbedding(origId, bowEmbedding(original));
 
     // Same content → supersede
@@ -104,7 +104,6 @@ describe("Embedding-based routing (integration)", () => {
       const newContent = "API rate limiting updated to 200 requests per minute";
       const newId = store.add({
         content: newContent,
-        type: "decision",
         tags: ["api"],
         relations: [{ target_id: supersedeDecision.existingId, type: "supersedes" }],
       });

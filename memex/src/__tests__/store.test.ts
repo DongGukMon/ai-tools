@@ -18,7 +18,6 @@ describe("Store CRUD", () => {
     const { store } = newTestStore();
     const id = store.add({
       content: "gRPC chosen for type safety",
-      type: "decision",
       tags: ["architecture", "grpc"],
       sources: [{ project: "ai-tools", path: "src/main.ts" }],
     });
@@ -26,7 +25,6 @@ describe("Store CRUD", () => {
 
     const note = store.get(id);
     assert.equal(note.content, "gRPC chosen for type safety");
-    assert.equal(note.type, "decision");
     assert.equal(note.status, "open");
     assert.ok(note.created_at);
     assert.ok(note.updated_at);
@@ -39,18 +37,17 @@ describe("Store CRUD", () => {
 
   it("update", () => {
     const { store } = newTestStore();
-    const id = store.add({ content: "original", type: "observation", tags: ["test"] });
-    store.update(id, { content: "updated", type: "decision", tags: ["test", "updated"] });
+    const id = store.add({ content: "original", tags: ["test"] });
+    store.update(id, { content: "updated", tags: ["test", "updated"] });
 
     const note = store.get(id);
     assert.equal(note.content, "updated");
-    assert.equal(note.type, "decision");
     assert.deepEqual(note.tags, ["test", "updated"]);
   });
 
   it("update status", () => {
     const { store } = newTestStore();
-    const id = store.add({ content: "a question", type: "question" });
+    const id = store.add({ content: "a question" });
     store.updateStatus(id, "resolved");
     assert.equal(store.get(id).status, "resolved");
   });
@@ -72,8 +69,8 @@ describe("Store CRUD", () => {
   it("list", () => {
     const { store } = newTestStore();
     assert.equal(store.list().length, 0);
-    store.add({ content: "first note", type: "observation", tags: ["a"] });
-    store.add({ content: "second note\nwith more lines", type: "decision", tags: ["b"] });
+    store.add({ content: "first note", tags: ["a"] });
+    store.add({ content: "second note\nwith more lines", tags: ["b"] });
     const items = store.list();
     assert.equal(items.length, 2);
     for (const item of items) {
@@ -128,14 +125,6 @@ describe("Search", () => {
     store.add({ content: "about main", sources: [{ project: "proj", path: "src/main.ts" }] });
     store.add({ content: "about store", sources: [{ project: "proj", path: "lib/store.ts" }] });
     assert.equal((await search(store, { source: "proj:src" })).length, 1);
-  });
-
-  it("by type", async () => {
-    const { store } = newTestStore();
-    store.add({ content: "a decision", type: "decision" });
-    store.add({ content: "an observation", type: "observation" });
-    store.add({ content: "another decision", type: "decision" });
-    assert.equal((await search(store, { type: "decision" })).length, 2);
   });
 
   it("by status", async () => {
@@ -194,10 +183,11 @@ describe("Search", () => {
 
   it("combined filters", async () => {
     const { store } = newTestStore();
-    store.add({ content: "typescript grpc decision", type: "decision", tags: ["typescript"] });
-    store.add({ content: "typescript observation", type: "observation", tags: ["typescript"] });
-    store.add({ content: "python decision", type: "decision", tags: ["python"] });
-    assert.equal((await search(store, { tag: "typescript", type: "decision" })).length, 1);
+    store.add({ content: "typescript grpc note", tags: ["typescript"] });
+    store.add({ content: "typescript observation", tags: ["typescript"] });
+    store.add({ content: "python note", tags: ["python"] });
+    assert.equal((await search(store, { tag: "typescript" })).length, 2);
+    assert.equal((await search(store, { tag: "python" })).length, 1);
   });
 });
 

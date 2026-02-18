@@ -1,7 +1,6 @@
 export interface Note {
   id: string;
   content: string;
-  type: string; // decision, pattern, gotcha, risk, architecture
   keywords: string[];
   tags: string[];
   sources: Source[];
@@ -65,8 +64,8 @@ export interface NoteWithRelations {
 export interface NoteSummary {
   id: string;
   preview: string;
-  type: string;
   tags: string[];
+  keywords: string[];
   status: string;
 }
 
@@ -75,7 +74,6 @@ export interface NoteCandidate {
   keywords: string[];
   tags: string[];
   sources: Source[];
-  type: string;
 }
 
 export const SIMILARITY_THRESHOLDS = {
@@ -99,7 +97,6 @@ export interface SearchParams {
   tag?: string;
   source?: string;
   query?: string;
-  type?: string;
   status?: string;
   min_score?: number;
   limit?: number;

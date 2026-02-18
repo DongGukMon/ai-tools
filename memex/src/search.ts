@@ -49,11 +49,6 @@ export async function search(store: Store, params: SearchParams): Promise<Search
     }).filter((n): n is Note => n !== null);
   }
 
-  // Post-filter by type
-  if (params.type) {
-    candidates = candidates.filter((n) => n.type === params.type);
-  }
-
   // Post-filter by status
   if (params.status) {
     candidates = candidates.filter((n) => n.status === params.status);

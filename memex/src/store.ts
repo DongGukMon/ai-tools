@@ -33,7 +33,6 @@ export class Store {
       id,
       content: note.content,
       keywords: note.keywords ?? [],
-      type: note.type ?? "",
       tags: note.tags ?? [],
       sources: note.sources ?? [],
       relations: note.relations ?? [],
@@ -52,13 +51,12 @@ export class Store {
     return this.readNote(id);
   }
 
-  update(id: string, updates: Partial<Pick<Note, "content" | "keywords" | "type" | "status" | "tags" | "sources">>): void {
+  update(id: string, updates: Partial<Pick<Note, "content" | "keywords" | "status" | "tags" | "sources">>): void {
     const note = this.readNote(id);
     this.indexRemove(note);
 
     if (updates.content !== undefined) note.content = updates.content;
     if (updates.keywords !== undefined) note.keywords = updates.keywords;
-    if (updates.type !== undefined) note.type = updates.type;
     if (updates.status !== undefined) note.status = updates.status;
     if (updates.tags !== undefined) note.tags = updates.tags;
     if (updates.sources !== undefined) note.sources = updates.sources;
@@ -100,7 +98,7 @@ export class Store {
         const nl = preview.indexOf("\n");
         if (nl >= 0) preview = preview.slice(0, nl);
         if (preview.length > 80) preview = preview.slice(0, 80) + "...";
-        return { id: note.id, preview, type: note.type, tags: note.tags, status: note.status };
+        return { id: note.id, preview, tags: note.tags, keywords: note.keywords, status: note.status };
       } catch {
         return null;
       }
@@ -176,6 +174,10 @@ export class Store {
   }
 
   // --- Index accessors (copies for read-only use) ---
+
+  reload(): void {
+    this.loadIndexes();
+  }
 
   getBaseDir(): string { return this.baseDir; }
   tagsIndex(): TagIndex { return JSON.parse(JSON.stringify(this.tags)); }

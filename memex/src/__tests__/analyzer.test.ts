@@ -39,7 +39,7 @@ describe("Analyzer", () => {
 
     it("notes schema has required fields", () => {
       const itemSchema = analysisSchema.properties.notes.items;
-      assert.deepEqual(itemSchema.required, ["content", "keywords", "tags", "sources", "type"]);
+      assert.deepEqual(itemSchema.required, ["content", "keywords", "tags", "sources"]);
     });
 
     it("does not include update or supersede schemas", () => {
