@@ -139,6 +139,22 @@ export class Store {
     return { ...this.embeddings };
   }
 
+  /** Return embeddings only for non-superseded notes (for routing). */
+  activeEmbeddings(): Record<string, number[]> {
+    const result: Record<string, number[]> = {};
+    for (const [id, emb] of Object.entries(this.embeddings)) {
+      try {
+        const note = this.readNote(id);
+        if (note.status !== "superseded") {
+          result[id] = emb;
+        }
+      } catch {
+        // Note deleted — skip stale embedding
+      }
+    }
+    return result;
+  }
+
   // --- Config ---
 
   getConfig(): Config {

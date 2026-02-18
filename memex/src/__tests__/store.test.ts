@@ -281,6 +281,52 @@ describe("Embeddings", () => {
   });
 });
 
+describe("Active Embeddings", () => {
+  it("excludes superseded notes", () => {
+    const { store } = newTestStore();
+    const id1 = store.add({ content: "original note" });
+    const id2 = store.add({ content: "newer note" });
+    store.setEmbedding(id1, [1, 0, 0]);
+    store.setEmbedding(id2, [0, 1, 0]);
+
+    // Before superseding: both present
+    assert.equal(Object.keys(store.allEmbeddings()).length, 2);
+    assert.equal(Object.keys(store.activeEmbeddings()).length, 2);
+
+    // After superseding id1: only id2 in activeEmbeddings
+    store.updateStatus(id1, "superseded");
+    assert.equal(Object.keys(store.allEmbeddings()).length, 2);
+    assert.equal(Object.keys(store.activeEmbeddings()).length, 1);
+    assert.ok(store.activeEmbeddings()[id2]);
+    assert.ok(!store.activeEmbeddings()[id1]);
+  });
+
+  it("includes resolved notes", () => {
+    const { store } = newTestStore();
+    const id1 = store.add({ content: "resolved note" });
+    store.setEmbedding(id1, [1, 0, 0]);
+    store.updateStatus(id1, "resolved");
+
+    assert.equal(Object.keys(store.activeEmbeddings()).length, 1);
+  });
+
+  it("skips embeddings for deleted notes", () => {
+    const { store } = newTestStore();
+    const id1 = store.add({ content: "note to delete" });
+    const id2 = store.add({ content: "keeper" });
+    store.setEmbedding(id1, [1, 0, 0]);
+    store.setEmbedding(id2, [0, 1, 0]);
+
+    // Manually remove note file but leave stale embedding
+    const { rmSync } = require("fs");
+    const { join } = require("path");
+    rmSync(join(store.getBaseDir(), "notes", `${id1}.json`));
+
+    assert.equal(Object.keys(store.activeEmbeddings()).length, 1);
+    assert.ok(store.activeEmbeddings()[id2]);
+  });
+});
+
 describe("Config", () => {
   it("defaults", () => {
     const { store } = newTestStore();

@@ -122,6 +122,39 @@ describe("Embedding-based routing (integration)", () => {
     const decision = routeByEmbedding(candidateEmb, store.allEmbeddings());
     assert.equal(decision.action, "add_independent");
   });
+
+  it("activeEmbeddings prevents duplicate supersession chains", () => {
+    const store = newTestStore();
+
+    // Original note
+    const content = "MCP server Store caches embeddings in memory and never reloads";
+    const origId = store.add({ content, tags: ["bug"] });
+    store.setEmbedding(origId, bowEmbedding(content));
+
+    // Simulate supersede: mark original as superseded, add replacement
+    store.updateStatus(origId, "superseded");
+    const content1 = "MCP server Store caches embeddings in memory — fixed with reload()";
+    const emb1 = bowEmbedding(content1);
+    const new1Id = store.add({
+      content: content1, tags: ["bug"],
+      relations: [{ target_id: origId, type: "supersedes" }],
+    });
+    store.setEmbedding(new1Id, emb1);
+
+    // Next pass: similar content — using allEmbeddings would match origId
+    const content2 = "MCP server Store embedding cache bug — now reloads on each tool call";
+    const emb2 = bowEmbedding(content2);
+
+    // With allEmbeddings: may target superseded origId (the bug)
+    const dAll = routeByEmbedding(emb2, store.allEmbeddings());
+
+    // With activeEmbeddings: must NOT target superseded origId
+    const dActive = routeByEmbedding(emb2, store.activeEmbeddings());
+    if (dActive.action === "supersede" || dActive.action === "update" || dActive.action === "add_related") {
+      assert.notEqual(dActive.existingId, origId, "should not target superseded note");
+      assert.equal(dActive.existingId, new1Id, "should target the active successor");
+    }
+  });
 });
 
 describe("Threshold constants", () => {

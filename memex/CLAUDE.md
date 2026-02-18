@@ -15,7 +15,7 @@ A hook fires based on `hook_mode` (`realtime` = each turn, `session_end` = on /e
 3. **Analyzer** (Agent SDK) evaluates turns for high-value knowledge only:
    - Architectural decisions, recurring patterns, gotchas, risks
    - NOT todos, tasks, open questions, debugging logs, or session-specific details
-4. **Embedding Router** computes embeddings for each candidate and routes via cosine similarity:
+4. **Embedding Router** computes embeddings for each candidate and routes via cosine similarity (superseded notes are excluded from comparison to prevent duplicate chains):
    - `sim ≥ 0.8` → **supersede** existing note (mark old as superseded, add new with relation)
    - `sim ≥ 0.55` → **update** existing note (replace content, merge tags/sources)
    - `sim ≥ 0.2` → **add** with `relates_to` relation to similar note
@@ -31,7 +31,6 @@ Search notes by filters. When a query is provided, results are ranked by semanti
 - `tag` (string, optional) — filter by tag
 - `source` (string, optional) — filter by source key ("project:path")
 - `query` (string, optional) — semantic similarity search query
-- `type` (string, optional) — filter by type
 - `status` (string, optional) — filter by status
 - `min_score` (string, optional) — minimum similarity score threshold (0-1). Only applies when `query` is provided.
 - `limit` (string, optional) — maximum number of results to return.
@@ -60,8 +59,8 @@ Retrieve a note by ID.
    mcp__memex__search(tag="authentication")
 
 3. Review risks and gotchas:
-   mcp__memex__search(type="gotcha")
-   mcp__memex__search(type="risk")
+   mcp__memex__search(tag="gotcha")
+   mcp__memex__search(tag="risk")
 ```
 
 ## Source Format

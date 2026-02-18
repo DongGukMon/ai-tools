@@ -235,7 +235,7 @@ async function applyCandidate(
     ? keywords.join(" ") + " " + candidate.content
     : candidate.content;
   const embedding = await computeEmbedding(embeddingText);
-  const existingEmbeddings = store.allEmbeddings();
+  const existingEmbeddings = store.activeEmbeddings();
   const decision = routeByEmbedding(embedding, existingEmbeddings);
 
   switch (decision.action) {
