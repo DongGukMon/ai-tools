@@ -1,7 +1,8 @@
 export interface Note {
   id: string;
   content: string;
-  type: string; // decision, question, pattern, risk, observation, todo
+  type: string; // decision, pattern, gotcha, risk, architecture
+  keywords: string[];
   tags: string[];
   sources: Source[];
   relations: Relation[];
@@ -71,6 +72,7 @@ export interface NoteSummary {
 
 export interface NoteCandidate {
   content: string;
+  keywords: string[];
   tags: string[];
   sources: Source[];
   type: string;

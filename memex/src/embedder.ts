@@ -1,4 +1,3 @@
-import { Store } from "./store.js";
 import { cosineSimilarity } from "./search.js";
 import { SIMILARITY_THRESHOLDS } from "./types.js";
 import type { RoutingDecision } from "./types.js";
@@ -70,67 +69,6 @@ export function routeByEmbedding(
     return { action: "add_related", existingId: best.id, similarity: best.similarity };
   }
   return { action: "add_independent" };
-}
-
-// --- Embedder class ---
-
-export class Embedder {
-  private queue: string[] = [];
-  private processing = false;
-  private store: Store;
-  private enabled: boolean;
-
-  constructor(store: Store, enabled: boolean) {
-    this.store = store;
-    this.enabled = enabled;
-  }
-
-  isEnabled(): boolean {
-    return this.enabled;
-  }
-
-  enqueue(id: string): void {
-    if (!this.enabled) return;
-    this.queue.push(id);
-    this.processNext();
-  }
-
-  private async processNext(): Promise<void> {
-    if (this.processing || this.queue.length === 0) return;
-    this.processing = true;
-
-    while (this.queue.length > 0) {
-      const id = this.queue.shift()!;
-      try {
-        await this.processNote(id);
-      } catch (err) {
-        console.error(`embedder: failed to process note ${id}:`, err);
-      }
-    }
-
-    this.processing = false;
-  }
-
-  private async processNote(id: string): void {
-    const note = this.store.get(id);
-    const embedding = await computeEmbedding(note.content);
-    this.store.setEmbedding(id, embedding);
-  }
-
-  async similarNotes(query: string, k: number): Promise<string[]> {
-    if (!this.enabled) return [];
-    const queryEmb = await computeEmbedding(query);
-    const allEmbs = this.store.allEmbeddings();
-
-    const scored: { id: string; score: number }[] = [];
-    for (const [id, emb] of Object.entries(allEmbs)) {
-      const sim = cosineSimilarity(queryEmb, emb);
-      if (sim > 0.1) scored.push({ id, score: sim });
-    }
-
-    scored.sort((a, b) => b.score - a.score);
-    return scored.slice(0, k).map((s) => s.id);
-  }
 }
 
 // --- BoW fallback ---

@@ -1,15 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync } from "fs";
-import { join } from "path";
-import { tmpdir } from "os";
-import { Store } from "../store.js";
-import { bowEmbedding, Embedder, computeEmbedding, findBestMatch, routeByEmbedding } from "../embedder.js";
+import { bowEmbedding, computeEmbedding, findBestMatch, routeByEmbedding } from "../embedder.js";
 import { cosineSimilarity } from "../search.js";
-
-function newTestStore(): Store {
-  return new Store(mkdtempSync(join(tmpdir(), "memex-embedder-test-")));
-}
 
 describe("bowEmbedding", () => {
   it("produces 384-dim vector", () => {
@@ -127,27 +119,3 @@ describe("routeByEmbedding", () => {
   });
 });
 
-describe("Embedder class", () => {
-  it("disabled embedder skips enqueue", () => {
-    const store = newTestStore();
-    const embedder = new Embedder(store, false);
-    assert.equal(embedder.isEnabled(), false);
-
-    const id = store.add({ content: "test note" });
-    embedder.enqueue(id);
-    assert.equal(store.getEmbedding(id), undefined);
-  });
-
-  it("enabled embedder reports enabled", () => {
-    const store = newTestStore();
-    const embedder = new Embedder(store, true);
-    assert.equal(embedder.isEnabled(), true);
-  });
-
-  it("disabled similarNotes returns empty", async () => {
-    const store = newTestStore();
-    const embedder = new Embedder(store, false);
-    const results = await embedder.similarNotes("test query", 5);
-    assert.deepEqual(results, []);
-  });
-});

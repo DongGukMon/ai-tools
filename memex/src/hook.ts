@@ -217,9 +217,12 @@ async function applyCandidate(
   embeddingEnabled: boolean,
   log: (msg: string) => void,
 ): Promise<void> {
+  const keywords = candidate.keywords ?? [];
+
   if (!embeddingEnabled) {
     const id = store.add({
       content: candidate.content,
+      keywords,
       type: candidate.type,
       tags: candidate.tags,
       sources: candidate.sources,
@@ -228,7 +231,11 @@ async function applyCandidate(
     return;
   }
 
-  const embedding = await computeEmbedding(candidate.content);
+  // Embed keywords + content: keywords boost term matching, content covers natural language queries
+  const embeddingText = keywords.length > 0
+    ? keywords.join(" ") + " " + candidate.content
+    : candidate.content;
+  const embedding = await computeEmbedding(embeddingText);
   const existingEmbeddings = store.allEmbeddings();
   const decision = routeByEmbedding(embedding, existingEmbeddings);
 
@@ -237,6 +244,7 @@ async function applyCandidate(
       store.updateStatus(decision.existingId, "superseded");
       const id = store.add({
         content: candidate.content,
+        keywords,
         type: candidate.type,
         tags: candidate.tags,
         sources: candidate.sources,
@@ -248,10 +256,12 @@ async function applyCandidate(
     }
     case "update": {
       const existing = store.get(decision.existingId);
+      const mergedKeywords = [...new Set([...(existing.keywords ?? []), ...keywords])];
       const mergedTags = [...new Set([...existing.tags, ...candidate.tags])];
       const mergedSources = mergeSources(existing.sources, candidate.sources);
       store.update(decision.existingId, {
         content: candidate.content,
+        keywords: mergedKeywords,
         tags: mergedTags,
         sources: mergedSources,
       });
@@ -262,6 +272,7 @@ async function applyCandidate(
     case "add_related": {
       const id = store.add({
         content: candidate.content,
+        keywords,
         type: candidate.type,
         tags: candidate.tags,
         sources: candidate.sources,
@@ -274,6 +285,7 @@ async function applyCandidate(
     case "add_independent": {
       const id = store.add({
         content: candidate.content,
+        keywords,
         type: candidate.type,
         tags: candidate.tags,
         sources: candidate.sources,

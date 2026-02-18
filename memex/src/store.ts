@@ -32,6 +32,7 @@ export class Store {
     const full: Note = {
       id,
       content: note.content,
+      keywords: note.keywords ?? [],
       type: note.type ?? "",
       tags: note.tags ?? [],
       sources: note.sources ?? [],
@@ -51,11 +52,12 @@ export class Store {
     return this.readNote(id);
   }
 
-  update(id: string, updates: Partial<Pick<Note, "content" | "type" | "status" | "tags" | "sources">>): void {
+  update(id: string, updates: Partial<Pick<Note, "content" | "keywords" | "type" | "status" | "tags" | "sources">>): void {
     const note = this.readNote(id);
     this.indexRemove(note);
 
     if (updates.content !== undefined) note.content = updates.content;
+    if (updates.keywords !== undefined) note.keywords = updates.keywords;
     if (updates.type !== undefined) note.type = updates.type;
     if (updates.status !== undefined) note.status = updates.status;
     if (updates.tags !== undefined) note.tags = updates.tags;
@@ -192,7 +194,10 @@ export class Store {
   private readNote(id: string): Note {
     const p = this.notePath(id);
     if (!existsSync(p)) throw new Error(`note not found: ${id}`);
-    return JSON.parse(readFileSync(p, "utf-8"));
+    const note = JSON.parse(readFileSync(p, "utf-8"));
+    // Backward compat: old notes don't have keywords
+    if (!note.keywords) note.keywords = [];
+    return note;
   }
 
   private writeNote(note: Note): void {
