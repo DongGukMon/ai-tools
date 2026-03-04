@@ -138,6 +138,16 @@ func msgCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			peer, content := args[0], args[1]
 
+			if strings.TrimSpace(peer) == "" {
+				return fmt.Errorf("peer name cannot be empty")
+			}
+			if strings.TrimSpace(content) == "" {
+				return fmt.Errorf("message cannot be empty")
+			}
+			if len(content) > 10240 {
+				return fmt.Errorf("message too large (%d bytes, max 10KB)", len(content))
+			}
+
 			store, err := irc.NewStore()
 			if err != nil {
 				return err
@@ -146,6 +156,19 @@ func msgCmd() *cobra.Command {
 			from, err := resolveMyName(store)
 			if err != nil {
 				return err
+			}
+
+			if peer == from {
+				return fmt.Errorf("cannot send message to yourself")
+			}
+
+			// Verify peer exists in registry
+			peers, err := store.ListPeers()
+			if err != nil {
+				return err
+			}
+			if _, ok := peers[peer]; !ok {
+				return fmt.Errorf("peer '%s' not found (use 'who' to list peers)", peer)
 			}
 
 			if err := store.SendMessage(peer, from, content); err != nil {
@@ -235,6 +258,7 @@ func inboxCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&all, "all", false, "Show all messages including read")
+	cmd.Flags().SetInterspersed(false) // Allow "inbox -1" without flag parsing
 	return cmd
 }
 
@@ -289,6 +313,10 @@ func topicCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			title := args[0]
 
+			if strings.TrimSpace(title) == "" {
+				return fmt.Errorf("topic title cannot be empty")
+			}
+
 			store, err := irc.NewStore()
 			if err != nil {
 				return err
@@ -304,7 +332,15 @@ func topicCmd() *cobra.Command {
 				return fmt.Errorf("failed to read stdin: %w", err)
 			}
 
-			if err := store.PublishTopic(name, title, string(content)); err != nil {
+			contentStr := strings.TrimSpace(string(content))
+			if contentStr == "" {
+				return fmt.Errorf("topic content cannot be empty (pipe content via stdin)")
+			}
+			if len(contentStr) > 51200 {
+				return fmt.Errorf("topic too large (%d bytes, max 50KB)", len(contentStr))
+			}
+
+			if err := store.PublishTopic(name, title, contentStr); err != nil {
 				return err
 			}
 
