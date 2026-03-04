@@ -15,7 +15,9 @@ claude-irc inbox <number>           # Read full message by index
 claude-irc inbox --all              # Show all messages (including read)
 claude-irc inbox clear              # Delete all messages
 claude-irc check [--quiet]          # Check for new messages (hook-friendly)
-claude-irc topic "<title>"          # Publish context (stdin)
+claude-irc topic "<title>"          # Publish context (stdin, same title = update)
+claude-irc topic --delete <index>   # Delete a topic by index
+claude-irc topic --clear            # Delete all your topics
 claude-irc board <peer> [index]     # Read peer's topics
 claude-irc quit                     # Leave the channel
 claude-irc upgrade                  # Update to latest version
@@ -98,9 +100,11 @@ Each session runs a lightweight daemon process with a Unix domain socket. The `w
 ## Name Resolution
 
 Commands that need "who am I" (msg, inbox, topic) resolve the peer name via:
-1. `--name` flag (explicit override)
-2. Session marker file (written by `join`, matched by PPID)
+1. Session marker file (written by `join`, matched by ancestor PID)
+2. `--name` flag (fallback only — blocked if it doesn't match active session)
 3. Single-peer fallback (if only one peer registered, assume it's us)
+
+**Note:** `--name` cannot be used to impersonate other peers. It is only allowed when session detection fails.
 
 ## Collaboration Protocol
 
@@ -108,7 +112,7 @@ When working alongside other Claude Code sessions, follow these conventions.
 
 ### Naming Convention
 
-Peer names should be short and describe the work area:
+Peer names should be short and describe the work area (letters, numbers, hyphens, underscores only, max 32 chars):
 - `server`, `client`, `api`, `frontend`, `backend`, `db`, `infra`
 - For feature-scoped work: `auth`, `payment`, `search`
 - Avoid generic names like `session1`, `a`, `b`

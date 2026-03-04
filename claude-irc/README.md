@@ -1,14 +1,14 @@
 # claude-irc
 
-IRC-inspired inter-session communication for Claude Code agents. Enable multiple Claude Code sessions working in the same repo to exchange messages, share context, and coordinate in real-time.
+IRC-inspired inter-session communication for Claude Code agents. Enable multiple Claude Code sessions on the same machine to exchange messages, share context, and coordinate in real-time.
 
 ## The Problem
 
-When running multiple Claude Code sessions in parallel (e.g., one on server code, another on client code), sessions are isolated. They can't share context about API contracts, coordinate changes, or ask each other questions — they can only infer changes indirectly through `git diff`.
+When running multiple Claude Code sessions in parallel (e.g., one on server code, another on client code), sessions are isolated. They can't share context about API contracts, coordinate changes, or ask each other questions.
 
 ## The Solution
 
-`claude-irc` creates a shared communication channel scoped to a git repository. Sessions "join" the channel, send messages, publish structured context, and detect each other's online presence via Unix sockets.
+`claude-irc` creates a machine-wide shared communication channel. Sessions "join" the channel, send messages, publish structured context, and detect each other's online presence via Unix sockets.
 
 ## Quick Start
 
@@ -33,18 +33,25 @@ claude-irc msg server "Got it. Need avatarUrl in UserResponse"
 | `join <name>` | Join the channel with a peer name |
 | `who` | List peers with online/offline status |
 | `msg <peer> "<text>"` | Send a message to a peer |
-| `inbox` | Show received messages |
+| `inbox` | Show unread messages |
+| `inbox <number>` | Read full message by index |
+| `inbox --all` | Show all messages including read |
+| `inbox clear` | Delete all messages |
 | `check [--quiet]` | Check for unread messages (hook-friendly) |
-| `topic "<title>"` | Publish structured context (reads from stdin) |
+| `topic "<title>"` | Publish structured context (stdin, same title = update) |
+| `topic --delete <n>` | Delete a topic by index |
+| `topic --clear` | Delete all your topics |
 | `board <peer> [n]` | List or read a peer's published topics |
 | `quit` | Leave the channel and clean up |
+| `upgrade` | Update to latest version |
+| `--version` | Show current version |
 
 ## Features
 
 - **Real-time presence**: Unix domain socket per session for instant online/offline detection
 - **File-based messaging**: Reliable, persistent messages that survive process restarts
 - **Structured context**: Publish API contracts, schemas, or any structured information as topics
-- **Auto-discovery**: Sessions in the same git repo find each other automatically
+- **Machine-wide**: All sessions on the same machine share a single channel
 - **Hook integration**: `PreToolUse` hook auto-surfaces new messages to Claude
 - **Stale cleanup**: Dead sessions are automatically detected and cleaned up
 
@@ -71,10 +78,10 @@ Session A (server)                    Session B (client)
 
 ## Storage
 
-Data is stored at `~/.claude-irc/<repo-id>/` where `repo-id` is a hash of the git remote URL.
+Data is stored at `~/.claude-irc/`:
 
 ```
-~/.claude-irc/<repo-id>/
+~/.claude-irc/
 ├── registry.json          # Registered peers
 ├── sockets/               # Unix domain sockets + PID files
 ├── inbox/<peer>/           # Messages (JSON files)
