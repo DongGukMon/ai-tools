@@ -10,6 +10,15 @@ inputs:
   password:
     description: "Vault password (sets VAULTKEY_PASSWORD env for subsequent steps)"
     required: true
+  secrets:
+    description: |
+      Secrets to load as env vars (one per line).
+      Format: ENV_NAME=scope KEY
+      Example:
+        CLOUDFLARE_API_TOKEN=cloudflare CLOUDFLARE_API_TOKEN
+        DB_PASSWORD=myapp/prod DB_PASSWORD
+    required: false
+    default: ""
   version:
     description: "vaultkey version to install (default: latest)"
     required: false
@@ -52,5 +61,22 @@ runs:
     - name: Init vault
       shell: bash
       run: vaultkey init --ci https://${{ inputs.gh-pat }}@github.com/${{ inputs.vault-repo }}.git
+      env:
+        VAULTKEY_PASSWORD: ${{ inputs.password }}
+
+    - name: Load secrets
+      if: inputs.secrets != ''
+      shell: bash
+      run: |
+        while IFS= read -r line; do
+          [ -z "$line" ] && continue
+          ENV_NAME="${line%%=*}"
+          SPEC="${line#*=}"
+          SCOPE="${SPEC%% *}"
+          KEY="${SPEC#* }"
+          VALUE=$(vaultkey get "$SCOPE" "$KEY")
+          echo "::add-mask::$VALUE"
+          echo "$ENV_NAME=$VALUE" >> $GITHUB_ENV
+        done <<< "${{ inputs.secrets }}"
       env:
         VAULTKEY_PASSWORD: ${{ inputs.password }}
