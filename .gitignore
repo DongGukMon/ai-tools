@@ -6,6 +6,8 @@ vaultkey/vaultkey
 vaultkey/dist/
 memex/dist/
 memex/node_modules/
+claude-irc/claude-irc
+claude-irc/dist/
 
 # Local files
 blog-post.md
@@ -37,3 +39,4 @@ Thumbs.db
 # Local data
 ~/.redit/
 ~/.memex/
+~/.claude-irc/

@@ -34,6 +34,19 @@
       "license": "MIT",
       "keywords": ["knowledge", "graph", "memory", "search", "notes"],
       "category": "productivity"
+    },
+    {
+      "name": "claude-irc",
+      "source": "./claude-irc",
+      "description": "IRC-inspired inter-session communication for Claude Code agents",
+      "version": "1.0.0",
+      "author": {
+        "name": "Airen Kang"
+      },
+      "repository": "https://github.com/bang9/ai-tools",
+      "license": "MIT",
+      "keywords": ["irc", "communication", "agent", "inter-session", "collaboration"],
+      "category": "collaboration"
     }
   ]
 }

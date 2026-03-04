@@ -44,6 +44,25 @@ A local knowledge graph for AI — automatically stores, connects, and retrieves
 /plugin install memex
 ```
 
+### [claude-irc](./claude-irc)
+
+IRC-inspired inter-session communication for Claude Code agents. Enable multiple sessions working in the same repo to exchange messages, share context, and coordinate in real-time.
+
+#### Installation
+
+**CLI**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/bang9/ai-tools/main/claude-irc/install.sh | bash
+```
+
+**Plugin** (via Claude Code Plugin)
+
+```bash
+/plugin marketplace add bang9/ai-tools
+/plugin install claude-irc
+```
+
 ## License
 
 MIT
