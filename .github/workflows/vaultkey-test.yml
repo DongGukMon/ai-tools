@@ -1,0 +1,28 @@
+name: "vaultkey: Test"
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'vaultkey/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'vaultkey/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Run tests
+        run: |
+          cd vaultkey
+          go test ./...
