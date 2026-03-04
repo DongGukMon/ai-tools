@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -109,7 +110,35 @@ func (s *Store) tryCleanStalePeer(name string) {
 			}
 		}
 
+		// Clean up orphan inbox and topics directories
+		os.RemoveAll(s.InboxDir(name))
+		os.RemoveAll(s.TopicsDir(name))
+
 		// Unregister from registry
 		s.Unregister(name)
+	}
+}
+
+// CleanOrphanDirs removes inbox/topics directories for peers not in the registry.
+func (s *Store) CleanOrphanDirs() {
+	peers, err := s.ListPeers()
+	if err != nil {
+		return
+	}
+
+	for _, subdir := range []string{"inbox", "topics"} {
+		dir := filepath.Join(s.BaseDir, subdir)
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
+			if _, ok := peers[entry.Name()]; !ok {
+				os.RemoveAll(filepath.Join(dir, entry.Name()))
+			}
+		}
 	}
 }

@@ -33,16 +33,22 @@ func TestRegisterAndList(t *testing.T) {
 	}
 }
 
-func TestRegisterDuplicate(t *testing.T) {
+func TestRegisterDuplicateStaleReplacement(t *testing.T) {
 	store := newTestStore(t)
 
 	if err := store.Register("server", 1234); err != nil {
 		t.Fatalf("first Register failed: %v", err)
 	}
 
-	err := store.Register("server", 5678)
-	if err == nil {
-		t.Fatal("expected error for duplicate registration")
+	// Without a running daemon, re-registration should succeed (stale peer replacement)
+	if err := store.Register("server", 5678); err != nil {
+		t.Fatalf("expected stale re-registration to succeed, got: %v", err)
+	}
+
+	// Verify the new PID is stored
+	peers, _ := store.ListPeers()
+	if peers["server"].PID != 5678 {
+		t.Errorf("expected PID 5678 after re-registration, got %d", peers["server"].PID)
 	}
 }
 

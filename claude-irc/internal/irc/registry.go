@@ -25,10 +25,18 @@ type Registry struct {
 }
 
 // Register adds a peer to the registry.
+// If a peer with the same name exists but is not responding, re-registration is allowed.
 func (s *Store) Register(name string, pid int) error {
 	return s.withRegistryLock(func(reg *Registry) error {
 		if _, exists := reg.Peers[name]; exists {
-			return fmt.Errorf("peer '%s' already exists (use 'quit' first)", name)
+			// Allow re-registration if daemon is not responding (dead/zombie)
+			if !s.CheckPresence(name) {
+				// Clean up stale artifacts
+				os.Remove(s.SocketPath(name))
+				os.Remove(s.PIDPath(name))
+			} else {
+				return fmt.Errorf("peer '%s' already exists (use 'quit' first)", name)
+			}
 		}
 
 		cwd, _ := os.Getwd()

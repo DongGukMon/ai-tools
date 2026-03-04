@@ -1,12 +1,14 @@
 package irc
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const baseDir = ".claude-irc"
@@ -75,6 +77,7 @@ func (s *Store) RemoveSessionMarker(ppid int) error {
 // DetectSession finds a session marker matching the given PID or any ancestor PID.
 // This handles the case where claude-irc is invoked from a subshell (e.g., Bash tool)
 // whose PPID differs from the Claude Code session PID that ran "join".
+// Optimized: scans existing markers first to avoid unnecessary ps subprocess calls.
 func DetectSession(pid int) (store *Store, name string, err error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -83,19 +86,43 @@ func DetectSession(pid int) (store *Store, name string, err error) {
 
 	dir := filepath.Join(home, baseDir)
 
-	// Walk up the process tree looking for a matching session marker
+	// Collect all session marker PIDs for fast lookup (avoids ps calls when no markers exist)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, "", fmt.Errorf("no active session for pid %d", pid)
+	}
+
+	markerPIDs := make(map[int]string) // pid → peer name
+	for _, e := range entries {
+		if !strings.HasPrefix(e.Name(), ".session_") {
+			continue
+		}
+		pidStr := strings.TrimPrefix(e.Name(), ".session_")
+		markerPID, err := strconv.Atoi(pidStr)
+		if err != nil {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		if err != nil {
+			continue
+		}
+		peerName := strings.TrimSpace(string(data))
+		if peerName != "" {
+			markerPIDs[markerPID] = peerName
+		}
+	}
+
+	if len(markerPIDs) == 0 {
+		return nil, "", fmt.Errorf("no active session for pid %d", pid)
+	}
+
+	// Walk up the process tree checking against known marker PIDs
 	current := pid
-	for i := 0; i < 10; i++ { // limit depth to avoid infinite loops
-		markerPath := filepath.Join(dir, fmt.Sprintf(".session_%d", current))
-		data, err := os.ReadFile(markerPath)
-		if err == nil {
-			peerName := strings.TrimSpace(string(data))
-			if peerName != "" {
-				return &Store{BaseDir: dir, Name: peerName}, peerName, nil
-			}
+	for i := 0; i < 10; i++ {
+		if peerName, ok := markerPIDs[current]; ok {
+			return &Store{BaseDir: dir, Name: peerName}, peerName, nil
 		}
 
-		// Get parent PID
 		parent := getParentPID(current)
 		if parent <= 1 || parent == current {
 			break
@@ -108,7 +135,9 @@ func DetectSession(pid int) (store *Store, name string, err error) {
 
 // getParentPID returns the parent PID of the given process.
 func getParentPID(pid int) int {
-	out, err := exec.Command("ps", "-o", "ppid=", "-p", strconv.Itoa(pid)).Output()
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "ps", "-o", "ppid=", "-p", strconv.Itoa(pid)).Output()
 	if err != nil {
 		return 0
 	}
@@ -139,7 +168,9 @@ func FindSessionPID(startPID int) int {
 }
 
 func getProcessComm(pid int) string {
-	out, err := exec.Command("ps", "-o", "comm=", "-p", strconv.Itoa(pid)).Output()
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "ps", "-o", "comm=", "-p", strconv.Itoa(pid)).Output()
 	if err != nil {
 		return ""
 	}

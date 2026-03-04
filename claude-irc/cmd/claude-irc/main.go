@@ -58,6 +58,10 @@ func joinCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
 
+			if !isValidPeerName(name) {
+				return fmt.Errorf("invalid peer name '%s': only letters, numbers, hyphens, and underscores allowed (max 32 chars)", name)
+			}
+
 			store, err := irc.NewStore()
 			if err != nil {
 				return err
@@ -109,6 +113,9 @@ func whoCmd() *cobra.Command {
 				return err
 			}
 
+			// Clean up orphan inbox/topics directories
+			store.CleanOrphanDirs()
+
 			if len(statuses) == 0 {
 				fmt.Println("No peers connected.")
 				return nil
@@ -138,8 +145,8 @@ func msgCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			peer, content := args[0], args[1]
 
-			if strings.TrimSpace(peer) == "" {
-				return fmt.Errorf("peer name cannot be empty")
+			if !isValidPeerName(peer) {
+				return fmt.Errorf("invalid peer name '%s'", peer)
 			}
 			if strings.TrimSpace(content) == "" {
 				return fmt.Errorf("message cannot be empty")
@@ -224,32 +231,32 @@ func inboxCmd() *cobra.Command {
 				return nil
 			}
 
-			// Filter to unread only (unless --all)
-			var filtered []irc.Message
-			if all {
-				filtered = messages
-			} else {
-				for _, msg := range messages {
-					if !msg.Read {
-						filtered = append(filtered, msg)
-					}
+			// Build display list: indices always refer to the full message list
+			type indexedMsg struct {
+				index int // 1-based position in full message list
+				msg   irc.Message
+			}
+			var display []indexedMsg
+			for i, msg := range messages {
+				if all || !msg.Read {
+					display = append(display, indexedMsg{index: i + 1, msg: msg})
 				}
 			}
 
-			if len(filtered) == 0 {
+			if len(display) == 0 {
 				fmt.Println("No messages.")
 				return nil
 			}
 
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 			fmt.Fprintln(w, "#\tFROM\tTIME\tMESSAGE")
-			for i, msg := range filtered {
-				preview := strings.ReplaceAll(msg.Content, "\n", " ")
+			for _, d := range display {
+				preview := strings.ReplaceAll(d.msg.Content, "\n", " ")
 				if len(preview) > 80 {
 					preview = preview[:77] + "..."
 				}
 				fmt.Fprintf(w, "%d\t%s\t%s\t%s\n",
-					i+1, msg.From, timeAgo(msg.Timestamp), preview)
+					d.index, d.msg.From, timeAgo(d.msg.Timestamp), preview)
 			}
 			w.Flush()
 
@@ -306,17 +313,13 @@ func checkCmd() *cobra.Command {
 }
 
 func topicCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "topic <title>",
-		Short: "Publish a context topic (reads content from stdin)",
-		Args:  cobra.ExactArgs(1),
+	var deleteIndex int
+	var clear bool
+	cmd := &cobra.Command{
+		Use:   "topic [title]",
+		Short: "Publish, delete, or clear topics",
+		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			title := args[0]
-
-			if strings.TrimSpace(title) == "" {
-				return fmt.Errorf("topic title cannot be empty")
-			}
-
 			store, err := irc.NewStore()
 			if err != nil {
 				return err
@@ -325,6 +328,38 @@ func topicCmd() *cobra.Command {
 			name, err := resolveMyName(store)
 			if err != nil {
 				return err
+			}
+
+			// Handle --clear
+			if clear {
+				if err := store.ClearTopics(name); err != nil {
+					return err
+				}
+				fmt.Fprintln(os.Stderr, "All topics cleared.")
+				return nil
+			}
+
+			// Handle --delete <index>
+			if deleteIndex > 0 {
+				topic, err := store.GetTopic(name, deleteIndex)
+				if err != nil {
+					return err
+				}
+				if err := store.DeleteTopic(name, deleteIndex); err != nil {
+					return err
+				}
+				fmt.Fprintf(os.Stderr, "Deleted topic #%d: \"%s\"\n", deleteIndex, topic.Title)
+				return nil
+			}
+
+			// Publish: requires title arg + stdin
+			if len(args) == 0 {
+				return fmt.Errorf("usage: topic <title> (pipe content via stdin), topic --delete <index>, or topic --clear")
+			}
+
+			title := args[0]
+			if strings.TrimSpace(title) == "" {
+				return fmt.Errorf("topic title cannot be empty")
 			}
 
 			content, err := io.ReadAll(os.Stdin)
@@ -348,10 +383,13 @@ func topicCmd() *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().IntVar(&deleteIndex, "delete", 0, "Delete topic by index")
+	cmd.Flags().BoolVar(&clear, "clear", false, "Delete all your topics")
+	return cmd
 }
 
 func boardCmd() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "board <peer> [index]",
 		Short: "Read a peer's published topics",
 		Args:  cobra.RangeArgs(1, 2),
@@ -400,6 +438,8 @@ func boardCmd() *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().SetInterspersed(false) // Allow "board peer -1" without flag parsing
+	return cmd
 }
 
 func quitCmd() *cobra.Command {
@@ -478,16 +518,22 @@ func daemonCmd() *cobra.Command {
 }
 
 // resolveMyName determines the current peer's name.
-// Priority: --name flag > ancestor session marker > single registered peer.
+// Priority: session marker > --name fallback > single registered peer.
+// --name is only allowed when session detection fails (prevents impersonation).
 func resolveMyName(store *irc.Store) (string, error) {
+	// Try session detection first
+	_, detected, detectErr := irc.DetectSession(os.Getppid())
+
 	if nameFlag != "" {
+		// --name provided: only allow if session detection fails or matches
+		if detectErr == nil && detected != "" && detected != nameFlag {
+			return "", fmt.Errorf("--name '%s' does not match your session '%s'", nameFlag, detected)
+		}
 		return nameFlag, nil
 	}
 
-	// Walk up the process tree to find a matching session marker
-	_, name, err := irc.DetectSession(os.Getppid())
-	if err == nil && name != "" {
-		return name, nil
+	if detectErr == nil && detected != "" {
+		return detected, nil
 	}
 
 	// Fallback: if only one peer exists, assume it's us
@@ -499,6 +545,19 @@ func resolveMyName(store *irc.Store) (string, error) {
 	}
 
 	return "", fmt.Errorf("not joined (run 'claude-irc join <name>' first, or use --name)")
+}
+
+// isValidPeerName checks that a peer name contains only safe characters.
+func isValidPeerName(name string) bool {
+	if name == "" || len(name) > 32 {
+		return false
+	}
+	for _, c := range name {
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_') {
+			return false
+		}
+	}
+	return true
 }
 
 func upgradeCmd() *cobra.Command {
