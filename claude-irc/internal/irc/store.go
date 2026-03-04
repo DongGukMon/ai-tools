@@ -3,7 +3,9 @@ package irc
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -70,24 +72,76 @@ func (s *Store) RemoveSessionMarker(ppid int) error {
 	return os.Remove(s.SessionMarkerPath(ppid))
 }
 
-// DetectSession finds a session marker matching the given PPID.
-func DetectSession(ppid int) (store *Store, name string, err error) {
+// DetectSession finds a session marker matching the given PID or any ancestor PID.
+// This handles the case where claude-irc is invoked from a subshell (e.g., Bash tool)
+// whose PPID differs from the Claude Code session PID that ran "join".
+func DetectSession(pid int) (store *Store, name string, err error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil, "", err
 	}
 
 	dir := filepath.Join(home, baseDir)
-	markerPath := filepath.Join(dir, fmt.Sprintf(".session_%d", ppid))
-	data, err := os.ReadFile(markerPath)
+
+	// Walk up the process tree looking for a matching session marker
+	current := pid
+	for i := 0; i < 10; i++ { // limit depth to avoid infinite loops
+		markerPath := filepath.Join(dir, fmt.Sprintf(".session_%d", current))
+		data, err := os.ReadFile(markerPath)
+		if err == nil {
+			peerName := strings.TrimSpace(string(data))
+			if peerName != "" {
+				return &Store{BaseDir: dir, Name: peerName}, peerName, nil
+			}
+		}
+
+		// Get parent PID
+		parent := getParentPID(current)
+		if parent <= 1 || parent == current {
+			break
+		}
+		current = parent
+	}
+
+	return nil, "", fmt.Errorf("no active session for pid %d", pid)
+}
+
+// getParentPID returns the parent PID of the given process.
+func getParentPID(pid int) int {
+	out, err := exec.Command("ps", "-o", "ppid=", "-p", strconv.Itoa(pid)).Output()
 	if err != nil {
-		return nil, "", fmt.Errorf("no active session for pid %d", ppid)
+		return 0
 	}
-
-	peerName := strings.TrimSpace(string(data))
-	if peerName == "" {
-		return nil, "", fmt.Errorf("no active session for pid %d", ppid)
+	ppid, err := strconv.Atoi(strings.TrimSpace(string(out)))
+	if err != nil {
+		return 0
 	}
+	return ppid
+}
 
-	return &Store{BaseDir: dir, Name: peerName}, peerName, nil
+// FindSessionPID walks up the process tree from the given PID to find the
+// most appropriate PID to use as session identifier. It looks for a "claude"
+// process in the ancestry (Claude Code), falling back to the given PID.
+func FindSessionPID(startPID int) int {
+	current := startPID
+	for i := 0; i < 10; i++ {
+		comm := getProcessComm(current)
+		if comm == "claude" {
+			return current
+		}
+		parent := getParentPID(current)
+		if parent <= 1 || parent == current {
+			break
+		}
+		current = parent
+	}
+	return startPID // fallback: use the given PID as-is
+}
+
+func getProcessComm(pid int) string {
+	out, err := exec.Command("ps", "-o", "comm=", "-p", strconv.Itoa(pid)).Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
 }

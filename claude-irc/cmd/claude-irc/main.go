@@ -63,7 +63,7 @@ func joinCmd() *cobra.Command {
 				return err
 			}
 
-			sessionPID := os.Getppid()
+			sessionPID := irc.FindSessionPID(os.Getppid())
 
 			// Register in registry
 			if err := store.Register(name, sessionPID); err != nil {
@@ -159,10 +159,11 @@ func msgCmd() *cobra.Command {
 }
 
 func inboxCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "inbox",
-		Short: "Show received messages",
-		Args:  cobra.NoArgs,
+	var full bool
+	cmd := &cobra.Command{
+		Use:   "inbox [index]",
+		Short: "Show received messages (use index to read full message)",
+		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store, err := irc.NewStore()
 			if err != nil {
@@ -184,6 +185,21 @@ func inboxCmd() *cobra.Command {
 				return nil
 			}
 
+			// Read specific message by index
+			if len(args) == 1 {
+				index, err := strconv.Atoi(args[0])
+				if err != nil || index < 1 || index > len(messages) {
+					return fmt.Errorf("invalid index: %s (1-%d)", args[0], len(messages))
+				}
+				msg := messages[index-1]
+				fmt.Printf("[%s] %s (%s)\n\n%s\n",
+					msg.From, timeAgo(msg.Timestamp),
+					func() string { if msg.Read { return "read" }; return "unread" }(),
+					msg.Content)
+				store.MarkAllRead(name)
+				return nil
+			}
+
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 			fmt.Fprintln(w, "#\tFROM\tTIME\tSTATUS\tMESSAGE")
 			for i, msg := range messages {
@@ -192,20 +208,24 @@ func inboxCmd() *cobra.Command {
 					status = "read"
 				}
 				preview := msg.Content
-				if len(preview) > 80 {
+				if !full && len(preview) > 80 {
 					preview = preview[:77] + "..."
+				}
+				// Replace newlines for table view
+				if !full {
+					preview = strings.ReplaceAll(preview, "\n", " ")
 				}
 				fmt.Fprintf(w, "%d\t%s\t%s\t%s\t%s\n",
 					i+1, msg.From, timeAgo(msg.Timestamp), status, preview)
 			}
 			w.Flush()
 
-			// Mark all as read
 			store.MarkAllRead(name)
-
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&full, "full", false, "Show full message content without truncation")
+	return cmd
 }
 
 func checkCmd() *cobra.Command {
@@ -342,27 +362,21 @@ func quitCmd() *cobra.Command {
 		Short: "Leave the channel and clean up",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ppid := os.Getppid()
-
-			store, name, err := irc.DetectSession(ppid)
+			store, err := irc.NewStore()
 			if err != nil {
-				// Try NewStore as fallback
-				store, err = irc.NewStore()
-				if err != nil {
-					return nil // Nothing to do
-				}
-				// Try to read marker with store
-				name, err = store.ReadSessionMarker(ppid)
-				if err != nil {
-					return nil // Not joined
-				}
+				return nil
+			}
+
+			name, err := resolveMyName(store)
+			if err != nil {
+				return nil // Not joined
 			}
 
 			// Kill daemon
 			store.KillDaemon(name)
 
-			// Remove session marker
-			store.RemoveSessionMarker(ppid)
+			// Remove session markers (clean all markers pointing to this name)
+			cleanSessionMarkers(store, name)
 
 			// Unregister from registry
 			store.Unregister(name)
@@ -370,6 +384,27 @@ func quitCmd() *cobra.Command {
 			fmt.Fprintf(os.Stderr, "Left as '%s'. Goodbye!\n", name)
 			return nil
 		},
+	}
+}
+
+// cleanSessionMarkers removes all session marker files that point to the given name.
+func cleanSessionMarkers(store *irc.Store, name string) {
+	entries, err := os.ReadDir(store.BaseDir)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if !strings.HasPrefix(e.Name(), ".session_") {
+			continue
+		}
+		path := filepath.Join(store.BaseDir, e.Name())
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		if strings.TrimSpace(string(data)) == name {
+			os.Remove(path)
+		}
 	}
 }
 
@@ -397,13 +432,14 @@ func daemonCmd() *cobra.Command {
 }
 
 // resolveMyName determines the current peer's name.
-// Priority: --name flag > PPID session marker > single registered peer.
+// Priority: --name flag > ancestor session marker > single registered peer.
 func resolveMyName(store *irc.Store) (string, error) {
 	if nameFlag != "" {
 		return nameFlag, nil
 	}
 
-	name, err := store.ReadSessionMarker(os.Getppid())
+	// Walk up the process tree to find a matching session marker
+	_, name, err := irc.DetectSession(os.Getppid())
 	if err == nil && name != "" {
 		return name, nil
 	}
