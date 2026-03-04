@@ -23,6 +23,16 @@ curl -fsSL https://raw.githubusercontent.com/bang9/ai-tools/main/redit/install.s
 /plugin install redit
 ```
 
+### [vaultkey](./vaultkey)
+
+Encrypted secrets manager backed by a private Git repo. AES-256-GCM encryption, synced across machines via git.
+
+#### Installation
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/bang9/ai-tools/main/vaultkey/install.sh | bash
+```
+
 ### [memex](./memex)
 
 A local knowledge graph for AI — automatically stores, connects, and retrieves knowledge across conversations.
