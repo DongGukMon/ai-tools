@@ -5,17 +5,42 @@ inputs:
     description: "GitHub PAT with read access to the vault repo"
     required: true
   vault-repo:
-    description: "Vault repo (e.g. bang9/vaultkey-secrets)"
+    description: "Vault repo (e.g. your-user/your-secrets-repo)"
+    required: true
+  version:
+    description: "vaultkey version to install (default: latest)"
     required: false
-    default: "bang9/vaultkey-secrets"
+    default: "latest"
 runs:
   using: "composite"
   steps:
+    - name: Resolve version
+      id: version
+      shell: bash
+      run: |
+        if [ "${{ inputs.version }}" = "latest" ]; then
+          VERSION=$(curl -sfSL https://api.github.com/repos/bang9/ai-tools/releases/latest | grep '"tag_name"' | head -1 | cut -d'"' -f4)
+        else
+          VERSION="${{ inputs.version }}"
+        fi
+        echo "tag=$VERSION" >> $GITHUB_OUTPUT
+
+    - name: Cache vaultkey binary
+      id: cache
+      uses: actions/cache@v4
+      with:
+        path: ~/.local/bin/vaultkey
+        key: vaultkey-${{ runner.os }}-${{ runner.arch }}-${{ steps.version.outputs.tag }}
+
     - name: Install vaultkey
+      if: steps.cache.outputs.cache-hit != 'true'
       shell: bash
       run: |
         curl -fsSL https://raw.githubusercontent.com/bang9/ai-tools/main/vaultkey/install.sh | bash
-        echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+    - name: Add to PATH
+      shell: bash
+      run: echo "$HOME/.local/bin" >> $GITHUB_PATH
 
     - name: Clone vault
       shell: bash
