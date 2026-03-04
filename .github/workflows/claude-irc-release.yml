@@ -27,7 +27,6 @@ jobs:
           GOOS=darwin GOARCH=arm64 go build -o dist/claude-irc-darwin-arm64 ./cmd/claude-irc
           GOOS=darwin GOARCH=amd64 go build -o dist/claude-irc-darwin-amd64 ./cmd/claude-irc
           GOOS=linux GOARCH=amd64 go build -o dist/claude-irc-linux-amd64 ./cmd/claude-irc
-          GOOS=windows GOARCH=amd64 go build -o dist/claude-irc-windows-amd64.exe ./cmd/claude-irc
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -36,5 +35,4 @@ jobs:
             claude-irc/dist/claude-irc-darwin-arm64
             claude-irc/dist/claude-irc-darwin-amd64
             claude-irc/dist/claude-irc-linux-amd64
-            claude-irc/dist/claude-irc-windows-amd64.exe
           generate_release_notes: true
