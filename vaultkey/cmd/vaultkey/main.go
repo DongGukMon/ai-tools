@@ -3,7 +3,10 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strings"
 
 	"github.com/bang9/ai-tools/vaultkey/internal/vaultkey"
 	"github.com/spf13/cobra"
@@ -12,18 +15,22 @@ import (
 var (
 	passwordFlag string
 	ciFlag       bool
+
+	// Set via -ldflags at build time
+	version = "dev"
 )
 
 func main() {
 	root := &cobra.Command{
-		Use:   "vaultkey",
-		Short: "Encrypted secrets manager backed by a private Git repo",
+		Use:     "vaultkey",
+		Short:   "Encrypted secrets manager backed by a private Git repo",
+		Version: version,
 	}
 
 	root.PersistentFlags().StringVar(&passwordFlag, "password", "", "vault password (or use VAULTKEY_PASSWORD env)")
 	root.PersistentFlags().BoolVar(&ciFlag, "ci", false, "CI mode: skip interactive prompts")
 
-	root.AddCommand(initCmd(), setCmd(), getCmd(), listCmd(), deleteCmd(), pushCmd(), pullCmd())
+	root.AddCommand(initCmd(), setCmd(), getCmd(), listCmd(), deleteCmd(), pushCmd(), pullCmd(), upgradeCmd())
 
 	if err := root.Execute(); err != nil {
 		os.Exit(1)
@@ -229,6 +236,80 @@ func pullCmd() *cobra.Command {
 			}
 
 			fmt.Fprintln(os.Stderr, "Pulled successfully.")
+			return nil
+		},
+	}
+}
+
+func upgradeCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "upgrade",
+		Short: "Upgrade vaultkey to the latest version",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			repo := "bang9/ai-tools"
+
+			// Fetch latest version from GitHub
+			fmt.Fprintln(os.Stderr, "Checking for updates...")
+			out, err := exec.Command("curl", "-sfSL",
+				fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", repo)).Output()
+			if err != nil {
+				return fmt.Errorf("failed to check latest version: %w", err)
+			}
+
+			// Parse tag_name from JSON (simple string search to avoid adding dependencies)
+			latestVersion := ""
+			for _, line := range strings.Split(string(out), "\n") {
+				line = strings.TrimSpace(line)
+				if strings.Contains(line, `"tag_name"`) {
+					parts := strings.Split(line, `"`)
+					if len(parts) >= 4 {
+						latestVersion = parts[3]
+					}
+					break
+				}
+			}
+			if latestVersion == "" {
+				return fmt.Errorf("failed to parse latest version from GitHub")
+			}
+
+			if version != "dev" && latestVersion == version {
+				fmt.Fprintf(os.Stderr, "Already up to date (%s)\n", version)
+				return nil
+			}
+
+			osName := runtime.GOOS
+			arch := runtime.GOARCH
+
+			binaryName := fmt.Sprintf("vaultkey-%s-%s", osName, arch)
+			if osName == "windows" {
+				binaryName += ".exe"
+			}
+
+			downloadURL := fmt.Sprintf("https://github.com/%s/releases/download/%s/%s", repo, latestVersion, binaryName)
+
+			// Find current binary path
+			binPath, err := os.Executable()
+			if err != nil {
+				binPath = filepath.Join(os.Getenv("HOME"), ".local", "bin", "vaultkey")
+			}
+			// Resolve symlinks
+			if resolved, err := filepath.EvalSymlinks(binPath); err == nil {
+				binPath = resolved
+			}
+
+			fmt.Fprintf(os.Stderr, "Downloading %s...\n", latestVersion)
+			dlCmd := exec.Command("curl", "-fsSL", "-o", binPath, downloadURL)
+			dlCmd.Stderr = os.Stderr
+			if err := dlCmd.Run(); err != nil {
+				return fmt.Errorf("download failed: %w", err)
+			}
+
+			if err := os.Chmod(binPath, 0755); err != nil {
+				return fmt.Errorf("chmod failed: %w", err)
+			}
+
+			fmt.Fprintf(os.Stderr, "Updated to %s\n", latestVersion)
 			return nil
 		},
 	}

@@ -2,6 +2,8 @@
 redit/redit
 redit/bin/
 redit/dist/
+vaultkey/vaultkey
+vaultkey/dist/
 memex/dist/
 memex/node_modules/
 
