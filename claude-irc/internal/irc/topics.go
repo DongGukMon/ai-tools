@@ -102,6 +102,9 @@ func (s *Store) GetTopic(name string, index int) (*Topic, error) {
 		return nil, err
 	}
 
+	if len(topics) == 0 {
+		return nil, fmt.Errorf("no topics to read")
+	}
 	if index < 1 || index > len(topics) {
 		return nil, fmt.Errorf("topic index %d out of range (1-%d)", index, len(topics))
 	}
@@ -117,6 +120,9 @@ func (s *Store) DeleteTopic(name string, index int) error {
 		return err
 	}
 
+	if len(files) == 0 {
+		return fmt.Errorf("no topics to delete")
+	}
 	if index < 1 || index > len(files) {
 		return fmt.Errorf("topic index %d out of range (1-%d)", index, len(files))
 	}

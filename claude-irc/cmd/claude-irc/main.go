@@ -265,7 +265,8 @@ func inboxCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&all, "all", false, "Show all messages including read")
-	cmd.Flags().SetInterspersed(false) // Allow "inbox -1" without flag parsing
+	cmd.Flags().SetInterspersed(false)
+	cmd.FParseErrWhitelist = cobra.FParseErrWhitelist{UnknownFlags: true} // Allow "inbox -1"
 	return cmd
 }
 
@@ -340,7 +341,10 @@ func topicCmd() *cobra.Command {
 			}
 
 			// Handle --delete <index>
-			if deleteIndex > 0 {
+			if cmd.Flags().Changed("delete") {
+				if deleteIndex < 1 {
+					return fmt.Errorf("invalid topic index: %d (must be >= 1)", deleteIndex)
+				}
 				topic, err := store.GetTopic(name, deleteIndex)
 				if err != nil {
 					return err
@@ -450,12 +454,12 @@ func quitCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store, err := irc.NewStore()
 			if err != nil {
-				return nil
+				return nil // No store dir — nothing to quit
 			}
 
 			name, err := resolveMyName(store)
 			if err != nil {
-				return nil // Not joined
+				return fmt.Errorf("not joined (nothing to quit)")
 			}
 
 			// Kill daemon
