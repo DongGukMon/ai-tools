@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -291,10 +292,19 @@ func checkCmd() *cobra.Command {
 			}
 
 			if quiet {
-				// Hook mode: print messages inline for Claude to see
+				// Hook mode: output structured JSON for Claude Code PreToolUse hook
+				// Plain stdout is NOT visible to the agent; additionalContext is.
+				var lines []string
 				for _, msg := range unread {
-					fmt.Printf("[claude-irc] %s: %s\n", msg.From, msg.Content)
+					lines = append(lines, fmt.Sprintf("[claude-irc] %s: %s", msg.From, msg.Content))
 				}
+				hookOutput := map[string]interface{}{
+					"hookSpecificOutput": map[string]interface{}{
+						"hookEventName":    "PreToolUse",
+						"additionalContext": strings.Join(lines, "\n"),
+					},
+				}
+				json.NewEncoder(os.Stdout).Encode(hookOutput)
 			} else {
 				fmt.Printf("%d unread message(s):\n", len(unread))
 				for _, msg := range unread {
