@@ -45,13 +45,12 @@ runs:
       shell: bash
       run: echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-    - name: Clone vault
-      shell: bash
-      run: |
-        mkdir -p $HOME/.vaultkey
-        git clone https://${{ inputs.gh-pat }}@github.com/${{ inputs.vault-repo }}.git $HOME/.vaultkey/repo
-        echo '{"repo_path":"'$HOME'/.vaultkey/repo"}' > $HOME/.vaultkey/config.json
-
     - name: Set vault password
       shell: bash
       run: echo "VAULTKEY_PASSWORD=${{ inputs.password }}" >> $GITHUB_ENV
+
+    - name: Init vault
+      shell: bash
+      run: vaultkey init --ci https://${{ inputs.gh-pat }}@github.com/${{ inputs.vault-repo }}.git
+      env:
+        VAULTKEY_PASSWORD: ${{ inputs.password }}

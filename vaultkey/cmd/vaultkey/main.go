@@ -9,7 +9,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var passwordFlag string
+var (
+	passwordFlag string
+	ciFlag       bool
+)
 
 func main() {
 	root := &cobra.Command{
@@ -18,6 +21,7 @@ func main() {
 	}
 
 	root.PersistentFlags().StringVar(&passwordFlag, "password", "", "vault password (or use VAULTKEY_PASSWORD env)")
+	root.PersistentFlags().BoolVar(&ciFlag, "ci", false, "CI mode: skip interactive prompts")
 
 	root.AddCommand(initCmd(), setCmd(), getCmd(), listCmd(), deleteCmd(), pushCmd(), pullCmd())
 
@@ -34,7 +38,13 @@ func initCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			repoURL := args[0]
 
-			pw, err := vaultkey.GetPasswordWithConfirm(passwordFlag)
+			var pw string
+			var err error
+			if ciFlag {
+				pw, err = vaultkey.GetPassword(passwordFlag)
+			} else {
+				pw, err = vaultkey.GetPasswordWithConfirm(passwordFlag)
+			}
 			if err != nil {
 				return err
 			}
