@@ -1,0 +1,25 @@
+name: "Setup vaultkey"
+description: "Install vaultkey CLI and clone vault repo"
+inputs:
+  gh-pat:
+    description: "GitHub PAT with read access to the vault repo"
+    required: true
+  vault-repo:
+    description: "Vault repo (e.g. bang9/vaultkey-secrets)"
+    required: false
+    default: "bang9/vaultkey-secrets"
+runs:
+  using: "composite"
+  steps:
+    - name: Install vaultkey
+      shell: bash
+      run: |
+        curl -fsSL https://raw.githubusercontent.com/bang9/ai-tools/main/vaultkey/install.sh | bash
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+    - name: Clone vault
+      shell: bash
+      run: |
+        mkdir -p $HOME/.vaultkey
+        git clone https://${{ inputs.gh-pat }}@github.com/${{ inputs.vault-repo }}.git $HOME/.vaultkey/repo
+        echo '{"repo_path":"'$HOME'/.vaultkey/repo"}' > $HOME/.vaultkey/config.json
