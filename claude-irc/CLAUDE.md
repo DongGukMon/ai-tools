@@ -2,7 +2,7 @@
 
 ## Overview
 
-`claude-irc` enables communication between Claude Code sessions running in the same git repository. Think IRC for AI agents — join a channel, send messages, share context, see who's online.
+`claude-irc` enables communication between Claude Code sessions on the same machine. Think IRC for AI agents — join a channel, send messages, share context, see who's online.
 
 ## Commands
 
@@ -10,11 +10,16 @@
 claude-irc join <name>              # Join the channel
 claude-irc who                      # List peers (online/offline)
 claude-irc msg <peer> "<message>"   # Send a message
-claude-irc inbox                    # Show received messages
+claude-irc inbox                    # Show unread messages
+claude-irc inbox <number>           # Read full message by index
+claude-irc inbox --all              # Show all messages (including read)
+claude-irc inbox clear              # Delete all messages
 claude-irc check [--quiet]          # Check for new messages (hook-friendly)
 claude-irc topic "<title>"          # Publish context (stdin)
 claude-irc board <peer> [index]     # Read peer's topics
 claude-irc quit                     # Leave the channel
+claude-irc upgrade                  # Update to latest version
+claude-irc --version                # Show current version
 ```
 
 ## Workflow

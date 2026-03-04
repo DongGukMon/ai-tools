@@ -159,10 +159,10 @@ func msgCmd() *cobra.Command {
 }
 
 func inboxCmd() *cobra.Command {
-	var full bool
+	var all bool
 	cmd := &cobra.Command{
-		Use:   "inbox [index]",
-		Short: "Show received messages (use index to read full message)",
+		Use:   "inbox [index|clear]",
+		Short: "Show unread messages (use index to read full, 'clear' to delete all)",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store, err := irc.NewStore()
@@ -175,14 +175,18 @@ func inboxCmd() *cobra.Command {
 				return err
 			}
 
+			// Handle "inbox clear"
+			if len(args) == 1 && args[0] == "clear" {
+				if err := store.ClearInbox(name); err != nil {
+					return err
+				}
+				fmt.Fprintln(os.Stderr, "Inbox cleared.")
+				return nil
+			}
+
 			messages, err := store.ReadInbox(name)
 			if err != nil {
 				return err
-			}
-
-			if len(messages) == 0 {
-				fmt.Println("No messages.")
-				return nil
 			}
 
 			// Read specific message by index
@@ -192,31 +196,37 @@ func inboxCmd() *cobra.Command {
 					return fmt.Errorf("invalid index: %s (1-%d)", args[0], len(messages))
 				}
 				msg := messages[index-1]
-				fmt.Printf("[%s] %s (%s)\n\n%s\n",
-					msg.From, timeAgo(msg.Timestamp),
-					func() string { if msg.Read { return "read" }; return "unread" }(),
-					msg.Content)
+				fmt.Printf("[%s] %s\n\n%s\n", msg.From, timeAgo(msg.Timestamp), msg.Content)
 				store.MarkAllRead(name)
 				return nil
 			}
 
-			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-			fmt.Fprintln(w, "#\tFROM\tTIME\tSTATUS\tMESSAGE")
-			for i, msg := range messages {
-				status := "unread"
-				if msg.Read {
-					status = "read"
+			// Filter to unread only (unless --all)
+			var filtered []irc.Message
+			if all {
+				filtered = messages
+			} else {
+				for _, msg := range messages {
+					if !msg.Read {
+						filtered = append(filtered, msg)
+					}
 				}
-				preview := msg.Content
-				if !full && len(preview) > 80 {
+			}
+
+			if len(filtered) == 0 {
+				fmt.Println("No messages.")
+				return nil
+			}
+
+			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+			fmt.Fprintln(w, "#\tFROM\tTIME\tMESSAGE")
+			for i, msg := range filtered {
+				preview := strings.ReplaceAll(msg.Content, "\n", " ")
+				if len(preview) > 80 {
 					preview = preview[:77] + "..."
 				}
-				// Replace newlines for table view
-				if !full {
-					preview = strings.ReplaceAll(preview, "\n", " ")
-				}
-				fmt.Fprintf(w, "%d\t%s\t%s\t%s\t%s\n",
-					i+1, msg.From, timeAgo(msg.Timestamp), status, preview)
+				fmt.Fprintf(w, "%d\t%s\t%s\t%s\n",
+					i+1, msg.From, timeAgo(msg.Timestamp), preview)
 			}
 			w.Flush()
 
@@ -224,7 +234,7 @@ func inboxCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().BoolVar(&full, "full", false, "Show full message content without truncation")
+	cmd.Flags().BoolVar(&all, "all", false, "Show all messages including read")
 	return cmd
 }
 

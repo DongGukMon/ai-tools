@@ -104,6 +104,12 @@ func (s *Store) UnreadCount(name string) (int, error) {
 	return len(msgs), nil
 }
 
+// ClearInbox removes all messages from a peer's inbox.
+func (s *Store) ClearInbox(name string) error {
+	dir := s.InboxDir(name)
+	return os.RemoveAll(dir)
+}
+
 // MarkAllRead marks all messages in a peer's inbox as read.
 func (s *Store) MarkAllRead(name string) error {
 	dir := s.InboxDir(name)
