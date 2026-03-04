@@ -7,6 +7,9 @@ inputs:
   vault-repo:
     description: "Vault repo (e.g. your-user/your-secrets-repo)"
     required: true
+  password:
+    description: "Vault password (sets VAULTKEY_PASSWORD env for subsequent steps)"
+    required: true
   version:
     description: "vaultkey version to install (default: latest)"
     required: false
@@ -48,3 +51,7 @@ runs:
         mkdir -p $HOME/.vaultkey
         git clone https://${{ inputs.gh-pat }}@github.com/${{ inputs.vault-repo }}.git $HOME/.vaultkey/repo
         echo '{"repo_path":"'$HOME'/.vaultkey/repo"}' > $HOME/.vaultkey/config.json
+
+    - name: Set vault password
+      shell: bash
+      run: echo "VAULTKEY_PASSWORD=${{ inputs.password }}" >> $GITHUB_ENV
