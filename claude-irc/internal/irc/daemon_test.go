@@ -19,7 +19,7 @@ func newSocketTestStore(t *testing.T) *Store {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
 	t.Cleanup(func() { os.RemoveAll(dir) })
-	return &Store{BaseDir: dir, RepoID: "test"}
+	return &Store{BaseDir: dir}
 }
 
 func TestSocketPingPong(t *testing.T) {

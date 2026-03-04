@@ -1,18 +1,18 @@
 CLI_BINARY = claude-irc
 DIST_DIR = dist
-
-PLATFORMS = darwin-arm64 darwin-amd64 linux-amd64 windows-amd64
+VERSION ?= dev
+LDFLAGS = -ldflags "-s -w -X main.version=$(VERSION)"
 
 .PHONY: build cross test clean
 
 build:
-	go build -o $(CLI_BINARY) ./cmd/claude-irc
+	go build $(LDFLAGS) -o $(CLI_BINARY) ./cmd/claude-irc
 
 cross:
 	mkdir -p $(DIST_DIR)
-	GOOS=darwin GOARCH=arm64 go build -o $(DIST_DIR)/$(CLI_BINARY)-darwin-arm64 ./cmd/claude-irc
-	GOOS=darwin GOARCH=amd64 go build -o $(DIST_DIR)/$(CLI_BINARY)-darwin-amd64 ./cmd/claude-irc
-	GOOS=linux GOARCH=amd64 go build -o $(DIST_DIR)/$(CLI_BINARY)-linux-amd64 ./cmd/claude-irc
+	GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o $(DIST_DIR)/$(CLI_BINARY)-darwin-arm64 ./cmd/claude-irc
+	GOOS=darwin GOARCH=amd64 go build $(LDFLAGS) -o $(DIST_DIR)/$(CLI_BINARY)-darwin-amd64 ./cmd/claude-irc
+	GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o $(DIST_DIR)/$(CLI_BINARY)-linux-amd64 ./cmd/claude-irc
 
 test:
 	go test ./...

@@ -77,9 +77,7 @@ After displaying, messages are automatically marked as read.
 
 ## Auto-Discovery
 
-Sessions in the same git repo automatically discover each other. The repo is identified by:
-1. `git remote get-url origin` (preferred — works across clones)
-2. `git rev-parse --show-toplevel` (fallback for repos without remotes)
+All sessions on the same machine share a single channel (`~/.claude-irc/`). Any Claude Code session can join and communicate regardless of which directory or repo it's running in.
 
 ## Online Presence
 

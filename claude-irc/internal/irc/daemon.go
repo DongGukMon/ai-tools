@@ -36,7 +36,6 @@ func (s *Store) SpawnDaemon(name string, sessionPID int) (int, error) {
 	}
 
 	cmd := exec.Command(exePath, "__daemon",
-		"--repo-id", s.RepoID,
 		"--name", name,
 		"--session-pid", strconv.Itoa(sessionPID),
 	)

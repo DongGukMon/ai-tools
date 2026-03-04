@@ -23,10 +23,12 @@ jobs:
       - name: Build binaries
         run: |
           cd claude-irc
+          VERSION=${GITHUB_REF_NAME}
+          LDFLAGS="-s -w -X main.version=${VERSION}"
           mkdir -p dist
-          GOOS=darwin GOARCH=arm64 go build -o dist/claude-irc-darwin-arm64 ./cmd/claude-irc
-          GOOS=darwin GOARCH=amd64 go build -o dist/claude-irc-darwin-amd64 ./cmd/claude-irc
-          GOOS=linux GOARCH=amd64 go build -o dist/claude-irc-linux-amd64 ./cmd/claude-irc
+          GOOS=darwin GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o dist/claude-irc-darwin-arm64 ./cmd/claude-irc
+          GOOS=darwin GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o dist/claude-irc-darwin-amd64 ./cmd/claude-irc
+          GOOS=linux GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o dist/claude-irc-linux-amd64 ./cmd/claude-irc
 
       - name: Create Release
         uses: softprops/action-gh-release@v2

@@ -4,7 +4,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strconv"
+	"strings"
 	"text/tabwriter"
 	"time"
 
@@ -12,12 +16,18 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var nameFlag string
+var (
+	nameFlag string
+
+	// Set via -ldflags at build time
+	version = "dev"
+)
 
 func main() {
 	root := &cobra.Command{
-		Use:   "claude-irc",
-		Short: "IRC-inspired inter-session communication for Claude Code",
+		Use:     "claude-irc",
+		Short:   "IRC-inspired inter-session communication for Claude Code",
+		Version: version,
 	}
 
 	root.PersistentFlags().StringVar(&nameFlag, "name", "", "Override peer name (bypass session marker)")
@@ -32,9 +42,12 @@ func main() {
 		boardCmd(),
 		quitCmd(),
 		daemonCmd(),
+		upgradeCmd(),
 	)
 
-	root.Execute()
+	if err := root.Execute(); err != nil {
+		os.Exit(1)
+	}
 }
 
 func joinCmd() *cobra.Command {
@@ -336,7 +349,7 @@ func quitCmd() *cobra.Command {
 				// Try NewStore as fallback
 				store, err = irc.NewStore()
 				if err != nil {
-					return nil // Not in a repo, nothing to do
+					return nil // Nothing to do
 				}
 				// Try to read marker with store
 				name, err = store.ReadSessionMarker(ppid)
@@ -361,14 +374,14 @@ func quitCmd() *cobra.Command {
 }
 
 func daemonCmd() *cobra.Command {
-	var repoID, name string
+	var name string
 	var sessionPID int
 
 	cmd := &cobra.Command{
 		Use:    "__daemon",
 		Hidden: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			store, err := irc.NewStoreWithRepoID(repoID)
+			store, err := irc.NewStore()
 			if err != nil {
 				return err
 			}
@@ -376,10 +389,8 @@ func daemonCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&repoID, "repo-id", "", "Repository ID")
 	cmd.Flags().StringVar(&name, "name", "", "Peer name")
 	cmd.Flags().IntVar(&sessionPID, "session-pid", 0, "Parent session PID to monitor")
-	cmd.MarkFlagRequired("repo-id")
 	cmd.MarkFlagRequired("name")
 
 	return cmd
@@ -406,6 +417,70 @@ func resolveMyName(store *irc.Store) (string, error) {
 	}
 
 	return "", fmt.Errorf("not joined (run 'claude-irc join <name>' first, or use --name)")
+}
+
+func upgradeCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "upgrade",
+		Short: "Upgrade claude-irc to the latest version",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			repo := "bang9/ai-tools"
+
+			fmt.Fprintln(os.Stderr, "Checking for updates...")
+			out, err := exec.Command("curl", "-sfSL",
+				fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", repo)).Output()
+			if err != nil {
+				return fmt.Errorf("failed to check latest version: %w", err)
+			}
+
+			latestVersion := ""
+			for _, line := range strings.Split(string(out), "\n") {
+				line = strings.TrimSpace(line)
+				if strings.Contains(line, `"tag_name"`) {
+					parts := strings.Split(line, `"`)
+					if len(parts) >= 4 {
+						latestVersion = parts[3]
+					}
+					break
+				}
+			}
+			if latestVersion == "" {
+				return fmt.Errorf("failed to parse latest version from GitHub")
+			}
+
+			if version != "dev" && latestVersion == version {
+				fmt.Fprintf(os.Stderr, "Already up to date (%s)\n", version)
+				return nil
+			}
+
+			binaryName := fmt.Sprintf("claude-irc-%s-%s", runtime.GOOS, runtime.GOARCH)
+
+			downloadURL := fmt.Sprintf("https://github.com/%s/releases/download/%s/%s", repo, latestVersion, binaryName)
+
+			binPath, err := os.Executable()
+			if err != nil {
+				binPath = filepath.Join(os.Getenv("HOME"), ".local", "bin", "claude-irc")
+			}
+			if resolved, err := filepath.EvalSymlinks(binPath); err == nil {
+				binPath = resolved
+			}
+
+			fmt.Fprintf(os.Stderr, "Downloading %s...\n", latestVersion)
+			dlCmd := exec.Command("curl", "-fsSL", "-o", binPath, downloadURL)
+			dlCmd.Stderr = os.Stderr
+			if err := dlCmd.Run(); err != nil {
+				return fmt.Errorf("download failed: %w", err)
+			}
+
+			if err := os.Chmod(binPath, 0755); err != nil {
+				return fmt.Errorf("chmod failed: %w", err)
+			}
+
+			fmt.Fprintf(os.Stderr, "Updated to %s\n", latestVersion)
+			return nil
+		},
+	}
 }
 
 // timeAgo returns a human-readable relative time string.
