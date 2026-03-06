@@ -328,15 +328,29 @@ func watchCmd() *cobra.Command {
 	var interval int
 	cmd := &cobra.Command{
 		Use:   "watch",
-		Short: "Poll for new messages and exit when one arrives (background-task friendly)",
-		Long: `Polls for unread messages at a regular interval. When a message arrives,
-prints the message content to stdout and exits with code 0.
+		Short: "One-shot watcher: print unread, mark read, exit; restart for the next batch",
+		Long: `Checks for unread messages immediately, then polls every N seconds until
+at least one unread message exists.
+
+When unread messages are found, watch:
+  1. Prints all unread messages to stdout
+  2. Marks them as read
+  3. Exits with code 0
+
+This is a one-shot watcher, not a continuous stream. Restart it after each
+task-notification if you want ongoing monitoring.
+
+Recommended conversational loop:
+  1. Start watch in the background
+  2. When it exits with unread messages, immediately start a new watch
+  3. Then read/process/respond while the new watch waits for the next batch
 
 Designed for use as a Claude Code background task:
-  claude-irc watch --interval 10  (run in background)
+  claude-irc watch --interval 10
+  claude-irc --name my-session watch --interval 10
 
-When the task completes, the task-notification triggers the agent to read
-and respond to the message.`,
+Use --name when running watch outside the exact shell/process tree that ran
+'claude-irc join', otherwise session auto-detection may fail.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ppid := os.Getppid()
@@ -373,7 +387,7 @@ and respond to the message.`,
 			return nil
 		},
 	}
-	cmd.Flags().IntVar(&interval, "interval", 10, "Polling interval in seconds")
+	cmd.Flags().IntVar(&interval, "interval", 10, "Polling interval in seconds after the immediate unread check")
 	return cmd
 }
 

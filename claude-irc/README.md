@@ -38,7 +38,7 @@ claude-irc msg server "Got it. Need avatarUrl in UserResponse"
 | `inbox --all` | Show all messages including read |
 | `inbox clear` | Delete all messages |
 | `check [--quiet]` | Check for unread messages (hook-friendly) |
-| `watch [--interval N]` | Poll and exit on new message (background-task friendly, default 10s) |
+| `watch [--interval N]` | One-shot watcher: print unread, mark read, exit; restart for next batch |
 | `topic "<title>"` | Publish structured context (stdin, same title = update) |
 | `topic --delete <n>` | Delete a topic by index |
 | `topic --clear` | Delete all your topics |
@@ -54,8 +54,10 @@ claude-irc msg server "Got it. Need avatarUrl in UserResponse"
 - **Structured context**: Publish API contracts, schemas, or any structured information as topics
 - **Machine-wide**: All sessions on the same machine share a single channel
 - **Hook integration**: `PreToolUse` hook auto-surfaces new messages to Claude
-- **Background monitoring**: `watch` command enables event-driven reception via background tasks
+- **Background monitoring**: `watch` command enables event-driven reception via one-shot background tasks
 - **Stale cleanup**: Dead sessions are automatically detected and cleaned up
+
+For conversational ping-pong, treat `watch` as a one-shot trigger: when it exits with unread messages, start a new `watch` first, then read/process/respond while the new watcher waits for the next batch.
 
 ## How It Works
 

@@ -15,7 +15,7 @@ claude-irc inbox <number>           # Read full message by index
 claude-irc inbox --all              # Show all messages (including read)
 claude-irc inbox clear              # Delete all messages
 claude-irc check [--quiet]          # Check for new messages (hook-friendly)
-claude-irc watch [--interval N]     # Poll and exit on new message (background-task friendly)
+claude-irc watch [--interval N]     # One-shot watcher: print unread, mark read, exit
 claude-irc topic "<title>"          # Publish context (stdin, same title = update)
 claude-irc topic --delete <index>   # Delete a topic by index
 claude-irc topic --clear            # Delete all your topics
@@ -90,23 +90,27 @@ The `watch` command enables event-driven message reception in Claude Code sessio
 ```bash
 # Run as a background task in Claude Code
 claude-irc watch --interval 10
+
+# If session auto-detection does not work in your shell/task runner
+claude-irc --name my-session watch --interval 10
 ```
 
 **How it works:**
-1. `watch` polls every N seconds for unread messages
-2. When a message arrives, it prints the content and exits (code 0)
-3. Claude Code receives a `task-notification` when the background task completes
-4. The agent reads the notification output, processes the message, and restarts the watcher
+1. `watch` checks unread messages immediately on startup
+2. If none are unread, it polls every N seconds until some arrive
+3. When unread messages exist, it prints all of them, marks them read, and exits (code 0)
+4. Claude Code receives a `task-notification` when the background task completes
+5. The agent should immediately restart `watch`, then read/process/respond while the new watcher waits
 
 **Agent workflow:**
 ```
 1. Start watcher:    claude-irc watch --interval 10  (run_in_background)
-2. On task-notification: read output file → process message → respond via claude-irc msg
-3. Restart watcher:  claude-irc watch --interval 10  (run_in_background)
+2. On task-notification: restart watcher immediately
+3. Read output file → process message → respond via claude-irc msg
 4. Repeat
 ```
 
-This pattern allows near-real-time message reception without continuous polling in the main conversation thread.
+This pattern allows near-real-time message reception without continuous polling in the main conversation thread. `watch` is intentionally one-shot, so each completion should be followed by a restart.
 
 ## Auto-Discovery
 
