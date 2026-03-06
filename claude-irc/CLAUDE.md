@@ -216,6 +216,10 @@ claude-irc join <name>
 - When your work affects other sessions, send a message before moving on
 ```
 
+## Development
+
+When building and installing locally, always stop the running process (daemon) first before replacing the binary. Never replace a running binary in-place.
+
 ## Installation
 
 ```bash
