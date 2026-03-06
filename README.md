@@ -33,17 +33,6 @@ Encrypted secrets manager backed by a private Git repo. AES-256-GCM encryption, 
 curl -fsSL https://raw.githubusercontent.com/bang9/ai-tools/main/vaultkey/install.sh | bash
 ```
 
-### [memex](./memex)
-
-A local knowledge graph for AI — automatically stores, connects, and retrieves knowledge across conversations.
-
-#### Installation
-
-```bash
-/plugin marketplace add bang9/ai-tools
-/plugin install memex
-```
-
 ### [claude-irc](./claude-irc)
 
 IRC-inspired inter-session communication for Claude Code agents. Enable multiple sessions working in the same repo to exchange messages, share context, and coordinate in real-time.
