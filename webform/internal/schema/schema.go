@@ -51,7 +51,8 @@ Types:
   rad     radio           cb      checkbox        url     url
   email   email           tel     tel             date    date
   time    time            dt      datetime        color   color
-  range   range           file    file            json    json editor
+  range   range           file    file
+  json    json editor (returns parsed object or raw string on invalid JSON)
   list    dynamic list    grp     field group
 
 Opts:

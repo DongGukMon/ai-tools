@@ -87,13 +87,16 @@ main() {
 
     os=$(detect_os)
     arch=$(detect_arch)
+
+    # Validate supported platform (must match Makefile cross targets)
+    case "${os}-${arch}" in
+        darwin-arm64|darwin-amd64|linux-amd64) ;;
+        *) error "Unsupported platform: ${os}/${arch}. Supported: darwin/arm64, darwin/amd64, linux/amd64" ;;
+    esac
+
     version=$(get_latest_version)
 
     binary_name="webform-${os}-${arch}"
-    if [ "$os" = "windows" ]; then
-        binary_name="${binary_name}.exe"
-        BINARY_NAME="webform.exe"
-    fi
 
     download_url="https://github.com/${REPO}/releases/download/${version}/${binary_name}"
 

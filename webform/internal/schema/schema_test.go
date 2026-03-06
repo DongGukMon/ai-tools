@@ -136,6 +136,11 @@ func TestReference(t *testing.T) {
 	if !strings.Contains(ref, "Example:") {
 		t.Error("reference should contain an example")
 	}
+
+	// JSON field contract must be documented
+	if !strings.Contains(ref, "raw string") || !strings.Contains(ref, "invalid JSON") {
+		t.Error("reference should document json field string fallback contract")
+	}
 }
 
 func TestSchema_FieldParsing(t *testing.T) {

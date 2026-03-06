@@ -34,15 +34,16 @@ esac
 
 case "$OS" in
     darwin|linux) ;;
-    mingw*|msys*|cygwin*) OS="windows" ;;
     *) echo "Unsupported OS: $OS" >&2; exit 1 ;;
 esac
 
+# Validate supported platform (must match Makefile cross targets)
+case "${OS}-${ARCH}" in
+    darwin-arm64|darwin-amd64|linux-amd64) ;;
+    *) echo "Unsupported platform: ${OS}/${ARCH}. Supported: darwin/arm64, darwin/amd64, linux/amd64" >&2; exit 1 ;;
+esac
+
 DOWNLOAD_NAME="${BINARY_NAME}-${OS}-${ARCH}"
-if [ "$OS" = "windows" ]; then
-    DOWNLOAD_NAME="${DOWNLOAD_NAME}.exe"
-    BINARY_NAME="${BINARY_NAME}.exe"
-fi
 
 # Get latest release version
 echo "Fetching latest release version..." >&2

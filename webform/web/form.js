@@ -8,6 +8,17 @@
 
   // ── Helpers ──
 
+  function setNested(obj, path, value) {
+    var keys = path.split('.');
+    var last = keys.pop();
+    var target = obj;
+    keys.forEach(function (k) {
+      if (!target[k] || typeof target[k] !== 'object') target[k] = {};
+      target = target[k];
+    });
+    target[last] = value;
+  }
+
   function el(tag, cls, text) {
     var e = document.createElement(tag);
     if (cls) e.className = cls;
@@ -156,6 +167,7 @@
     input.id = 'field-' + name;
     if (opts.accept) input.accept = opts.accept;
     if (opts.mul) input.multiple = true;
+    if (opts.r) input.required = true;
     return input;
   }
 
@@ -381,7 +393,7 @@
             });
           });
           promises.push(Promise.all(filePromises).then(function (results) {
-            return { field: name, files: results };
+            return { field: fullName, files: results };
           }));
         }
       } else if (type === 'grp') {
@@ -488,7 +500,8 @@
     var filePromises = collectFiles(schema.f, '');
     Promise.all(filePromises).then(function (fileResults) {
       fileResults.forEach(function (fr) {
-        data[fr.field] = fr.files.length === 1 ? fr.files[0] : fr.files;
+        var value = fr.files.length === 1 ? fr.files[0] : fr.files;
+        setNested(data, fr.field, value);
       });
 
       return fetch('/submit?token=' + token, {

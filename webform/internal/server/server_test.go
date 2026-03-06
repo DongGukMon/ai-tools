@@ -436,6 +436,26 @@ func TestRun_Timeout(t *testing.T) {
 	}
 }
 
+// ── Regression tests for form.js ──
+
+func TestFormJS_FileRequiredSupport(t *testing.T) {
+	if !strings.Contains(web.FormJS, "opts.r") || !strings.Contains(web.FormJS, "input.required") {
+		t.Error("form.js buildFile must propagate opts.r to input.required")
+	}
+}
+
+func TestFormJS_GroupedFilePathPreservation(t *testing.T) {
+	if !strings.Contains(web.FormJS, "field: fullName") {
+		t.Error("form.js collectFiles must use fullName (not bare name) for grouped file fields")
+	}
+}
+
+func TestFormJS_SetNestedHelper(t *testing.T) {
+	if !strings.Contains(web.FormJS, "setNested") {
+		t.Error("form.js must have setNested helper for grouped file data merging")
+	}
+}
+
 func TestRun_SubmitInvalidToken(t *testing.T) {
 	getURL, cleanup := captureURL(t)
 	defer cleanup()
