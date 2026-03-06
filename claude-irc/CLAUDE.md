@@ -15,6 +15,7 @@ claude-irc inbox <number>           # Read full message by index
 claude-irc inbox --all              # Show all messages (including read)
 claude-irc inbox clear              # Delete all messages
 claude-irc check [--quiet]          # Check for new messages (hook-friendly)
+claude-irc watch [--interval N]     # Poll and exit on new message (background-task friendly)
 claude-irc topic "<title>"          # Publish context (stdin, same title = update)
 claude-irc topic --delete <index>   # Delete a topic by index
 claude-irc topic --clear            # Delete all your topics
@@ -81,6 +82,31 @@ The `check --quiet` command is designed for PreToolUse hooks. It outputs message
 ```
 
 After displaying, messages are automatically marked as read.
+
+### Background Monitoring (for Claude Code agents)
+
+The `watch` command enables event-driven message reception in Claude Code sessions:
+
+```bash
+# Run as a background task in Claude Code
+claude-irc watch --interval 10
+```
+
+**How it works:**
+1. `watch` polls every N seconds for unread messages
+2. When a message arrives, it prints the content and exits (code 0)
+3. Claude Code receives a `task-notification` when the background task completes
+4. The agent reads the notification output, processes the message, and restarts the watcher
+
+**Agent workflow:**
+```
+1. Start watcher:    claude-irc watch --interval 10  (run_in_background)
+2. On task-notification: read output file → process message → respond via claude-irc msg
+3. Restart watcher:  claude-irc watch --interval 10  (run_in_background)
+4. Repeat
+```
+
+This pattern allows near-real-time message reception without continuous polling in the main conversation thread.
 
 ## Auto-Discovery
 

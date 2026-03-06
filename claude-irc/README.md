@@ -38,6 +38,7 @@ claude-irc msg server "Got it. Need avatarUrl in UserResponse"
 | `inbox --all` | Show all messages including read |
 | `inbox clear` | Delete all messages |
 | `check [--quiet]` | Check for unread messages (hook-friendly) |
+| `watch [--interval N]` | Poll and exit on new message (background-task friendly, default 10s) |
 | `topic "<title>"` | Publish structured context (stdin, same title = update) |
 | `topic --delete <n>` | Delete a topic by index |
 | `topic --clear` | Delete all your topics |
@@ -53,6 +54,7 @@ claude-irc msg server "Got it. Need avatarUrl in UserResponse"
 - **Structured context**: Publish API contracts, schemas, or any structured information as topics
 - **Machine-wide**: All sessions on the same machine share a single channel
 - **Hook integration**: `PreToolUse` hook auto-surfaces new messages to Claude
+- **Background monitoring**: `watch` command enables event-driven reception via background tasks
 - **Stale cleanup**: Dead sessions are automatically detected and cleaned up
 
 ## How It Works

@@ -39,6 +39,7 @@ func main() {
 		msgCmd(),
 		inboxCmd(),
 		checkCmd(),
+		watchCmd(),
 		topicCmd(),
 		boardCmd(),
 		quitCmd(),
@@ -320,6 +321,59 @@ func checkCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&quiet, "quiet", false, "Minimal output for hook integration")
+	return cmd
+}
+
+func watchCmd() *cobra.Command {
+	var interval int
+	cmd := &cobra.Command{
+		Use:   "watch",
+		Short: "Poll for new messages and exit when one arrives (background-task friendly)",
+		Long: `Polls for unread messages at a regular interval. When a message arrives,
+prints the message content to stdout and exits with code 0.
+
+Designed for use as a Claude Code background task:
+  claude-irc watch --interval 10  (run in background)
+
+When the task completes, the task-notification triggers the agent to read
+and respond to the message.`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ppid := os.Getppid()
+
+			store, name, err := irc.DetectSession(ppid)
+			if err != nil {
+				return fmt.Errorf("not joined (run 'claude-irc join <name>' first)")
+			}
+
+			ticker := time.NewTicker(time.Duration(interval) * time.Second)
+			defer ticker.Stop()
+
+			// Check immediately on start
+			if msgs, err := store.UnreadMessages(name); err == nil && len(msgs) > 0 {
+				for _, msg := range msgs {
+					fmt.Printf("[%s] %s\n", msg.From, msg.Content)
+				}
+				store.MarkAllRead(name)
+				return nil
+			}
+
+			for range ticker.C {
+				msgs, err := store.UnreadMessages(name)
+				if err != nil || len(msgs) == 0 {
+					continue
+				}
+				for _, msg := range msgs {
+					fmt.Printf("[%s] %s\n", msg.From, msg.Content)
+				}
+				store.MarkAllRead(name)
+				return nil
+			}
+
+			return nil
+		},
+	}
+	cmd.Flags().IntVar(&interval, "interval", 10, "Polling interval in seconds")
 	return cmd
 }
 
