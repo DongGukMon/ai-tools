@@ -8,6 +8,8 @@ memex/dist/
 memex/node_modules/
 claude-irc/claude-irc
 claude-irc/dist/
+webform/webform
+webform/dist/
 
 # Local files
 blog-post.md

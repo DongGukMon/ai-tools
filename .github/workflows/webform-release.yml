@@ -1,0 +1,40 @@
+name: "webform: Release"
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Build binaries
+        run: |
+          cd webform
+          VERSION=${GITHUB_REF_NAME}
+          LDFLAGS="-s -w -X main.version=${VERSION}"
+          mkdir -p dist
+          GOOS=darwin GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o dist/webform-darwin-arm64 ./cmd/webform
+          GOOS=darwin GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o dist/webform-darwin-amd64 ./cmd/webform
+          GOOS=linux GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o dist/webform-linux-amd64 ./cmd/webform
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            webform/dist/webform-darwin-arm64
+            webform/dist/webform-darwin-amd64
+            webform/dist/webform-linux-amd64
+          generate_release_notes: true

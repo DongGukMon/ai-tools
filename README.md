@@ -52,6 +52,16 @@ curl -fsSL https://raw.githubusercontent.com/bang9/ai-tools/main/claude-irc/inst
 /plugin install claude-irc
 ```
 
+### [webform](./webform)
+
+Dynamic web form for collecting structured data from users. AI generates a compact schema, opens a browser form, and receives the submitted data as JSON.
+
+#### Installation
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/bang9/ai-tools/main/webform/install.sh | bash
+```
+
 ## License
 
 MIT
