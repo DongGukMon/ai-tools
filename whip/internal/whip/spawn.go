@@ -37,11 +37,11 @@ func prepareSessionFlag(task *Task) string {
 func prepareModelFlags(task *Task) string {
 	switch task.Difficulty {
 	case "hard":
-		return "--model claude-opus-4-6 --reasoning-effort high"
+		return "--model opus --effort high"
 	case "medium":
-		return "--model claude-opus-4-6 --reasoning-effort medium"
+		return "--model opus --effort medium"
 	case "easy":
-		return "--model claude-sonnet-4-6"
+		return "--model sonnet"
 	default:
 		return ""
 	}
@@ -103,13 +103,14 @@ func KillTmuxSession(taskID string) error {
 	return cmd.Run()
 }
 
-// AttachTmuxSession execs into the tmux session for the given task ID.
+// AttachTmuxSession attaches to the tmux session for the given task ID.
+// Runs as a subprocess so the caller resumes after tmux detach.
 func AttachTmuxSession(taskID string) error {
-	tmuxPath, err := exec.LookPath("tmux")
-	if err != nil {
-		return fmt.Errorf("tmux not found: %w", err)
-	}
-	return syscall.Exec(tmuxPath, []string{"tmux", "attach", "-t", tmuxSessionName(taskID)}, os.Environ())
+	cmd := exec.Command("tmux", "attach", "-t", tmuxSessionName(taskID))
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
 
 // CaptureTmuxPane captures the current pane content of a tmux session.

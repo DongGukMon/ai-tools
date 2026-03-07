@@ -862,7 +862,8 @@ func (m DashboardModel) renderTmuxFooter() string {
 	dot := lipgloss.NewStyle().Foreground(colorDim).Render("  ·  ")
 	refresh := lipgloss.NewStyle().Foreground(colorDim).Render("↻ 2s auto-refreshing")
 
-	line := "  " + footerKey("←/esc", "back") + dot + footerKey("enter", "attach") + dot + refresh
+	detachHint := lipgloss.NewStyle().Foreground(colorSubtle).Render("(ctrl+b d to return)")
+	line := "  " + footerKey("←/esc", "back") + dot + footerKey("enter", "attach") + " " + detachHint + dot + refresh
 
 	return lipgloss.NewStyle().MarginTop(1).Render(line)
 }

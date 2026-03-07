@@ -814,20 +814,30 @@ func dashboardCmd() *cobra.Command {
 				whip.NewDashboardModel(store, version),
 				tea.WithAltScreen(),
 			)
-			m, err := p.Run()
-			if err != nil {
-				return err
-			}
-			if dm, ok := m.(whip.DashboardModel); ok {
-				if id := dm.PendingAttach(); id != "" {
-					if !whip.IsTmuxSession(id) {
-						fmt.Fprintf(os.Stderr, "tmux session for task %s no longer exists\n", id)
-						return nil
-					}
-					return whip.AttachTmuxSession(id)
+			for {
+				m, err := p.Run()
+				if err != nil {
+					return err
 				}
+				dm, ok := m.(whip.DashboardModel)
+				if !ok {
+					return nil
+				}
+				id := dm.PendingAttach()
+				if id == "" {
+					return nil
+				}
+				if whip.IsTmuxSession(id) {
+					_ = whip.AttachTmuxSession(id)
+				} else {
+					fmt.Fprintf(os.Stderr, "tmux session for task %s no longer exists\n", id)
+				}
+				// Restart dashboard after detach
+				p = tea.NewProgram(
+					whip.NewDashboardModel(store, version),
+					tea.WithAltScreen(),
+				)
 			}
-			return nil
 		},
 	}
 }
