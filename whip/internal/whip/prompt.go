@@ -6,7 +6,19 @@ import (
 	"time"
 )
 
+// GeneratePrompt dispatches prompt generation to the task's backend.
+// This is the top-level entry point used by assign, retry, and auto-assign.
 func GeneratePrompt(task *Task) string {
+	backend, err := GetBackend(task.Backend)
+	if err != nil {
+		// Fallback to claude if backend is unknown (shouldn't happen in practice)
+		backend = &ClaudeBackend{}
+	}
+	return backend.GeneratePrompt(task)
+}
+
+// generateClaudePrompt produces the Claude Code agent prompt for a task.
+func generateClaudePrompt(task *Task) string {
 	var b strings.Builder
 
 	b.WriteString(`You are an agent working under a lead session. You own this task but coordinate with the lead on key decisions.

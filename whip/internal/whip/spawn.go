@@ -8,8 +8,6 @@ import (
 	"strings"
 	"syscall"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 // tmuxSessionName returns the tmux session name for a task.
@@ -17,56 +15,10 @@ func tmuxSessionName(taskID string) string {
 	return "whip-" + taskID
 }
 
-// prepareSessionFlag sets up the Claude session flag for a task spawn.
-// If the task has no SessionID, generates a new one and returns --session-id.
-// If the task already has a SessionID (retry), returns --resume to fork from
-// the previous conversation, and updates SessionID to a new UUID for this run.
-func prepareSessionFlag(task *Task) string {
-	if task.SessionID != "" {
-		// Retry: resume from previous session, then track new session ID
-		oldID := task.SessionID
-		task.SessionID = uuid.New().String()
-		return "--resume " + shellEscape(oldID)
-	}
-	// First spawn: generate new session ID
-	task.SessionID = uuid.New().String()
-	return "--session-id " + shellEscape(task.SessionID)
-}
-
-// prepareModelFlags returns CLI flags for claude based on task difficulty.
-func prepareModelFlags(task *Task) string {
-	switch task.Difficulty {
-	case "hard":
-		return "--model opus --effort high"
-	case "medium":
-		return "--model opus --effort medium"
-	case "easy":
-		return "--model sonnet"
-	default:
-		return ""
-	}
-}
-
-// SpawnTmux creates a detached tmux session running Claude Code for the task.
-func SpawnTmux(task *Task, promptPath string) error {
-	sessionFlag := prepareSessionFlag(task)
-	modelFlags := prepareModelFlags(task)
-
-	flags := sessionFlag
-	if modelFlags != "" {
-		flags = modelFlags + " " + flags
-	}
-
-	shellCmd := fmt.Sprintf(
-		`cd %s && WHIP_SHELL_PID=$$ WHIP_TASK_ID=%s claude --dangerously-skip-permissions %s "Read and follow %s" ; exit`,
-		shellEscape(task.CWD),
-		shellEscape(task.ID),
-		flags,
-		shellEscape(promptPath),
-	)
-
+// SpawnTmux creates a detached tmux session running the given shell command.
+func SpawnTmux(taskID string, shellCmd string) error {
 	cmd := exec.Command("tmux", "new-session", "-d",
-		"-s", tmuxSessionName(task.ID),
+		"-s", tmuxSessionName(taskID),
 		"-x", "120", "-y", "40",
 		shellCmd,
 	)
@@ -75,16 +27,30 @@ func SpawnTmux(task *Task, promptPath string) error {
 	return cmd.Run()
 }
 
-// Spawn tries tmux first, falls back to Terminal.app. Returns the runner type.
+// Spawn uses the task's backend to build a launch command, then runs it via
+// tmux (preferred) or Terminal.app. Returns the runner type.
 func Spawn(task *Task, promptPath string) (string, error) {
+	backend, err := GetBackend(task.Backend)
+	if err != nil {
+		return "", err
+	}
+
+	launchCmd := backend.BuildLaunchCmd(task, promptPath)
+	shellCmd := fmt.Sprintf(
+		`cd %s && WHIP_SHELL_PID=$$ WHIP_TASK_ID=%s %s ; exit`,
+		shellEscape(task.CWD),
+		shellEscape(task.ID),
+		launchCmd,
+	)
+
 	if _, err := exec.LookPath("tmux"); err == nil {
-		if err := SpawnTmux(task, promptPath); err != nil {
+		if err := SpawnTmux(task.ID, shellCmd); err != nil {
 			return "", fmt.Errorf("tmux spawn failed: %w", err)
 		}
 		return "tmux", nil
 	}
 
-	if err := SpawnTerminal(task, promptPath); err != nil {
+	if err := SpawnTerminal(task.ID, shellCmd); err != nil {
 		return "", fmt.Errorf("terminal spawn failed: %w", err)
 	}
 	return "terminal", nil
@@ -123,29 +89,9 @@ func CaptureTmuxPane(taskID string) (string, error) {
 	return string(out), nil
 }
 
-// SpawnTerminal opens a new Terminal.app tab via osascript and runs Claude Code
-// with the task's prompt file. The env vars WHIP_SHELL_PID and WHIP_TASK_ID
-// are set so the task session can register itself via heartbeat.
-func SpawnTerminal(task *Task, promptPath string) error {
-	// Build the shell command to execute in the new terminal.
-	// $$ evaluates to the shell PID of the new terminal tab.
-	// ; exit ensures the terminal tab closes when Claude exits.
-	sessionFlag := prepareSessionFlag(task)
-	modelFlags := prepareModelFlags(task)
-
-	flags := sessionFlag
-	if modelFlags != "" {
-		flags = modelFlags + " " + flags
-	}
-
-	shellCmd := fmt.Sprintf(
-		`cd %s && WHIP_SHELL_PID=$$ WHIP_TASK_ID=%s claude --dangerously-skip-permissions %s "Read and follow %s" ; exit`,
-		shellEscape(task.CWD),
-		shellEscape(task.ID),
-		flags,
-		shellEscape(promptPath),
-	)
-
+// SpawnTerminal opens a new Terminal.app tab via osascript and runs the given
+// shell command. Used as a fallback when tmux is not available.
+func SpawnTerminal(taskID string, shellCmd string) error {
 	script := fmt.Sprintf(
 		`tell application "Terminal" to do script %s`,
 		appleScriptString(shellCmd),
@@ -249,6 +195,11 @@ func AutoAssignDependents(store *Store, completedID string) ([]string, error) {
 		dep.MasterIRCName = cfg.MasterIRCName
 		if dep.MasterIRCName == "" {
 			dep.MasterIRCName = "whip-master"
+		}
+
+		// Ensure backend is persisted for retry/resume
+		if dep.Backend == "" {
+			dep.Backend = DefaultBackendName
 		}
 
 		prompt := GeneratePrompt(dep)

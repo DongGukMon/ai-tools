@@ -336,6 +336,11 @@ func (m DashboardModel) retryTask(taskID string) tea.Cmd {
 		task.IRCName = "whip-" + task.ID
 		task.MasterIRCName = cfg.MasterIRCName
 
+		// Normalize legacy empty-backend tasks on retry
+		if task.Backend == "" {
+			task.Backend = DefaultBackendName
+		}
+
 		prompt := GeneratePrompt(task)
 		if err := m.store.SavePrompt(task.ID, prompt); err != nil {
 			return retryResultMsg{err: err}
@@ -384,11 +389,12 @@ type resumeResultMsg struct{ err error }
 
 func (m DashboardModel) resumeTask(task *Task) tea.Cmd {
 	return func() tea.Msg {
+		backend, err := GetBackend(task.Backend)
+		if err != nil {
+			return resumeResultMsg{err: err}
+		}
 		sessionName := "whip-resume-" + task.ID
-		shellCmd := fmt.Sprintf(
-			`claude --resume %s ; exit`,
-			shellEscape(task.SessionID),
-		)
+		shellCmd := fmt.Sprintf(`%s ; exit`, backend.BuildResumeCmd(task))
 		cmd := exec.Command("tmux", "new-session", "-d",
 			"-s", sessionName,
 			"-x", "120", "-y", "40",
@@ -518,7 +524,7 @@ func (m DashboardModel) detailMaxScroll() int {
 		return 0
 	}
 
-	fieldCount := 8 // ID, Title, Status, Difficulty, Review, Runner, Created, Updated
+	fieldCount := 9 // ID, Title, Status, Backend, Difficulty, Review, Runner, Created, Updated
 	if t.IRCName != "" {
 		fieldCount++
 	}
@@ -703,6 +709,7 @@ func (m DashboardModel) renderDetailView(w int) string {
 		{"ID", idStyle.Render(t.ID)},
 		{"Title", valStyle.Render(t.Title)},
 		{"Status", renderStatus(t.Status)},
+		{"Backend", renderBackend(t.Backend)},
 		{"Difficulty", valStyle.Render(diffDisplay)},
 		{"Review", valStyle.Render(fmt.Sprintf("%v", t.Review))},
 		{"Runner", renderRunner(t.Runner)},
@@ -931,15 +938,16 @@ func (m DashboardModel) renderIRCMsgFooter() string {
 }
 
 func (m DashboardModel) renderTable() string {
-	colID := 7
+	colID := 5
 	colTitle := 24
-	colStatus := 14
+	colStatus := 13
+	colBackend := 7
 	colRunner := 6
-	colIRC := 14
-	colPID := 10
+	colPID := 8
+	colIRC := 10
 	colDeps := 12
-	colNote := 18
-	colUpdated := 10
+	colNote := 16
+	colUpdated := 8
 
 	sep := styledSep()
 
@@ -949,9 +957,10 @@ func (m DashboardModel) renderTable() string {
 		padRight(hdrStyle.Render("ID"), colID),
 		padRight(hdrStyle.Render("TITLE"), colTitle),
 		padRight(hdrStyle.Render("STATUS"), colStatus),
+		padRight(hdrStyle.Render("BACKEND"), colBackend),
 		padRight(hdrStyle.Render("RUNNER"), colRunner),
-		padRight(hdrStyle.Render("IRC"), colIRC),
 		padRight(hdrStyle.Render("PID"), colPID),
+		padRight(hdrStyle.Render("IRC"), colIRC),
 		padRight(hdrStyle.Render("DEPS"), colDeps),
 		padRight(hdrStyle.Render("NOTE"), colNote),
 		padRight(hdrStyle.Render("UPDATED"), colUpdated),
@@ -975,7 +984,10 @@ func (m DashboardModel) renderTable() string {
 		id := padRight(idStyle.Render(truncate(t.ID, colID)), colID)
 		title := padRight(truncate(t.Title, colTitle), colTitle)
 		status := padRight(renderStatus(t.Status), colStatus)
+		backend := padRight(renderBackend(t.Backend), colBackend)
 		runner := padRight(renderRunner(t.Runner), colRunner)
+
+		pid := padRight(renderPID(t.ShellPID), colPID)
 
 		ircName := truncate(t.IRCName, colIRC)
 		if ircName == "" {
@@ -983,7 +995,6 @@ func (m DashboardModel) renderTable() string {
 		}
 		irc := padRight(ircName, colIRC)
 
-		pid := padRight(renderPID(t.ShellPID), colPID)
 		deps := padRight(renderDeps(t.DependsOn), colDeps)
 
 		noteStr := truncate(t.Note, colNote)
@@ -996,7 +1007,7 @@ func (m DashboardModel) renderTable() string {
 
 		updated := padRight(lipgloss.NewStyle().Foreground(colorSubtle).Render(timeAgo(t.UpdatedAt)), colUpdated)
 
-		row := indicator + strings.Join([]string{id, title, status, runner, irc, pid, deps, note, updated}, sep)
+		row := indicator + strings.Join([]string{id, title, status, backend, runner, pid, irc, deps, note, updated}, sep)
 		if selected {
 			row = lipgloss.NewStyle().Background(lipgloss.Color("#1E1B4B")).Render(row)
 		}
@@ -1149,6 +1160,17 @@ func renderStatus(s TaskStatus) string {
 	}
 }
 
+func renderBackend(backend string) string {
+	switch backend {
+	case "claude":
+		return lipgloss.NewStyle().Foreground(colorAccent).Render("claude")
+	case "codex":
+		return lipgloss.NewStyle().Foreground(colorSuccess).Render("codex")
+	default:
+		return lipgloss.NewStyle().Foreground(colorDim).Render("—")
+	}
+}
+
 func renderRunner(runner string) string {
 	switch runner {
 	case "tmux":
@@ -1226,7 +1248,7 @@ func min(a, b int) int {
 // tableContentWidth returns the visual width of a table row.
 // Must stay in sync with column widths in renderTable().
 func tableContentWidth() int {
-	cols := []int{7, 24, 14, 6, 14, 10, 12, 18, 10}
+	cols := []int{5, 24, 13, 7, 6, 8, 10, 12, 16, 8}
 	total := 2 // indent ("  " or "▸ ")
 	for i, c := range cols {
 		total += c

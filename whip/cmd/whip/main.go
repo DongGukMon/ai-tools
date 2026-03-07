@@ -52,7 +52,7 @@ func main() {
 }
 
 func createCmd() *cobra.Command {
-	var desc, file, cwd, difficulty string
+	var desc, file, cwd, difficulty, backend string
 	var review bool
 
 	cmd := &cobra.Command{
@@ -70,6 +70,13 @@ func createCmd() *cobra.Command {
 			// Validate --review: only allowed for medium/hard
 			if review && difficulty != "medium" && difficulty != "hard" {
 				return fmt.Errorf("--review requires --difficulty medium or hard")
+			}
+
+			// Validate backend
+			if backend != "" {
+				if _, err := whip.GetBackend(backend); err != nil {
+					return err
+				}
 			}
 
 			// Resolve description from --desc, --file, or stdin
@@ -94,6 +101,7 @@ func createCmd() *cobra.Command {
 			task := whip.NewTask(title, description, cwd)
 			task.Difficulty = difficulty
 			task.Review = review
+			task.Backend = backend
 			if err := store.SaveTask(task); err != nil {
 				return err
 			}
@@ -110,6 +118,7 @@ func createCmd() *cobra.Command {
 	cmd.Flags().StringVar(&difficulty, "difficulty", "", "Task difficulty (hard, medium, easy)")
 	cmd.Flags().Lookup("difficulty").Shorthand = "d"
 	cmd.Flags().BoolVar(&review, "review", false, "Require review before completion (medium/hard only)")
+	cmd.Flags().StringVar(&backend, "backend", "", "AI backend (default: claude)")
 
 	return cmd
 }
@@ -195,6 +204,11 @@ func showCmd() *cobra.Command {
 				fmt.Printf("Review:      yes\n")
 			}
 			fmt.Printf("CWD:         %s\n", task.CWD)
+			backend := task.Backend
+			if backend == "" {
+				backend = "default (claude)"
+			}
+			fmt.Printf("Backend:     %s\n", backend)
 			if task.Runner != "" {
 				fmt.Printf("Runner:      %s\n", task.Runner)
 			}
@@ -295,6 +309,11 @@ func assignCmd() *cobra.Command {
 			// Set task IRC names
 			task.IRCName = "whip-" + task.ID
 			task.MasterIRCName = cfg.MasterIRCName
+
+			// Ensure backend is persisted so retry/resume use the same backend
+			if task.Backend == "" {
+				task.Backend = whip.DefaultBackendName
+			}
 
 			// Generate prompt
 			prompt := whip.GeneratePrompt(task)
@@ -580,6 +599,11 @@ func retryCmd() *cobra.Command {
 			task.IRCName = "whip-" + task.ID
 			task.MasterIRCName = cfg.MasterIRCName
 
+			// Ensure backend is persisted (normalize legacy empty-backend tasks)
+			if task.Backend == "" {
+				task.Backend = whip.DefaultBackendName
+			}
+
 			// Generate prompt and spawn (will use --resume if SessionID exists)
 			prompt := whip.GeneratePrompt(task)
 			if err := store.SavePrompt(task.ID, prompt); err != nil {
@@ -611,7 +635,7 @@ func retryCmd() *cobra.Command {
 func resumeCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "resume <id>",
-		Short: "Resume a task's Claude session interactively in current terminal",
+		Short: "Resume a task's session interactively in current terminal",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store, err := whip.NewStore()
@@ -633,14 +657,18 @@ func resumeCmd() *cobra.Command {
 				return fmt.Errorf("task %s has no session ID (was it assigned before session tracking was added?)", id)
 			}
 
-			// Exec claude --resume in the current terminal (replaces this process)
-			claudePath, err := exec.LookPath("claude")
+			backend, err := whip.GetBackend(task.Backend)
 			if err != nil {
-				return fmt.Errorf("claude not found: %w", err)
+				return err
+			}
+
+			path, execArgs, err := backend.ResumeExec(task)
+			if err != nil {
+				return err
 			}
 
 			fmt.Fprintf(os.Stderr, "Resuming session %s for task %s (%s)...\n", task.SessionID, task.ID, task.Title)
-			return syscall.Exec(claudePath, []string{"claude", "--resume", task.SessionID}, os.Environ())
+			return syscall.Exec(path, execArgs, os.Environ())
 		},
 	}
 }

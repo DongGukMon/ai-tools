@@ -38,6 +38,45 @@ func TestCreateAndLoadTask(t *testing.T) {
 	}
 }
 
+func TestBackendPersistence(t *testing.T) {
+	s := tempStore(t)
+	task := NewTask("Backend Test", "desc", "/tmp")
+	task.Backend = "claude"
+	s.SaveTask(task)
+
+	loaded, err := s.LoadTask(task.ID)
+	if err != nil {
+		t.Fatalf("LoadTask: %v", err)
+	}
+	if loaded.Backend != "claude" {
+		t.Errorf("Backend = %q, want %q", loaded.Backend, "claude")
+	}
+}
+
+func TestBackendEmptyDefault(t *testing.T) {
+	s := tempStore(t)
+	task := NewTask("No Backend", "desc", "/tmp")
+	// Backend left empty
+	s.SaveTask(task)
+
+	loaded, err := s.LoadTask(task.ID)
+	if err != nil {
+		t.Fatalf("LoadTask: %v", err)
+	}
+	if loaded.Backend != "" {
+		t.Errorf("Backend = %q, want empty", loaded.Backend)
+	}
+
+	// GetBackend should handle empty gracefully
+	b, err := GetBackend(loaded.Backend)
+	if err != nil {
+		t.Fatalf("GetBackend: %v", err)
+	}
+	if b.Name() != "claude" {
+		t.Errorf("default backend = %q, want %q", b.Name(), "claude")
+	}
+}
+
 func TestListTasks(t *testing.T) {
 	s := tempStore(t)
 
@@ -242,6 +281,7 @@ func TestTaskStatusTransition(t *testing.T) {
 func TestRetryFlow(t *testing.T) {
 	s := tempStore(t)
 	task := NewTask("Retry Me", "desc", "/tmp")
+	task.Backend = "claude"
 	s.SaveTask(task)
 
 	// Progress through lifecycle to failed
@@ -293,6 +333,11 @@ func TestRetryFlow(t *testing.T) {
 	}
 	if retried.CompletedAt != nil {
 		t.Error("CompletedAt should be nil")
+	}
+
+	// Backend preserved across retry
+	if retried.Backend != "claude" {
+		t.Errorf("Backend = %q, want %q (should be preserved across retry)", retried.Backend, "claude")
 	}
 
 	// Notes preserved across retry

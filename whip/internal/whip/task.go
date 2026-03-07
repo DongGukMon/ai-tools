@@ -46,6 +46,7 @@ type Task struct {
 	Description   string     `json:"description"`
 	CWD           string     `json:"cwd"`
 	Status        TaskStatus `json:"status"`
+	Backend       string     `json:"backend,omitempty"`
 	Runner        string     `json:"runner,omitempty"`
 	IRCName       string     `json:"irc_name"`
 	MasterIRCName string     `json:"master_irc_name"`
