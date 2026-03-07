@@ -15,7 +15,6 @@
     "inter-session",
     "collaboration"
   ],
-  "category": "collaboration",
   "skills": "./skills/",
   "hooks": {
     "SessionStart": [

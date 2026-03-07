@@ -9,13 +9,23 @@ OUTPUT="$REPO_ROOT/.claude-plugin/marketplace.json"
 
 plugins="[]"
 
+# Category mapping (not stored in plugin.json to avoid validation errors)
+get_category() {
+    case "$1" in
+        claude-irc) echo "collaboration" ;;
+        *)          echo "productivity" ;;
+    esac
+}
+
 for plugin_json in "$REPO_ROOT"/*/.claude-plugin/plugin.json; do
     [ -f "$plugin_json" ] || continue
 
     plugin_dir="$(dirname "$(dirname "$plugin_json")")"
-    source_rel="./$(basename "$plugin_dir")"
+    plugin_name="$(basename "$plugin_dir")"
+    source_rel="./$plugin_name"
+    category="$(get_category "$plugin_name")"
 
-    entry=$(jq -c --arg source "$source_rel" '{
+    entry=$(jq -c --arg source "$source_rel" --arg category "$category" '{
         name: .name,
         source: $source,
         description: .description,
@@ -24,7 +34,7 @@ for plugin_json in "$REPO_ROOT"/*/.claude-plugin/plugin.json; do
         repository: .repository,
         license: .license,
         keywords: .keywords,
-        category: .category
+        category: $category
     }' "$plugin_json")
 
     plugins=$(echo "$plugins" | jq --argjson entry "$entry" '. + [$entry]')

@@ -16,7 +16,6 @@
     "confluence",
     "notion"
   ],
-  "category": "productivity",
   "skills": "./skills/",
   "mcpServers": "./.mcp.json",
   "hooks": {
