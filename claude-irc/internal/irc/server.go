@@ -31,6 +31,8 @@ type ServerInfo struct {
 	LocalURL string `json:"local_url"`
 }
 
+const dashboardOperatorName = "user"
+
 // RunServer starts the HTTP API server and blocks until the context is cancelled.
 func RunServer(ctx context.Context, cfg ServerConfig) error {
 	token, err := generateToken()
@@ -230,6 +232,10 @@ func handlePostMessage(w http.ResponseWriter, r *http.Request, store *Store) {
 
 	if body.To == "" || body.From == "" || body.Content == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "to, from, and content are required"})
+		return
+	}
+	if body.From != dashboardOperatorName {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "only 'user' may send messages over HTTP"})
 		return
 	}
 

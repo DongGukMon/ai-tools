@@ -212,7 +212,7 @@ func TestAPIMessagesCRUD(t *testing.T) {
 	// Send a message
 	resp := doRequest(t, ts, token, "POST", "/api/messages", map[string]string{
 		"to":      "alice",
-		"from":    "bob",
+		"from":    "user",
 		"content": "hello alice",
 	})
 	if resp.StatusCode != http.StatusOK {
@@ -288,6 +288,102 @@ func TestAPIPostMessageValidation(t *testing.T) {
 				t.Errorf("expected 400, got %d", resp.StatusCode)
 			}
 		})
+	}
+}
+
+func TestAPIPostMessageRejectsNonUserSender(t *testing.T) {
+	ts, store, token := setupTestServer(t)
+
+	resp := doRequest(t, ts, token, "POST", "/api/messages", map[string]string{
+		"to":      "agent-1",
+		"from":    "whip-master",
+		"content": "spoofed",
+	})
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", resp.StatusCode)
+	}
+
+	var body map[string]string
+	decodeJSON(t, resp, &body)
+	if body["error"] != "only 'user' may send messages over HTTP" {
+		t.Fatalf("unexpected error: %q", body["error"])
+	}
+
+	messages, err := store.ReadInbox("agent-1")
+	if err != nil {
+		t.Fatalf("failed to read inbox: %v", err)
+	}
+	if len(messages) != 0 {
+		t.Fatalf("expected no delivered messages, got %d", len(messages))
+	}
+}
+
+func TestAPIUserInboxFlow(t *testing.T) {
+	ts, store, token := setupTestServer(t)
+
+	resp := doRequest(t, ts, token, "POST", "/api/messages", map[string]string{
+		"to":      "agent-1",
+		"from":    "user",
+		"content": "reply via dashboard",
+	})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("POST /api/messages: expected 200, got %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	messages, err := store.ReadInbox("agent-1")
+	if err != nil {
+		t.Fatalf("failed to read agent inbox: %v", err)
+	}
+	if len(messages) != 1 {
+		t.Fatalf("expected 1 delivered message, got %d", len(messages))
+	}
+	if messages[0].From != "user" {
+		t.Fatalf("expected delivered message from user, got %q", messages[0].From)
+	}
+
+	if err := store.SendMessage("user", "agent-1", "hello from agent"); err != nil {
+		t.Fatalf("failed to seed user inbox: %v", err)
+	}
+
+	resp = doRequest(t, ts, token, "GET", "/api/messages/user", nil)
+	var unread []Message
+	decodeJSON(t, resp, &unread)
+	if len(unread) != 1 {
+		t.Fatalf("expected 1 unread user message, got %d", len(unread))
+	}
+	if unread[0].From != "agent-1" {
+		t.Fatalf("expected unread message from agent-1, got %q", unread[0].From)
+	}
+
+	resp = doRequest(t, ts, token, "POST", "/api/messages/user/read", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("POST /api/messages/user/read: expected 200, got %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	resp = doRequest(t, ts, token, "GET", "/api/messages/user?all=true", nil)
+	var all []Message
+	decodeJSON(t, resp, &all)
+	if len(all) != 1 {
+		t.Fatalf("expected 1 total user message, got %d", len(all))
+	}
+	if !all[0].Read {
+		t.Fatal("expected user message to be marked read")
+	}
+
+	resp = doRequest(t, ts, token, "DELETE", "/api/messages/user", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("DELETE /api/messages/user: expected 200, got %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	resp = doRequest(t, ts, token, "GET", "/api/messages/user?all=true", nil)
+	decodeJSON(t, resp, &all)
+	if len(all) != 0 {
+		t.Fatalf("expected empty user inbox after delete, got %d messages", len(all))
 	}
 }
 
@@ -530,4 +626,3 @@ func TestAPIRunServer(t *testing.T) {
 		t.Error("server did not shut down in time")
 	}
 }
-

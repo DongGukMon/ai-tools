@@ -6,12 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strconv"
-	"net/url"
 	"strings"
 	"sync"
 	"syscall"
@@ -187,10 +187,6 @@ func msgCmd() *cobra.Command {
 
 			if peer == from {
 				return fmt.Errorf("cannot send message to yourself")
-			}
-
-			if peer == "user" {
-				return fmt.Errorf("'user' is a send-only observer and cannot receive messages")
 			}
 
 			// Verify peer exists in registry
