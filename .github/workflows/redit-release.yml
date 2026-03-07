@@ -37,16 +37,16 @@ jobs:
           GOOS=linux GOARCH=amd64 go build -o dist/redit-mcp-linux-amd64 ./cmd/redit-mcp
           GOOS=windows GOARCH=amd64 go build -o dist/redit-mcp-windows-amd64.exe ./cmd/redit-mcp
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            redit/dist/redit-darwin-arm64
-            redit/dist/redit-darwin-amd64
-            redit/dist/redit-linux-amd64
-            redit/dist/redit-windows-amd64.exe
-            redit/dist/redit-mcp-darwin-arm64
-            redit/dist/redit-mcp-darwin-amd64
-            redit/dist/redit-mcp-linux-amd64
+      - name: Upload binaries
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ inputs.version }}" \
+            redit/dist/redit-darwin-arm64 \
+            redit/dist/redit-darwin-amd64 \
+            redit/dist/redit-linux-amd64 \
+            redit/dist/redit-windows-amd64.exe \
+            redit/dist/redit-mcp-darwin-arm64 \
+            redit/dist/redit-mcp-darwin-amd64 \
+            redit/dist/redit-mcp-linux-amd64 \
             redit/dist/redit-mcp-windows-amd64.exe
-          generate_release_notes: true

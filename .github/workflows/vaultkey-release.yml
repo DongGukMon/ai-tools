@@ -31,12 +31,12 @@ jobs:
           GOOS=linux GOARCH=amd64 go build -o dist/vaultkey-linux-amd64 ./cmd/vaultkey
           GOOS=windows GOARCH=amd64 go build -o dist/vaultkey-windows-amd64.exe ./cmd/vaultkey
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            vaultkey/dist/vaultkey-darwin-arm64
-            vaultkey/dist/vaultkey-darwin-amd64
-            vaultkey/dist/vaultkey-linux-amd64
+      - name: Upload binaries
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ inputs.version }}" \
+            vaultkey/dist/vaultkey-darwin-arm64 \
+            vaultkey/dist/vaultkey-darwin-amd64 \
+            vaultkey/dist/vaultkey-linux-amd64 \
             vaultkey/dist/vaultkey-windows-amd64.exe
-          generate_release_notes: true

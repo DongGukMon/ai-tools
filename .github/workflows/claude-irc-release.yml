@@ -32,11 +32,11 @@ jobs:
           GOOS=darwin GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o dist/claude-irc-darwin-amd64 ./cmd/claude-irc
           GOOS=linux GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o dist/claude-irc-linux-amd64 ./cmd/claude-irc
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            claude-irc/dist/claude-irc-darwin-arm64
-            claude-irc/dist/claude-irc-darwin-amd64
+      - name: Upload binaries
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ inputs.version }}" \
+            claude-irc/dist/claude-irc-darwin-arm64 \
+            claude-irc/dist/claude-irc-darwin-amd64 \
             claude-irc/dist/claude-irc-linux-amd64
-          generate_release_notes: true

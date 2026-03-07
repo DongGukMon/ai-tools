@@ -9,27 +9,79 @@ permissions:
   contents: write
 
 jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate Release Notes
+        id: notes
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          PREV_TAG=$(git tag --sort=-v:refname | grep '^v' | sed -n '2p')
+
+          BODY=""
+          PRODUCTS="whip claude-irc redit vaultkey webform"
+
+          for product in $PRODUCTS; do
+            if [ -n "$PREV_TAG" ]; then
+              COMMITS=$(git log --oneline "${PREV_TAG}..${TAG}" -- "${product}/")
+            else
+              COMMITS=$(git log --oneline "${TAG}" -- "${product}/")
+            fi
+
+            BODY="${BODY}## ${product}"$'\n'
+            if [ -z "$COMMITS" ]; then
+              BODY="${BODY}(no changes)"$'\n'
+            else
+              while IFS= read -r line; do
+                # Strip commit hash prefix
+                MSG=$(echo "$line" | sed 's/^[a-f0-9]* //')
+                BODY="${BODY}- ${MSG}"$'\n'
+              done <<< "$COMMITS"
+            fi
+            BODY="${BODY}"$'\n'
+          done
+
+          # Write to file to preserve newlines
+          echo "$BODY" > /tmp/release-notes.md
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "${{ github.ref_name }}" \
+            --notes-file /tmp/release-notes.md
+
   claude-irc:
+    needs: [create-release]
     uses: ./.github/workflows/claude-irc-release.yml
     with:
       version: ${{ github.ref_name }}
 
   redit:
+    needs: [create-release]
     uses: ./.github/workflows/redit-release.yml
     with:
       version: ${{ github.ref_name }}
 
   vaultkey:
+    needs: [create-release]
     uses: ./.github/workflows/vaultkey-release.yml
     with:
       version: ${{ github.ref_name }}
 
   webform:
+    needs: [create-release]
     uses: ./.github/workflows/webform-release.yml
     with:
       version: ${{ github.ref_name }}
 
   whip:
+    needs: [create-release]
     uses: ./.github/workflows/whip-release.yml
     with:
       version: ${{ github.ref_name }}

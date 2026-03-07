@@ -32,11 +32,11 @@ jobs:
           GOOS=darwin GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o dist/webform-darwin-amd64 ./cmd/webform
           GOOS=linux GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o dist/webform-linux-amd64 ./cmd/webform
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            webform/dist/webform-darwin-arm64
-            webform/dist/webform-darwin-amd64
+      - name: Upload binaries
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ inputs.version }}" \
+            webform/dist/webform-darwin-arm64 \
+            webform/dist/webform-darwin-amd64 \
             webform/dist/webform-linux-amd64
-          generate_release_notes: true
