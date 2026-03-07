@@ -11,90 +11,29 @@ import (
 )
 
 var (
-	// Colors
-	colorPrimary   = lipgloss.Color("#7C3AED") // purple
-	colorSecondary = lipgloss.Color("#6366F1") // indigo
-	colorSuccess   = lipgloss.Color("#10B981") // green
-	colorWarning   = lipgloss.Color("#F59E0B") // amber
-	colorDanger    = lipgloss.Color("#EF4444") // red
-	colorMuted     = lipgloss.Color("#6B7280") // gray
-	colorText      = lipgloss.Color("#E5E7EB") // light gray
-	colorDim       = lipgloss.Color("#4B5563") // dim gray
-	colorBg        = lipgloss.Color("#111827") // dark bg
-	colorHeaderBg  = lipgloss.Color("#1F2937") // header bg
+	// ── Color palette ──────────────────────────────────────────────
+	colorPrimary   = lipgloss.Color("#8B5CF6") // vibrant purple
+	colorSecondary = lipgloss.Color("#818CF8") // soft indigo
+	colorAccent    = lipgloss.Color("#A78BFA") // light purple
+	colorSuccess   = lipgloss.Color("#34D399") // emerald
+	colorWarning   = lipgloss.Color("#FBBF24") // amber
+	colorDanger    = lipgloss.Color("#F87171") // rose
+	colorText      = lipgloss.Color("#F3F4F6") // gray-100
+	colorMuted     = lipgloss.Color("#9CA3AF") // gray-400
+	colorSubtle    = lipgloss.Color("#6B7280") // gray-500
+	colorDim       = lipgloss.Color("#374151") // gray-700
 
-	// Styles
-	headerStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("#FFFFFF")).
-			Background(colorPrimary).
-			Padding(0, 1)
+	// ── Status styles ──────────────────────────────────────────────
+	statusCreated    = lipgloss.NewStyle().Foreground(colorSubtle)
+	statusAssigned   = lipgloss.NewStyle().Foreground(colorWarning)
+	statusInProgress = lipgloss.NewStyle().Foreground(colorSecondary).Bold(true)
+	statusCompleted  = lipgloss.NewStyle().Foreground(colorSuccess)
+	statusFailed     = lipgloss.NewStyle().Foreground(colorDanger)
 
-	titleStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(colorPrimary)
-
-	subtitleStyle = lipgloss.NewStyle().
-			Foreground(colorMuted)
-
-	statusCreated = lipgloss.NewStyle().
-			Foreground(colorMuted).
-			Bold(true)
-
-	statusAssigned = lipgloss.NewStyle().
-			Foreground(colorWarning).
-			Bold(true)
-
-	statusInProgress = lipgloss.NewStyle().
-				Foreground(colorSecondary).
-				Bold(true)
-
-	statusCompleted = lipgloss.NewStyle().
-			Foreground(colorSuccess).
-			Bold(true)
-
-	statusFailed = lipgloss.NewStyle().
-			Foreground(colorDanger).
-			Bold(true)
-
-	tableHeaderStyle = lipgloss.NewStyle().
-				Bold(true).
-				Foreground(colorText).
-				BorderStyle(lipgloss.NormalBorder()).
-				BorderBottom(true).
-				BorderForeground(colorDim)
-
-	rowStyle = lipgloss.NewStyle().
-			Foreground(colorText)
-
-	rowAltStyle = lipgloss.NewStyle().
-			Foreground(colorText).
-			Background(lipgloss.Color("#1a1f2e"))
-
-	idStyle = lipgloss.NewStyle().
-		Foreground(colorWarning)
-
-	pidAliveStyle = lipgloss.NewStyle().
-			Foreground(colorSuccess)
-
-	pidDeadStyle = lipgloss.NewStyle().
-			Foreground(colorDanger)
-
-	footerStyle = lipgloss.NewStyle().
-			Foreground(colorMuted).
-			MarginTop(1)
-
-	separatorStyle = lipgloss.NewStyle().
-			Foreground(colorDim)
-
-	summaryBoxStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(colorDim).
-			Padding(0, 1).
-			MarginTop(1)
-
-	countStyle = lipgloss.NewStyle().
-			Bold(true)
+	// ── Cell styles ────────────────────────────────────────────────
+	idStyle       = lipgloss.NewStyle().Foreground(colorWarning)
+	pidAliveStyle = lipgloss.NewStyle().Foreground(colorSuccess)
+	pidDeadStyle  = lipgloss.NewStyle().Foreground(colorDanger)
 
 	spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 )
@@ -218,44 +157,73 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// ── Helpers ────────────────────────────────────────────────────────
+
+// padRight pads a (possibly styled) string to the given visual width.
+func padRight(s string, width int) string {
+	w := lipgloss.Width(s)
+	if w >= width {
+		return s
+	}
+	return s + strings.Repeat(" ", width-w)
+}
+
+func styledSep() string {
+	return lipgloss.NewStyle().Foreground(colorDim).Render(" │ ")
+}
+
+// ── View ───────────────────────────────────────────────────────────
+
 func (m DashboardModel) View() string {
 	var b strings.Builder
+	w := min(m.width, 120)
 
-	// Header
+	// ── Header ────────────────────────────────────────────
 	spinner := lipgloss.NewStyle().Foreground(colorSecondary).Render(spinnerFrames[m.spinnerIndex])
-	versionStr := ""
+
+	badge := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#FFFFFF")).
+		Background(colorPrimary).
+		Padding(0, 1).
+		Render("WHIP")
+	subtitle := lipgloss.NewStyle().Foreground(colorAccent).Render("Task Orchestrator")
+	left := badge + " " + subtitle
+
+	var rightParts []string
 	if m.version != "" {
-		versionStr = "  " + lipgloss.NewStyle().Foreground(colorDim).Render(m.version)
+		rightParts = append(rightParts, lipgloss.NewStyle().Foreground(colorSubtle).Render(m.version))
 	}
-	header := headerStyle.Render(" WHIP ") +
-		" " +
-		titleStyle.Render("Task Orchestrator") +
-		versionStr +
-		"  " +
-		spinner +
-		" " +
-		subtitleStyle.Render(time.Now().Format("15:04:05"))
-	b.WriteString(header)
+	rightParts = append(rightParts, spinner, lipgloss.NewStyle().Foreground(colorMuted).Render(time.Now().Format("15:04:05")))
+	right := strings.Join(rightParts, "  ")
+
+	leftW := lipgloss.Width(left)
+	rightW := lipgloss.Width(right)
+	gap := w - leftW - rightW - 2
+	if gap < 2 {
+		gap = 2
+	}
+	b.WriteString(" " + left + strings.Repeat(" ", gap) + right)
 	b.WriteString("\n")
 
-	// Separator
-	sep := separatorStyle.Render(strings.Repeat("─", min(m.width, 120)))
-	b.WriteString(sep)
+	// Accent separator
+	b.WriteString(" " + lipgloss.NewStyle().Foreground(colorPrimary).Render(strings.Repeat("━", w-2)))
 	b.WriteString("\n")
 
+	// ── Error ─────────────────────────────────────────────
 	if m.err != nil {
-		b.WriteString(lipgloss.NewStyle().Foreground(colorDanger).Render(fmt.Sprintf("Error: %v", m.err)))
-		b.WriteString("\n")
+		errLabel := lipgloss.NewStyle().Foreground(colorDanger).Bold(true).Render("  ✗ Error:")
+		errMsg := lipgloss.NewStyle().Foreground(colorDanger).Render(fmt.Sprintf(" %v", m.err))
+		b.WriteString(errLabel + errMsg + "\n")
 	}
 
+	// ── Tasks ─────────────────────────────────────────────
 	if len(m.tasks) == 0 {
-		empty := lipgloss.NewStyle().
-			Foreground(colorMuted).
+		b.WriteString("\n")
+		b.WriteString(lipgloss.NewStyle().
+			Foreground(colorSubtle).
 			Italic(true).
-			MarginTop(1).
-			MarginLeft(2).
-			Render("No tasks. Create one with: whip create \"title\" --desc \"description\"")
-		b.WriteString(empty)
+			Render("  No tasks yet — create one with: whip create \"title\" --desc \"description\""))
 		b.WriteString("\n")
 	} else {
 		b.WriteString(m.renderTable())
@@ -263,19 +231,18 @@ func (m DashboardModel) View() string {
 		b.WriteString(m.renderSummary())
 	}
 
-	// IRC peers
+	// ── IRC ───────────────────────────────────────────────
 	b.WriteString("\n")
 	b.WriteString(m.renderPeers())
 
-	// Footer
+	// ── Footer ────────────────────────────────────────────
 	b.WriteString("\n")
-	b.WriteString(footerStyle.Render("  q quit  r refresh  c clean completed  Auto-refreshing every 2s"))
+	b.WriteString(m.renderFooter())
 
 	return b.String()
 }
 
 func (m DashboardModel) renderTable() string {
-	// Column widths
 	colID := 7
 	colTitle := 24
 	colStatus := 14
@@ -286,65 +253,57 @@ func (m DashboardModel) renderTable() string {
 	colNote := 18
 	colUpdated := 10
 
-	// Header row
-	hdr := fmt.Sprintf("  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s",
-		colID, "ID",
-		colTitle, "TITLE",
-		colStatus, "STATUS",
-		colRunner, "RUNNER",
-		colIRC, "IRC",
-		colPID, "PID",
-		colDeps, "DEPS",
-		colNote, "NOTE",
-		colUpdated, "UPDATED",
-	)
-	header := tableHeaderStyle.Render(hdr)
+	sep := styledSep()
+
+	// Header labels
+	hdrStyle := lipgloss.NewStyle().Bold(true).Foreground(colorMuted)
+	hdrCells := []string{
+		padRight(hdrStyle.Render("ID"), colID),
+		padRight(hdrStyle.Render("TITLE"), colTitle),
+		padRight(hdrStyle.Render("STATUS"), colStatus),
+		padRight(hdrStyle.Render("RUNNER"), colRunner),
+		padRight(hdrStyle.Render("IRC"), colIRC),
+		padRight(hdrStyle.Render("PID"), colPID),
+		padRight(hdrStyle.Render("DEPS"), colDeps),
+		padRight(hdrStyle.Render("NOTE"), colNote),
+		padRight(hdrStyle.Render("UPDATED"), colUpdated),
+	}
+	header := "  " + strings.Join(hdrCells, sep)
+
+	// Header underline
+	underline := "  " + lipgloss.NewStyle().Foreground(colorDim).Render(strings.Repeat("─", lipgloss.Width(header)-2))
 
 	var rows []string
 	rows = append(rows, header)
+	rows = append(rows, underline)
 
-	for i, t := range m.tasks {
-		id := idStyle.Render(truncate(t.ID, colID))
+	for _, t := range m.tasks {
+		id := padRight(idStyle.Render(truncate(t.ID, colID)), colID)
+		title := padRight(truncate(t.Title, colTitle), colTitle)
+		status := padRight(renderStatus(t.Status), colStatus)
+		runner := padRight(renderRunner(t.Runner), colRunner)
 
-		title := truncate(t.Title, colTitle)
-
-		status := renderStatus(t.Status)
-
-		runnerStr := renderRunner(t.Runner)
-
-		irc := truncate(t.IRCName, colIRC)
-		if irc == "" {
-			irc = lipgloss.NewStyle().Foreground(colorDim).Render("—")
+		ircName := truncate(t.IRCName, colIRC)
+		if ircName == "" {
+			ircName = lipgloss.NewStyle().Foreground(colorDim).Render("—")
 		}
+		irc := padRight(ircName, colIRC)
 
-		pidStr := renderPID(t.ShellPID)
+		pid := padRight(renderPID(t.ShellPID), colPID)
+		deps := padRight(renderDeps(t.DependsOn), colDeps)
 
-		deps := renderDeps(t.DependsOn)
-
-		note := lipgloss.NewStyle().Foreground(colorMuted).Render(truncate(t.Note, colNote))
-		if t.Note == "" {
-			note = lipgloss.NewStyle().Foreground(colorDim).Render("—")
+		noteStr := truncate(t.Note, colNote)
+		if noteStr == "" {
+			noteStr = lipgloss.NewStyle().Foreground(colorDim).Render("—")
+		} else {
+			noteStr = lipgloss.NewStyle().Foreground(colorMuted).Render(noteStr)
 		}
+		note := padRight(noteStr, colNote)
 
-		updated := subtitleStyle.Render(timeAgo(t.UpdatedAt))
+		updated := padRight(lipgloss.NewStyle().Foreground(colorSubtle).Render(timeAgo(t.UpdatedAt)), colUpdated)
 
-		row := fmt.Sprintf("  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s",
-			colID+len(id)-lipgloss.Width(id), id,
-			colTitle+len(title)-lipgloss.Width(title), title,
-			colStatus+len(status)-lipgloss.Width(status), status,
-			colRunner+len(runnerStr)-lipgloss.Width(runnerStr), runnerStr,
-			colIRC+len(irc)-lipgloss.Width(irc), irc,
-			colPID+len(pidStr)-lipgloss.Width(pidStr), pidStr,
-			colDeps+len(deps)-lipgloss.Width(deps), deps,
-			colNote+len(note)-lipgloss.Width(note), note,
-			colUpdated+len(updated)-lipgloss.Width(updated), updated,
-		)
-
-		style := rowStyle
-		if i%2 == 1 {
-			style = rowAltStyle
-		}
-		rows = append(rows, style.Render(row))
+		row := "  " + strings.Join([]string{id, title, status, runner, irc, pid, deps, note, updated}, sep)
+		rows = append(rows, row)
 	}
 
 	return strings.Join(rows, "\n")
@@ -356,55 +315,91 @@ func (m DashboardModel) renderSummary() string {
 		counts[t.Status]++
 	}
 
+	dot := lipgloss.NewStyle().Foreground(colorDim).Render(" │ ")
 	total := len(m.tasks)
-	parts := []string{
-		countStyle.Copy().Foreground(colorText).Render(fmt.Sprintf("%d total", total)),
-	}
 
+	parts := []string{
+		lipgloss.NewStyle().Bold(true).Foreground(colorText).Render(fmt.Sprintf("%d total", total)),
+	}
 	if n := counts[StatusCreated]; n > 0 {
-		parts = append(parts, statusCreated.Render(fmt.Sprintf("%d created", n)))
+		parts = append(parts, statusCreated.Render(fmt.Sprintf("● %d created", n)))
 	}
 	if n := counts[StatusAssigned]; n > 0 {
-		parts = append(parts, statusAssigned.Render(fmt.Sprintf("%d assigned", n)))
+		parts = append(parts, statusAssigned.Render(fmt.Sprintf("◐ %d assigned", n)))
 	}
 	if n := counts[StatusInProgress]; n > 0 {
-		parts = append(parts, statusInProgress.Render(fmt.Sprintf("%d in_progress", n)))
+		parts = append(parts, statusInProgress.Render(fmt.Sprintf("▶ %d in_progress", n)))
 	}
 	if n := counts[StatusCompleted]; n > 0 {
-		parts = append(parts, statusCompleted.Render(fmt.Sprintf("%d completed", n)))
+		parts = append(parts, statusCompleted.Render(fmt.Sprintf("✓ %d completed", n)))
 	}
 	if n := counts[StatusFailed]; n > 0 {
-		parts = append(parts, statusFailed.Render(fmt.Sprintf("%d failed", n)))
+		parts = append(parts, statusFailed.Render(fmt.Sprintf("✗ %d failed", n)))
 	}
 
-	return summaryBoxStyle.Render(strings.Join(parts, "  ·  "))
+	content := strings.Join(parts, dot)
+	box := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(colorDim).
+		Padding(0, 2).
+		Render(content)
+
+	return "  " + box
 }
 
 func (m DashboardModel) renderPeers() string {
-	label := lipgloss.NewStyle().Bold(true).Foreground(colorText).Render("IRC")
+	label := lipgloss.NewStyle().Bold(true).Foreground(colorAccent).Render("IRC")
+
+	var content string
 	if m.peers == nil {
-		return "  " + label + "  " + lipgloss.NewStyle().Foreground(colorDim).Render("not connected")
-	}
-	if len(m.peers) == 0 {
-		return "  " + label + "  " + lipgloss.NewStyle().Foreground(colorDim).Render("no peers")
-	}
-	var parts []string
-	for _, p := range m.peers {
-		nameStyle := lipgloss.NewStyle().Foreground(colorSuccess)
-		statusStr := "online"
-		if !p.Online {
-			nameStyle = lipgloss.NewStyle().Foreground(colorDim)
-			statusStr = "offline"
+		content = lipgloss.NewStyle().Foreground(colorSubtle).Render("not connected")
+	} else if len(m.peers) == 0 {
+		content = lipgloss.NewStyle().Foreground(colorSubtle).Render("no peers online")
+	} else {
+		var parts []string
+		for _, p := range m.peers {
+			if p.Online {
+				dot := lipgloss.NewStyle().Foreground(colorSuccess).Render("●")
+				name := lipgloss.NewStyle().Foreground(colorText).Render(p.Name)
+				parts = append(parts, dot+" "+name)
+			} else {
+				dot := lipgloss.NewStyle().Foreground(colorDim).Render("○")
+				name := lipgloss.NewStyle().Foreground(colorSubtle).Render(p.Name)
+				parts = append(parts, dot+" "+name)
+			}
 		}
-		parts = append(parts, nameStyle.Render(p.Name)+" "+lipgloss.NewStyle().Foreground(colorDim).Render("("+statusStr+")"))
+		content = strings.Join(parts, lipgloss.NewStyle().Foreground(colorDim).Render("   "))
 	}
-	return "  " + label + "  " + strings.Join(parts, lipgloss.NewStyle().Foreground(colorDim).Render("  ·  "))
+
+	box := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(colorDim).
+		Padding(0, 2).
+		Render(label + "  " + content)
+
+	return "  " + box
 }
+
+func (m DashboardModel) renderFooter() string {
+	key := func(k, desc string) string {
+		return lipgloss.NewStyle().Bold(true).Foreground(colorText).Render(k) +
+			" " +
+			lipgloss.NewStyle().Foreground(colorSubtle).Render(desc)
+	}
+	dot := lipgloss.NewStyle().Foreground(colorDim).Render("  ·  ")
+	refresh := lipgloss.NewStyle().Foreground(colorDim).Render("↻ 2s")
+
+	return lipgloss.NewStyle().MarginTop(1).Render(
+		"  " + key("q", "quit") + dot + key("r", "refresh") + dot + key("c", "clean") + dot + refresh,
+	)
+}
+
+// ── Status / cell renderers ────────────────────────────────────────
 
 func renderStatus(s TaskStatus) string {
 	switch s {
 	case StatusCreated:
-		return statusCreated.Render("● created")
+		return statusCreated.Render("○ created")
 	case StatusAssigned:
 		return statusAssigned.Render("◐ assigned")
 	case StatusInProgress:
