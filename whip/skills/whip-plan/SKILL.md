@@ -54,25 +54,37 @@ Decompose the work into tasks following these principles:
 
 ### Difficulty assignment
 
-| Level | Model | When to use |
-|---------|-------|----------------------------------------------|
-| `hard` | Opus (high effort) | Complex architecture, multi-file refactors, subtle bugs, security-sensitive work |
-| `medium`| Opus (medium effort) | Moderate features, cross-file changes with clear scope, interface implementation |
-| `easy` | Sonnet | Truly mechanical: config files, boilerplate scaffolds, copy-paste patterns, docs |
+| Level | Whip flag | When to use |
+|---------|------------------|----------------------------------------------|
+| `hard` | `--difficulty hard` | Complex architecture, multi-file refactors, subtle bugs, security-sensitive work |
+| `medium`| `--difficulty medium` | Moderate features, cross-file changes with clear scope, interface implementation |
+| `easy` | `--difficulty easy` | Truly mechanical: config files, boilerplate scaffolds, copy-paste patterns, docs |
 
 **Choosing the right level is critical.** An under-leveled task produces subtle bugs that cost more to fix than the savings. Apply these rules:
 
-1. **Interface boundaries require `medium` minimum.** If a task must match an API contract, type signature, or protocol defined elsewhere, it needs Opus-level reasoning. Sonnet may approximate names/paths instead of matching exactly.
-   - Bad: `[easy] API client` that must match server endpoints → path mismatches, wrong field names
+1. **Interface boundaries require `medium` minimum.** If a task must match an API contract, type signature, or protocol defined elsewhere, it needs higher-reasoning mode. Lower-effort settings may approximate names or paths instead of matching exactly.
+   - Bad: `[easy] API client` that must match server endpoints or a shared session contract
    - Good: `[medium] API client` — cross-referencing another task's interface needs precision
 
 2. **`easy` is only for tasks with zero ambiguity.** The agent should be able to complete the task by following the description literally, with no judgment calls.
    - Good `easy`: CI/CD workflow YAML, project scaffold from template, rename/move files
-   - Bad `easy`: anything that says "match the existing pattern" or "implement the interface from Task X"
+   - Bad `easy`: anything that says "match the existing pattern", "implement the interface from Task X", or "touch shared plumbing"
 
 3. **When in doubt, use `medium`.** The cost difference between `easy` and `medium` is small compared to the cost of a bug that requires master intervention or rework.
 
 4. **Reserve `hard` for tasks where correctness is non-obvious.** Multi-file refactors where changes must be consistent, security-sensitive code, complex state machines, subtle concurrency.
+
+### Backend assignment
+
+Choose the backend during planning whenever portability or execution quality matters.
+
+- If the user explicitly requests `claude` or `codex`, record that backend in the task spec.
+- Default heuristics when the user did not specify:
+  - Use `codex` for research-grade work, complex problem solving, strict review, or tasks where technical precision matters more than speed.
+  - Use `claude` for faster execution, strong ideation, or straightforward coding tasks that benefit from momentum over deep investigation.
+- If different tasks should use different backends, make that explicit per task.
+- If all tasks should use one backend, say so clearly in the plan and still record it in each task spec.
+- If backend is omitted, the executing `/whip-start` skill's default backend will apply. Avoid relying on this when the plan may be executed by different environments.
 
 ## Step 5: Present the plan
 
@@ -84,15 +96,15 @@ Present a clear, structured plan to the user:
 ### Task Graph
 
 Round 1 (parallel):
-- [easy] Task A: <title> — <1-line scope>
-- [medium] Task B: <title> — <1-line scope>
+- [easy][claude] Task A: <title> — <1-line scope>
+- [medium][codex] Task B: <title> — <1-line scope>
 
 Round 2 (after Round 1):
-- [medium] Task C: <title> — <1-line scope> (depends on: A, B)
-- [easy] Task D: <title> — <1-line scope> (depends on: A)
+- [medium][codex] Task C: <title> — <1-line scope> (depends on: A, B)
+- [easy][claude] Task D: <title> — <1-line scope> (depends on: A)
 
 Round 3 (after Round 2):
-- [medium] Task E: <title> — <1-line scope> (depends on: C)
+- [medium][claude] Task E: <title> — <1-line scope> (depends on: C)
 
 ### Dependency Diagram
 
@@ -132,6 +144,7 @@ The plan file takes the high-level graph from plan mode and fleshes it out into 
 ## Tasks
 
 ### Task 1: <title>
+- **Backend**: claude | codex
 - **Difficulty**: easy | medium | hard
 - **Depends on**: (none) | Task 2, Task 3
 - **Scope**:
@@ -155,6 +168,7 @@ The plan file takes the high-level graph from plan mode and fleshes it out into 
 ```
 
 **What makes a good task description:**
+- Explicit backend choice when it matters or when the user specified one
 - File paths and function names, not vague references
 - Exact API shapes (request/response JSON, endpoint paths, headers)
 - Existing code references with file:line pointers
@@ -169,6 +183,7 @@ Run `/whip-start <bound-file-path>` to execute this plan.
 ```
 
 Replace `<bound-file-path>` with the actual bound file path (e.g., `~/.claude/plans/serialized-strolling-lightning.md`).
+Prefer explicit `Backend` fields in the task specs so the plan behaves the same whether `/whip-start` runs in Claude or Codex.
 
 ## Step 8: Exit plan mode
 
