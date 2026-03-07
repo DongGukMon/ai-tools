@@ -1,16 +1,19 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"text/tabwriter"
 	"time"
 
@@ -52,6 +55,7 @@ func main() {
 		quitCmd(),
 		daemonCmd(),
 		upgradeCmd(),
+		serveCmd(),
 	)
 
 	if err := root.Execute(); err != nil {
@@ -653,6 +657,62 @@ func isValidPeerName(name string) bool {
 		}
 	}
 	return true
+}
+
+func serveCmd() *cobra.Command {
+	var port int
+	var tunnel string
+
+	cmd := &cobra.Command{
+		Use:   "serve",
+		Short: "Start HTTP API server for external access",
+		Long:  "Starts an HTTP API server that wraps the local claude-irc store, with optional cloudflared tunnel for remote access.",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			store, err := irc.NewStore()
+			if err != nil {
+				return err
+			}
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			// Signal handling
+			sigCh := make(chan os.Signal, 1)
+			signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
+			go func() { <-sigCh; cancel() }()
+
+			// Optional tunnel
+			var tunnelMgr *irc.TunnelManager
+			var publicURL string
+			if cmd.Flags().Changed("tunnel") {
+				tunnelMgr = irc.NewTunnelManager(tunnel, port)
+				var err error
+				publicURL, err = tunnelMgr.Start(ctx)
+				if err != nil {
+					return fmt.Errorf("tunnel: %w", err)
+				}
+				defer tunnelMgr.Stop()
+			}
+
+			return irc.RunServer(ctx, irc.ServerConfig{
+				Port:  port,
+				Store: store,
+				OnReady: func(info irc.ServerInfo) {
+					connectURL := info.LocalURL
+					if publicURL != "" {
+						connectURL = publicURL
+					}
+					fmt.Fprintf(os.Stderr, "claude-irc serve started.\n")
+					fmt.Fprintf(os.Stderr, "Connect URL: %s?token=%s\n", connectURL, info.Token)
+				},
+			})
+		},
+	}
+
+	cmd.Flags().IntVar(&port, "port", 8585, "HTTP server port")
+	cmd.Flags().StringVar(&tunnel, "tunnel", "", "Cloudflare Tunnel hostname (empty for quick tunnel, or domain like irc.bang9.dev)")
+	return cmd
 }
 
 func upgradeCmd() *cobra.Command {
