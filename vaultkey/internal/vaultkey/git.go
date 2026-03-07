@@ -24,7 +24,7 @@ func GitPull(repoPath string) error {
 	return nil
 }
 
-func GitPush(repoPath string) error {
+func GitSync(repoPath string) error {
 	// Stage vault.json
 	add := exec.Command("git", "-C", repoPath, "add", vaultFileName)
 	if out, err := add.CombinedOutput(); err != nil {
@@ -34,7 +34,8 @@ func GitPush(repoPath string) error {
 	// Check if there are staged changes
 	diff := exec.Command("git", "-C", repoPath, "diff", "--cached", "--quiet")
 	if err := diff.Run(); err == nil {
-		return fmt.Errorf("nothing to push (no changes)")
+		// No local changes — just pull
+		return GitPull(repoPath)
 	}
 
 	// Commit
@@ -43,11 +44,26 @@ func GitPush(repoPath string) error {
 		return fmt.Errorf("git commit failed: %s", strings.TrimSpace(string(out)))
 	}
 
-	// Push
-	push := exec.Command("git", "-C", repoPath, "push")
+	// Pull --rebase then push (skip pull if no upstream yet)
+	if hasUpstream(repoPath) {
+		if err := GitPull(repoPath); err != nil {
+			return err
+		}
+	}
+
+	push := exec.Command("git", "-C", repoPath, "push", "-u", "origin", "HEAD")
 	out, err := push.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("git push failed: %s", strings.TrimSpace(string(out)))
 	}
 	return nil
+}
+
+func GitPush(repoPath string) error {
+	return GitSync(repoPath)
+}
+
+func hasUpstream(repoPath string) bool {
+	cmd := exec.Command("git", "-C", repoPath, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}")
+	return cmd.Run() == nil
 }

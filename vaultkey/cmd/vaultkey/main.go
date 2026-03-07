@@ -97,7 +97,20 @@ func setCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			scope, key, value := args[0], args[1], args[2]
 
-			v, err := openVault()
+			cfg, err := vaultkey.LoadConfig()
+			if err != nil {
+				return err
+			}
+
+			pw, err := vaultkey.GetPassword(passwordFlag)
+			if err != nil {
+				return err
+			}
+
+			// Pull latest before mutation
+			_ = vaultkey.GitPull(cfg.RepoPath)
+
+			v, err := vaultkey.LoadVault(cfg.RepoPath, pw)
 			if err != nil {
 				return err
 			}
@@ -107,6 +120,11 @@ func setCmd() *cobra.Command {
 			}
 
 			fmt.Fprintf(os.Stderr, "Set %s/%s\n", scope, key)
+
+			if err := vaultkey.GitSync(cfg.RepoPath); err != nil {
+				return fmt.Errorf("sync failed: %w", err)
+			}
+			fmt.Fprintln(os.Stderr, "Synced.")
 			return nil
 		},
 	}
@@ -184,7 +202,20 @@ func deleteCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			scope, key := args[0], args[1]
 
-			v, err := openVault()
+			cfg, err := vaultkey.LoadConfig()
+			if err != nil {
+				return err
+			}
+
+			pw, err := vaultkey.GetPassword(passwordFlag)
+			if err != nil {
+				return err
+			}
+
+			// Pull latest before mutation
+			_ = vaultkey.GitPull(cfg.RepoPath)
+
+			v, err := vaultkey.LoadVault(cfg.RepoPath, pw)
 			if err != nil {
 				return err
 			}
@@ -194,6 +225,11 @@ func deleteCmd() *cobra.Command {
 			}
 
 			fmt.Fprintf(os.Stderr, "Deleted %s/%s\n", scope, key)
+
+			if err := vaultkey.GitSync(cfg.RepoPath); err != nil {
+				return fmt.Errorf("sync failed: %w", err)
+			}
+			fmt.Fprintln(os.Stderr, "Synced.")
 			return nil
 		},
 	}
