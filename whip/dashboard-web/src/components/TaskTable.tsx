@@ -30,12 +30,15 @@ function RunnerCell({ runner }: { runner: string }) {
   }
 }
 
-function PidCell({ pid, alive }: { pid: number; alive: boolean }) {
+function PidCell({ pid, alive, status }: { pid: number; alive: boolean; status: Task['status'] }) {
   if (pid <= 0) {
     return <span className="text-gray-400 dark:text-gray-700">&mdash;</span>
   }
   if (alive) {
     return <span className="text-emerald-500 dark:text-emerald-400">● {pid}</span>
+  }
+  if (status === 'completed') {
+    return <span className="text-amber-500 dark:text-amber-400">- {pid}</span>
   }
   return <span className="text-red-500 dark:text-red-400">✗ {pid}</span>
 }
@@ -113,7 +116,7 @@ export function TaskTable({ tasks, selectedId, onSelect }: TaskTableProps) {
                   <RunnerCell runner={task.runner} />
                 </td>
                 <td className="py-1.5 px-1.5">
-                  <PidCell pid={task.shell_pid} alive={task.pid_alive} />
+                  <PidCell pid={task.shell_pid} alive={task.pid_alive} status={task.status} />
                 </td>
                 <td className="py-1.5 px-1.5">
                   {task.irc_name ? (

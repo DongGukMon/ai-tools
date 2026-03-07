@@ -39,9 +39,10 @@ function RunnerValue({ runner }: { runner: string }) {
   }
 }
 
-function PidValue({ pid, alive }: { pid: number; alive: boolean }) {
+function PidValue({ pid, alive, status }: { pid: number; alive: boolean; status: Task['status'] }) {
   if (pid <= 0) return <span className="text-gray-400 dark:text-gray-600">&mdash;</span>
   if (alive) return <span className="text-emerald-500 dark:text-emerald-400">● {pid}</span>
+  if (status === 'completed') return <span className="text-amber-500 dark:text-amber-400">- {pid}</span>
   return <span className="text-red-500 dark:text-red-400">✗ {pid}</span>
 }
 
@@ -106,7 +107,7 @@ export function TaskDetail({ task, onClose }: TaskDetailProps) {
             {task.master_irc_name && <Field label="Master IRC">{task.master_irc_name}</Field>}
             {task.shell_pid > 0 && (
               <Field label="Shell PID">
-                <PidValue pid={task.shell_pid} alive={task.pid_alive} />
+                <PidValue pid={task.shell_pid} alive={task.pid_alive} status={task.status} />
               </Field>
             )}
             {task.note && (

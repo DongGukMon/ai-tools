@@ -35,9 +35,10 @@ var (
 	statusFailed     = lipgloss.NewStyle().Foreground(colorDanger)
 
 	// ── Cell styles ────────────────────────────────────────────────
-	idStyle       = lipgloss.NewStyle().Foreground(colorWarning)
-	pidAliveStyle = lipgloss.NewStyle().Foreground(colorSuccess)
-	pidDeadStyle  = lipgloss.NewStyle().Foreground(colorDanger)
+	idStyle        = lipgloss.NewStyle().Foreground(colorWarning)
+	pidAliveStyle  = lipgloss.NewStyle().Foreground(colorSuccess)
+	pidExitedStyle = lipgloss.NewStyle().Foreground(colorWarning)
+	pidDeadStyle   = lipgloss.NewStyle().Foreground(colorDanger)
 
 	spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 )
@@ -722,7 +723,7 @@ func (m DashboardModel) renderDetailView(w int) string {
 		fields = append(fields, struct{ label, value string }{"Master IRC", valStyle.Render(t.MasterIRCName)})
 	}
 	if t.ShellPID > 0 {
-		fields = append(fields, struct{ label, value string }{"Shell PID", renderPID(t.ShellPID)})
+		fields = append(fields, struct{ label, value string }{"Shell PID", renderPID(t)})
 	}
 	if t.Note != "" {
 		fields = append(fields, struct{ label, value string }{"Note", lipgloss.NewStyle().Foreground(colorMuted).Render(t.Note)})
@@ -987,7 +988,7 @@ func (m DashboardModel) renderTable() string {
 		backend := padRight(renderBackend(t.Backend), colBackend)
 		runner := padRight(renderRunner(t.Runner), colRunner)
 
-		pid := padRight(renderPID(t.ShellPID), colPID)
+		pid := padRight(renderPID(t), colPID)
 
 		ircName := truncate(t.IRCName, colIRC)
 		if ircName == "" {
@@ -1182,14 +1183,18 @@ func renderRunner(runner string) string {
 	}
 }
 
-func renderPID(pid int) string {
-	if pid <= 0 {
+func renderPID(t *Task) string {
+	if t == nil || t.ShellPID <= 0 {
 		return lipgloss.NewStyle().Foreground(colorDim).Render("—")
 	}
-	if IsProcessAlive(pid) {
-		return pidAliveStyle.Render(fmt.Sprintf("● %d", pid))
+	switch TaskProcessState(t) {
+	case ProcessStateAlive:
+		return pidAliveStyle.Render(fmt.Sprintf("● %d", t.ShellPID))
+	case ProcessStateExited:
+		return pidExitedStyle.Render(fmt.Sprintf("- %d", t.ShellPID))
+	default:
+		return pidDeadStyle.Render(fmt.Sprintf("✗ %d", t.ShellPID))
 	}
-	return pidDeadStyle.Render(fmt.Sprintf("✗ %d", pid))
 }
 
 func renderDeps(deps []string) string {

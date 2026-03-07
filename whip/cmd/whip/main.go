@@ -10,9 +10,9 @@ import (
 	"text/tabwriter"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/bang9/ai-tools/shared/upgrade"
 	"github.com/bang9/ai-tools/whip/internal/whip"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 )
 
@@ -125,10 +125,10 @@ func createCmd() *cobra.Command {
 
 func listCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "list",
-		Short: "List all tasks",
+		Use:     "list",
+		Short:   "List all tasks",
 		Aliases: []string{"ls"},
-		Args:  cobra.NoArgs,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store, err := whip.NewStore()
 			if err != nil {
@@ -148,14 +148,7 @@ func listCmd() *cobra.Command {
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 			fmt.Fprintln(w, "ID\tTITLE\tSTATUS\tIRC\tPID\tUPDATED")
 			for _, t := range tasks {
-				pid := ""
-				if t.ShellPID > 0 {
-					alive := "dead"
-					if whip.IsProcessAlive(t.ShellPID) {
-						alive = "alive"
-					}
-					pid = fmt.Sprintf("%d (%s)", t.ShellPID, alive)
-				}
+				pid := formatShellPID(t)
 				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
 					t.ID,
 					truncate(t.Title, 30),
@@ -218,11 +211,7 @@ func showCmd() *cobra.Command {
 			fmt.Printf("IRC:         %s\n", task.IRCName)
 			fmt.Printf("Master IRC:  %s\n", task.MasterIRCName)
 			if task.ShellPID > 0 {
-				alive := "dead"
-				if whip.IsProcessAlive(task.ShellPID) {
-					alive = "alive"
-				}
-				fmt.Printf("Shell PID:   %d (%s)\n", task.ShellPID, alive)
+				fmt.Printf("Shell PID:   %s\n", formatShellPID(task))
 			}
 			if len(task.DependsOn) > 0 {
 				fmt.Printf("Depends on:  %s\n", strings.Join(task.DependsOn, ", "))
@@ -827,10 +816,10 @@ func cleanCmd() *cobra.Command {
 
 func dashboardCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "dashboard",
-		Short: "Live task dashboard (TUI)",
+		Use:     "dashboard",
+		Short:   "Live task dashboard (TUI)",
 		Aliases: []string{"dash"},
-		Args:  cobra.NoArgs,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store, err := whip.NewStore()
 			if err != nil {
@@ -986,6 +975,17 @@ func resolveDescription(desc, file string) (string, error) {
 	}
 
 	return "", nil
+}
+
+func formatShellPID(task *whip.Task) string {
+	if task == nil || task.ShellPID <= 0 {
+		return ""
+	}
+	state := whip.TaskProcessState(task)
+	if state == whip.ProcessStateNone {
+		return ""
+	}
+	return fmt.Sprintf("%d (%s)", task.ShellPID, state)
 }
 
 func truncate(s string, max int) string {
