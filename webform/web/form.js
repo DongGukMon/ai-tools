@@ -554,7 +554,7 @@
     overlay.appendChild(resultCard);
     document.body.appendChild(overlay);
 
-    var closeCountdown = 5;
+    var closeCountdown = 3;
     function updateClose() {
       closeMsg.textContent = 'Closing in ' + closeCountdown + 's...';
       if (closeCountdown <= 0) {
