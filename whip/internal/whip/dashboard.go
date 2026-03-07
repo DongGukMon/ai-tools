@@ -279,7 +279,7 @@ func (m DashboardModel) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.retryTask(m.selectedTask.ID)
 		}
 	case "s":
-		if m.selectedTask != nil && m.selectedTask.Status != StatusCompleted && m.selectedTask.SessionID != "" && !IsProcessAlive(m.selectedTask.ShellPID) {
+		if m.selectedTask != nil && m.selectedTask.Status != StatusCompleted && m.selectedTask.SessionID != "" && m.selectedTask.ShellPID > 0 && !IsProcessAlive(m.selectedTask.ShellPID) {
 			return m, m.resumeTask(m.selectedTask)
 		}
 	case "ctrl+c":
@@ -896,7 +896,7 @@ func (m DashboardModel) renderDetailFooter() string {
 	if m.selectedTask != nil && m.selectedTask.Status == StatusFailed {
 		line += dot + footerKey("r", "retry")
 	}
-	if m.selectedTask != nil && m.selectedTask.Status != StatusCompleted && m.selectedTask.SessionID != "" && !IsProcessAlive(m.selectedTask.ShellPID) {
+	if m.selectedTask != nil && m.selectedTask.Status != StatusCompleted && m.selectedTask.SessionID != "" && m.selectedTask.ShellPID > 0 && !IsProcessAlive(m.selectedTask.ShellPID) {
 		line += dot + footerKey("s", "resume")
 	}
 
