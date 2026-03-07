@@ -1085,7 +1085,7 @@ func (m DashboardModel) renderPeers() string {
 		content = lipgloss.NewStyle().Foreground(colorSubtle).Render("no peers online")
 	} else {
 		var parts []string
-		for _, p := range m.peers {
+		for _, p := range m.ircPeers() {
 			if p.Online {
 				dot := lipgloss.NewStyle().Foreground(colorSuccess).Render("●")
 				name := lipgloss.NewStyle().Foreground(colorText).Render(p.Name)
