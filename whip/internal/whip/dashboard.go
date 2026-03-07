@@ -47,6 +47,14 @@ type peerInfo struct {
 }
 type peersMsg []peerInfo
 
+type viewState int
+
+const (
+	viewList viewState = iota
+	viewDetail
+	viewTmux
+)
+
 type DashboardModel struct {
 	store         *Store
 	tasks         []*Task
@@ -58,6 +66,9 @@ type DashboardModel struct {
 	spinnerIndex  int
 	tickCount     int
 	cursor        int
+	view          viewState
+	selectedTask  *Task
+	tmuxContent   string
 	pendingAttach string
 }
 
@@ -128,35 +139,13 @@ func loadPeers() tea.Cmd {
 func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "q", "ctrl+c":
-			return m, tea.Quit
-		case "r":
-			return m, m.loadTasks()
-		case "c":
-			return m, m.cleanTasks()
-		case "up", "k":
-			if len(m.tasks) > 0 {
-				m.cursor--
-				if m.cursor < 0 {
-					m.cursor = len(m.tasks) - 1
-				}
-			}
-		case "down", "j":
-			if len(m.tasks) > 0 {
-				m.cursor++
-				if m.cursor >= len(m.tasks) {
-					m.cursor = 0
-				}
-			}
-		case "enter":
-			if len(m.tasks) > 0 && m.cursor < len(m.tasks) {
-				t := m.tasks[m.cursor]
-				if t.Runner == "tmux" && IsTmuxSession(t.ID) {
-					m.pendingAttach = t.ID
-					return m, tea.Quit
-				}
-			}
+		switch m.view {
+		case viewList:
+			return m.updateList(msg)
+		case viewDetail:
+			return m.updateDetail(msg)
+		case viewTmux:
+			return m.updateTmux(msg)
 		}
 
 	case tea.WindowSizeMsg:
@@ -168,6 +157,15 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = nil
 		if m.cursor >= len(m.tasks) && len(m.tasks) > 0 {
 			m.cursor = len(m.tasks) - 1
+		}
+		// Refresh selectedTask if viewing detail/tmux
+		if m.selectedTask != nil {
+			for _, t := range m.tasks {
+				if t.ID == m.selectedTask.ID {
+					m.selectedTask = t
+					break
+				}
+			}
 		}
 
 	case peersMsg:
@@ -182,9 +180,81 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		m.spinnerIndex = (m.spinnerIndex + 1) % len(spinnerFrames)
 		m.tickCount++
-		return m, tea.Batch(m.loadTasks(), loadPeers(), tickCmd())
+		cmds := []tea.Cmd{m.loadTasks(), loadPeers(), tickCmd()}
+		// Auto-refresh tmux content
+		if m.view == viewTmux && m.selectedTask != nil {
+			if content, err := CaptureTmuxPane(m.selectedTask.ID); err == nil {
+				m.tmuxContent = content
+			}
+		}
+		return m, tea.Batch(cmds...)
 	}
 
+	return m, nil
+}
+
+func (m DashboardModel) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "q", "ctrl+c":
+		return m, tea.Quit
+	case "r":
+		return m, m.loadTasks()
+	case "c":
+		return m, m.cleanTasks()
+	case "up", "k":
+		if len(m.tasks) > 0 {
+			m.cursor--
+			if m.cursor < 0 {
+				m.cursor = len(m.tasks) - 1
+			}
+		}
+	case "down", "j":
+		if len(m.tasks) > 0 {
+			m.cursor++
+			if m.cursor >= len(m.tasks) {
+				m.cursor = 0
+			}
+		}
+	case "enter":
+		if len(m.tasks) > 0 && m.cursor < len(m.tasks) {
+			m.selectedTask = m.tasks[m.cursor]
+			m.view = viewDetail
+		}
+	}
+	return m, nil
+}
+
+func (m DashboardModel) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "backspace", "q":
+		m.view = viewList
+		m.selectedTask = nil
+	case "a":
+		if m.selectedTask != nil && m.selectedTask.Runner == "tmux" && IsTmuxSession(m.selectedTask.ID) {
+			m.view = viewTmux
+			if content, err := CaptureTmuxPane(m.selectedTask.ID); err == nil {
+				m.tmuxContent = content
+			}
+		}
+	case "ctrl+c":
+		return m, tea.Quit
+	}
+	return m, nil
+}
+
+func (m DashboardModel) updateTmux(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "backspace", "q":
+		m.view = viewDetail
+		m.tmuxContent = ""
+	case "enter":
+		if m.selectedTask != nil {
+			m.pendingAttach = m.selectedTask.ID
+			return m, tea.Quit
+		}
+	case "ctrl+c":
+		return m, tea.Quit
+	}
 	return m, nil
 }
 
@@ -210,6 +280,31 @@ func (m DashboardModel) View() string {
 	w := min(m.width, 120)
 
 	// ── Header ────────────────────────────────────────────
+	b.WriteString(m.renderHeader(w))
+
+	// ── Error ─────────────────────────────────────────────
+	if m.err != nil {
+		errLabel := lipgloss.NewStyle().Foreground(colorDanger).Bold(true).Render("  ✗ Error:")
+		errMsg := lipgloss.NewStyle().Foreground(colorDanger).Render(fmt.Sprintf(" %v", m.err))
+		b.WriteString(errLabel + errMsg + "\n")
+	}
+
+	// ── View-specific content ─────────────────────────────
+	switch m.view {
+	case viewList:
+		b.WriteString(m.renderListView(w))
+	case viewDetail:
+		b.WriteString(m.renderDetailView(w))
+	case viewTmux:
+		b.WriteString(m.renderTmuxView(w))
+	}
+
+	return b.String()
+}
+
+func (m DashboardModel) renderHeader(w int) string {
+	var b strings.Builder
+
 	spinner := lipgloss.NewStyle().Foreground(colorSecondary).Render(spinnerFrames[m.spinnerIndex])
 
 	badge := lipgloss.NewStyle().
@@ -241,14 +336,12 @@ func (m DashboardModel) View() string {
 	b.WriteString(" " + lipgloss.NewStyle().Foreground(colorPrimary).Render(strings.Repeat("━", w-2)))
 	b.WriteString("\n")
 
-	// ── Error ─────────────────────────────────────────────
-	if m.err != nil {
-		errLabel := lipgloss.NewStyle().Foreground(colorDanger).Bold(true).Render("  ✗ Error:")
-		errMsg := lipgloss.NewStyle().Foreground(colorDanger).Render(fmt.Sprintf(" %v", m.err))
-		b.WriteString(errLabel + errMsg + "\n")
-	}
+	return b.String()
+}
 
-	// ── Tasks ─────────────────────────────────────────────
+func (m DashboardModel) renderListView(w int) string {
+	var b strings.Builder
+
 	if len(m.tasks) == 0 {
 		b.WriteString("\n")
 		b.WriteString(lipgloss.NewStyle().
@@ -264,13 +357,134 @@ func (m DashboardModel) View() string {
 		b.WriteString(m.renderSummary())
 	}
 
-	// ── IRC ───────────────────────────────────────────────
+	// IRC
 	b.WriteString("\n")
 	b.WriteString(m.renderPeers())
 
-	// ── Footer ────────────────────────────────────────────
+	// Footer
 	b.WriteString("\n")
-	b.WriteString(m.renderFooter())
+	b.WriteString(m.renderListFooter())
+
+	return b.String()
+}
+
+func (m DashboardModel) renderDetailView(w int) string {
+	var b strings.Builder
+	t := m.selectedTask
+	if t == nil {
+		return ""
+	}
+
+	labelStyle := lipgloss.NewStyle().Bold(true).Foreground(colorMuted).Width(14)
+	valStyle := lipgloss.NewStyle().Foreground(colorText)
+	dimStyle := lipgloss.NewStyle().Foreground(colorDim)
+
+	// Breadcrumb
+	breadcrumb := lipgloss.NewStyle().Foreground(colorSubtle).Render("  Tasks") +
+		lipgloss.NewStyle().Foreground(colorDim).Render(" › ") +
+		lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render(t.Title)
+	b.WriteString(breadcrumb + "\n\n")
+
+	// Fields
+	fields := []struct{ label, value string }{
+		{"ID", idStyle.Render(t.ID)},
+		{"Title", valStyle.Render(t.Title)},
+		{"Status", renderStatus(t.Status)},
+		{"Runner", renderRunner(t.Runner)},
+	}
+
+	if t.IRCName != "" {
+		fields = append(fields, struct{ label, value string }{"IRC", valStyle.Render(t.IRCName)})
+	}
+	if t.MasterIRCName != "" {
+		fields = append(fields, struct{ label, value string }{"Master IRC", valStyle.Render(t.MasterIRCName)})
+	}
+	if t.ShellPID > 0 {
+		fields = append(fields, struct{ label, value string }{"Shell PID", renderPID(t.ShellPID)})
+	}
+	if t.Note != "" {
+		fields = append(fields, struct{ label, value string }{"Note", lipgloss.NewStyle().Foreground(colorMuted).Render(t.Note)})
+	}
+	if len(t.DependsOn) > 0 {
+		fields = append(fields, struct{ label, value string }{"Depends on", lipgloss.NewStyle().Foreground(colorWarning).Render(strings.Join(t.DependsOn, ", "))})
+	}
+	if t.CWD != "" {
+		fields = append(fields, struct{ label, value string }{"CWD", lipgloss.NewStyle().Foreground(colorSubtle).Render(t.CWD)})
+	}
+
+	fields = append(fields, struct{ label, value string }{"Created", lipgloss.NewStyle().Foreground(colorSubtle).Render(t.CreatedAt.Format(time.RFC3339))})
+	fields = append(fields, struct{ label, value string }{"Updated", lipgloss.NewStyle().Foreground(colorSubtle).Render(t.UpdatedAt.Format(time.RFC3339))})
+	if t.AssignedAt != nil {
+		fields = append(fields, struct{ label, value string }{"Assigned", lipgloss.NewStyle().Foreground(colorSubtle).Render(t.AssignedAt.Format(time.RFC3339))})
+	}
+	if t.CompletedAt != nil {
+		fields = append(fields, struct{ label, value string }{"Completed", lipgloss.NewStyle().Foreground(colorSubtle).Render(t.CompletedAt.Format(time.RFC3339))})
+	}
+
+	for _, f := range fields {
+		b.WriteString("  " + labelStyle.Render(f.label) + " " + f.value + "\n")
+	}
+
+	// Description
+	if t.Description != "" {
+		b.WriteString("\n")
+		b.WriteString("  " + lipgloss.NewStyle().Bold(true).Foreground(colorAccent).Render("Description") + "\n")
+		b.WriteString("  " + dimStyle.Render(strings.Repeat("─", w-4)) + "\n")
+		for _, line := range strings.Split(t.Description, "\n") {
+			b.WriteString("  " + lipgloss.NewStyle().Foreground(colorMuted).Render(line) + "\n")
+		}
+	}
+
+	// Footer
+	b.WriteString("\n")
+	b.WriteString(m.renderDetailFooter())
+
+	return b.String()
+}
+
+func (m DashboardModel) renderTmuxView(w int) string {
+	var b strings.Builder
+	t := m.selectedTask
+	if t == nil {
+		return ""
+	}
+
+	// Breadcrumb
+	breadcrumb := lipgloss.NewStyle().Foreground(colorSubtle).Render("  Tasks") +
+		lipgloss.NewStyle().Foreground(colorDim).Render(" › ") +
+		lipgloss.NewStyle().Foreground(colorSubtle).Render(t.Title) +
+		lipgloss.NewStyle().Foreground(colorDim).Render(" › ") +
+		lipgloss.NewStyle().Foreground(colorSecondary).Bold(true).Render("tmux")
+	b.WriteString(breadcrumb + "\n")
+
+	// Tmux pane content in a bordered box
+	content := m.tmuxContent
+	if content == "" {
+		content = lipgloss.NewStyle().Foreground(colorSubtle).Italic(true).Render("(no output)")
+	}
+
+	// Limit height to fit terminal
+	lines := strings.Split(strings.TrimRight(content, "\n"), "\n")
+	maxLines := m.height - 8 // header + breadcrumb + footer margin
+	if maxLines < 5 {
+		maxLines = 5
+	}
+	if len(lines) > maxLines {
+		lines = lines[len(lines)-maxLines:]
+	}
+
+	box := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(colorSecondary).
+		Padding(0, 1).
+		MarginLeft(2).
+		Width(w - 6).
+		Render(strings.Join(lines, "\n"))
+	b.WriteString(box + "\n")
+
+	// Footer
+	b.WriteString("\n")
+	b.WriteString(m.renderTmuxFooter())
 
 	return b.String()
 }
@@ -424,25 +638,40 @@ func (m DashboardModel) renderPeers() string {
 	return box
 }
 
-func (m DashboardModel) renderFooter() string {
-	key := func(k, desc string) string {
-		return lipgloss.NewStyle().Bold(true).Foreground(colorText).Render(k) +
-			" " +
-			lipgloss.NewStyle().Foreground(colorSubtle).Render(desc)
-	}
+func footerKey(k, desc string) string {
+	return lipgloss.NewStyle().Bold(true).Foreground(colorText).Render(k) +
+		" " +
+		lipgloss.NewStyle().Foreground(colorSubtle).Render(desc)
+}
+
+func (m DashboardModel) renderListFooter() string {
 	dot := lipgloss.NewStyle().Foreground(colorDim).Render("  ·  ")
 	refresh := lipgloss.NewStyle().Foreground(colorDim).Render("↻ 2s")
 
-	line := "  " + key("↑↓", "navigate") + dot + key("q", "quit") + dot + key("r", "refresh") + dot + key("c", "clean") + dot + refresh
+	line := "  " + footerKey("↑↓", "navigate") + dot + footerKey("enter", "detail") + dot + footerKey("q", "quit") + dot + footerKey("r", "refresh") + dot + footerKey("c", "clean") + dot + refresh
 
-	// Show attach hint if selected task is a tmux session
-	if len(m.tasks) > 0 && m.cursor < len(m.tasks) {
-		t := m.tasks[m.cursor]
-		if t.Runner == "tmux" && IsTmuxSession(t.ID) {
-			hint := lipgloss.NewStyle().Foreground(colorSuccess).Bold(true).Render("  [enter: attach]")
-			line += hint
-		}
+	return lipgloss.NewStyle().MarginTop(1).Render(line)
+}
+
+func (m DashboardModel) renderDetailFooter() string {
+	dot := lipgloss.NewStyle().Foreground(colorDim).Render("  ·  ")
+
+	line := "  " + footerKey("esc", "back")
+
+	if m.selectedTask != nil && m.selectedTask.Runner == "tmux" && IsTmuxSession(m.selectedTask.ID) {
+		line += dot + footerKey("a", "view tmux")
 	}
+
+	line += dot + footerKey("q", "back")
+
+	return lipgloss.NewStyle().MarginTop(1).Render(line)
+}
+
+func (m DashboardModel) renderTmuxFooter() string {
+	dot := lipgloss.NewStyle().Foreground(colorDim).Render("  ·  ")
+	refresh := lipgloss.NewStyle().Foreground(colorDim).Render("↻ 2s auto-refreshing")
+
+	line := "  " + footerKey("esc", "back") + dot + footerKey("enter", "attach") + dot + refresh
 
 	return lipgloss.NewStyle().MarginTop(1).Render(line)
 }
