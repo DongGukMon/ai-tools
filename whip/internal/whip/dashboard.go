@@ -58,7 +58,11 @@ const (
 	viewList viewState = iota
 	viewDetail
 	viewTmux
+	viewIRC    // peer selection list
+	viewIRCMsg // message text input
 )
+
+type ircSendResultMsg struct{ err error }
 
 type DashboardModel struct {
 	store         *Store
@@ -76,6 +80,12 @@ type DashboardModel struct {
 	detailScroll  int
 	tmuxContent   string
 	pendingAttach string
+
+	ircCursor      int
+	ircInput       string
+	ircTarget      string
+	ircLastSendErr error
+	ircLastSendAt  time.Time
 }
 
 func (m DashboardModel) PendingAttach() string {
@@ -152,6 +162,10 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateDetail(msg)
 		case viewTmux:
 			return m.updateTmux(msg)
+		case viewIRC:
+			return m.updateIRC(msg)
+		case viewIRCMsg:
+			return m.updateIRCMsg(msg)
 		}
 
 	case tea.WindowSizeMsg:
@@ -193,6 +207,11 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.err = msg.err
 		}
+		return m, nil
+
+	case ircSendResultMsg:
+		m.ircLastSendErr = msg.err
+		m.ircLastSendAt = time.Now()
 		return m, nil
 
 	case cleanedMsg:
@@ -242,6 +261,12 @@ func (m DashboardModel) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.selectedTask = m.tasks[m.cursor]
 			m.detailScroll = 0
 			m.view = viewDetail
+		}
+	case "i":
+		peers := m.ircPeers()
+		if len(peers) > 0 {
+			m.ircCursor = 0
+			m.view = viewIRC
 		}
 	}
 	return m, nil
@@ -391,6 +416,84 @@ func (m DashboardModel) updateTmux(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// ircPeers returns the peer list with 'user' filtered out.
+func (m DashboardModel) ircPeers() []peerInfo {
+	var filtered []peerInfo
+	for _, p := range m.peers {
+		if p.Name != "user" {
+			filtered = append(filtered, p)
+		}
+	}
+	return filtered
+}
+
+func (m DashboardModel) updateIRC(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	peers := m.ircPeers()
+	switch msg.String() {
+	case "esc", "backspace", "left":
+		m.view = viewList
+	case "up", "k":
+		if len(peers) > 0 {
+			m.ircCursor--
+			if m.ircCursor < 0 {
+				m.ircCursor = len(peers) - 1
+			}
+		}
+	case "down", "j":
+		if len(peers) > 0 {
+			m.ircCursor++
+			if m.ircCursor >= len(peers) {
+				m.ircCursor = 0
+			}
+		}
+	case "enter":
+		if len(peers) > 0 && m.ircCursor < len(peers) {
+			m.ircTarget = peers[m.ircCursor].Name
+			m.ircInput = ""
+			m.ircLastSendErr = nil
+			m.ircLastSendAt = time.Time{}
+			m.view = viewIRCMsg
+		}
+	case "ctrl+c":
+		return m, tea.Quit
+	}
+	return m, nil
+}
+
+func (m DashboardModel) updateIRCMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyRunes:
+		m.ircInput += string(msg.Runes)
+	case tea.KeySpace:
+		m.ircInput += " "
+	case tea.KeyBackspace:
+		runes := []rune(m.ircInput)
+		if len(runes) > 0 {
+			m.ircInput = string(runes[:len(runes)-1])
+		}
+	case tea.KeyEnter:
+		if strings.TrimSpace(m.ircInput) != "" {
+			cmd := m.sendIRCMsg(m.ircTarget, m.ircInput)
+			m.ircInput = ""
+			return m, cmd
+		}
+	case tea.KeyEsc:
+		m.ircInput = ""
+		m.view = viewIRC
+	case tea.KeyCtrlC:
+		return m, tea.Quit
+	}
+	return m, nil
+}
+
+func (m DashboardModel) sendIRCMsg(target, message string) tea.Cmd {
+	return func() tea.Msg {
+		fullMsg := message + "\n\n---\n[From dashboard operator. This is a one-way message — do not reply to 'user'. If you need clarification, escalate through your agent or use webform to ask.]"
+		err := exec.Command("claude-irc", "--name", "user", "msg", target, fullMsg).Run()
+		return ircSendResultMsg{err: err}
+	}
+}
+
 // detailMaxScroll returns the maximum scroll offset for the detail description.
 func (m DashboardModel) detailMaxScroll() int {
 	t := m.selectedTask
@@ -481,6 +584,10 @@ func (m DashboardModel) View() string {
 		b.WriteString(m.renderDetailView(w))
 	case viewTmux:
 		b.WriteString(m.renderTmuxView(w))
+	case viewIRC:
+		b.WriteString(m.renderIRCView(w))
+	case viewIRCMsg:
+		b.WriteString(m.renderIRCMsgView(w))
 	}
 
 	return b.String()
@@ -715,6 +822,97 @@ func (m DashboardModel) renderTmuxView(w int) string {
 	return b.String()
 }
 
+func (m DashboardModel) renderIRCView(w int) string {
+	var b strings.Builder
+	peers := m.ircPeers()
+
+	// Breadcrumb
+	breadcrumb := lipgloss.NewStyle().Foreground(colorSubtle).Render("  Tasks") +
+		lipgloss.NewStyle().Foreground(colorDim).Render(" › ") +
+		lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render("IRC")
+	b.WriteString(breadcrumb + "\n\n")
+
+	if len(peers) == 0 {
+		b.WriteString(lipgloss.NewStyle().Foreground(colorSubtle).Italic(true).Render("  No peers available") + "\n")
+	} else {
+		for i, p := range peers {
+			selected := i == m.ircCursor
+			indicator := "  "
+			if selected {
+				indicator = lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render("▸ ")
+			}
+
+			var dot, name string
+			if p.Online {
+				dot = lipgloss.NewStyle().Foreground(colorSuccess).Render("●")
+				name = lipgloss.NewStyle().Foreground(colorText).Render(p.Name)
+			} else {
+				dot = lipgloss.NewStyle().Foreground(colorDim).Render("○")
+				name = lipgloss.NewStyle().Foreground(colorSubtle).Render(p.Name)
+			}
+
+			row := indicator + dot + " " + name
+			if selected {
+				row = lipgloss.NewStyle().Background(lipgloss.Color("#1E1B4B")).Render(row)
+			}
+			b.WriteString(row + "\n")
+		}
+	}
+
+	// Footer
+	b.WriteString("\n")
+	b.WriteString(m.renderIRCFooter())
+
+	return b.String()
+}
+
+func (m DashboardModel) renderIRCMsgView(w int) string {
+	var b strings.Builder
+
+	// Breadcrumb
+	breadcrumb := lipgloss.NewStyle().Foreground(colorSubtle).Render("  Tasks") +
+		lipgloss.NewStyle().Foreground(colorDim).Render(" › ") +
+		lipgloss.NewStyle().Foreground(colorSubtle).Render("IRC") +
+		lipgloss.NewStyle().Foreground(colorDim).Render(" › ") +
+		lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render(m.ircTarget)
+	b.WriteString(breadcrumb + "\n\n")
+
+	// Send feedback
+	if !m.ircLastSendAt.IsZero() {
+		if m.ircLastSendErr != nil {
+			errMsg := lipgloss.NewStyle().Foreground(colorDanger).Render(fmt.Sprintf("  ✗ %v", m.ircLastSendErr))
+			b.WriteString(errMsg + "\n")
+		} else if time.Since(m.ircLastSendAt) < 3*time.Second {
+			okMsg := lipgloss.NewStyle().Foreground(colorSuccess).Render(fmt.Sprintf("  ✓ sent to %s", m.ircTarget))
+			b.WriteString(okMsg + "\n")
+		}
+	}
+
+	// Input prompt
+	prompt := lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render("  > ")
+	cursor := lipgloss.NewStyle().Foreground(colorText).Render("█")
+	input := lipgloss.NewStyle().Foreground(colorText).Render(m.ircInput)
+	b.WriteString(prompt + input + cursor + "\n")
+
+	// Footer
+	b.WriteString("\n")
+	b.WriteString(m.renderIRCMsgFooter())
+
+	return b.String()
+}
+
+func (m DashboardModel) renderIRCFooter() string {
+	dot := lipgloss.NewStyle().Foreground(colorDim).Render("  ·  ")
+	line := "  " + footerKey("←/esc", "back") + dot + footerKey("↑↓", "navigate") + dot + footerKey("enter", "message")
+	return lipgloss.NewStyle().MarginTop(1).Render(line)
+}
+
+func (m DashboardModel) renderIRCMsgFooter() string {
+	dot := lipgloss.NewStyle().Foreground(colorDim).Render("  ·  ")
+	line := "  " + footerKey("esc", "back") + dot + footerKey("enter", "send")
+	return lipgloss.NewStyle().MarginTop(1).Render(line)
+}
+
 func (m DashboardModel) renderTable() string {
 	colID := 7
 	colTitle := 24
@@ -877,7 +1075,7 @@ func (m DashboardModel) renderListFooter() string {
 	dot := lipgloss.NewStyle().Foreground(colorDim).Render("  ·  ")
 	refresh := lipgloss.NewStyle().Foreground(colorDim).Render("↻ 2s")
 
-	line := "  " + footerKey("↑↓", "navigate") + dot + footerKey("enter", "detail") + dot + footerKey("q", "quit") + dot + footerKey("c", "clean") + dot + refresh
+	line := "  " + footerKey("↑↓", "navigate") + dot + footerKey("enter", "detail") + dot + footerKey("i", "irc") + dot + footerKey("q", "quit") + dot + footerKey("c", "clean") + dot + refresh
 
 	return lipgloss.NewStyle().MarginTop(1).Render(line)
 }
