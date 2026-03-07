@@ -74,11 +74,11 @@ Installs the `/remote-edit` skill and ensures the `redit` CLI is available in Cl
 ### Quick Start
 
 ```
-1. content = mcp__atlassian__get_page(id="12345")
+1. content = <fetch command for page 12345>
 2. path = $(echo "$content" | redit init "confluence:12345")
 3. Edit <path> with partial modifications
 4. final = $(redit read "confluence:12345")
-5. mcp__atlassian__update_page(id="12345", content=final)
+5. <update command>(id="12345", content=final)
 6. redit drop "confluence:12345"
 ```
 
@@ -98,8 +98,8 @@ Available automatically when the plugin is installed.
 
 The `/remote-edit` skill guides Claude through the full edit cycle:
 
-1. **Fetch and Initialize** — Fetch content via MCP, store locally with `redit init`
+1. **Fetch and Initialize** — Fetch content from the source system, store locally with `redit init`
 2. **Edit** — Use the Edit tool for partial modifications on the working file
 3. **Review** — Check changes with `redit diff`, reset if needed with `redit reset`
-4. **Commit** — Read final content with `redit read`, push back via MCP
+4. **Commit** — Read final content with `redit read`, push back via your source-system integration
 5. **Cleanup** — Remove local cache with `redit drop`

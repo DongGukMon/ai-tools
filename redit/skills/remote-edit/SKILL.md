@@ -1,6 +1,6 @@
 ---
 name: remote-edit
-description: Efficiently edit remote documents (Confluence, Notion, etc.) using local cache. Use this when you need to make partial edits to documents fetched via MCP, avoiding full content regeneration.
+description: Efficiently edit remote documents (Confluence, Notion, etc.) using local cache. Use this when you need to make partial edits to source content without regenerating the entire document.
 argument-hint: "[service:id] [description of changes]"
 user-invocable: true
 allowed-tools: Bash, Read, Edit
@@ -24,10 +24,10 @@ redit provides a local cache layer for editing remote documents. Instead of rege
 
 ### Step 1: Fetch and Initialize
 
-First, fetch the document content using the appropriate MCP (Atlassian, Notion, etc.):
+First, obtain the current document content from the source system using the appropriate API, CLI, or user-provided content:
 
 ```
-content = mcp__xxx__get_document(id)
+content = <fetch command or provided content>
 ```
 
 Then initialize redit with a unique key:
@@ -69,11 +69,11 @@ redit reset "service:document-id" → restore to original
 
 ### Step 4: Commit
 
-Read the final content and update via MCP:
+Read the final content and update the source system:
 
 ```
 final_content = $(redit read "service:document-id")
-mcp__xxx__update_document(id, final_content)
+<update command>(id, final_content)
 ```
 
 ### Step 5: Cleanup
@@ -89,13 +89,13 @@ redit drop "service:document-id"
 User request: "Update the 'Installation' section in Confluence page 12345"
 
 ```
-1. Fetch: content = mcp__atlassian__get_page(id="12345")
+1. Fetch: content = <fetch command for page 12345>
 2. Init: path = $(echo "$content" | redit init "confluence:12345")
 3. Edit: Edit <path> to update the Installation section
 4. Verify: redit diff "confluence:12345"
 5. Commit:
    - final = $(redit read "confluence:12345")
-   - mcp__atlassian__update_page(id="12345", content=final)
+   - <update command>(id="12345", content=final)
 6. Cleanup: redit drop "confluence:12345"
 ```
 

@@ -77,15 +77,13 @@ Each tool should follow this structure:
 <tool-name>/
 ├── .claude-plugin/
 │   └── plugin.json       # Plugin manifest
-├── .mcp.json             # MCP server configuration
 ├── install.sh            # One-liner install script (curl | bash)
 ├── Makefile              # Build workflow (build, cross, test, clean)
 ├── skills/               # Skills for guided workflows
 ├── scripts/
 │   └── ensure-binary.sh  # Auto-download script
 ├── cmd/
-│   ├── <tool>/           # CLI entry point
-│   └── <tool>-mcp/       # MCP server entry point
+│   └── <tool>/           # CLI entry point
 ├── internal/             # Shared logic
 └── dist/                 # Built binaries (gitignored)
 ```
@@ -103,10 +101,3 @@ Each tool should follow this structure:
 - **Language**: Go for performance-critical tools
 - **Error Handling**: Always return meaningful error messages
 - **Documentation**: Include CLAUDE.md in each tool directory with usage instructions
-
-## MCP Server Guidelines
-
-- Use JSON-RPC 2.0 over stdio
-- Implement `initialize`, `tools/list`, `tools/call` methods
-- Return structured `ToolCallResult` with `content` array
-- Set `isError: true` for error responses

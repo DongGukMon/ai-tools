@@ -25,7 +25,7 @@ Usage:
   redit upgrade          Upgrade to latest version
 
 Examples:
-  # Initialize from MCP content
+  # Initialize from source content
   echo "$content" | redit init "confluence:12345"
 
   # Get path for editing

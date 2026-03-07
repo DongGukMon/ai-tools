@@ -7,7 +7,7 @@ For APIs that don't support partial updates, edit locally and perform a single u
 
 ## Core Principles
 
-1. **Fetch via MCP, edit with redit, update via MCP**
+1. **Fetch from the source system, edit with redit, push final content back**
 2. **Use Edit tool for partial modifications** - no need to regenerate entire content
 3. **Commit only when dirty** - skip API call if no changes
 
@@ -29,8 +29,8 @@ redit list           # list all keys
 ### Basic Pattern
 
 ```
-1. Fetch document via MCP
-   content = mcp__xxx__get_document(id)
+1. Fetch document content from the source system
+   content = <fetch command or existing content>
 
 2. Store in redit
    path = $(echo "$content" | redit init "<service>:<id>")
@@ -41,9 +41,9 @@ redit list           # list all keys
 4. Check status
    redit status "<service>:<id>"  # if dirty, continue
 
-5. Update via MCP with final content
+5. Update the source system with final content
    final = $(redit read "<service>:<id>")
-   mcp__xxx__update_document(id, final)
+   <update command>(id, final)
 
 6. Cleanup
    redit drop "<service>:<id>"
@@ -68,7 +68,7 @@ User: "Update the 'Overview' section in Confluence page 12345"
 
 ```bash
 # 1. Fetch document
-content=$(mcp__atlassian__get_page --id "12345")
+content=$(fetch-confluence-page "12345")
 
 # 2. Store in redit
 path=$(echo "$content" | redit init "confluence:12345")
@@ -82,7 +82,7 @@ redit diff "confluence:12345"
 
 # 5. Commit
 final=$(redit read "confluence:12345")
-mcp__atlassian__update_page --id "12345" --content "$final"
+update-confluence-page "12345" "$final"
 
 # 6. Cleanup
 redit drop "confluence:12345"
@@ -102,7 +102,7 @@ path=$(echo "$content" | redit init "confluence:12345")
 # Single commit
 redit status "confluence:12345"  # dirty
 final=$(redit read "confluence:12345")
-mcp__atlassian__update_page(...)
+update-confluence-page(...)
 ```
 
 ### Case 3: Mistake During Editing → Recovery
