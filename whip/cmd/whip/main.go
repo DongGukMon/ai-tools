@@ -52,7 +52,7 @@ func main() {
 }
 
 func createCmd() *cobra.Command {
-	var desc, file, cwd string
+	var desc, file, cwd, difficulty string
 
 	cmd := &cobra.Command{
 		Use:   "create <title>",
@@ -60,6 +60,11 @@ func createCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			title := args[0]
+
+			// Validate difficulty
+			if difficulty != "" && difficulty != "hard" && difficulty != "medium" && difficulty != "easy" {
+				return fmt.Errorf("invalid difficulty %q: must be hard, medium, or easy", difficulty)
+			}
 
 			// Resolve description from --desc, --file, or stdin
 			description, err := resolveDescription(desc, file)
@@ -81,6 +86,7 @@ func createCmd() *cobra.Command {
 			}
 
 			task := whip.NewTask(title, description, cwd)
+			task.Difficulty = difficulty
 			if err := store.SaveTask(task); err != nil {
 				return err
 			}
@@ -94,6 +100,8 @@ func createCmd() *cobra.Command {
 	cmd.Flags().StringVar(&desc, "desc", "", "Task description")
 	cmd.Flags().StringVar(&file, "file", "", "Read description from file")
 	cmd.Flags().StringVar(&cwd, "cwd", "", "Working directory (default: current)")
+	cmd.Flags().StringVar(&difficulty, "difficulty", "", "Task difficulty (hard, medium, easy)")
+	cmd.Flags().Lookup("difficulty").Shorthand = "d"
 
 	return cmd
 }
@@ -170,6 +178,11 @@ func showCmd() *cobra.Command {
 			fmt.Printf("ID:          %s\n", task.ID)
 			fmt.Printf("Title:       %s\n", task.Title)
 			fmt.Printf("Status:      %s\n", task.Status)
+			diff := task.Difficulty
+			if diff == "" {
+				diff = "default"
+			}
+			fmt.Printf("Difficulty:  %s\n", diff)
 			fmt.Printf("CWD:         %s\n", task.CWD)
 			if task.Runner != "" {
 				fmt.Printf("Runner:      %s\n", task.Runner)

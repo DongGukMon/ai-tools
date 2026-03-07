@@ -33,15 +33,35 @@ func prepareSessionFlag(task *Task) string {
 	return "--session-id " + shellEscape(task.SessionID)
 }
 
+// prepareModelFlags returns CLI flags for claude based on task difficulty.
+func prepareModelFlags(task *Task) string {
+	switch task.Difficulty {
+	case "hard":
+		return "--model claude-opus-4-6 --reasoning-effort high"
+	case "medium":
+		return "--model claude-opus-4-6 --reasoning-effort medium"
+	case "easy":
+		return "--model claude-sonnet-4-6"
+	default:
+		return ""
+	}
+}
+
 // SpawnTmux creates a detached tmux session running Claude Code for the task.
 func SpawnTmux(task *Task, promptPath string) error {
 	sessionFlag := prepareSessionFlag(task)
+	modelFlags := prepareModelFlags(task)
+
+	flags := sessionFlag
+	if modelFlags != "" {
+		flags = modelFlags + " " + flags
+	}
 
 	shellCmd := fmt.Sprintf(
 		`cd %s && WHIP_SHELL_PID=$$ WHIP_TASK_ID=%s claude --dangerously-skip-permissions %s "Read and follow %s" ; exit`,
 		shellEscape(task.CWD),
 		shellEscape(task.ID),
-		sessionFlag,
+		flags,
 		shellEscape(promptPath),
 	)
 
@@ -110,12 +130,18 @@ func SpawnTerminal(task *Task, promptPath string) error {
 	// $$ evaluates to the shell PID of the new terminal tab.
 	// ; exit ensures the terminal tab closes when Claude exits.
 	sessionFlag := prepareSessionFlag(task)
+	modelFlags := prepareModelFlags(task)
+
+	flags := sessionFlag
+	if modelFlags != "" {
+		flags = modelFlags + " " + flags
+	}
 
 	shellCmd := fmt.Sprintf(
 		`cd %s && WHIP_SHELL_PID=$$ WHIP_TASK_ID=%s claude --dangerously-skip-permissions %s "Read and follow %s" ; exit`,
 		shellEscape(task.CWD),
 		shellEscape(task.ID),
-		sessionFlag,
+		flags,
 		shellEscape(promptPath),
 	)
 

@@ -80,7 +80,7 @@ Avoid central implementation planning, but do enough scoping to define ownership
 Create all tasks, set dependencies if needed, then assign independent tasks. Tasks with dependencies will auto-assign when their prerequisites complete.
 
 ```bash
-whip create "<agent role/title>" --desc "## Objective
+whip create "<agent role/title>" --difficulty <level> --desc "## Objective
 <what needs to be done>
 
 ## Scope
@@ -117,3 +117,22 @@ As agents complete:
 ### Step 5: Wrap up
 
 When all agents are done, summarize what was accomplished across the team. Do NOT run `claude-irc quit` — stay connected for future dispatches.
+
+---
+
+## Difficulty Classification
+
+Set `--difficulty` when creating tasks to control the agent's model and reasoning effort. Omit it (or leave empty) to use the user's default Claude Code settings.
+
+| Level | Flag | When to use |
+|---------|------------------------------|----------------------------------------------|
+| `hard` | `--model claude-opus-4-6 --reasoning-effort high` | Complex architecture, multi-file refactors, subtle bugs, security-sensitive work |
+| `medium`| `--model claude-opus-4-6 --reasoning-effort medium` | Moderate features, cross-file changes with clear scope, non-trivial but well-defined work |
+| `easy` | `--model claude-sonnet-4-6` | Simple/mechanical tasks: config changes, rename, boilerplate, docs, formatting |
+| *(omit)* | *(none — user default)* | When unsure, or when the user's default is preferred |
+
+**Guidelines:**
+- Default to omitting difficulty unless you have a clear signal about task complexity
+- Prefer `easy` for tasks that are mostly copy-paste or template-driven
+- Use `hard` sparingly — it's slower and more expensive
+- When assembling a team, mix difficulty levels to optimize cost: not every agent needs `hard`

@@ -52,6 +52,7 @@ type Task struct {
 	ShellPID      int        `json:"shell_pid"`
 	Note          string     `json:"note"`
 	Notes         []Note     `json:"notes,omitempty"`
+	Difficulty    string     `json:"difficulty,omitempty"`
 	DependsOn     []string   `json:"depends_on"`
 	CreatedAt     time.Time  `json:"created_at"`
 	UpdatedAt     time.Time  `json:"updated_at"`

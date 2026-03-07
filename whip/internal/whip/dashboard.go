@@ -485,10 +485,16 @@ func (m DashboardModel) renderDetailView(w int) string {
 	b.WriteString(breadcrumb + "\n\n")
 
 	// Fields
+	diffDisplay := t.Difficulty
+	if diffDisplay == "" {
+		diffDisplay = "default"
+	}
+
 	fields := []struct{ label, value string }{
 		{"ID", idStyle.Render(t.ID)},
 		{"Title", valStyle.Render(t.Title)},
 		{"Status", renderStatus(t.Status)},
+		{"Difficulty", valStyle.Render(diffDisplay)},
 		{"Runner", renderRunner(t.Runner)},
 	}
 
