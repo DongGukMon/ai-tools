@@ -279,17 +279,19 @@ func (m DashboardModel) renderTable() string {
 	colID := 7
 	colTitle := 24
 	colStatus := 14
+	colRunner := 6
 	colIRC := 14
 	colPID := 10
 	colDeps := 12
-	colNote := 20
+	colNote := 18
 	colUpdated := 10
 
 	// Header row
-	hdr := fmt.Sprintf("  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s",
+	hdr := fmt.Sprintf("  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s",
 		colID, "ID",
 		colTitle, "TITLE",
 		colStatus, "STATUS",
+		colRunner, "RUNNER",
 		colIRC, "IRC",
 		colPID, "PID",
 		colDeps, "DEPS",
@@ -308,6 +310,8 @@ func (m DashboardModel) renderTable() string {
 
 		status := renderStatus(t.Status)
 
+		runnerStr := renderRunner(t.Runner)
+
 		irc := truncate(t.IRCName, colIRC)
 		if irc == "" {
 			irc = lipgloss.NewStyle().Foreground(colorDim).Render("—")
@@ -324,10 +328,11 @@ func (m DashboardModel) renderTable() string {
 
 		updated := subtitleStyle.Render(timeAgo(t.UpdatedAt))
 
-		row := fmt.Sprintf("  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s",
+		row := fmt.Sprintf("  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s",
 			colID+len(id)-lipgloss.Width(id), id,
 			colTitle+len(title)-lipgloss.Width(title), title,
 			colStatus+len(status)-lipgloss.Width(status), status,
+			colRunner+len(runnerStr)-lipgloss.Width(runnerStr), runnerStr,
 			colIRC+len(irc)-lipgloss.Width(irc), irc,
 			colPID+len(pidStr)-lipgloss.Width(pidStr), pidStr,
 			colDeps+len(deps)-lipgloss.Width(deps), deps,
@@ -410,6 +415,17 @@ func renderStatus(s TaskStatus) string {
 		return statusFailed.Render("✗ failed")
 	default:
 		return string(s)
+	}
+}
+
+func renderRunner(runner string) string {
+	switch runner {
+	case "tmux":
+		return lipgloss.NewStyle().Foreground(colorSecondary).Render("tmux")
+	case "terminal":
+		return lipgloss.NewStyle().Foreground(colorWarning).Render("term")
+	default:
+		return lipgloss.NewStyle().Foreground(colorDim).Render("—")
 	}
 }
 
