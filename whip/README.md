@@ -114,6 +114,17 @@ For a detailed workflow guide, see [Workflow Guide (EN)](docs/workflow-en.md) | 
         └── prompt.txt   # Initial prompt for Claude
 ```
 
+## Skills
+
+whip includes Claude Code skills for guided workflows:
+
+| Skill | Description |
+|-------|-------------|
+| `/whip-plan` | Analyze work, decompose into tasks with dependency graph, get user approval |
+| `/whip-start` | Dispatch agents — single or team with parallel execution and coordination |
+
+Typical flow: `/whip-plan` to design the task graph → `/whip-start` to execute it.
+
 ## Plugin Installation
 
 Via Claude Code Plugin:

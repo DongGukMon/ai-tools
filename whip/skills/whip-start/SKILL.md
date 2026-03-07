@@ -1,5 +1,5 @@
 ---
-name: task-run
+name: whip-start
 description: Spawn Claude Code agent sessions to handle tasks. Dispatches a single agent or assembles a team for parallel work.
 user_invocable: true
 ---
@@ -131,11 +131,19 @@ Set `--difficulty` when creating tasks to control the agent's model and reasonin
 | `easy` | `--model claude-sonnet-4-6` | Simple/mechanical tasks: config changes, rename, boilerplate, docs, formatting |
 | *(omit)* | *(none — user default)* | When unsure, or when the user's default is preferred |
 
-**Guidelines:**
-- Default to omitting difficulty unless you have a clear signal about task complexity
-- Prefer `easy` for tasks that are mostly copy-paste or template-driven
-- Use `hard` sparingly — it's slower and more expensive
-- When assembling a team, mix difficulty levels to optimize cost: not every agent needs `hard`
+**Choosing the right level is critical.** An under-leveled task produces subtle bugs that cost more to fix than the savings:
+
+1. **Interface boundaries require `medium` minimum.** If a task must match an API contract, type signature, or protocol defined by another task, it needs Opus-level reasoning. Sonnet may approximate names/paths instead of matching exactly.
+   - Bad: `[easy] API client` that must match server endpoints → path mismatches, wrong field names
+   - Good: `[medium] API client` — cross-referencing another task's interface needs precision
+
+2. **`easy` is only for tasks with zero ambiguity.** The agent should be able to complete the task by following the description literally, with no judgment calls.
+   - Good `easy`: CI/CD workflow YAML, project scaffold from template, rename/move files
+   - Bad `easy`: anything that says "match the existing pattern" or "implement the interface from Task X"
+
+3. **When in doubt, use `medium`.** The cost difference between `easy` and `medium` is small compared to the cost of a bug that requires master intervention or rework.
+
+4. **Reserve `hard` for tasks where correctness is non-obvious.** Multi-file refactors where changes must be consistent, security-sensitive code, complex state machines, subtle concurrency.
 
 ---
 

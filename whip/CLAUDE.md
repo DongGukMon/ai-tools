@@ -98,6 +98,13 @@ All commands accept full or prefix task IDs. If `a1b2c` is the only task startin
 
 Tasks with `depends_on` cannot be assigned until all dependencies are `completed`. When a task completes, whip automatically assigns any dependent tasks whose prerequisites are now fully met.
 
+## Skills
+
+| Skill | Description |
+|-------|-------------|
+| `/whip-plan` | Analyze work, design task dependency graph, get user approval |
+| `/whip-start` | Dispatch agents — single or team with parallel execution |
+
 ## Installation
 
 ```bash
