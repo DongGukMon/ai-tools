@@ -48,6 +48,7 @@ type Task struct {
 	Runner        string     `json:"runner,omitempty"`
 	IRCName       string     `json:"irc_name"`
 	MasterIRCName string     `json:"master_irc_name"`
+	SessionID     string     `json:"session_id,omitempty"`
 	ShellPID      int        `json:"shell_pid"`
 	Note          string     `json:"note"`
 	Notes         []Note     `json:"notes,omitempty"`

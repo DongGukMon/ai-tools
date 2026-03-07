@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"text/tabwriter"
 	"time"
 
@@ -34,6 +35,7 @@ func main() {
 		unassignCmd(),
 		statusCmd(),
 		retryCmd(),
+		resumeCmd(),
 		broadcastCmd(),
 		heartbeatCmd(),
 		killCmd(),
@@ -171,6 +173,9 @@ func showCmd() *cobra.Command {
 			fmt.Printf("CWD:         %s\n", task.CWD)
 			if task.Runner != "" {
 				fmt.Printf("Runner:      %s\n", task.Runner)
+			}
+			if task.SessionID != "" {
+				fmt.Printf("Session ID:  %s\n", task.SessionID)
 			}
 			fmt.Printf("IRC:         %s\n", task.IRCName)
 			fmt.Printf("Master IRC:  %s\n", task.MasterIRCName)
@@ -474,7 +479,7 @@ func statusCmd() *cobra.Command {
 func retryCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "retry <id>",
-		Short: "Reset a failed task back to created for re-assignment",
+		Short: "Retry a failed task (resumes previous session context if available)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store, err := whip.NewStore()
@@ -492,16 +497,85 @@ func retryCmd() *cobra.Command {
 				return err
 			}
 
+			// Retry resets status to created but preserves SessionID
 			if err := task.Retry(); err != nil {
 				return err
 			}
 
+			// Resolve master IRC name
+			cfg, err := store.LoadConfig()
+			if err != nil {
+				return err
+			}
+			if cfg.MasterIRCName == "" {
+				cfg.MasterIRCName = "whip-master"
+			}
+
+			// Set task IRC names
+			task.IRCName = "whip-" + task.ID
+			task.MasterIRCName = cfg.MasterIRCName
+
+			// Generate prompt and spawn (will use --resume if SessionID exists)
+			prompt := whip.GeneratePrompt(task)
+			if err := store.SavePrompt(task.ID, prompt); err != nil {
+				return err
+			}
+
+			runner, err := whip.Spawn(task, store.PromptPath(task.ID))
+			if err != nil {
+				return fmt.Errorf("failed to spawn session: %w", err)
+			}
+			task.Runner = runner
+
+			// Update task status to assigned
+			task.Status = whip.StatusAssigned
+			now := time.Now()
+			task.AssignedAt = &now
+			task.UpdatedAt = now
 			if err := store.SaveTask(task); err != nil {
 				return err
 			}
 
-			fmt.Fprintf(os.Stderr, "Task %s reset to created (was failed). Ready for re-assignment.\n", id)
+			fmt.Fprintf(os.Stderr, "Retried task %s → IRC: %s (runner: %s, session resumed: %v)\n",
+				task.ID, task.IRCName, task.Runner, task.SessionID != "")
 			return nil
+		},
+	}
+}
+
+func resumeCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "resume <id>",
+		Short: "Resume a task's Claude session interactively in current terminal",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			store, err := whip.NewStore()
+			if err != nil {
+				return err
+			}
+
+			id, err := store.ResolveID(args[0])
+			if err != nil {
+				return err
+			}
+
+			task, err := store.LoadTask(id)
+			if err != nil {
+				return err
+			}
+
+			if task.SessionID == "" {
+				return fmt.Errorf("task %s has no session ID (was it assigned before session tracking was added?)", id)
+			}
+
+			// Exec claude --resume in the current terminal (replaces this process)
+			claudePath, err := exec.LookPath("claude")
+			if err != nil {
+				return fmt.Errorf("claude not found: %w", err)
+			}
+
+			fmt.Fprintf(os.Stderr, "Resuming session %s for task %s (%s)...\n", task.SessionID, task.ID, task.Title)
+			return syscall.Exec(claudePath, []string{"claude", "--resume", task.SessionID}, os.Environ())
 		},
 	}
 }

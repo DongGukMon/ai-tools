@@ -1,8 +1,13 @@
 package irc
 
 import (
+	"errors"
+	"net"
+	"os"
+	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestRegisterAndList(t *testing.T) {
@@ -82,6 +87,83 @@ func TestSetDaemonPID(t *testing.T) {
 	peers, _ := store.ListPeers()
 	if peers["server"].DaemonPID != 9999 {
 		t.Errorf("expected daemon PID 9999, got %d", peers["server"].DaemonPID)
+	}
+}
+
+func TestRegisterSameNameSamePID_AlreadyJoined(t *testing.T) {
+	store := newSocketTestStore(t)
+	name := "aj"
+
+	os.MkdirAll(store.SocketsDir(), 0755)
+
+	// Register the peer
+	if err := store.Register(name, 1234); err != nil {
+		t.Fatalf("first Register failed: %v", err)
+	}
+
+	// Start daemon so CheckPresence returns true
+	daemonErr := make(chan error, 1)
+	go func() {
+		daemonErr <- store.RunDaemon(name, 0)
+	}()
+
+	// Wait for daemon socket to be ready
+	socketPath := store.SocketPath(name)
+	for i := 0; i < 40; i++ {
+		conn, err := net.DialTimeout("unix", socketPath, 100*time.Millisecond)
+		if err == nil {
+			conn.Close()
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	defer os.Remove(socketPath)
+
+	// Same name + same PID → ErrAlreadyJoined
+	err := store.Register(name, 1234)
+	if !errors.Is(err, ErrAlreadyJoined) {
+		t.Errorf("expected ErrAlreadyJoined, got: %v", err)
+	}
+}
+
+func TestRegisterSameNameDifferentPID_Error(t *testing.T) {
+	store := newSocketTestStore(t)
+	name := "dp"
+
+	os.MkdirAll(store.SocketsDir(), 0755)
+
+	// Register with PID 1234
+	if err := store.Register(name, 1234); err != nil {
+		t.Fatalf("first Register failed: %v", err)
+	}
+
+	// Start daemon so CheckPresence returns true
+	daemonErr := make(chan error, 1)
+	go func() {
+		daemonErr <- store.RunDaemon(name, 0)
+	}()
+
+	socketPath := store.SocketPath(name)
+	for i := 0; i < 40; i++ {
+		conn, err := net.DialTimeout("unix", socketPath, 100*time.Millisecond)
+		if err == nil {
+			conn.Close()
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	defer os.Remove(socketPath)
+
+	// Same name + different PID → original error
+	err := store.Register(name, 5678)
+	if err == nil {
+		t.Fatal("expected error for different PID re-registration")
+	}
+	if errors.Is(err, ErrAlreadyJoined) {
+		t.Error("should not be ErrAlreadyJoined for different PID")
+	}
+	if !strings.Contains(err.Error(), "already exists") {
+		t.Errorf("expected 'already exists' error, got: %v", err)
 	}
 }
 

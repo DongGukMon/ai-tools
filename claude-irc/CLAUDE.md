@@ -7,7 +7,7 @@
 ## Commands
 
 ```bash
-claude-irc join <name>              # Join the channel
+claude-irc join <name>              # Join the channel (idempotent if already joined)
 claude-irc who                      # List peers (online/offline)
 claude-irc msg <peer> "<message>"   # Send a message
 claude-irc inbox                    # Show unread messages
@@ -122,7 +122,7 @@ Each session runs a lightweight daemon process with a Unix domain socket. The `w
 
 ## Session Lifecycle
 
-- **join**: Registers in shared registry, starts daemon, writes session marker
+- **join**: Registers in shared registry, starts daemon, writes session marker. Idempotent — re-joining with the same name returns success (exit 0) with "Already joined" message
 - **quit**: Kills daemon, removes socket, unregisters from registry
 - **SessionEnd hook**: Auto-runs `quit` when Claude Code session ends
 - **Stale cleanup**: `who` detects dead processes and auto-cleans their artifacts

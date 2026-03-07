@@ -2,12 +2,16 @@ package irc
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"syscall"
 	"time"
 )
+
+// ErrAlreadyJoined is returned when the same session tries to re-join with the same name.
+var ErrAlreadyJoined = errors.New("already joined")
 
 // PeerInfo stores metadata about a registered peer.
 type PeerInfo struct {
@@ -28,12 +32,15 @@ type Registry struct {
 // If a peer with the same name exists but is not responding, re-registration is allowed.
 func (s *Store) Register(name string, pid int) error {
 	return s.withRegistryLock(func(reg *Registry) error {
-		if _, exists := reg.Peers[name]; exists {
+		if existing, exists := reg.Peers[name]; exists {
 			// Allow re-registration if daemon is not responding (dead/zombie)
 			if !s.CheckPresence(name) {
 				// Clean up stale artifacts
 				os.Remove(s.SocketPath(name))
 				os.Remove(s.PIDPath(name))
+			} else if existing.PID == pid {
+				// Same session re-joining with same name — idempotent
+				return ErrAlreadyJoined
 			} else {
 				return fmt.Errorf("peer '%s' already exists (use 'quit' first)", name)
 			}

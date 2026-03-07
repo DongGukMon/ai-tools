@@ -86,6 +86,8 @@ Tasks with unmet dependencies cannot be assigned. When a dependency completes, `
 4. Sessions communicate via `claude-irc` with periodic `/loop 1m claude-irc inbox` checks
 5. On completion, dependent tasks are auto-assigned and the master is notified
 
+For a detailed workflow guide, see [Workflow Guide (EN)](docs/workflow-en.md) | [워크플로우 가이드 (KO)](docs/workflow-ko.md)
+
 ## Storage
 
 ```

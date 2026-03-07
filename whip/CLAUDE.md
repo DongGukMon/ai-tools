@@ -16,6 +16,8 @@ whip status <id> [new-status] [--note "..."] # Get/set status with notes
 whip broadcast "message"                     # Message all active sessions
 whip heartbeat [id]                          # Register PID (called by task session)
 whip kill <id>                               # Force kill session
+whip retry <id>                              # Retry failed task (resumes previous session)
+whip resume <id>                             # Resume task session interactively
 whip clean                                   # Remove completed/failed tasks
 whip dashboard                               # Live TUI dashboard
 whip dep <id> --after <id>                   # Set dependencies
@@ -68,10 +70,21 @@ created → assigned → in_progress → completed
                                  → failed
 ```
 
-- `assign` spawns terminal, sets status to `assigned`
+- `assign` spawns terminal with `--session-id`, sets status to `assigned`
 - `heartbeat` registers PID, sets to `in_progress`
 - On `completed`, dependent tasks auto-assign
 - `kill` force-terminates, sets to `failed`
+- `retry` resets failed task and re-spawns with `--resume` (preserves conversation context)
+- `resume` opens task's Claude session interactively in current terminal
+
+## Session Tracking
+
+Each task tracks its Claude Code session ID. On `assign`, whip generates a UUID and passes `--session-id` to Claude. This enables:
+- **`whip retry <id>`**: Re-spawns with `claude --resume <old-session-id>`, preserving conversation context
+- **`whip resume <id>`**: Opens the session interactively in the current terminal via `claude --resume`
+- **`whip show <id>`**: Displays the Session ID
+
+Tasks assigned before session tracking was added will have no session ID; retry/resume falls back to a fresh session.
 
 ## Storage
 

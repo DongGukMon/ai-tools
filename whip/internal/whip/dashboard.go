@@ -40,6 +40,7 @@ var (
 
 type tickMsg time.Time
 type cleanedMsg int
+type retryResultMsg struct{ err error }
 
 type peerInfo struct {
 	Name   string
@@ -171,6 +172,18 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case peersMsg:
 		m.peers = []peerInfo(msg)
 
+	case retryResultMsg:
+		if msg.err != nil {
+			m.err = msg.err
+		}
+		return m, m.loadTasks()
+
+	case resumeResultMsg:
+		if msg.err != nil {
+			m.err = msg.err
+		}
+		return m, nil
+
 	case cleanedMsg:
 		return m, m.loadTasks()
 
@@ -236,10 +249,84 @@ func (m DashboardModel) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.tmuxContent = content
 			}
 		}
+	case "R":
+		if m.selectedTask != nil && m.selectedTask.Status == StatusFailed {
+			return m, m.retryTask(m.selectedTask.ID)
+		}
+	case "s":
+		if m.selectedTask != nil && m.selectedTask.Status.IsTerminal() && m.selectedTask.SessionID != "" {
+			return m, m.resumeTask(m.selectedTask)
+		}
 	case "ctrl+c":
 		return m, tea.Quit
 	}
 	return m, nil
+}
+
+func (m DashboardModel) retryTask(taskID string) tea.Cmd {
+	return func() tea.Msg {
+		task, err := m.store.LoadTask(taskID)
+		if err != nil {
+			return retryResultMsg{err: err}
+		}
+
+		if err := task.Retry(); err != nil {
+			return retryResultMsg{err: err}
+		}
+
+		cfg, err := m.store.LoadConfig()
+		if err != nil {
+			return retryResultMsg{err: err}
+		}
+		if cfg.MasterIRCName == "" {
+			cfg.MasterIRCName = "whip-master"
+		}
+
+		task.IRCName = "whip-" + task.ID
+		task.MasterIRCName = cfg.MasterIRCName
+
+		prompt := GeneratePrompt(task)
+		if err := m.store.SavePrompt(task.ID, prompt); err != nil {
+			return retryResultMsg{err: err}
+		}
+
+		runner, err := Spawn(task, m.store.PromptPath(task.ID))
+		if err != nil {
+			return retryResultMsg{err: fmt.Errorf("failed to spawn session: %w", err)}
+		}
+		task.Runner = runner
+
+		task.Status = StatusAssigned
+		now := time.Now()
+		task.AssignedAt = &now
+		task.UpdatedAt = now
+		if err := m.store.SaveTask(task); err != nil {
+			return retryResultMsg{err: err}
+		}
+
+		return retryResultMsg{}
+	}
+}
+
+type resumeResultMsg struct{ err error }
+
+func (m DashboardModel) resumeTask(task *Task) tea.Cmd {
+	return func() tea.Msg {
+		sessionName := "whip-resume-" + task.ID
+		shellCmd := fmt.Sprintf(
+			`claude --resume %s ; exit`,
+			shellEscape(task.SessionID),
+		)
+		cmd := exec.Command("tmux", "new-session", "-d",
+			"-s", sessionName,
+			"-x", "120", "-y", "40",
+			shellCmd,
+		)
+		if err := cmd.Run(); err != nil {
+			return resumeResultMsg{err: fmt.Errorf("failed to spawn resume session: %w", err)}
+		}
+		return resumeResultMsg{}
+	}
 }
 
 func (m DashboardModel) updateTmux(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -278,6 +365,9 @@ func styledSep() string {
 func (m DashboardModel) View() string {
 	var b strings.Builder
 	w := min(m.width, 120)
+	if m.view == viewList && len(m.tasks) > 0 {
+		w = max(w, tableContentWidth()+1)
+	}
 
 	// ── Header ────────────────────────────────────────────
 	b.WriteString(m.renderHeader(w))
@@ -659,7 +749,13 @@ func (m DashboardModel) renderDetailFooter() string {
 	line := "  " + footerKey("←/esc", "back")
 
 	if m.selectedTask != nil && m.selectedTask.Runner == "tmux" && IsTmuxSession(m.selectedTask.ID) {
-		line += dot + footerKey("a", "view tmux")
+		line += dot + footerKey("a", "attach tmux")
+	}
+	if m.selectedTask != nil && m.selectedTask.Status == StatusFailed {
+		line += dot + footerKey("R", "retry")
+	}
+	if m.selectedTask != nil && m.selectedTask.Status.IsTerminal() && m.selectedTask.SessionID != "" {
+		line += dot + footerKey("s", "resume")
 	}
 
 	return lipgloss.NewStyle().MarginTop(1).Render(line)
@@ -753,9 +849,30 @@ func timeAgo(t time.Time) string {
 	}
 }
 
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
 func min(a, b int) int {
 	if a < b {
 		return a
 	}
 	return b
+}
+
+// tableContentWidth returns the visual width of a table row.
+// Must stay in sync with column widths in renderTable().
+func tableContentWidth() int {
+	cols := []int{7, 24, 14, 6, 14, 10, 12, 18, 10}
+	total := 2 // indent ("  " or "▸ ")
+	for i, c := range cols {
+		total += c
+		if i < len(cols)-1 {
+			total += 3 // sep " │ " visual width
+		}
+	}
+	return total
 }

@@ -8,6 +8,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // tmuxSessionName returns the tmux session name for a task.
@@ -15,12 +17,31 @@ func tmuxSessionName(taskID string) string {
 	return "whip-" + taskID
 }
 
+// prepareSessionFlag sets up the Claude session flag for a task spawn.
+// If the task has no SessionID, generates a new one and returns --session-id.
+// If the task already has a SessionID (retry), returns --resume to fork from
+// the previous conversation, and updates SessionID to a new UUID for this run.
+func prepareSessionFlag(task *Task) string {
+	if task.SessionID != "" {
+		// Retry: resume from previous session, then track new session ID
+		oldID := task.SessionID
+		task.SessionID = uuid.New().String()
+		return "--resume " + shellEscape(oldID)
+	}
+	// First spawn: generate new session ID
+	task.SessionID = uuid.New().String()
+	return "--session-id " + shellEscape(task.SessionID)
+}
+
 // SpawnTmux creates a detached tmux session running Claude Code for the task.
 func SpawnTmux(task *Task, promptPath string) error {
+	sessionFlag := prepareSessionFlag(task)
+
 	shellCmd := fmt.Sprintf(
-		`cd %s && WHIP_SHELL_PID=$$ WHIP_TASK_ID=%s claude --dangerously-skip-permissions "Read and follow %s" ; exit`,
+		`cd %s && WHIP_SHELL_PID=$$ WHIP_TASK_ID=%s claude --dangerously-skip-permissions %s "Read and follow %s" ; exit`,
 		shellEscape(task.CWD),
 		shellEscape(task.ID),
+		sessionFlag,
 		shellEscape(promptPath),
 	)
 
@@ -88,10 +109,13 @@ func SpawnTerminal(task *Task, promptPath string) error {
 	// Build the shell command to execute in the new terminal.
 	// $$ evaluates to the shell PID of the new terminal tab.
 	// ; exit ensures the terminal tab closes when Claude exits.
+	sessionFlag := prepareSessionFlag(task)
+
 	shellCmd := fmt.Sprintf(
-		`cd %s && WHIP_SHELL_PID=$$ WHIP_TASK_ID=%s claude --dangerously-skip-permissions "Read and follow %s" ; exit`,
+		`cd %s && WHIP_SHELL_PID=$$ WHIP_TASK_ID=%s claude --dangerously-skip-permissions %s "Read and follow %s" ; exit`,
 		shellEscape(task.CWD),
 		shellEscape(task.ID),
+		sessionFlag,
 		shellEscape(promptPath),
 	)
 

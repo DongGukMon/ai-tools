@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -73,6 +74,10 @@ func joinCmd() *cobra.Command {
 
 			// Register in registry
 			if err := store.Register(name, sessionPID); err != nil {
+				if errors.Is(err, irc.ErrAlreadyJoined) {
+					fmt.Fprintf(os.Stderr, "Already joined as '%s'\n", name)
+					return nil
+				}
 				return err
 			}
 
