@@ -1,0 +1,40 @@
+name: "whip: Release"
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Build binaries
+        run: |
+          cd whip
+          VERSION=${GITHUB_REF_NAME}
+          LDFLAGS="-s -w -X main.version=${VERSION}"
+          mkdir -p dist
+          GOOS=darwin GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o dist/whip-darwin-arm64 ./cmd/whip
+          GOOS=darwin GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o dist/whip-darwin-amd64 ./cmd/whip
+          GOOS=linux GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o dist/whip-linux-amd64 ./cmd/whip
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            whip/dist/whip-darwin-arm64
+            whip/dist/whip-darwin-amd64
+            whip/dist/whip-linux-amd64
+          generate_release_notes: true

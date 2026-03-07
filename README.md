@@ -62,6 +62,25 @@ Dynamic web form for collecting structured data from users. AI generates a compa
 curl -fsSL https://raw.githubusercontent.com/bang9/ai-tools/main/webform/install.sh | bash
 ```
 
+### [whip](./whip)
+
+Task orchestrator for Claude Code. Spawn and manage multiple Claude Code sessions via Terminal.app, with inter-session communication via claude-irc.
+
+#### Installation
+
+**CLI**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/bang9/ai-tools/main/whip/install.sh | bash
+```
+
+**Plugin** (via Claude Code Plugin)
+
+```bash
+/plugin marketplace add bang9/ai-tools
+/plugin install whip
+```
+
 ## License
 
 MIT

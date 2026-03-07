@@ -1,14 +1,14 @@
 {
-  "name": "claude-irc",
+  "name": "whip",
   "version": "1.0.0",
-  "description": "IRC-inspired inter-session communication for Claude Code agents",
+  "description": "Task orchestrator for Claude Code — spawn and manage multiple task sessions",
   "author": {
     "name": "Airen Kang",
     "url": "https://github.com/bang9"
   },
   "repository": "https://github.com/bang9/ai-tools",
   "license": "MIT",
-  "keywords": ["irc", "communication", "agent", "inter-session", "collaboration"],
+  "keywords": ["task", "orchestrator", "parallel", "session", "management"],
   "skills": "./skills/",
   "hooks": {
     "SessionStart": [
@@ -18,17 +18,6 @@
           {
             "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/scripts/ensure-binary.sh"
-          }
-        ]
-      }
-    ],
-    "SessionEnd": [
-      {
-        "matcher": ".*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "claude-irc quit 2>/dev/null || true"
           }
         ]
       }

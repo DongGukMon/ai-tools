@@ -10,6 +10,8 @@ claude-irc/claude-irc
 claude-irc/dist/
 webform/webform
 webform/dist/
+whip/whip
+whip/dist/
 
 # Local files
 blog-post.md
@@ -42,3 +44,4 @@ Thumbs.db
 ~/.redit/
 ~/.memex/
 ~/.claude-irc/
+~/.whip/
