@@ -3,6 +3,9 @@ package whip
 import (
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/google/uuid"
 )
 
 func TestGetBackend_Default(t *testing.T) {
@@ -25,8 +28,18 @@ func TestGetBackend_Claude(t *testing.T) {
 	}
 }
 
+func TestGetBackend_Codex(t *testing.T) {
+	b, err := GetBackend("codex")
+	if err != nil {
+		t.Fatalf("GetBackend codex: %v", err)
+	}
+	if b.Name() != "codex" {
+		t.Errorf("Name = %q, want %q", b.Name(), "codex")
+	}
+}
+
 func TestGetBackend_Unknown(t *testing.T) {
-	_, err := GetBackend("codex")
+	_, err := GetBackend("bogus")
 	if err == nil {
 		t.Error("GetBackend should fail for unknown backend")
 	}
@@ -59,27 +72,37 @@ func TestClaudeBackend_BuildLaunchCmd_FirstSpawn(t *testing.T) {
 	}
 }
 
-func TestClaudeBackend_BuildLaunchCmd_Resume(t *testing.T) {
+func TestClaudeBackend_BuildLaunchCmd_ForksRetrySession(t *testing.T) {
 	b := &ClaudeBackend{}
 	task := NewTask("Test", "desc", "/tmp")
-	task.SessionID = "old-session-id"
+	oldID := "11111111-1111-4111-8111-111111111111"
+	task.SessionID = oldID
 
 	cmd := b.BuildLaunchCmd(task, "/path/to/prompt.txt")
 
-	// Should use --resume for retry
 	if !strings.Contains(cmd, "--resume") {
 		t.Errorf("cmd should contain --resume: %s", cmd)
 	}
-	// Should reference old session ID
-	if !strings.Contains(cmd, "old-session-id") {
+	if !strings.Contains(cmd, oldID) {
 		t.Errorf("cmd should reference old session ID: %s", cmd)
 	}
-	// SessionID should be updated to new UUID
-	if task.SessionID == "old-session-id" {
+	if !strings.Contains(cmd, "--fork-session") {
+		t.Errorf("cmd should contain --fork-session: %s", cmd)
+	}
+	if !strings.Contains(cmd, "--session-id") {
+		t.Errorf("cmd should contain --session-id for forked retries: %s", cmd)
+	}
+	if task.SessionID == oldID {
 		t.Error("SessionID should be updated after resume BuildLaunchCmd")
 	}
 	if task.SessionID == "" {
 		t.Error("SessionID should not be empty after resume BuildLaunchCmd")
+	}
+	if _, err := uuid.Parse(task.SessionID); err != nil {
+		t.Fatalf("SessionID should be a valid UUID, got %q: %v", task.SessionID, err)
+	}
+	if !strings.Contains(cmd, task.SessionID) {
+		t.Errorf("cmd should reference new session ID: %s", cmd)
 	}
 }
 
@@ -157,6 +180,97 @@ func TestClaudeBackend_ResumeExec(t *testing.T) {
 	}
 	if args[2] != "test-session-456" {
 		t.Errorf("args[2] = %q, want %q", args[2], "test-session-456")
+	}
+}
+
+func TestClaudeBackend_SyncSession_NoOp(t *testing.T) {
+	b := &ClaudeBackend{}
+	task := NewTask("Test", "desc", "/tmp")
+	task.SessionID = "existing"
+
+	if err := b.SyncSession(task, "/prompt.txt", time.Now()); err != nil {
+		t.Fatalf("SyncSession: %v", err)
+	}
+	if task.SessionID != "existing" {
+		t.Fatalf("SessionID = %q, want unchanged", task.SessionID)
+	}
+}
+
+func TestCodexBackend_BuildLaunchCmd_FirstSpawn(t *testing.T) {
+	b := &CodexBackend{}
+	task := NewTask("Test", "desc", "/tmp")
+	task.Difficulty = "hard"
+
+	cmd := b.BuildLaunchCmd(task, "/path/to/prompt.txt")
+
+	if !strings.Contains(cmd, "codex") {
+		t.Fatalf("cmd should contain codex: %s", cmd)
+	}
+	if !strings.Contains(cmd, "gpt-5.4") {
+		t.Fatalf("cmd should contain codex model: %s", cmd)
+	}
+	if !strings.Contains(cmd, `model_reasoning_effort="xhigh"`) {
+		t.Fatalf("cmd should contain effort override: %s", cmd)
+	}
+	if strings.Contains(cmd, "fork") {
+		t.Fatalf("first launch should not fork: %s", cmd)
+	}
+	if !strings.Contains(cmd, "prompt.txt") {
+		t.Fatalf("cmd should contain prompt path: %s", cmd)
+	}
+}
+
+func TestCodexBackend_BuildLaunchCmd_Fork(t *testing.T) {
+	b := &CodexBackend{}
+	task := NewTask("Test", "desc", "/tmp")
+	task.SessionID = "session-123"
+	task.Difficulty = "medium"
+
+	cmd := b.BuildLaunchCmd(task, "/path/to/prompt.txt")
+
+	if !strings.Contains(cmd, "fork") {
+		t.Fatalf("cmd should contain fork: %s", cmd)
+	}
+	if !strings.Contains(cmd, "session-123") {
+		t.Fatalf("cmd should reference previous session: %s", cmd)
+	}
+	if !strings.Contains(cmd, `model_reasoning_effort="xhigh"`) {
+		t.Fatalf("cmd should contain xhigh effort override: %s", cmd)
+	}
+}
+
+func TestCodexBackend_BuildResumeCmd(t *testing.T) {
+	b := &CodexBackend{}
+	task := NewTask("Test", "desc", "/tmp")
+	task.SessionID = "session-456"
+	task.Difficulty = "easy"
+
+	cmd := b.BuildResumeCmd(task)
+
+	if !strings.Contains(cmd, "resume") {
+		t.Fatalf("cmd should contain resume: %s", cmd)
+	}
+	if !strings.Contains(cmd, "session-456") {
+		t.Fatalf("cmd should contain session ID: %s", cmd)
+	}
+	if !strings.Contains(cmd, `model_reasoning_effort="high"`) {
+		t.Fatalf("cmd should contain high effort override for easy tasks: %s", cmd)
+	}
+}
+
+func TestCodexBackend_GeneratePrompt(t *testing.T) {
+	b := &CodexBackend{}
+	task := NewTask("Test Prompt", "Build the auth module", "/tmp")
+	task.IRCName = "whip-abc12"
+	task.MasterIRCName = "whip-master"
+
+	prompt := b.GeneratePrompt(task)
+
+	if !strings.Contains(prompt, "Run claude-irc inbox now") {
+		t.Fatalf("prompt should contain Codex inbox guidance")
+	}
+	if strings.Contains(prompt, "/loop 1m claude-irc inbox") {
+		t.Fatalf("prompt should not contain Claude-only loop command")
 	}
 }
 

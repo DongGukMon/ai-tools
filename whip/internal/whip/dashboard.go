@@ -208,6 +208,11 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case resumeResultMsg:
 		if msg.err != nil {
 			m.err = msg.err
+			return m, nil
+		}
+		if msg.sessionName != "" {
+			m.pendingAttach = msg.sessionName
+			return m, tea.Quit
 		}
 		return m, nil
 
@@ -386,7 +391,10 @@ func (m DashboardModel) approveTask(taskID string) tea.Cmd {
 	}
 }
 
-type resumeResultMsg struct{ err error }
+type resumeResultMsg struct {
+	err         error
+	sessionName string
+}
 
 func (m DashboardModel) resumeTask(task *Task) tea.Cmd {
 	return func() tea.Msg {
@@ -394,17 +402,24 @@ func (m DashboardModel) resumeTask(task *Task) tea.Cmd {
 		if err != nil {
 			return resumeResultMsg{err: err}
 		}
-		sessionName := "whip-resume-" + task.ID
-		shellCmd := fmt.Sprintf(`%s ; exit`, backend.BuildResumeCmd(task))
-		cmd := exec.Command("tmux", "new-session", "-d",
-			"-s", sessionName,
-			"-x", "120", "-y", "40",
-			shellCmd,
+
+		sessionName := tmuxResumeSessionName(task.ID)
+		if IsTmuxSessionName(sessionName) {
+			return resumeResultMsg{sessionName: sessionName}
+		}
+
+		shellCmd := fmt.Sprintf(
+			`cd %s && WHIP_SHELL_PID=$$ WHIP_TASK_ID=%s whip heartbeat %s >/dev/null 2>&1; WHIP_SHELL_PID=$$ WHIP_TASK_ID=%s %s ; exit`,
+			shellEscape(task.CWD),
+			shellEscape(task.ID),
+			shellEscape(task.ID),
+			shellEscape(task.ID),
+			backend.BuildResumeCmd(task),
 		)
-		if err := cmd.Run(); err != nil {
+		if err := SpawnTmuxSession(sessionName, shellCmd); err != nil {
 			return resumeResultMsg{err: fmt.Errorf("failed to spawn resume session: %w", err)}
 		}
-		return resumeResultMsg{}
+		return resumeResultMsg{sessionName: sessionName}
 	}
 }
 
@@ -415,7 +430,7 @@ func (m DashboardModel) updateTmux(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.tmuxContent = ""
 	case "enter":
 		if m.selectedTask != nil && IsTmuxSession(m.selectedTask.ID) {
-			m.pendingAttach = m.selectedTask.ID
+			m.pendingAttach = tmuxSessionName(m.selectedTask.ID)
 			return m, tea.Quit
 		}
 	case "ctrl+c":

@@ -1,6 +1,7 @@
 package whip
 
 import (
+	"os/exec"
 	"strings"
 	"testing"
 
@@ -30,6 +31,33 @@ func TestUpdateTmux_EnterWithDeadSession(t *testing.T) {
 	if cmd != nil {
 		// Should not return tea.Quit
 		t.Error("should not return a command when tmux session is dead")
+	}
+}
+
+func TestUpdateTmux_EnterQueuesSessionName(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not installed")
+	}
+
+	store := tempStore(t)
+	task := NewTask("Test", "desc", "/tmp")
+	task.Runner = "tmux"
+	store.SaveTask(task)
+
+	sessionName := tmuxSessionName(task.ID)
+	if err := SpawnTmuxSession(sessionName, "sleep 30"); err != nil {
+		t.Fatalf("SpawnTmuxSession: %v", err)
+	}
+	defer KillTmuxSessionName(sessionName)
+
+	m := NewDashboardModel(store, "test")
+	m.selectedTask = task
+	m.view = viewTmux
+
+	model, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	dm := model.(DashboardModel)
+	if dm.PendingAttach() != sessionName {
+		t.Fatalf("pendingAttach = %q, want %q", dm.PendingAttach(), sessionName)
 	}
 }
 
@@ -139,6 +167,52 @@ func TestDetailScrollResetOnEnter(t *testing.T) {
 	dm := model.(DashboardModel)
 	if dm.detailScroll != 0 {
 		t.Errorf("expected detailScroll reset to 0, got %d", dm.detailScroll)
+	}
+}
+
+func TestResumeResultMsg_QueuesResumeSessionAttach(t *testing.T) {
+	store := tempStore(t)
+	m := NewDashboardModel(store, "test")
+
+	model, cmd := m.Update(resumeResultMsg{sessionName: "whip-resume-abc12"})
+	dm := model.(DashboardModel)
+	if dm.PendingAttach() != "whip-resume-abc12" {
+		t.Fatalf("pendingAttach = %q, want resume session name", dm.PendingAttach())
+	}
+	if cmd == nil {
+		t.Fatal("expected tea.Quit command")
+	}
+}
+
+func TestResumeTask_ReusesExistingResumeSession(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not installed")
+	}
+
+	store := tempStore(t)
+	task := NewTask("Test", "desc", "/tmp")
+	task.Backend = "claude"
+	task.SessionID = "11111111-1111-4111-8111-111111111111"
+	store.SaveTask(task)
+
+	sessionName := tmuxResumeSessionName(task.ID)
+	if err := SpawnTmuxSession(sessionName, "sleep 30"); err != nil {
+		t.Fatalf("SpawnTmuxSession: %v", err)
+	}
+	defer KillTmuxSessionName(sessionName)
+
+	m := NewDashboardModel(store, "test")
+	msg := m.resumeTask(task)()
+
+	result, ok := msg.(resumeResultMsg)
+	if !ok {
+		t.Fatalf("resumeTask returned %T, want resumeResultMsg", msg)
+	}
+	if result.err != nil {
+		t.Fatalf("resumeTask returned error: %v", result.err)
+	}
+	if result.sessionName != sessionName {
+		t.Fatalf("sessionName = %q, want %q", result.sessionName, sessionName)
 	}
 }
 

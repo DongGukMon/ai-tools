@@ -21,7 +21,7 @@ var version = "dev"
 func main() {
 	root := &cobra.Command{
 		Use:     "whip",
-		Short:   "Task orchestrator for Claude Code",
+		Short:   "Task orchestrator for AI coding sessions",
 		Version: version,
 	}
 
@@ -624,7 +624,7 @@ func retryCmd() *cobra.Command {
 func resumeCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "resume <id>",
-		Short: "Resume a task's session interactively in current terminal",
+		Short: "Resume a task session interactively in the current terminal",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store, err := whip.NewStore()
@@ -653,6 +653,21 @@ func resumeCmd() *cobra.Command {
 
 			path, execArgs, err := backend.ResumeExec(task)
 			if err != nil {
+				return err
+			}
+
+			if task.CWD != "" {
+				if err := os.Chdir(task.CWD); err != nil {
+					return fmt.Errorf("change directory to %s: %w", task.CWD, err)
+				}
+			}
+
+			task.ShellPID = os.Getpid()
+			if task.Status == whip.StatusAssigned {
+				task.Status = whip.StatusInProgress
+			}
+			task.UpdatedAt = time.Now()
+			if err := store.SaveTask(task); err != nil {
 				return err
 			}
 
@@ -839,14 +854,14 @@ func dashboardCmd() *cobra.Command {
 				if !ok {
 					return nil
 				}
-				id := dm.PendingAttach()
-				if id == "" {
+				sessionName := dm.PendingAttach()
+				if sessionName == "" {
 					return nil
 				}
-				if whip.IsTmuxSession(id) {
-					_ = whip.AttachTmuxSession(id)
+				if whip.IsTmuxSessionName(sessionName) {
+					_ = whip.AttachTmuxSessionName(sessionName)
 				} else {
-					fmt.Fprintf(os.Stderr, "tmux session for task %s no longer exists\n", id)
+					fmt.Fprintf(os.Stderr, "tmux session %s no longer exists\n", sessionName)
 				}
 				// Restart dashboard after detach
 				p = tea.NewProgram(

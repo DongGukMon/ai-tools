@@ -15,16 +15,27 @@ func tmuxSessionName(taskID string) string {
 	return "whip-" + taskID
 }
 
-// SpawnTmux creates a detached tmux session running the given shell command.
-func SpawnTmux(taskID string, shellCmd string) error {
+// tmuxResumeSessionName returns the tmux session name for an interactive resume.
+func tmuxResumeSessionName(taskID string) string {
+	return "whip-resume-" + taskID
+}
+
+// SpawnTmuxSession creates a detached tmux session running the given shell
+// command under the provided session name.
+func SpawnTmuxSession(sessionName string, shellCmd string) error {
 	cmd := exec.Command("tmux", "new-session", "-d",
-		"-s", tmuxSessionName(taskID),
+		"-s", sessionName,
 		"-x", "120", "-y", "40",
 		shellCmd,
 	)
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+// SpawnTmux creates a detached tmux session for a task.
+func SpawnTmux(taskID string, shellCmd string) error {
+	return SpawnTmuxSession(tmuxSessionName(taskID), shellCmd)
 }
 
 // Spawn uses the task's backend to build a launch command, then runs it via
@@ -36,6 +47,7 @@ func Spawn(task *Task, promptPath string) (string, error) {
 	}
 
 	launchCmd := backend.BuildLaunchCmd(task, promptPath)
+	launchedAt := time.Now()
 	shellCmd := fmt.Sprintf(
 		`cd %s && WHIP_SHELL_PID=$$ WHIP_TASK_ID=%s %s ; exit`,
 		shellEscape(task.CWD),
@@ -47,24 +59,50 @@ func Spawn(task *Task, promptPath string) (string, error) {
 		if err := SpawnTmux(task.ID, shellCmd); err != nil {
 			return "", fmt.Errorf("tmux spawn failed: %w", err)
 		}
+		if err := backend.SyncSession(task, promptPath, launchedAt); err != nil {
+			return "", fmt.Errorf("session tracking failed: %w", err)
+		}
 		return "tmux", nil
 	}
 
 	if err := SpawnTerminal(task.ID, shellCmd); err != nil {
 		return "", fmt.Errorf("terminal spawn failed: %w", err)
 	}
+	if err := backend.SyncSession(task, promptPath, launchedAt); err != nil {
+		return "", fmt.Errorf("session tracking failed: %w", err)
+	}
 	return "terminal", nil
+}
+
+// IsTmuxSessionName checks if a tmux session exists for the given session name.
+func IsTmuxSessionName(sessionName string) bool {
+	cmd := exec.Command("tmux", "has-session", "-t", sessionName)
+	return cmd.Run() == nil
 }
 
 // IsTmuxSession checks if a tmux session exists for the given task ID.
 func IsTmuxSession(taskID string) bool {
-	cmd := exec.Command("tmux", "has-session", "-t", tmuxSessionName(taskID))
-	return cmd.Run() == nil
+	return IsTmuxSessionName(tmuxSessionName(taskID))
+}
+
+// KillTmuxSessionName kills the tmux session with the given session name.
+func KillTmuxSessionName(sessionName string) error {
+	cmd := exec.Command("tmux", "kill-session", "-t", sessionName)
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
 
 // KillTmuxSession kills the tmux session for the given task ID.
 func KillTmuxSession(taskID string) error {
-	cmd := exec.Command("tmux", "kill-session", "-t", tmuxSessionName(taskID))
+	return KillTmuxSessionName(tmuxSessionName(taskID))
+}
+
+// AttachTmuxSessionName attaches to the tmux session with the given session
+// name. Runs as a subprocess so the caller resumes after tmux detach.
+func AttachTmuxSessionName(sessionName string) error {
+	cmd := exec.Command("tmux", "attach", "-t", sessionName)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
 }
@@ -72,21 +110,23 @@ func KillTmuxSession(taskID string) error {
 // AttachTmuxSession attaches to the tmux session for the given task ID.
 // Runs as a subprocess so the caller resumes after tmux detach.
 func AttachTmuxSession(taskID string) error {
-	cmd := exec.Command("tmux", "attach", "-t", tmuxSessionName(taskID))
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	return AttachTmuxSessionName(tmuxSessionName(taskID))
 }
 
-// CaptureTmuxPane captures the current pane content of a tmux session.
-func CaptureTmuxPane(taskID string) (string, error) {
-	cmd := exec.Command("tmux", "capture-pane", "-t", tmuxSessionName(taskID), "-p")
+// CaptureTmuxPaneBySessionName captures the current pane content of a tmux
+// session by session name.
+func CaptureTmuxPaneBySessionName(sessionName string) (string, error) {
+	cmd := exec.Command("tmux", "capture-pane", "-t", sessionName, "-p")
 	out, err := cmd.Output()
 	if err != nil {
 		return "", err
 	}
 	return string(out), nil
+}
+
+// CaptureTmuxPane captures the current pane content of a task tmux session.
+func CaptureTmuxPane(taskID string) (string, error) {
+	return CaptureTmuxPaneBySessionName(tmuxSessionName(taskID))
 }
 
 // SpawnTerminal opens a new Terminal.app tab via osascript and runs the given

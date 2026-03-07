@@ -165,3 +165,18 @@ Before marking complete, verify your work (run tests, build checks, or whatever 
 
 	return b.String()
 }
+
+func generateCodexPrompt(task *Task) string {
+	prompt := generateClaudePrompt(task)
+	old := `
+4. Enable periodic message check:
+   /loop 1m claude-irc inbox
+`
+	new := `
+4. Check for new messages manually throughout the task:
+   - Run claude-irc inbox now
+   - Run claude-irc inbox after each meaningful chunk of work
+   - Run claude-irc inbox before status changes or when you think the lead replied
+`
+	return strings.Replace(prompt, old, new, 1)
+}
