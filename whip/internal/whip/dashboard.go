@@ -221,8 +221,6 @@ func (m DashboardModel) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "q", "ctrl+c":
 		return m, tea.Quit
-	case "r":
-		return m, m.loadTasks()
 	case "c":
 		return m, m.cleanTasks()
 	case "up", "k":
@@ -277,12 +275,12 @@ func (m DashboardModel) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.selectedTask != nil && m.selectedTask.Status == StatusReview {
 			return m, m.approveTask(m.selectedTask.ID)
 		}
-	case "R":
+	case "r":
 		if m.selectedTask != nil && m.selectedTask.Status == StatusFailed {
 			return m, m.retryTask(m.selectedTask.ID)
 		}
 	case "s":
-		if m.selectedTask != nil && m.selectedTask.Status.IsTerminal() && m.selectedTask.SessionID != "" {
+		if m.selectedTask != nil && m.selectedTask.Status != StatusCompleted && m.selectedTask.SessionID != "" && !IsProcessAlive(m.selectedTask.ShellPID) {
 			return m, m.resumeTask(m.selectedTask)
 		}
 	case "ctrl+c":
@@ -832,7 +830,7 @@ func (m DashboardModel) renderListFooter() string {
 	dot := lipgloss.NewStyle().Foreground(colorDim).Render("  ·  ")
 	refresh := lipgloss.NewStyle().Foreground(colorDim).Render("↻ 2s")
 
-	line := "  " + footerKey("↑↓", "navigate") + dot + footerKey("enter", "detail") + dot + footerKey("q", "quit") + dot + footerKey("r", "refresh") + dot + footerKey("c", "clean") + dot + refresh
+	line := "  " + footerKey("↑↓", "navigate") + dot + footerKey("enter", "detail") + dot + footerKey("q", "quit") + dot + footerKey("c", "clean") + dot + refresh
 
 	return lipgloss.NewStyle().MarginTop(1).Render(line)
 }
@@ -849,9 +847,9 @@ func (m DashboardModel) renderDetailFooter() string {
 		line += dot + footerKey("A", "approve")
 	}
 	if m.selectedTask != nil && m.selectedTask.Status == StatusFailed {
-		line += dot + footerKey("R", "retry")
+		line += dot + footerKey("r", "retry")
 	}
-	if m.selectedTask != nil && m.selectedTask.Status.IsTerminal() && m.selectedTask.SessionID != "" {
+	if m.selectedTask != nil && m.selectedTask.Status != StatusCompleted && m.selectedTask.SessionID != "" && !IsProcessAlive(m.selectedTask.ShellPID) {
 		line += dot + footerKey("s", "resume")
 	}
 
