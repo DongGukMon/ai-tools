@@ -16,6 +16,7 @@ export function LoginPage() {
       const params = new URLSearchParams(window.location.search)
       const urlParam = params.get('url')
       if (urlParam) {
+        setUrl(urlParam)
         // Clear the URL param from address bar
         window.history.replaceState({}, '', window.location.pathname)
         const parsed = parseConnectURL(urlParam)

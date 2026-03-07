@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strconv"
+	"net/url"
 	"strings"
 	"sync"
 	"syscall"
@@ -706,7 +707,7 @@ func serveCmd() *cobra.Command {
 						connectURL = publicURL
 					}
 					fullURL := fmt.Sprintf("%s?token=%s", connectURL, info.Token)
-					webURL := fmt.Sprintf("https://whip.bang9.dev?url=%s", fullURL)
+					webURL := fmt.Sprintf("https://whip.bang9.dev?url=%s", url.QueryEscape(fullURL))
 					fmt.Fprintf(os.Stderr, "claude-irc serve started.\n")
 					fmt.Fprintf(os.Stderr, "Connect URL: %s\n", fullURL)
 					if keyboardShortcutsAvailable() {
