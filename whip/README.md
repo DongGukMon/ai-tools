@@ -40,6 +40,8 @@ whip dashboard
 | `status <id> [new-status] [--note]` | Get/set status with notes |
 | `broadcast "message"` | Message all active sessions |
 | `heartbeat [id]` | Register PID (called by task session) |
+| `retry <id>` | Retry failed task (resumes previous session context) |
+| `resume <id>` | Resume task session interactively |
 | `kill <id>` | Force kill a task session |
 | `clean` | Remove completed/failed tasks |
 | `dashboard` | Live TUI dashboard |
@@ -78,10 +80,23 @@ Tasks with unmet dependencies cannot be assigned. When a dependency completes, `
 - Progress notes
 - Auto-refresh every 2 seconds
 
+## Session Runner
+
+`whip assign` spawns a Claude Code session using the best available runner:
+
+| Runner | Requirement | Behavior |
+|--------|------------|----------|
+| **tmux** (preferred) | `tmux` installed | Detached session — headless, capturable via dashboard |
+| **Terminal.app** (fallback) | macOS only | Opens a new Terminal tab via osascript |
+
+Install tmux for the best experience: `brew install tmux`
+
+With tmux, `whip dashboard` can preview live session output and attach directly. Without tmux, sessions open in separate Terminal tabs.
+
 ## How It Works
 
 1. **Master session** creates tasks and assigns them
-2. Each assigned task spawns a new Terminal tab running `claude --dangerously-skip-permissions`
+2. Each assigned task spawns a tmux session (or Terminal tab) running `claude --dangerously-skip-permissions`
 3. The spawned session reads a prompt file with task details, IRC setup, and completion instructions
 4. Sessions communicate via `claude-irc` with periodic `/loop 1m claude-irc inbox` checks
 5. On completion, dependent tasks are auto-assigned and the master is notified
