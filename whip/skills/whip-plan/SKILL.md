@@ -115,13 +115,14 @@ The user may:
 
 Do NOT proceed until the user explicitly approves.
 
-## Step 7: Exit plan mode and write plan file
+## Step 7: Write plan to the bound file
 
-Once the user approves:
+Once the user approves, write the full plan content **directly to the plan mode bound file** (the file shown in the plan mode system message, e.g., `~/.claude/plans/serialized-strolling-lightning.md`).
 
-1. **Exit plan mode** using the ExitPlanMode tool.
-
-2. **Based on the approved plan, write a plan file** to `~/.claude/plans/<slug>.md`. The slug should be descriptive (e.g., `irc-serve-and-web-dashboard`).
+**IMPORTANT — Plan mode file binding:**
+- Plan mode binds ONE file per conversation. You can ONLY edit this file while in plan mode.
+- Do NOT try to write to a separate `~/.claude/plans/<slug>.md` — that will fail in plan mode.
+- If the bound file has old content from a previous plan, **overwrite it entirely** with the new plan.
 
 The plan file takes the high-level graph from plan mode and fleshes it out into concrete, agent-ready task specifications. Use the codebase knowledge gathered during exploration (Step 3) to fill in exact file paths, function signatures, API shapes, and existing code references. Each task must include enough detail for an agent to work independently — the agent won't have any of the planning context.
 
@@ -159,9 +160,16 @@ The plan file takes the high-level graph from plan mode and fleshes it out into 
 - Existing code references with file:line pointers
 - Explicit "Out of scope" to prevent agents from wandering
 
-3. **Tell the user**:
+**At the end of the plan file**, always include the execution instruction:
 
+```markdown
+## Execution
+
+Run `/whip-start <bound-file-path>` to execute this plan.
 ```
-Plan file saved to ~/.claude/plans/<slug>.md
-Run `/whip-start <path>` to execute.
-```
+
+Replace `<bound-file-path>` with the actual bound file path (e.g., `~/.claude/plans/serialized-strolling-lightning.md`).
+
+## Step 8: Exit plan mode
+
+Call **ExitPlanMode**. The user sees the plan content (including the `/whip-start` command) and can approve or request changes.
