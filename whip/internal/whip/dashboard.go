@@ -259,8 +259,7 @@ func (m DashboardModel) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "down", "j":
 		if m.selectedTask != nil {
-			maxLines := strings.Count(m.selectedTask.Description, "\n")
-			if m.detailScroll < maxLines {
+			if m.detailScroll < m.detailMaxScroll() {
 				m.detailScroll++
 			}
 		}
@@ -390,6 +389,54 @@ func (m DashboardModel) updateTmux(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 	return m, nil
+}
+
+// detailMaxScroll returns the maximum scroll offset for the detail description.
+func (m DashboardModel) detailMaxScroll() int {
+	t := m.selectedTask
+	if t == nil || t.Description == "" {
+		return 0
+	}
+
+	fieldCount := 8 // ID, Title, Status, Difficulty, Review, Runner, Created, Updated
+	if t.IRCName != "" {
+		fieldCount++
+	}
+	if t.MasterIRCName != "" {
+		fieldCount++
+	}
+	if t.ShellPID > 0 {
+		fieldCount++
+	}
+	if t.Note != "" {
+		fieldCount++
+	}
+	if len(t.DependsOn) > 0 {
+		fieldCount++
+	}
+	if t.CWD != "" {
+		fieldCount++
+	}
+	if t.AssignedAt != nil {
+		fieldCount++
+	}
+	if t.CompletedAt != nil {
+		fieldCount++
+	}
+
+	// header(2) + breadcrumb(2) + fields + desc header(2) + footer(3) + padding(2)
+	overhead := 2 + 2 + fieldCount + 2 + 3 + 2
+	maxDescLines := m.height - overhead
+	if maxDescLines < 3 {
+		maxDescLines = 3
+	}
+
+	descLines := strings.Split(t.Description, "\n")
+	maxScroll := len(descLines) - maxDescLines
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	return maxScroll
 }
 
 // ── Helpers ────────────────────────────────────────────────────────
@@ -575,16 +622,16 @@ func (m DashboardModel) renderDetailView(w int) string {
 		descLabel := "Description"
 		descLines := strings.Split(t.Description, "\n")
 
-		// Calculate available lines for description:
-		// header(2) + breadcrumb(2) + fields + desc header(2) + footer(3) + padding(2)
+		// Calculate available lines for description
 		overhead := 2 + 2 + len(fields) + 2 + 3 + 2
 		maxDescLines := m.height - overhead
 		if maxDescLines < 3 {
 			maxDescLines = 3
 		}
 
-		// Clamp scroll
 		totalDesc := len(descLines)
+
+		// Clamp scroll for viewport changes (e.g. window resize)
 		maxScroll := totalDesc - maxDescLines
 		if maxScroll < 0 {
 			maxScroll = 0
