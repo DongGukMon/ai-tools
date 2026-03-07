@@ -1,6 +1,6 @@
 {
   "name": "claude-irc",
-  "version": "1.0.0",
+  "version": "v1.22.0",
   "description": "IRC-inspired inter-session communication for Claude Code agents",
   "author": {
     "name": "Airen Kang",
@@ -8,7 +8,13 @@
   },
   "repository": "https://github.com/bang9/ai-tools",
   "license": "MIT",
-  "keywords": ["irc", "communication", "agent", "inter-session", "collaboration"],
+  "keywords": [
+    "irc",
+    "communication",
+    "agent",
+    "inter-session",
+    "collaboration"
+  ],
   "category": "collaboration",
   "skills": "./skills/",
   "hooks": {

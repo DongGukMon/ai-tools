@@ -1,6 +1,6 @@
 {
   "name": "whip",
-  "version": "1.0.0",
+  "version": "v1.22.0",
   "description": "Task orchestrator for Claude Code — spawn and manage multiple task sessions",
   "author": {
     "name": "Airen Kang",
@@ -8,7 +8,13 @@
   },
   "repository": "https://github.com/bang9/ai-tools",
   "license": "MIT",
-  "keywords": ["task", "orchestrator", "parallel", "session", "management"],
+  "keywords": [
+    "task",
+    "orchestrator",
+    "parallel",
+    "session",
+    "management"
+  ],
   "category": "productivity",
   "skills": "./skills/",
   "hooks": {
