@@ -7,6 +7,13 @@ export class AuthError extends Error {
   }
 }
 
+export class ConnectionError extends Error {
+  constructor() {
+    super('Connection lost')
+    this.name = 'ConnectionError'
+  }
+}
+
 export class WhipAPIClient {
   private baseURL: string
   private token: string
@@ -17,14 +24,19 @@ export class WhipAPIClient {
   }
 
   private async request<T>(path: string, options?: RequestInit): Promise<T> {
-    const response = await fetch(`${this.baseURL}${path}`, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.token}`,
-        ...options?.headers,
-      },
-    })
+    let response: Response
+    try {
+      response = await fetch(`${this.baseURL}${path}`, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.token}`,
+          ...options?.headers,
+        },
+      })
+    } catch {
+      throw new ConnectionError()
+    }
 
     if (response.status === 401) {
       throw new AuthError()

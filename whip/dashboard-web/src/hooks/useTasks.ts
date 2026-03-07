@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import type { Task } from '../api/types'
 import type { WhipAPIClient } from '../api/client'
-import { AuthError } from '../api/client'
+import { AuthError, ConnectionError } from '../api/client'
 
 const POLL_INTERVAL = 2000
 
@@ -18,7 +18,7 @@ export function useTasks(client: WhipAPIClient | null, onAuthError: () => void) 
       setTasks(data)
       setError(null)
     } catch (err) {
-      if (err instanceof AuthError) {
+      if (err instanceof AuthError || err instanceof ConnectionError) {
         onAuthErrorRef.current()
         return
       }

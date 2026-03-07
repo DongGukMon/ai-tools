@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { Task, Peer, Message } from '../api/types'
-import { AuthError } from '../api/client'
+import { AuthError, ConnectionError } from '../api/client'
 import { getClient, clearAuth } from '../stores/auth'
 import { useTasks } from '../hooks/useTasks'
 import { TaskTable } from '../components/TaskTable'
@@ -32,22 +32,18 @@ export function DashboardPage() {
   const [sentMessages, setSentMessages] = useState<SentMessage[]>([])
   const [sending, setSending] = useState(false)
 
-  const handleAuthError = useCallback(() => {
+  const handleDisconnected = useCallback(() => {
     clearAuth()
     navigate('/')
   }, [navigate])
 
-  const { tasks, error } = useTasks(client, handleAuthError)
+  const { tasks, error } = useTasks(client, handleDisconnected)
 
   // Keep selected task in sync with latest data
   const currentSelected = selectedTask
     ? tasks.find(t => t.id === selectedTask.id) ?? null
     : null
 
-  const handleDisconnect = () => {
-    clearAuth()
-    navigate('/')
-  }
 
   // Poll peers every 2s
   useEffect(() => {
@@ -55,13 +51,13 @@ export function DashboardPage() {
     let active = true
     const poll = () => {
       client.getPeers().then(p => { if (active) setPeers(p) }).catch(err => {
-        if (err instanceof AuthError) handleAuthError()
+        if (err instanceof AuthError || err instanceof ConnectionError) handleDisconnected()
       })
     }
     poll()
     const id = setInterval(poll, 2000)
     return () => { active = false; clearInterval(id) }
-  }, [client, handleAuthError])
+  }, [client, handleDisconnected])
 
   // Poll inbox every 2s
   useEffect(() => {
@@ -153,7 +149,7 @@ export function DashboardPage() {
         </button>
         <div className="flex-1" />
         <button
-          onClick={handleDisconnect}
+          onClick={handleDisconnected}
           className="px-3 py-1.5 rounded-md text-sm text-gray-500 dark:text-gray-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
         >
           Disconnect
