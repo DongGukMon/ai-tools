@@ -134,7 +134,9 @@ Commands that need "who am I" (msg, inbox, topic) resolve the peer name via:
 2. `--name` flag (fallback only — blocked if it doesn't match active session)
 3. Single-peer fallback (if only one peer registered, assume it's us)
 
-**Note:** `--name` cannot be used to impersonate other peers. It is only allowed when session detection fails.
+**Note:** `--name` cannot be used to impersonate other peers. Without an active session, only `--name user` is permitted.
+
+**Reserved name:** `user` is reserved for the dashboard operator (send-only observer). It can send messages to agents but cannot receive messages. Agents should not attempt to reply to `user`.
 
 ## Collaboration Protocol
 

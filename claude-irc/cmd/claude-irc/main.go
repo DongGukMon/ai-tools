@@ -23,6 +23,12 @@ var (
 
 	// Set via -ldflags at build time
 	version = "dev"
+
+	// detectSession is the function used to detect the current session.
+	// Overridable in tests to isolate from the real session environment.
+	detectSession = func(pid int) (*irc.Store, string, error) {
+		return irc.DetectSession(pid)
+	}
 )
 
 func main() {
@@ -32,7 +38,7 @@ func main() {
 		Version: version,
 	}
 
-	root.PersistentFlags().StringVar(&nameFlag, "name", "", "Override peer name (bypass session marker)")
+	root.PersistentFlags().StringVar(&nameFlag, "name", "", "Override peer name (only 'user' allowed without active session)")
 
 	root.AddCommand(
 		joinCmd(),
@@ -174,6 +180,10 @@ func msgCmd() *cobra.Command {
 
 			if peer == from {
 				return fmt.Errorf("cannot send message to yourself")
+			}
+
+			if peer == "user" {
+				return fmt.Errorf("'user' is a send-only observer and cannot receive messages")
 			}
 
 			// Verify peer exists in registry
@@ -609,12 +619,18 @@ func daemonCmd() *cobra.Command {
 // --name is only allowed when session detection fails (prevents impersonation).
 func resolveMyName(store *irc.Store) (string, error) {
 	// Try session detection first
-	_, detected, detectErr := irc.DetectSession(os.Getppid())
+	_, detected, detectErr := detectSession(os.Getppid())
 
 	if nameFlag != "" {
 		// --name provided: only allow if session detection fails or matches
 		if detectErr == nil && detected != "" && detected != nameFlag {
 			return "", fmt.Errorf("--name '%s' does not match your session '%s'", nameFlag, detected)
+		}
+		if detectErr != nil || detected == "" {
+			// No active session: only allow reserved observer name
+			if nameFlag != "user" {
+				return "", fmt.Errorf("--name '%s' not allowed without an active session (only 'user' is permitted)", nameFlag)
+			}
 		}
 		return nameFlag, nil
 	}

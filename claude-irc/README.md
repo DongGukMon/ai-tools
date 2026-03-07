@@ -59,6 +59,15 @@ claude-irc msg server "Got it. Need avatarUrl in UserResponse"
 
 For conversational ping-pong, treat `watch` as a one-shot trigger: when it exits with unread messages, start a new `watch` first, then read/process/respond while the new watcher waits for the next batch.
 
+## Name Resolution
+
+Commands that need identity (`msg`, `inbox`, `topic`) resolve the peer name via:
+1. **Session marker** — written by `join`, matched by ancestor PID
+2. **`--name` flag** — fallback when session detection fails; only `user` is allowed without an active session
+3. Error if neither resolves
+
+**Reserved name:** `user` is a send-only observer for the dashboard operator. It can send messages to agents but cannot receive messages. Agents should not attempt to reply to `user`.
+
 ## How It Works
 
 ```
