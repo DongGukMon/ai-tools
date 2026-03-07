@@ -6,6 +6,7 @@ set -e
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 OUTPUT="$REPO_ROOT/.claude-plugin/marketplace.json"
+VERSION="${1:-1.0.0}"
 
 plugins="[]"
 
@@ -45,6 +46,7 @@ plugins=$(echo "$plugins" | jq 'sort_by(.name)')
 
 jq -n \
     --argjson plugins "$plugins" \
+    --arg version "$VERSION" \
     '{
         name: "ai-tools",
         owner: {
@@ -53,7 +55,7 @@ jq -n \
         },
         metadata: {
             description: "A collection of tools for Claude Code to operate more efficiently",
-            version: "1.0.0"
+            version: $version
         },
         plugins: $plugins
     }' > "$OUTPUT"

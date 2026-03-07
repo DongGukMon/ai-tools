@@ -268,14 +268,14 @@ func (m DashboardModel) renderTable() string {
 		updated := subtitleStyle.Render(timeAgo(t.UpdatedAt))
 
 		row := fmt.Sprintf("  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s",
-			colID+len(id)-len(truncate(t.ID, colID)), id,
-			colTitle, title,
-			colStatus+len(status)-len(string(t.Status)), status,
-			colIRC+len(irc)-len(truncate(t.IRCName, colIRC)), irc,
-			colPID+len(pidStr)-len(plainPID(t.ShellPID)), pidStr,
-			colDeps+len(deps)-plainDepsLen(t.DependsOn), deps,
-			colNote+len(note)-len(truncate(t.Note, colNote)), note,
-			colUpdated, updated,
+			colID+len(id)-lipgloss.Width(id), id,
+			colTitle+len(title)-lipgloss.Width(title), title,
+			colStatus+len(status)-lipgloss.Width(status), status,
+			colIRC+len(irc)-lipgloss.Width(irc), irc,
+			colPID+len(pidStr)-lipgloss.Width(pidStr), pidStr,
+			colDeps+len(deps)-lipgloss.Width(deps), deps,
+			colNote+len(note)-lipgloss.Width(note), note,
+			colUpdated+len(updated)-lipgloss.Width(updated), updated,
 		)
 
 		style := rowStyle
@@ -345,13 +345,6 @@ func renderPID(pid int) string {
 	return pidDeadStyle.Render(fmt.Sprintf("✗ %d", pid))
 }
 
-func plainPID(pid int) string {
-	if pid <= 0 {
-		return "—"
-	}
-	return fmt.Sprintf("x %d", pid)
-}
-
 func renderDeps(deps []string) string {
 	if len(deps) == 0 {
 		return lipgloss.NewStyle().Foreground(colorDim).Render("—")
@@ -365,24 +358,6 @@ func renderDeps(deps []string) string {
 		}
 	}
 	return lipgloss.NewStyle().Foreground(colorWarning).Render(strings.Join(short, ","))
-}
-
-func plainDepsLen(deps []string) int {
-	if len(deps) == 0 {
-		return 1 // "—"
-	}
-	total := 0
-	for i, d := range deps {
-		if i > 0 {
-			total++ // comma
-		}
-		if len(d) > 5 {
-			total += 5
-		} else {
-			total += len(d)
-		}
-	}
-	return total
 }
 
 func truncate(s string, max int) string {

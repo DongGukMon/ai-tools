@@ -66,12 +66,11 @@ Run these commands to initialize your session:
 When you've finished and verified your work:
 
 `)
-	fmt.Fprintf(&b, "1. whip status %s completed --note \"final summary of what was delivered\"\n", task.ID)
-	b.WriteString("   (if dependent tasks become unblocked, they are auto-assigned automatically)\n")
-	fmt.Fprintf(&b, "2. claude-irc msg %s \"Task %s complete. Here's what I delivered: <concrete summary>\"\n",
+	fmt.Fprintf(&b, "1. claude-irc msg %s \"Task %s complete. Here's what I delivered: <concrete summary>\"\n",
 		task.MasterIRCName, task.ID)
-	b.WriteString("3. claude-irc quit\n")
-	b.WriteString("4. exit\n")
+	b.WriteString("2. claude-irc quit\n")
+	fmt.Fprintf(&b, "3. whip status %s completed --note \"final summary of what was delivered\"\n", task.ID)
+	b.WriteString("   (this will auto-terminate the session)\n")
 
 	return b.String()
 }

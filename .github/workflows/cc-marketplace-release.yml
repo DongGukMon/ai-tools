@@ -29,7 +29,7 @@ jobs:
           done
 
           # Generate marketplace.json
-          bash .github/scripts/sync-marketplace.sh
+          bash .github/scripts/sync-marketplace.sh "$VERSION"
 
       - name: Commit and push
         run: |
