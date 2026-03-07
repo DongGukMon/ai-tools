@@ -42,7 +42,7 @@ Run these commands to initialize your session:
    /loop 1m claude-irc inbox
 
 ## Checkpoint: Share your plan
-Before writing any code, share your approach with the lead:
+Before diving in, share your approach with the lead:
 `)
 	fmt.Fprintf(&b, "   claude-irc msg %s \"Plan for %s: <your approach in 2-3 sentences>\"\n",
 		task.MasterIRCName, task.ID)
@@ -51,14 +51,15 @@ Before writing any code, share your approach with the lead:
 ## How You Work
 `)
 	fmt.Fprintf(&b, "- Work in: %s\n", task.CWD)
-	fmt.Fprintf(&b, "- Update your progress: whip status %s in_progress --note \"your progress here\"\n", task.ID)
 	fmt.Fprintf(&b, "- Coordinate with the lead session (%s) via claude-irc\n", task.MasterIRCName)
+	b.WriteString("  when you need alignment on cross-cutting decisions.\n")
+	b.WriteString("- Check what peers are working on: claude-irc board <peer>\n")
+	b.WriteString("- If you need user input that can't wait, use webform to collect it directly.\n")
 	b.WriteString(`
 ## When to ask the lead
 - Ambiguous requirements or multiple valid approaches — ask which direction
 - Changes that affect files other agents might be working on
 - Anything not covered in the task description
-- Use claude-irc msg to ask. If you need user input directly, use webform.
 
 ## Reporting
 - Share meaningful progress updates, not just status changes.
@@ -70,7 +71,7 @@ Before writing any code, share your approach with the lead:
 - When you receive a message from the lead session, acknowledge and respond promptly.
 
 ## Completing Your Task
-When you've finished and verified your work:
+Before marking complete, verify your work (run tests, build checks, or whatever the task requires).
 
 `)
 	fmt.Fprintf(&b, "1. claude-irc msg %s \"Task %s complete. Here's what I delivered: <concrete summary>\"\n",
