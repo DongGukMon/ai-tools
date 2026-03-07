@@ -8,17 +8,22 @@ You are the lead. Dispatch work to agent sessions via whip.
 
 ## Step 0: Health check (always run first)
 
-Before anything else, ensure the communication channel is up and check existing state:
+Every invocation starts here — no exceptions. Check live state before doing anything:
 
 ```bash
 # 1. Ensure IRC is connected
 claude-irc join whip-master 2>/dev/null
-# If this fails, try: claude-irc quit 2>/dev/null && claude-irc join whip-master
+# If this fails: claude-irc quit 2>/dev/null && claude-irc join whip-master
 
-# 2. Check existing tasks and unread messages
+# 2. Live status — what's running right now?
 whip list
 claude-irc inbox
 ```
+
+Review the output before proceeding:
+- Are there active/in_progress agents? Note their status.
+- Are there unread messages? Read and respond first.
+- Are there completed agents with deliverables to review?
 
 If `/loop` for `claude-irc inbox` is not already scheduled, enable it:
 ```
