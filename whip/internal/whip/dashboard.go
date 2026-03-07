@@ -3,6 +3,7 @@ package whip
 import (
 	"fmt"
 	"os/exec"
+	"sort"
 	"strings"
 	"time"
 
@@ -416,15 +417,31 @@ func (m DashboardModel) updateTmux(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// ircPeers returns the peer list with 'user' filtered out.
+// ircPeers returns the peer list with 'user' filtered out,
+// sorted alphabetically with 'whip-master' always first.
 func (m DashboardModel) ircPeers() []peerInfo {
-	var filtered []peerInfo
+	var master *peerInfo
+	var rest []peerInfo
 	for _, p := range m.peers {
-		if p.Name != "user" {
-			filtered = append(filtered, p)
+		if p.Name == "user" {
+			continue
+		}
+		if p.Name == "whip-master" {
+			cp := p
+			master = &cp
+		} else {
+			rest = append(rest, p)
 		}
 	}
-	return filtered
+	sort.Slice(rest, func(i, j int) bool {
+		return rest[i].Name < rest[j].Name
+	})
+	var result []peerInfo
+	if master != nil {
+		result = append(result, *master)
+	}
+	result = append(result, rest...)
+	return result
 }
 
 func (m DashboardModel) updateIRC(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
