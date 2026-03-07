@@ -446,8 +446,13 @@ func statusCmd() *cobra.Command {
 			// Auto-terminate task session when status becomes terminal
 			if task.Status.IsTerminal() && task.ShellPID > 0 {
 				if envPID := os.Getenv("WHIP_SHELL_PID"); envPID == fmt.Sprintf("%d", task.ShellPID) {
-					// Delay to let whip status return cleanly
-					exec.Command("sh", "-c", fmt.Sprintf("sleep 3 && kill -TERM %d 2>/dev/null; sleep 2 && kill -KILL %d 2>/dev/null", task.ShellPID, task.ShellPID)).Start()
+					if task.Runner == "tmux" {
+						// tmux: kill the entire session after a short delay
+						exec.Command("sh", "-c", fmt.Sprintf("sleep 3 && tmux kill-session -t whip-%s 2>/dev/null", id)).Start()
+					} else {
+						// terminal (or empty for backwards compat): PID-based kill
+						exec.Command("sh", "-c", fmt.Sprintf("sleep 3 && kill -TERM %d 2>/dev/null; sleep 2 && kill -KILL %d 2>/dev/null", task.ShellPID, task.ShellPID)).Start()
+					}
 				}
 			}
 
