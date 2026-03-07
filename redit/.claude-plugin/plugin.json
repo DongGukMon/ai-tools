@@ -16,7 +16,6 @@
     "confluence",
     "notion"
   ],
-  "skills": "./skills/",
   "hooks": {
     "SessionStart": [
       {

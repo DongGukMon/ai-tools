@@ -20,14 +20,16 @@ path=$(echo "$content" | redit init "confluence:12345")
 # 3. Edit the working file with precise partial changes
 # Edit <path>
 
-# 4. Review before committing
+# 4. Review and ask whether further changes are needed
 redit diff "confluence:12345"
 redit status "confluence:12345"
 
-# 5. Push final content back to the source system
+# 5. If more edits are requested soon, keep using the same key
+
+# 6. Only after final confirmation, push the final content
 final=$(redit read "confluence:12345")
 
-# 6. Clean up
+# 7. Clean up after the final push
 redit drop "confluence:12345"
 ```
 
@@ -39,4 +41,7 @@ Run `redit --help` for the full command list.
 
 - Use `service:id` keys such as `confluence:12345` or `notion:page-abc`.
 - If you need cache separation by version, use `service:id:version`.
-- Always `drop` after the edit cycle is complete.
+- Ask for confirmation after reviewing `redit diff`.
+- Reuse the same key for short follow-up edits.
+- Only push remote changes and `drop` after final confirmation.
+- Skip the remote update if `redit status` is `clean`.
