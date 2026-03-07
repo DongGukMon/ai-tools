@@ -754,6 +754,10 @@ func dashboardCmd() *cobra.Command {
 			}
 			if dm, ok := m.(whip.DashboardModel); ok {
 				if id := dm.PendingAttach(); id != "" {
+					if !whip.IsTmuxSession(id) {
+						fmt.Fprintf(os.Stderr, "tmux session for task %s no longer exists\n", id)
+						return nil
+					}
 					return whip.AttachTmuxSession(id)
 				}
 			}

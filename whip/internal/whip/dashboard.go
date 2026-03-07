@@ -344,7 +344,7 @@ func (m DashboardModel) updateTmux(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.view = viewDetail
 		m.tmuxContent = ""
 	case "enter":
-		if m.selectedTask != nil {
+		if m.selectedTask != nil && IsTmuxSession(m.selectedTask.ID) {
 			m.pendingAttach = m.selectedTask.ID
 			return m, tea.Quit
 		}
