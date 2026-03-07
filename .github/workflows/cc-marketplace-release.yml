@@ -1,0 +1,44 @@
+name: "Sync marketplace"
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Update versions and generate marketplace.json
+        run: |
+          VERSION=${{ inputs.version }}
+
+          # Update version in each plugin.json
+          for f in */.claude-plugin/plugin.json; do
+            [ -f "$f" ] || continue
+            jq --arg v "$VERSION" '.version = $v' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+          done
+
+          # Generate marketplace.json
+          bash .github/scripts/sync-marketplace.sh
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add '*/.claude-plugin/plugin.json' .claude-plugin/marketplace.json
+          if git diff --cached --quiet; then
+            echo "No changes"
+          else
+            git commit -m "chore: update plugin versions to ${{ inputs.version }}"
+            git push
+          fi

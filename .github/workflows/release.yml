@@ -1,0 +1,38 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  claude-irc:
+    uses: ./.github/workflows/claude-irc-release.yml
+    with:
+      version: ${{ github.ref_name }}
+
+  redit:
+    uses: ./.github/workflows/redit-release.yml
+    with:
+      version: ${{ github.ref_name }}
+
+  vaultkey:
+    uses: ./.github/workflows/vaultkey-release.yml
+    with:
+      version: ${{ github.ref_name }}
+
+  webform:
+    uses: ./.github/workflows/webform-release.yml
+    with:
+      version: ${{ github.ref_name }}
+
+  whip:
+    uses: ./.github/workflows/whip-release.yml
+    with:
+      version: ${{ github.ref_name }}
+
+  marketplace:
+    needs: [claude-irc, redit, vaultkey, webform, whip]
+    uses: ./.github/workflows/cc-marketplace-release.yml
+    with:
+      version: ${{ github.ref_name }}

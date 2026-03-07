@@ -10,32 +10,6 @@
   },
   "plugins": [
     {
-      "name": "redit",
-      "source": "./redit",
-      "description": "Remote Edit Layer - Local cache for efficiently editing remote documents that don't support partial updates",
-      "version": "1.0.0",
-      "author": {
-        "name": "Airen Kang"
-      },
-      "repository": "https://github.com/bang9/ai-tools",
-      "license": "MIT",
-      "keywords": ["remote", "edit", "cache", "confluence", "notion", "document"],
-      "category": "productivity"
-    },
-    {
-      "name": "memex",
-      "source": "./memex",
-      "description": "Local Knowledge Graph for AI — stores, connects, and retrieves knowledge across conversations",
-      "version": "1.0.0",
-      "author": {
-        "name": "Airen Kang"
-      },
-      "repository": "https://github.com/bang9/ai-tools",
-      "license": "MIT",
-      "keywords": ["knowledge", "graph", "memory", "search", "notes"],
-      "category": "productivity"
-    },
-    {
       "name": "claude-irc",
       "source": "./claude-irc",
       "description": "IRC-inspired inter-session communication for Claude Code agents",
@@ -45,8 +19,53 @@
       },
       "repository": "https://github.com/bang9/ai-tools",
       "license": "MIT",
-      "keywords": ["irc", "communication", "agent", "inter-session", "collaboration"],
+      "keywords": [
+        "irc",
+        "communication",
+        "agent",
+        "inter-session",
+        "collaboration"
+      ],
       "category": "collaboration"
+    },
+    {
+      "name": "redit",
+      "source": "./redit",
+      "description": "Remote Edit Layer - Local cache for efficiently editing remote documents",
+      "version": "1.0.0",
+      "author": {
+        "name": "Airen Kang"
+      },
+      "repository": "https://github.com/bang9/ai-tools",
+      "license": "MIT",
+      "keywords": [
+        "remote",
+        "edit",
+        "cache",
+        "document",
+        "confluence",
+        "notion"
+      ],
+      "category": "productivity"
+    },
+    {
+      "name": "whip",
+      "source": "./whip",
+      "description": "Task orchestrator for Claude Code — spawn and manage multiple task sessions",
+      "version": "1.0.0",
+      "author": {
+        "name": "Airen Kang"
+      },
+      "repository": "https://github.com/bang9/ai-tools",
+      "license": "MIT",
+      "keywords": [
+        "task",
+        "orchestrator",
+        "parallel",
+        "session",
+        "management"
+      ],
+      "category": "productivity"
     }
   ]
 }

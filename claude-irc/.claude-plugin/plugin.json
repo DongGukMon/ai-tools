@@ -9,6 +9,7 @@
   "repository": "https://github.com/bang9/ai-tools",
   "license": "MIT",
   "keywords": ["irc", "communication", "agent", "inter-session", "collaboration"],
+  "category": "collaboration",
   "skills": "./skills/",
   "hooks": {
     "SessionStart": [

@@ -1,16 +1,17 @@
 name: "whip: Release"
 
 on:
-  push:
-    tags:
-      - 'v*'
-
-permissions:
-  contents: write
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
 
 jobs:
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,7 +24,7 @@ jobs:
       - name: Build binaries
         run: |
           cd whip
-          VERSION=${GITHUB_REF_NAME}
+          VERSION=${{ inputs.version }}
           LDFLAGS="-s -w -X main.version=${VERSION}"
           mkdir -p dist
           GOOS=darwin GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o dist/whip-darwin-arm64 ./cmd/whip

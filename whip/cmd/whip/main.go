@@ -674,10 +674,6 @@ func upgradeCmd() *cobra.Command {
 				return nil
 			}
 
-			binaryName := fmt.Sprintf("whip-%s-%s", runtime.GOOS, runtime.GOARCH)
-			downloadURL := fmt.Sprintf("https://github.com/%s/releases/download/%s/%s",
-				repo, latestVersion, binaryName)
-
 			binPath, err := os.Executable()
 			if err != nil {
 				binPath = filepath.Join(os.Getenv("HOME"), ".local", "bin", "whip")
@@ -686,18 +682,28 @@ func upgradeCmd() *cobra.Command {
 				binPath = resolved
 			}
 
-			fmt.Fprintf(os.Stderr, "Downloading %s...\n", latestVersion)
-			dlCmd := exec.Command("curl", "-fsSL", "-o", binPath, downloadURL)
-			dlCmd.Stderr = os.Stderr
-			if err := dlCmd.Run(); err != nil {
-				return fmt.Errorf("download failed: %w", err)
+			installDir := filepath.Dir(binPath)
+
+			// Upgrade whip + required tools
+			tools := []string{"whip", "claude-irc", "webform"}
+			for _, tool := range tools {
+				toolBinary := fmt.Sprintf("%s-%s-%s", tool, runtime.GOOS, runtime.GOARCH)
+				toolURL := fmt.Sprintf("https://github.com/%s/releases/download/%s/%s",
+					repo, latestVersion, toolBinary)
+				toolPath := filepath.Join(installDir, tool)
+
+				fmt.Fprintf(os.Stderr, "Downloading %s %s...\n", tool, latestVersion)
+				dlCmd := exec.Command("curl", "-fsSL", "-o", toolPath, toolURL)
+				dlCmd.Stderr = os.Stderr
+				if err := dlCmd.Run(); err != nil {
+					fmt.Fprintf(os.Stderr, "Warning: failed to download %s: %v\n", tool, err)
+					continue
+				}
+				os.Chmod(toolPath, 0755)
+				fmt.Fprintf(os.Stderr, "  %s updated\n", tool)
 			}
 
-			if err := os.Chmod(binPath, 0755); err != nil {
-				return fmt.Errorf("chmod failed: %w", err)
-			}
-
-			fmt.Fprintf(os.Stderr, "Updated to %s\n", latestVersion)
+			fmt.Fprintf(os.Stderr, "All tools updated to %s\n", latestVersion)
 			return nil
 		},
 	}

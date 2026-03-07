@@ -9,6 +9,7 @@
   "repository": "https://github.com/bang9/ai-tools",
   "license": "MIT",
   "keywords": ["task", "orchestrator", "parallel", "session", "management"],
+  "category": "productivity",
   "skills": "./skills/",
   "hooks": {
     "SessionStart": [

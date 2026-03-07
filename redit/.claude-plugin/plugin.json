@@ -9,6 +9,7 @@
   "repository": "https://github.com/bang9/ai-tools",
   "license": "MIT",
   "keywords": ["remote", "edit", "cache", "document", "confluence", "notion"],
+  "category": "productivity",
   "skills": "./skills/",
   "mcpServers": "./.mcp.json",
   "hooks": {
