@@ -1,28 +1,27 @@
 ---
 name: task-run
-description: Spawn Claude Code sessions to handle tasks. Works for both single tasks and multi-task orchestration.
+description: Spawn Claude Code agent sessions to handle tasks. Dispatches a single agent or assembles a team for parallel work.
 user_invocable: true
 ---
 
-Dispatch work to dedicated Claude Code sessions via whip.
+You are the lead. Dispatch work to agent sessions via whip.
 
 ## Decide Mode
 
-Look at the user's request and arguments:
-- **Single task**: One clear, self-contained piece of work (e.g., "fix the login bug", "add dark mode") → go to Single Task Flow
-- **Multi-task**: Work that can be decomposed into 2+ independent parallel tasks → go to Multi-Task Flow
-- **Ambiguous**: If unclear, default to single task. Don't over-decompose.
+Look at the user's request:
+- **Solo agent**: One clear, self-contained piece of work → Solo Flow
+- **Agent team**: Work that decomposes into 2+ independent parallel tasks → Team Flow
+- **Ambiguous**: Default to solo. Don't over-decompose.
 
 ---
 
-## Single Task Flow
+## Solo Flow
 
-Minimal overhead. Create and assign immediately.
+Dispatch immediately. No planning phase.
 
 ```bash
-# Join only if not already joined (idempotent)
 claude-irc join whip-master 2>/dev/null || true
-whip create "<title>" --desc "<detailed description with context>"
+whip create "<title>" --desc "<detailed description with full context>"
 whip assign <task-id> --master-irc whip-master
 ```
 
@@ -31,59 +30,57 @@ Enable monitoring:
 /loop 1m claude-irc inbox
 ```
 
-Wait for completion. Do NOT run `claude-irc quit` — the main session stays connected for future tasks.
+Wait for completion. Do NOT run `claude-irc quit` — stay connected for future dispatches.
 
 ---
 
-## Multi-Task Flow
+## Team Flow
 
-### Step 1: Plan
+### Step 1: Assemble the team
 
-Decompose into independent, parallelizable tasks. Each task should:
-- Have a clear, specific scope
-- Be completable by a single Claude Code session
-- Have minimal dependencies on other tasks
+Define each agent's role and scope. Each agent should:
+- Have a clear, specific responsibility
+- Be able to work independently
+- Have minimal dependencies on other agents
 
-Minimize analysis time in the main session. Delegate investigation to the task sessions — include enough context in the description for them to self-orient.
-
-Present the task breakdown to the user for approval before proceeding.
+Minimize analysis in the main session — include enough context in descriptions for agents to self-orient. Present the team composition to the user before proceeding.
 
 ### Step 2: Initialize
 
 ```bash
-# Join only if not already joined (idempotent)
 claude-irc join whip-master 2>/dev/null || true
 ```
 
-### Step 3: Create & Assign Tasks
+### Step 3: Create & deploy agents
 
-Create all tasks, set dependencies if needed, then assign all at once:
+Create all tasks, set dependencies if needed, then deploy all at once:
 ```bash
-whip create "<title>" --desc "<detailed description with acceptance criteria>"
+whip create "<agent role/title>" --desc "<responsibility, context, acceptance criteria>"
 whip dep <task-id> --after <dependency-id>  # only if needed
 whip assign <task-id> --master-irc whip-master
 ```
 
-### Step 4: Monitor & Coordinate
+### Step 4: Coordinate
 
 Enable periodic message checking:
 ```
 /loop 1m claude-irc inbox
 ```
 
-While tasks are running:
-- Read messages from task owners and respond promptly
-- Use `whip list` to check overall progress
-- Use `whip broadcast "message"` for announcements to all sessions
-- Use `claude-irc msg <irc-name> "message"` for targeted communication
+As team lead:
+- Respond to agent messages promptly
+- Use `whip list` to monitor overall progress
+- Use `whip broadcast "message"` for team-wide announcements
+- Use `claude-irc msg <irc-name> "message"` for direct communication with specific agents
+- Relay information between agents when they need context from each other
 
-### Step 5: Handle Completion
+### Step 5: Handle completion
 
-As tasks complete:
-- Review their completion messages
-- If dependent tasks are auto-assigned, monitor their startup
-- If a task fails: `whip kill <id>` + `whip unassign <id>` + fix + `whip assign <id>`
+As agents complete:
+- Review their deliverables
+- Dependent agents auto-deploy when prerequisites are met
+- If an agent fails: `whip kill <id>` + `whip unassign <id>` + fix + `whip assign <id>`
 
-### Step 6: Wrap Up
+### Step 6: Wrap up
 
-When all tasks are complete, summarize what was accomplished. Do NOT run `claude-irc quit` — the main session stays connected for future tasks.
+When all agents are done, summarize what was accomplished across the team. Do NOT run `claude-irc quit` — stay connected for future dispatches.
