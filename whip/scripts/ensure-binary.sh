@@ -57,10 +57,26 @@ DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/${DOWNLOAD
 
 echo "Downloading whip ${VERSION}..." >&2
 
+# safe_install: download to temp file, rm old binary, mv new one in.
+# This avoids corrupting a running binary (in-place overwrite kills active processes).
+# rm + mv creates a new inode, so existing processes keep their old fd.
+safe_install() {
+    local url="$1"
+    local dest="$2"
+    local tmp="${dest}.tmp.$$"
+    if curl -fsSL -o "$tmp" "$url"; then
+        chmod +x "$tmp"
+        rm -f "$dest"
+        mv "$tmp" "$dest"
+        return 0
+    fi
+    rm -f "$tmp"
+    return 1
+}
+
 # Try to download
 if command -v curl &> /dev/null; then
-    if curl -fsSL -o "$INSTALLED_BINARY" "$DOWNLOAD_URL"; then
-        chmod +x "$INSTALLED_BINARY"
+    if safe_install "$DOWNLOAD_URL" "$INSTALLED_BINARY"; then
         echo "whip ${VERSION} installed to $INSTALLED_BINARY" >&2
 
         # Also ensure required companion tools are at expected version
@@ -93,8 +109,7 @@ if command -v curl &> /dev/null; then
                 fi
 
                 TOOL_URL="https://github.com/${REPO}/releases/download/${VERSION}/${tool}-${OS}-${ARCH}"
-                if curl -fsSL -o "$INSTALL_DIR/$tool" "$TOOL_URL" 2>/dev/null; then
-                    chmod +x "$INSTALL_DIR/$tool"
+                if safe_install "$TOOL_URL" "$INSTALL_DIR/$tool"; then
                     echo "$tool ${VERSION} installed" >&2
                 fi
             fi
@@ -103,11 +118,15 @@ if command -v curl &> /dev/null; then
         exit 0
     fi
 elif command -v wget &> /dev/null; then
-    if wget -q -O "$INSTALLED_BINARY" "$DOWNLOAD_URL"; then
-        chmod +x "$INSTALLED_BINARY"
+    TMP_BINARY="${INSTALLED_BINARY}.tmp.$$"
+    if wget -q -O "$TMP_BINARY" "$DOWNLOAD_URL"; then
+        chmod +x "$TMP_BINARY"
+        rm -f "$INSTALLED_BINARY"
+        mv "$TMP_BINARY" "$INSTALLED_BINARY"
         echo "whip ${VERSION} installed to $INSTALLED_BINARY" >&2
         exit 0
     fi
+    rm -f "$TMP_BINARY"
 fi
 
 echo "Failed to download binary. Trying to build from source..." >&2

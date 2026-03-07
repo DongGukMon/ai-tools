@@ -77,19 +77,36 @@ stop_claude_irc_daemons
 
 echo "Downloading claude-irc ${VERSION}..." >&2
 
+# safe_install: download to temp file, rm old binary, mv new one in.
+# Avoids corrupting running binaries — rm+mv creates a new inode.
+safe_install() {
+    local url="$1" dest="$2" tmp="${dest}.tmp.$$"
+    if curl -fsSL -o "$tmp" "$url"; then
+        chmod +x "$tmp"
+        rm -f "$dest"
+        mv "$tmp" "$dest"
+        return 0
+    fi
+    rm -f "$tmp"
+    return 1
+}
+
 # Try to download
 if command -v curl &> /dev/null; then
-    if curl -fsSL -o "$INSTALLED_BINARY" "$DOWNLOAD_URL"; then
-        chmod +x "$INSTALLED_BINARY"
+    if safe_install "$DOWNLOAD_URL" "$INSTALLED_BINARY"; then
         echo "claude-irc ${VERSION} installed to $INSTALLED_BINARY" >&2
         exit 0
     fi
 elif command -v wget &> /dev/null; then
-    if wget -q -O "$INSTALLED_BINARY" "$DOWNLOAD_URL"; then
-        chmod +x "$INSTALLED_BINARY"
+    TMP_BINARY="${INSTALLED_BINARY}.tmp.$$"
+    if wget -q -O "$TMP_BINARY" "$DOWNLOAD_URL"; then
+        chmod +x "$TMP_BINARY"
+        rm -f "$INSTALLED_BINARY"
+        mv "$TMP_BINARY" "$INSTALLED_BINARY"
         echo "claude-irc ${VERSION} installed to $INSTALLED_BINARY" >&2
         exit 0
     fi
+    rm -f "$TMP_BINARY"
 fi
 
 echo "Failed to download binary. Trying to build from source..." >&2
