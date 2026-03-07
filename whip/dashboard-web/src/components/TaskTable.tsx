@@ -8,6 +8,17 @@ interface TaskTableProps {
   onSelect: (task: Task) => void
 }
 
+function BackendCell({ backend }: { backend: string }) {
+  switch (backend) {
+    case 'claude':
+      return <span className="text-purple-400 dark:text-purple-300">claude</span>
+    case 'codex':
+      return <span className="text-emerald-500 dark:text-emerald-400">codex</span>
+    default:
+      return <span className="text-gray-400 dark:text-gray-700">&mdash;</span>
+  }
+}
+
 function RunnerCell({ runner }: { runner: string }) {
   switch (runner) {
     case 'tmux':
@@ -38,15 +49,16 @@ function DepsCell({ deps }: { deps: string[] }) {
 }
 
 const columns = [
-  { key: 'id', label: 'ID', width: 'w-[5.5rem]' },
+  { key: 'id', label: 'ID', width: 'w-[4.5rem]' },
   { key: 'title', label: 'TITLE', width: 'min-w-[10rem] flex-1' },
-  { key: 'status', label: 'STATUS', width: 'w-[9rem]' },
+  { key: 'status', label: 'STATUS', width: 'w-[8.5rem]' },
+  { key: 'backend', label: 'BACKEND', width: 'w-[5.5rem]' },
   { key: 'runner', label: 'RUNNER', width: 'w-[5rem]' },
-  { key: 'irc', label: 'IRC', width: 'w-[9rem]' },
-  { key: 'pid', label: 'PID', width: 'w-[7rem]' },
+  { key: 'pid', label: 'PID', width: 'w-[6rem]' },
+  { key: 'irc', label: 'IRC', width: 'w-[7.5rem]' },
   { key: 'deps', label: 'DEPS', width: 'w-[8rem]' },
-  { key: 'note', label: 'NOTE', width: 'w-[12rem]' },
-  { key: 'updated', label: 'UPDATED', width: 'w-[6.5rem]' },
+  { key: 'note', label: 'NOTE', width: 'w-[10rem]' },
+  { key: 'updated', label: 'UPDATED', width: 'w-[6rem]' },
 ] as const
 
 export function TaskTable({ tasks, selectedId, onSelect }: TaskTableProps) {
@@ -95,19 +107,22 @@ export function TaskTable({ tasks, selectedId, onSelect }: TaskTableProps) {
                   <StatusBadge status={task.status} />
                 </td>
                 <td className="py-1.5 px-1.5">
+                  <BackendCell backend={task.backend} />
+                </td>
+                <td className="py-1.5 px-1.5">
                   <RunnerCell runner={task.runner} />
+                </td>
+                <td className="py-1.5 px-1.5">
+                  <PidCell pid={task.shell_pid} alive={task.pid_alive} />
                 </td>
                 <td className="py-1.5 px-1.5">
                   {task.irc_name ? (
                     <span className="text-gray-700 dark:text-gray-300">
-                      {truncate(task.irc_name, 14)}
+                      {truncate(task.irc_name, 10)}
                     </span>
                   ) : (
                     <span className="text-gray-400 dark:text-gray-700">&mdash;</span>
                   )}
-                </td>
-                <td className="py-1.5 px-1.5">
-                  <PidCell pid={task.shell_pid} alive={task.pid_alive} />
                 </td>
                 <td className="py-1.5 px-1.5">
                   <DepsCell deps={task.depends_on} />

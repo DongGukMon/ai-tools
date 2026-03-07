@@ -17,6 +17,17 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
+function BackendValue({ backend }: { backend: string }) {
+  switch (backend) {
+    case 'claude':
+      return <span className="text-purple-400 dark:text-purple-300">claude</span>
+    case 'codex':
+      return <span className="text-emerald-500 dark:text-emerald-400">codex</span>
+    default:
+      return <span className="text-gray-400 dark:text-gray-600">&mdash;</span>
+  }
+}
+
 function RunnerValue({ runner }: { runner: string }) {
   switch (runner) {
     case 'tmux':
@@ -83,6 +94,7 @@ export function TaskDetail({ task, onClose }: TaskDetailProps) {
             </Field>
             <Field label="Title">{task.title}</Field>
             <Field label="Status"><StatusBadge status={task.status} /></Field>
+            <Field label="Backend"><BackendValue backend={task.backend} /></Field>
             <Field label="Difficulty">
               {task.difficulty || 'default'}
             </Field>

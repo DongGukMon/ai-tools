@@ -26,6 +26,7 @@ export interface Task {
   description: string
   cwd: string
   status: TaskStatus
+  backend: string
   runner: string
   irc_name: string
   master_irc_name: string
