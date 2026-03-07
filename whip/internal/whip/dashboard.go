@@ -228,6 +228,8 @@ func (m DashboardModel) View() string {
 	} else {
 		b.WriteString(m.renderTable())
 		b.WriteString("\n")
+		b.WriteString(" " + lipgloss.NewStyle().Foreground(colorPrimary).Render(strings.Repeat("━", w-2)))
+		b.WriteString("\n")
 		b.WriteString(m.renderSummary())
 	}
 
@@ -342,9 +344,10 @@ func (m DashboardModel) renderSummary() string {
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(colorDim).
 		Padding(0, 2).
+		MarginLeft(2).
 		Render(content)
 
-	return "  " + box
+	return box
 }
 
 func (m DashboardModel) renderPeers() string {
@@ -375,9 +378,10 @@ func (m DashboardModel) renderPeers() string {
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(colorDim).
 		Padding(0, 2).
+		MarginLeft(2).
 		Render(label + "  " + content)
 
-	return "  " + box
+	return box
 }
 
 func (m DashboardModel) renderFooter() string {
