@@ -6,18 +6,26 @@ PLUGIN_ROOT="$(dirname "$SCRIPT_DIR")"
 
 REPO="bang9/ai-tools"
 BINARY_NAME="whip"
-
-# Check if binary is already available in PATH
-if command -v "$BINARY_NAME" &> /dev/null; then
-    exit 0
-fi
-
 INSTALL_DIR="$HOME/.local/bin"
 INSTALLED_BINARY="$INSTALL_DIR/$BINARY_NAME"
 
-# Check if already installed
-if [ -x "$INSTALLED_BINARY" ]; then
-    exit 0
+# Get expected version from plugin.json
+EXPECTED_VERSION=$(grep '"version"' "$PLUGIN_ROOT/.claude-plugin/plugin.json" | head -1 | cut -d'"' -f4)
+
+# Find binary and check version
+BINARY_PATH=""
+if command -v "$BINARY_NAME" &> /dev/null; then
+    BINARY_PATH="$(command -v "$BINARY_NAME")"
+elif [ -x "$INSTALLED_BINARY" ]; then
+    BINARY_PATH="$INSTALLED_BINARY"
+fi
+
+if [ -n "$BINARY_PATH" ]; then
+    INSTALLED_VERSION=$("$BINARY_PATH" --version 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' || echo "")
+    if [ "$INSTALLED_VERSION" = "$EXPECTED_VERSION" ]; then
+        exit 0  # up to date
+    fi
+    echo "Upgrading $BINARY_NAME from ${INSTALLED_VERSION:-unknown} to $EXPECTED_VERSION..." >&2
 fi
 
 mkdir -p "$INSTALL_DIR"
@@ -43,17 +51,8 @@ case "${OS}-${ARCH}" in
     *) echo "Unsupported platform: ${OS}/${ARCH}. Supported: darwin/arm64, darwin/amd64, linux/amd64" >&2; exit 1 ;;
 esac
 
+VERSION="$EXPECTED_VERSION"
 DOWNLOAD_NAME="${BINARY_NAME}-${OS}-${ARCH}"
-
-# Get latest release version
-echo "Fetching latest release version..." >&2
-VERSION=$(curl -sfSL "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name"' | head -1 | cut -d'"' -f4)
-
-if [ -z "$VERSION" ]; then
-    echo "Failed to fetch latest version, using fallback v1.0.0" >&2
-    VERSION="v1.0.0"
-fi
-
 DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/${DOWNLOAD_NAME}"
 
 echo "Downloading whip ${VERSION}..." >&2
@@ -64,9 +63,21 @@ if command -v curl &> /dev/null; then
         chmod +x "$INSTALLED_BINARY"
         echo "whip ${VERSION} installed to $INSTALLED_BINARY" >&2
 
-        # Also ensure required tools
+        # Also ensure required companion tools are at expected version
         for tool in claude-irc webform; do
-            if ! command -v "$tool" &> /dev/null && ! [ -x "$INSTALL_DIR/$tool" ]; then
+            TOOL_PATH=""
+            if command -v "$tool" &> /dev/null; then
+                TOOL_PATH="$(command -v "$tool")"
+            elif [ -x "$INSTALL_DIR/$tool" ]; then
+                TOOL_PATH="$INSTALL_DIR/$tool"
+            fi
+
+            TOOL_VERSION=""
+            if [ -n "$TOOL_PATH" ]; then
+                TOOL_VERSION=$("$TOOL_PATH" --version 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' || echo "")
+            fi
+
+            if [ "$TOOL_VERSION" != "$VERSION" ]; then
                 TOOL_URL="https://github.com/${REPO}/releases/download/${VERSION}/${tool}-${OS}-${ARCH}"
                 if curl -fsSL -o "$INSTALL_DIR/$tool" "$TOOL_URL" 2>/dev/null; then
                     chmod +x "$INSTALL_DIR/$tool"

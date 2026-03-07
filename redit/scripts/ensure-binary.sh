@@ -5,12 +5,23 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_ROOT="$(dirname "$SCRIPT_DIR")"
 BIN_DIR="$PLUGIN_ROOT/bin"
 MCP_BINARY="$BIN_DIR/redit-mcp"
+VERSION_FILE="$BIN_DIR/.redit-mcp-version"
 
 REPO="bang9/ai-tools"
 
-# Check if binary exists and is executable
+# Get expected version from plugin.json
+EXPECTED_VERSION=$(grep '"version"' "$PLUGIN_ROOT/.claude-plugin/plugin.json" | head -1 | cut -d'"' -f4)
+
+# Check if binary exists and is at expected version
 if [ -x "$MCP_BINARY" ]; then
-    exit 0
+    INSTALLED_VERSION=""
+    if [ -f "$VERSION_FILE" ]; then
+        INSTALLED_VERSION=$(cat "$VERSION_FILE")
+    fi
+    if [ "$INSTALLED_VERSION" = "$EXPECTED_VERSION" ]; then
+        exit 0  # up to date
+    fi
+    echo "Upgrading redit-mcp from ${INSTALLED_VERSION:-unknown} to $EXPECTED_VERSION..." >&2
 fi
 
 mkdir -p "$BIN_DIR"
@@ -31,35 +42,29 @@ case "$OS" in
     *) echo "Unsupported OS: $OS" >&2; exit 1 ;;
 esac
 
+VERSION="$EXPECTED_VERSION"
 BINARY_NAME="redit-mcp-${OS}-${ARCH}"
 if [ "$OS" = "windows" ]; then
     BINARY_NAME="${BINARY_NAME}.exe"
 fi
 
-# Get latest release version from GitHub API
-echo "Fetching latest release version..." >&2
-VERSION=$(curl -sfSL "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name"' | head -1 | cut -d'"' -f4)
-
-if [ -z "$VERSION" ]; then
-    echo "Failed to fetch latest version, using fallback v1.0.0" >&2
-    VERSION="v1.0.0"
-fi
-
 DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/${BINARY_NAME}"
 
-echo "Downloading redit-mcp ${VERSION} from ${DOWNLOAD_URL}..." >&2
+echo "Downloading redit-mcp ${VERSION}..." >&2
 
 # Try to download pre-built binary
 if command -v curl &> /dev/null; then
     if curl -fsSL -o "$MCP_BINARY" "$DOWNLOAD_URL"; then
         chmod +x "$MCP_BINARY"
-        echo "redit-mcp ${VERSION} downloaded successfully" >&2
+        echo "$VERSION" > "$VERSION_FILE"
+        echo "redit-mcp ${VERSION} installed successfully" >&2
         exit 0
     fi
 elif command -v wget &> /dev/null; then
     if wget -q -O "$MCP_BINARY" "$DOWNLOAD_URL"; then
         chmod +x "$MCP_BINARY"
-        echo "redit-mcp ${VERSION} downloaded successfully" >&2
+        echo "$VERSION" > "$VERSION_FILE"
+        echo "redit-mcp ${VERSION} installed successfully" >&2
         exit 0
     fi
 fi
@@ -71,6 +76,7 @@ if command -v go &> /dev/null; then
     echo "Building redit-mcp from source..." >&2
     cd "$PLUGIN_ROOT"
     go build -o "$MCP_BINARY" ./cmd/redit-mcp
+    echo "$VERSION" > "$VERSION_FILE"
     echo "redit-mcp built successfully" >&2
     exit 0
 fi
