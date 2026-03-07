@@ -14,10 +14,10 @@ import (
 
 // PeerStatus represents the online/offline status of a peer.
 type PeerStatus struct {
-	Name         string
-	Online       bool
-	CWD          string
-	RegisteredAt time.Time
+	Name         string    `json:"name"`
+	Online       bool      `json:"online"`
+	CWD          string    `json:"cwd"`
+	RegisteredAt time.Time `json:"registered_at"`
 }
 
 // CheckPresence pings a peer's Unix socket to check if they're online.
