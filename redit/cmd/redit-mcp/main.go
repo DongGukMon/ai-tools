@@ -84,6 +84,8 @@ type ContentBlock struct {
 	Text string `json:"text"`
 }
 
+var version = "dev"
+
 var store *redit.Store
 
 func main() {
@@ -128,7 +130,7 @@ func handleRequest(req Request) *Response {
 				ProtocolVersion: "2024-11-05",
 				ServerInfo: ServerInfo{
 					Name:    "redit",
-					Version: "1.0.0",
+					Version: version,
 				},
 				Capabilities: Capabilities{
 					Tools: &ToolsCapability{},

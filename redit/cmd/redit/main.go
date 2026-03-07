@@ -8,6 +8,8 @@ import (
 	"github.com/bang9/ai-tools/redit/internal/redit"
 )
 
+var version = "dev"
+
 const usage = `redit - Remote Edit Layer for AI-assisted document editing
 
 Usage:
@@ -164,6 +166,9 @@ func main() {
 			fmt.Fprintf(w, "%s\t%s\t%s\n", item.Key, item.Status, item.Path)
 		}
 		w.Flush()
+
+	case "version", "--version":
+		fmt.Printf("redit version %s\n", version)
 
 	case "help", "-h", "--help":
 		fmt.Print(usage)

@@ -26,16 +26,17 @@ jobs:
         run: |
           cd redit
           mkdir -p dist
+          LDFLAGS="-s -w -X main.version=${{ inputs.version }}"
           # redit CLI
-          GOOS=darwin GOARCH=arm64 go build -o dist/redit-darwin-arm64 ./cmd/redit
-          GOOS=darwin GOARCH=amd64 go build -o dist/redit-darwin-amd64 ./cmd/redit
-          GOOS=linux GOARCH=amd64 go build -o dist/redit-linux-amd64 ./cmd/redit
-          GOOS=windows GOARCH=amd64 go build -o dist/redit-windows-amd64.exe ./cmd/redit
+          GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/redit-darwin-arm64 ./cmd/redit
+          GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/redit-darwin-amd64 ./cmd/redit
+          GOOS=linux GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/redit-linux-amd64 ./cmd/redit
+          GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/redit-windows-amd64.exe ./cmd/redit
           # redit-mcp server
-          GOOS=darwin GOARCH=arm64 go build -o dist/redit-mcp-darwin-arm64 ./cmd/redit-mcp
-          GOOS=darwin GOARCH=amd64 go build -o dist/redit-mcp-darwin-amd64 ./cmd/redit-mcp
-          GOOS=linux GOARCH=amd64 go build -o dist/redit-mcp-linux-amd64 ./cmd/redit-mcp
-          GOOS=windows GOARCH=amd64 go build -o dist/redit-mcp-windows-amd64.exe ./cmd/redit-mcp
+          GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/redit-mcp-darwin-arm64 ./cmd/redit-mcp
+          GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/redit-mcp-darwin-amd64 ./cmd/redit-mcp
+          GOOS=linux GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/redit-mcp-linux-amd64 ./cmd/redit-mcp
+          GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/redit-mcp-windows-amd64.exe ./cmd/redit-mcp
 
       - name: Upload binaries
         env:
