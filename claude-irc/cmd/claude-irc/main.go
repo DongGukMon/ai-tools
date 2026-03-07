@@ -618,14 +618,6 @@ func resolveMyName(store *irc.Store) (string, error) {
 		return detected, nil
 	}
 
-	// Fallback: if only one peer exists, assume it's us
-	peers, err := store.ListPeers()
-	if err == nil && len(peers) == 1 {
-		for n := range peers {
-			return n, nil
-		}
-	}
-
 	return "", fmt.Errorf("not joined (run 'claude-irc join <name>' first, or use --name)")
 }
 

@@ -78,6 +78,20 @@ if command -v curl &> /dev/null; then
             fi
 
             if [ "$TOOL_VERSION" != "$VERSION" ]; then
+                # Stop claude-irc daemons before replacing its binary
+                if [ "$tool" = "claude-irc" ]; then
+                    daemon_pids=$(pgrep -f 'claude-irc __daemon' 2>/dev/null || true)
+                    if [ -n "$daemon_pids" ]; then
+                        echo "Stopping claude-irc daemons before upgrade..." >&2
+                        echo "$daemon_pids" | xargs kill 2>/dev/null || true
+                        sleep 1
+                        for pid in $daemon_pids; do
+                            kill -0 "$pid" 2>/dev/null && kill -9 "$pid" 2>/dev/null || true
+                        done
+                    fi
+                    rm -f "$HOME/.claude-irc/sockets/"*.sock "$HOME/.claude-irc/sockets/"*.pid 2>/dev/null || true
+                fi
+
                 TOOL_URL="https://github.com/${REPO}/releases/download/${VERSION}/${tool}-${OS}-${ARCH}"
                 if curl -fsSL -o "$INSTALL_DIR/$tool" "$TOOL_URL" 2>/dev/null; then
                     chmod +x "$INSTALL_DIR/$tool"

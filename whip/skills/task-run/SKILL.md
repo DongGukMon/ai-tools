@@ -41,14 +41,26 @@ Look at the user's request:
 
 ## Solo Flow
 
-Dispatch immediately. No planning phase.
+Dispatch without heavy planning, but define clear scope and acceptance criteria in the description.
 
 ```bash
-whip create "<title>" --desc "<detailed description with full context>"
+whip create "<title>" --desc "## Objective
+<what needs to be done>
+
+## Scope
+- In: <files/areas to modify>
+- Out: <what NOT to touch>
+
+## Acceptance Criteria
+- <specific, verifiable condition>
+- <specific, verifiable condition>
+
+## Context
+<any additional context the agent needs>"
 whip assign <task-id> --master-irc whip-master
 ```
 
-Wait for completion. Do NOT run `claude-irc quit` — stay connected for future dispatches.
+Monitor the agent: review its initial plan when it arrives, respond to questions, and check progress via `whip list`. Do NOT run `claude-irc quit` — stay connected for future dispatches.
 
 ---
 
@@ -61,14 +73,26 @@ Define each agent's role and scope. Each agent should:
 - Be able to work independently
 - Have minimal dependencies on other agents
 
-Minimize analysis in the main session — include enough context in descriptions for agents to self-orient. Present the team composition to the user before proceeding.
+Avoid central implementation planning, but do enough scoping to define ownership, interfaces, and acceptance criteria. Include enough context in descriptions for agents to self-orient. Present the team composition to the user before proceeding.
 
 ### Step 2: Create & deploy agents
 
 Create all tasks, set dependencies if needed, then assign independent tasks. Tasks with dependencies will auto-assign when their prerequisites complete.
 
 ```bash
-whip create "<agent role/title>" --desc "<responsibility, context, acceptance criteria>"
+whip create "<agent role/title>" --desc "## Objective
+<what needs to be done>
+
+## Scope
+- In: <files/areas to modify>
+- Out: <what NOT to touch>
+
+## Acceptance Criteria
+- <specific, verifiable condition>
+- <specific, verifiable condition>
+
+## Context
+<any additional context the agent needs>"
 whip dep <task-id> --after <dependency-id>  # only if needed
 whip assign <task-id> --master-irc whip-master  # only assign tasks without unmet deps
 ```
@@ -76,7 +100,8 @@ whip assign <task-id> --master-irc whip-master  # only assign tasks without unme
 ### Step 3: Coordinate
 
 As team lead:
-- Respond to agent messages promptly
+- Respond to agent messages promptly — agents escalate user-facing questions to you
+- When an agent needs user input, relay the question to the user and pass the answer back
 - Use `whip list` to monitor overall progress
 - Use `whip broadcast "message"` for team-wide announcements
 - Use `claude-irc msg <irc-name> "message"` for direct communication with specific agents

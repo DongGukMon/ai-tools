@@ -55,6 +55,26 @@ fi
 VERSION="$EXPECTED_VERSION"
 DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/${DOWNLOAD_NAME}"
 
+# Stop running claude-irc daemons before replacing the binary.
+# Daemons will be restarted naturally by the next `claude-irc join`.
+stop_claude_irc_daemons() {
+    local daemon_pids
+    daemon_pids=$(pgrep -f 'claude-irc __daemon' 2>/dev/null || true)
+    if [ -n "$daemon_pids" ]; then
+        echo "Stopping claude-irc daemons before upgrade..." >&2
+        echo "$daemon_pids" | xargs kill 2>/dev/null || true
+        sleep 1
+        # Force kill any that didn't exit gracefully
+        for pid in $daemon_pids; do
+            kill -0 "$pid" 2>/dev/null && kill -9 "$pid" 2>/dev/null || true
+        done
+    fi
+    # Clean up stale socket/pid files
+    rm -f "$HOME/.claude-irc/sockets/"*.sock "$HOME/.claude-irc/sockets/"*.pid 2>/dev/null || true
+}
+
+stop_claude_irc_daemons
+
 echo "Downloading claude-irc ${VERSION}..." >&2
 
 # Try to download

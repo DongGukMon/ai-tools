@@ -33,6 +33,12 @@ func (s TaskStatus) IsActive() bool {
 	return s == StatusAssigned || s == StatusInProgress
 }
 
+type Note struct {
+	Timestamp time.Time `json:"timestamp"`
+	Status    string    `json:"status"`
+	Content   string    `json:"content"`
+}
+
 type Task struct {
 	ID            string     `json:"id"`
 	Title         string     `json:"title"`
@@ -44,6 +50,7 @@ type Task struct {
 	MasterIRCName string     `json:"master_irc_name"`
 	ShellPID      int        `json:"shell_pid"`
 	Note          string     `json:"note"`
+	Notes         []Note     `json:"notes,omitempty"`
 	DependsOn     []string   `json:"depends_on"`
 	CreatedAt     time.Time  `json:"created_at"`
 	UpdatedAt     time.Time  `json:"updated_at"`
@@ -75,6 +82,7 @@ func (t *Task) ValidateTransition(newStatus TaskStatus) error {
 		StatusCreated:    {StatusAssigned},
 		StatusAssigned:   {StatusInProgress, StatusCreated}, // back to created on unassign
 		StatusInProgress: {StatusCompleted, StatusFailed, StatusAssigned},
+		StatusFailed:     {StatusCreated}, // retry: failed → created
 	}
 
 	targets, ok := allowed[t.Status]
@@ -88,6 +96,32 @@ func (t *Task) ValidateTransition(newStatus TaskStatus) error {
 		}
 	}
 	return fmt.Errorf("cannot transition from %s to %s", t.Status, newStatus)
+}
+
+// AddNote appends a timestamped note to the task's notes history.
+func (t *Task) AddNote(content string) {
+	t.Notes = append(t.Notes, Note{
+		Timestamp: time.Now(),
+		Status:    string(t.Status),
+		Content:   content,
+	})
+	t.Note = content // keep legacy field in sync
+}
+
+// Retry resets a failed task back to created so it can be re-assigned.
+func (t *Task) Retry() error {
+	if t.Status != StatusFailed {
+		return fmt.Errorf("task %s is %s, only failed tasks can be retried", t.ID, t.Status)
+	}
+	t.Status = StatusCreated
+	t.Runner = ""
+	t.IRCName = ""
+	t.MasterIRCName = ""
+	t.ShellPID = 0
+	t.AssignedAt = nil
+	t.CompletedAt = nil
+	t.UpdatedAt = time.Now()
+	return nil
 }
 
 func generateID() string {

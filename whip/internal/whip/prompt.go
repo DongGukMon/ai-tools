@@ -3,6 +3,7 @@ package whip
 import (
 	"fmt"
 	"strings"
+	"time"
 )
 
 func GeneratePrompt(task *Task) string {
@@ -15,8 +16,17 @@ func GeneratePrompt(task *Task) string {
 	fmt.Fprintf(&b, "- ID: %s\n", task.ID)
 	fmt.Fprintf(&b, "- Title: %s\n", task.Title)
 	b.WriteString("- Description:\n")
+	b.WriteString("<task-context>\n")
 	b.WriteString(task.Description)
-	b.WriteString("\n")
+	b.WriteString("\n</task-context>\n")
+
+	if len(task.Notes) > 0 {
+		b.WriteString("\n## Previous Attempt Notes\n")
+		b.WriteString("This task was previously attempted. Review these notes from prior agent(s) before starting:\n\n")
+		for _, n := range task.Notes {
+			fmt.Fprintf(&b, "- [%s] (%s) %s\n", n.Timestamp.Format(time.RFC3339), n.Status, n.Content)
+		}
+	}
 
 	b.WriteString(`
 ## Getting Started
@@ -54,7 +64,7 @@ Before diving in, share your approach with the lead:
 	fmt.Fprintf(&b, "- Coordinate with the lead session (%s) via claude-irc\n", task.MasterIRCName)
 	b.WriteString("  when you need alignment on cross-cutting decisions.\n")
 	b.WriteString("- Check what peers are working on: claude-irc board <peer>\n")
-	b.WriteString("- If you need user input that can't wait, use webform to collect it directly.\n")
+	b.WriteString("- If you need user input, escalate to the lead first. If urgent and the lead is unresponsive, use webform to collect it directly.\n")
 	b.WriteString(`
 ## When to ask the lead
 - Ambiguous requirements or multiple valid approaches — ask which direction
@@ -69,6 +79,23 @@ Before diving in, share your approach with the lead:
 	fmt.Fprintf(&b, "- Update progress notes: whip status %s in_progress --note \"your progress here\"\n", task.ID)
 	b.WriteString(`- If blocked, say what you need specifically so it can be unblocked fast.
 - When you receive a message from the lead session, acknowledge and respond promptly.
+
+## Handling Failure
+If you cannot complete the task, do NOT just mark it failed silently. Before giving up:
+
+1. Write a detailed handoff note explaining:
+   - What was accomplished so far
+   - What went wrong / why it failed
+   - What remains to be done and where the next agent should pick up
+2. Notify the lead:
+`)
+	fmt.Fprintf(&b, "   claude-irc msg %s \"Task %s failed: <reason>. Handoff note written.\"\n",
+		task.MasterIRCName, task.ID)
+	b.WriteString("3. claude-irc quit\n")
+	fmt.Fprintf(&b, "4. whip status %s failed --note \"<detailed handoff note>\"\n", task.ID)
+	b.WriteString(`   (this will auto-terminate the session)
+
+The handoff note is critical — it will be preserved and shown to the next agent assigned to this task after retry.
 
 ## Completing Your Task
 Before marking complete, verify your work (run tests, build checks, or whatever the task requires).

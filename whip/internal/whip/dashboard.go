@@ -226,7 +226,7 @@ func (m DashboardModel) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m DashboardModel) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "esc", "backspace", "q":
+	case "esc", "backspace", "left":
 		m.view = viewList
 		m.selectedTask = nil
 	case "a":
@@ -244,7 +244,7 @@ func (m DashboardModel) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m DashboardModel) updateTmux(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "esc", "backspace", "q":
+	case "esc", "backspace", "left":
 		m.view = viewDetail
 		m.tmuxContent = ""
 	case "enter":
@@ -656,13 +656,11 @@ func (m DashboardModel) renderListFooter() string {
 func (m DashboardModel) renderDetailFooter() string {
 	dot := lipgloss.NewStyle().Foreground(colorDim).Render("  ·  ")
 
-	line := "  " + footerKey("esc", "back")
+	line := "  " + footerKey("←/esc", "back")
 
 	if m.selectedTask != nil && m.selectedTask.Runner == "tmux" && IsTmuxSession(m.selectedTask.ID) {
 		line += dot + footerKey("a", "view tmux")
 	}
-
-	line += dot + footerKey("q", "back")
 
 	return lipgloss.NewStyle().MarginTop(1).Render(line)
 }
@@ -671,7 +669,7 @@ func (m DashboardModel) renderTmuxFooter() string {
 	dot := lipgloss.NewStyle().Foreground(colorDim).Render("  ·  ")
 	refresh := lipgloss.NewStyle().Foreground(colorDim).Render("↻ 2s auto-refreshing")
 
-	line := "  " + footerKey("esc", "back") + dot + footerKey("enter", "attach") + dot + refresh
+	line := "  " + footerKey("←/esc", "back") + dot + footerKey("enter", "attach") + dot + refresh
 
 	return lipgloss.NewStyle().MarginTop(1).Render(line)
 }

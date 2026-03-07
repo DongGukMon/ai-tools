@@ -33,6 +33,7 @@ func main() {
 		attachCmd(),
 		unassignCmd(),
 		statusCmd(),
+		retryCmd(),
 		broadcastCmd(),
 		heartbeatCmd(),
 		killCmd(),
@@ -180,9 +181,6 @@ func showCmd() *cobra.Command {
 				}
 				fmt.Printf("Shell PID:   %d (%s)\n", task.ShellPID, alive)
 			}
-			if task.Note != "" {
-				fmt.Printf("Note:        %s\n", task.Note)
-			}
 			if len(task.DependsOn) > 0 {
 				fmt.Printf("Depends on:  %s\n", strings.Join(task.DependsOn, ", "))
 			}
@@ -193,6 +191,15 @@ func showCmd() *cobra.Command {
 			}
 			if task.CompletedAt != nil {
 				fmt.Printf("Completed:   %s\n", task.CompletedAt.Format(time.RFC3339))
+			}
+
+			if len(task.Notes) > 0 {
+				fmt.Printf("\n--- Notes ---\n")
+				for _, n := range task.Notes {
+					fmt.Printf("[%s] (%s) %s\n", n.Timestamp.Format(time.RFC3339), n.Status, n.Content)
+				}
+			} else if task.Note != "" {
+				fmt.Printf("Note:        %s\n", task.Note)
 			}
 
 			if task.Description != "" {
@@ -422,7 +429,7 @@ func statusCmd() *cobra.Command {
 			}
 
 			if cmd.Flags().Changed("note") {
-				task.Note = note
+				task.AddNote(note)
 			}
 			task.UpdatedAt = time.Now()
 
@@ -462,6 +469,41 @@ func statusCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&note, "note", "", "Progress note")
 	return cmd
+}
+
+func retryCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "retry <id>",
+		Short: "Reset a failed task back to created for re-assignment",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			store, err := whip.NewStore()
+			if err != nil {
+				return err
+			}
+
+			id, err := store.ResolveID(args[0])
+			if err != nil {
+				return err
+			}
+
+			task, err := store.LoadTask(id)
+			if err != nil {
+				return err
+			}
+
+			if err := task.Retry(); err != nil {
+				return err
+			}
+
+			if err := store.SaveTask(task); err != nil {
+				return err
+			}
+
+			fmt.Fprintf(os.Stderr, "Task %s reset to created (was failed). Ready for re-assignment.\n", id)
+			return nil
+		},
+	}
 }
 
 func broadcastCmd() *cobra.Command {
@@ -580,7 +622,7 @@ func killCmd() *cobra.Command {
 			}
 
 			task.Status = whip.StatusFailed
-			task.Note = "killed"
+			task.AddNote("killed")
 			now := time.Now()
 			task.CompletedAt = &now
 			task.UpdatedAt = now
