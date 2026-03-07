@@ -58,17 +58,17 @@ export class WhipAPIClient {
 
   async getInbox(name: string, all?: boolean): Promise<Message[]> {
     const params = all ? '?all=true' : ''
-    return this.request<Message[]>(`/api/inbox/${encodeURIComponent(name)}${params}`)
+    return this.request<Message[]>(`/api/messages/${encodeURIComponent(name)}${params}`)
   }
 
   async markRead(name: string): Promise<void> {
-    await this.request<unknown>(`/api/inbox/${encodeURIComponent(name)}/read`, {
+    await this.request<unknown>(`/api/messages/${encodeURIComponent(name)}/read`, {
       method: 'POST',
     })
   }
 
   async clearInbox(name: string): Promise<void> {
-    await this.request<unknown>(`/api/inbox/${encodeURIComponent(name)}`, {
+    await this.request<unknown>(`/api/messages/${encodeURIComponent(name)}`, {
       method: 'DELETE',
     })
   }

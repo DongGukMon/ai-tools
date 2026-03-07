@@ -1,19 +1,36 @@
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import type { Task } from '../api/types'
+import type { Task, Peer, Message } from '../api/types'
+import { AuthError } from '../api/client'
 import { getClient, clearAuth } from '../stores/auth'
 import { useTasks } from '../hooks/useTasks'
 import { TaskTable } from '../components/TaskTable'
 import { TaskDetail } from '../components/TaskDetail'
 import { SummaryStats } from '../components/SummaryStats'
+import { PeerList } from '../components/PeerList'
+import { Chat, type ChatMessage } from '../components/Chat'
+import { TopicBoard } from '../components/TopicBoard'
 
 type Tab = 'tasks' | 'irc'
+
+interface SentMessage {
+  to: string
+  content: string
+  timestamp: string
+}
 
 export function DashboardPage() {
   const navigate = useNavigate()
   const client = useMemo(() => getClient(), [])
   const [activeTab, setActiveTab] = useState<Tab>('tasks')
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
+
+  // IRC state
+  const [peers, setPeers] = useState<Peer[]>([])
+  const [selectedPeer, setSelectedPeer] = useState<string | null>(null)
+  const [inboxMessages, setInboxMessages] = useState<Message[]>([])
+  const [sentMessages, setSentMessages] = useState<SentMessage[]>([])
+  const [sending, setSending] = useState(false)
 
   const handleAuthError = useCallback(() => {
     clearAuth()
@@ -31,6 +48,79 @@ export function DashboardPage() {
     clearAuth()
     navigate('/')
   }
+
+  // Poll peers every 2s
+  useEffect(() => {
+    if (!client) return
+    let active = true
+    const poll = () => {
+      client.getPeers().then(p => { if (active) setPeers(p) }).catch(err => {
+        if (err instanceof AuthError) handleAuthError()
+      })
+    }
+    poll()
+    const id = setInterval(poll, 2000)
+    return () => { active = false; clearInterval(id) }
+  }, [client, handleAuthError])
+
+  // Poll inbox every 2s
+  useEffect(() => {
+    if (!client) return
+    let active = true
+    const poll = () => {
+      client.getInbox('user', true).then(m => { if (active) setInboxMessages(m) }).catch(() => {})
+    }
+    poll()
+    const id = setInterval(poll, 2000)
+    return () => { active = false; clearInterval(id) }
+  }, [client])
+
+  // Mark messages as read when viewing a peer's chat
+  useEffect(() => {
+    if (!client || !selectedPeer) return
+    const hasUnread = inboxMessages.some(m => m.from === selectedPeer && !m.read)
+    if (hasUnread) {
+      client.markRead('user').catch(() => {})
+    }
+  }, [client, selectedPeer, inboxMessages])
+
+  // Unread counts per peer
+  const unreadCounts: Record<string, number> = {}
+  for (const msg of inboxMessages) {
+    if (!msg.read) {
+      unreadCounts[msg.from] = (unreadCounts[msg.from] || 0) + 1
+    }
+  }
+
+  // Send message handler
+  const handleSend = useCallback(async (content: string) => {
+    if (!client || !selectedPeer) return
+    setSending(true)
+    try {
+      await client.sendMessage(selectedPeer, content)
+      setSentMessages(prev => [...prev, {
+        to: selectedPeer,
+        content,
+        timestamp: new Date().toISOString(),
+      }])
+    } finally {
+      setSending(false)
+    }
+  }, [client, selectedPeer])
+
+  // Merge sent + received for selected peer
+  const chatMessages: ChatMessage[] = selectedPeer
+    ? [
+        ...inboxMessages
+          .filter(m => m.from === selectedPeer)
+          .map(m => ({ from: m.from, content: m.content, timestamp: m.timestamp, direction: 'received' as const })),
+        ...sentMessages
+          .filter(m => m.to === selectedPeer)
+          .map(m => ({ from: 'user', content: m.content, timestamp: m.timestamp, direction: 'sent' as const })),
+      ].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+    : []
+
+  const selectedPeerInfo = peers.find(p => p.name === selectedPeer) ?? null
 
   if (!client) {
     navigate('/')
@@ -97,8 +187,24 @@ export function DashboardPage() {
           </div>
         </div>
       ) : (
-        <div className="py-12 text-center text-gray-400 dark:text-gray-600">
-          IRC view coming soon.
+        <div className="flex gap-0 h-[calc(100vh-10rem)] rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden bg-white dark:bg-[#0F172A]">
+          <PeerList
+            peers={peers}
+            selectedPeer={selectedPeer}
+            unreadCounts={unreadCounts}
+            onSelectPeer={setSelectedPeer}
+          />
+          <div className="flex-1 flex flex-col gap-3 p-3 min-w-0 bg-gray-50 dark:bg-[#0B1120]">
+            <Chat
+              peer={selectedPeerInfo}
+              messages={chatMessages}
+              onSend={handleSend}
+              sending={sending}
+            />
+            {selectedPeer && client && (
+              <TopicBoard client={client} peerName={selectedPeer} />
+            )}
+          </div>
         </div>
       )}
 
