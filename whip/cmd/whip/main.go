@@ -34,6 +34,7 @@ func main() {
 		attachCmd(),
 		unassignCmd(),
 		statusCmd(),
+		approveCmd(),
 		retryCmd(),
 		resumeCmd(),
 		broadcastCmd(),
@@ -53,6 +54,7 @@ func main() {
 
 func createCmd() *cobra.Command {
 	var desc, file, cwd, difficulty string
+	var review bool
 
 	cmd := &cobra.Command{
 		Use:   "create <title>",
@@ -64,6 +66,11 @@ func createCmd() *cobra.Command {
 			// Validate difficulty
 			if difficulty != "" && difficulty != "hard" && difficulty != "medium" && difficulty != "easy" {
 				return fmt.Errorf("invalid difficulty %q: must be hard, medium, or easy", difficulty)
+			}
+
+			// Validate --review: only allowed for medium/hard
+			if review && difficulty != "medium" && difficulty != "hard" {
+				return fmt.Errorf("--review requires --difficulty medium or hard")
 			}
 
 			// Resolve description from --desc, --file, or stdin
@@ -87,6 +94,7 @@ func createCmd() *cobra.Command {
 
 			task := whip.NewTask(title, description, cwd)
 			task.Difficulty = difficulty
+			task.Review = review
 			if err := store.SaveTask(task); err != nil {
 				return err
 			}
@@ -102,6 +110,7 @@ func createCmd() *cobra.Command {
 	cmd.Flags().StringVar(&cwd, "cwd", "", "Working directory (default: current)")
 	cmd.Flags().StringVar(&difficulty, "difficulty", "", "Task difficulty (hard, medium, easy)")
 	cmd.Flags().Lookup("difficulty").Shorthand = "d"
+	cmd.Flags().BoolVar(&review, "review", false, "Require review before completion (medium/hard only)")
 
 	return cmd
 }
@@ -183,6 +192,9 @@ func showCmd() *cobra.Command {
 				diff = "default"
 			}
 			fmt.Printf("Difficulty:  %s\n", diff)
+			if task.Review {
+				fmt.Printf("Review:      yes\n")
+			}
 			fmt.Printf("CWD:         %s\n", task.CWD)
 			if task.Runner != "" {
 				fmt.Printf("Runner:      %s\n", task.Runner)
@@ -487,6 +499,47 @@ func statusCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&note, "note", "", "Progress note")
 	return cmd
+}
+
+func approveCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "approve <id>",
+		Short: "Approve a task in review status (notifies agent to commit and complete)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			store, err := whip.NewStore()
+			if err != nil {
+				return err
+			}
+
+			id, err := store.ResolveID(args[0])
+			if err != nil {
+				return err
+			}
+
+			task, err := store.LoadTask(id)
+			if err != nil {
+				return err
+			}
+
+			if task.Status != whip.StatusReview {
+				return fmt.Errorf("task %s is %s, must be 'review' to approve", id, task.Status)
+			}
+
+			// Notify agent via IRC to commit and complete
+			if task.IRCName != "" {
+				commitMsg := fmt.Sprintf("Task %s approved. Please commit your changes and run `whip status %s completed --note \"...\"` to finalize.", id, id)
+				ircCmd := exec.Command("claude-irc", "msg", task.IRCName, commitMsg)
+				ircCmd.Stderr = os.Stderr
+				if err := ircCmd.Run(); err != nil {
+					return fmt.Errorf("failed to notify agent via IRC: %w", err)
+				}
+			}
+
+			fmt.Fprintf(os.Stderr, "Approved task %s — agent notified to commit and complete\n", id)
+			return nil
+		},
+	}
 }
 
 func retryCmd() *cobra.Command {

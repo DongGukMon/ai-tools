@@ -136,3 +136,29 @@ Set `--difficulty` when creating tasks to control the agent's model and reasonin
 - Prefer `easy` for tasks that are mostly copy-paste or template-driven
 - Use `hard` sparingly — it's slower and more expensive
 - When assembling a team, mix difficulty levels to optimize cost: not every agent needs `hard`
+
+---
+
+## Review Flow
+
+For tasks where you want to review changes before the agent commits, use the `--review` flag. This is only available for `medium` and `hard` difficulty tasks.
+
+### How it works
+
+1. **Create with review**: `whip create "title" --difficulty medium --review --desc "..."`
+2. **Agent works**: The agent's prompt instructs it to NOT commit and to report via `whip status <id> review` when done.
+3. **Review**: Check the agent's changes (e.g., via `git diff` in the task's working directory).
+4. **Approve**: `whip approve <id>` transitions the task to `completed` and notifies the agent via IRC to commit.
+   - In the dashboard, press `A` on a task in `review` status to approve it.
+
+### When to use review
+
+- Tasks that modify shared/critical code paths
+- When you want to verify changes before they're committed
+- Complex refactors where the output quality matters
+
+### When NOT to use review
+
+- `easy` tasks (simple/mechanical — let them commit directly)
+- Tasks with no difficulty set (default flow)
+- When speed is more important than review

@@ -13,13 +13,14 @@ const (
 	StatusCreated    TaskStatus = "created"
 	StatusAssigned   TaskStatus = "assigned"
 	StatusInProgress TaskStatus = "in_progress"
+	StatusReview     TaskStatus = "review"
 	StatusCompleted  TaskStatus = "completed"
 	StatusFailed     TaskStatus = "failed"
 )
 
 func (s TaskStatus) IsValid() bool {
 	switch s {
-	case StatusCreated, StatusAssigned, StatusInProgress, StatusCompleted, StatusFailed:
+	case StatusCreated, StatusAssigned, StatusInProgress, StatusReview, StatusCompleted, StatusFailed:
 		return true
 	}
 	return false
@@ -53,6 +54,7 @@ type Task struct {
 	Note          string     `json:"note"`
 	Notes         []Note     `json:"notes,omitempty"`
 	Difficulty    string     `json:"difficulty,omitempty"`
+	Review        bool       `json:"review,omitempty"`
 	DependsOn     []string   `json:"depends_on"`
 	CreatedAt     time.Time  `json:"created_at"`
 	UpdatedAt     time.Time  `json:"updated_at"`
@@ -83,7 +85,8 @@ func (t *Task) ValidateTransition(newStatus TaskStatus) error {
 	allowed := map[TaskStatus][]TaskStatus{
 		StatusCreated:    {StatusAssigned},
 		StatusAssigned:   {StatusInProgress, StatusCreated}, // back to created on unassign
-		StatusInProgress: {StatusCompleted, StatusFailed, StatusAssigned},
+		StatusInProgress: {StatusCompleted, StatusReview, StatusFailed, StatusAssigned},
+		StatusReview:     {StatusCompleted, StatusFailed},
 		StatusFailed:     {StatusCreated}, // retry: failed → created
 	}
 

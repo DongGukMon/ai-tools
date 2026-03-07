@@ -23,10 +23,13 @@ var (
 	colorSubtle    = lipgloss.Color("#6B7280") // gray-500
 	colorDim       = lipgloss.Color("#374151") // gray-700
 
+	colorReview = lipgloss.Color("#F472B6") // pink
+
 	// ── Status styles ──────────────────────────────────────────────
 	statusCreated    = lipgloss.NewStyle().Foreground(colorSubtle)
 	statusAssigned   = lipgloss.NewStyle().Foreground(colorWarning)
 	statusInProgress = lipgloss.NewStyle().Foreground(colorSecondary).Bold(true)
+	statusReview     = lipgloss.NewStyle().Foreground(colorReview).Bold(true)
 	statusCompleted  = lipgloss.NewStyle().Foreground(colorSuccess)
 	statusFailed     = lipgloss.NewStyle().Foreground(colorDanger)
 
@@ -41,6 +44,7 @@ var (
 type tickMsg time.Time
 type cleanedMsg int
 type retryResultMsg struct{ err error }
+type approveResultMsg struct{ err error }
 
 type peerInfo struct {
 	Name   string
@@ -179,6 +183,12 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.loadTasks()
 
+	case approveResultMsg:
+		if msg.err != nil {
+			m.err = msg.err
+		}
+		return m, m.loadTasks()
+
 	case resumeResultMsg:
 		if msg.err != nil {
 			m.err = msg.err
@@ -250,13 +260,22 @@ func (m DashboardModel) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.detailScroll--
 		}
 	case "down", "j":
-		m.detailScroll++
+		if m.selectedTask != nil {
+			maxLines := strings.Count(m.selectedTask.Description, "\n")
+			if m.detailScroll < maxLines {
+				m.detailScroll++
+			}
+		}
 	case "a":
 		if m.selectedTask != nil && m.selectedTask.Runner == "tmux" && IsTmuxSession(m.selectedTask.ID) {
 			m.view = viewTmux
 			if content, err := CaptureTmuxPane(m.selectedTask.ID); err == nil {
 				m.tmuxContent = content
 			}
+		}
+	case "A":
+		if m.selectedTask != nil && m.selectedTask.Status == StatusReview {
+			return m, m.approveTask(m.selectedTask.ID)
 		}
 	case "R":
 		if m.selectedTask != nil && m.selectedTask.Status == StatusFailed {
@@ -314,6 +333,27 @@ func (m DashboardModel) retryTask(taskID string) tea.Cmd {
 		}
 
 		return retryResultMsg{}
+	}
+}
+
+func (m DashboardModel) approveTask(taskID string) tea.Cmd {
+	return func() tea.Msg {
+		task, err := m.store.LoadTask(taskID)
+		if err != nil {
+			return approveResultMsg{err: err}
+		}
+
+		if task.Status != StatusReview {
+			return approveResultMsg{err: fmt.Errorf("task %s is %s, must be review to approve", taskID, task.Status)}
+		}
+
+		// Notify agent via IRC to commit and complete (don't transition status)
+		if task.IRCName != "" {
+			msg := fmt.Sprintf("Task %s approved. Please commit your changes and run `whip status %s completed --note \"...\"` to finalize.", taskID, taskID)
+			exec.Command("claude-irc", "msg", task.IRCName, msg).Run()
+		}
+
+		return approveResultMsg{}
 	}
 }
 
@@ -495,6 +535,7 @@ func (m DashboardModel) renderDetailView(w int) string {
 		{"Title", valStyle.Render(t.Title)},
 		{"Status", renderStatus(t.Status)},
 		{"Difficulty", valStyle.Render(diffDisplay)},
+		{"Review", valStyle.Render(fmt.Sprintf("%v", t.Review))},
 		{"Runner", renderRunner(t.Runner)},
 	}
 
@@ -726,6 +767,9 @@ func (m DashboardModel) renderSummary() string {
 	if n := counts[StatusInProgress]; n > 0 {
 		parts = append(parts, statusInProgress.Render(fmt.Sprintf("▶ %d in_progress", n)))
 	}
+	if n := counts[StatusReview]; n > 0 {
+		parts = append(parts, statusReview.Render(fmt.Sprintf("◎ %d review", n)))
+	}
 	if n := counts[StatusCompleted]; n > 0 {
 		parts = append(parts, statusCompleted.Render(fmt.Sprintf("✓ %d completed", n)))
 	}
@@ -801,6 +845,9 @@ func (m DashboardModel) renderDetailFooter() string {
 	if m.selectedTask != nil && m.selectedTask.Runner == "tmux" && IsTmuxSession(m.selectedTask.ID) {
 		line += dot + footerKey("a", "attach tmux")
 	}
+	if m.selectedTask != nil && m.selectedTask.Status == StatusReview {
+		line += dot + footerKey("A", "approve")
+	}
 	if m.selectedTask != nil && m.selectedTask.Status == StatusFailed {
 		line += dot + footerKey("R", "retry")
 	}
@@ -830,6 +877,8 @@ func renderStatus(s TaskStatus) string {
 		return statusAssigned.Render("◐ assigned")
 	case StatusInProgress:
 		return statusInProgress.Render("▶ in_progress")
+	case StatusReview:
+		return statusReview.Render("◎ review")
 	case StatusCompleted:
 		return statusCompleted.Render("✓ completed")
 	case StatusFailed:

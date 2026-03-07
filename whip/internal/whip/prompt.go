@@ -101,11 +101,35 @@ The handoff note is critical — it will be preserved and shown to the next agen
 Before marking complete, verify your work (run tests, build checks, or whatever the task requires).
 
 `)
-	fmt.Fprintf(&b, "1. claude-irc msg %s \"Task %s complete. Here's what I delivered: <concrete summary>\"\n",
-		task.MasterIRCName, task.ID)
-	b.WriteString("2. claude-irc quit\n")
-	fmt.Fprintf(&b, "3. whip status %s completed --note \"final summary of what was delivered\"\n", task.ID)
-	b.WriteString("   (this will auto-terminate the session)\n")
+	if task.Review {
+		// Review flow: agent reports for review, does NOT commit
+		b.WriteString("**IMPORTANT: This task requires review before completion.**\n")
+		b.WriteString("- Do NOT commit your changes.\n")
+		b.WriteString("- When your work is ready, report for review instead of marking completed.\n\n")
+		fmt.Fprintf(&b, "1. claude-irc msg %s \"Task %s ready for review. Here's what I delivered: <concrete summary>\"\n",
+			task.MasterIRCName, task.ID)
+		fmt.Fprintf(&b, "2. whip status %s review --note \"summary of what was delivered\"\n", task.ID)
+		b.WriteString("3. Wait for the lead to approve. You will receive an IRC message when approved.\n")
+		b.WriteString("4. After receiving approval: commit your changes, then run:\n")
+		b.WriteString("   claude-irc quit\n")
+		fmt.Fprintf(&b, "   whip status %s completed --note \"final summary\"\n", task.ID)
+		b.WriteString("   (this will auto-terminate the session)\n")
+	} else if task.Difficulty == "easy" {
+		// Easy tasks: agent MUST commit before completing
+		b.WriteString("**IMPORTANT: You must commit your changes before marking complete.**\n\n")
+		b.WriteString("1. Stage and commit your changes with a meaningful commit message.\n")
+		fmt.Fprintf(&b, "2. claude-irc msg %s \"Task %s complete. Here's what I delivered: <concrete summary>\"\n",
+			task.MasterIRCName, task.ID)
+		b.WriteString("3. claude-irc quit\n")
+		fmt.Fprintf(&b, "4. whip status %s completed --note \"final summary of what was delivered\"\n", task.ID)
+		b.WriteString("   (this will auto-terminate the session)\n")
+	} else {
+		fmt.Fprintf(&b, "1. claude-irc msg %s \"Task %s complete. Here's what I delivered: <concrete summary>\"\n",
+			task.MasterIRCName, task.ID)
+		b.WriteString("2. claude-irc quit\n")
+		fmt.Fprintf(&b, "3. whip status %s completed --note \"final summary of what was delivered\"\n", task.ID)
+		b.WriteString("   (this will auto-terminate the session)\n")
+	}
 
 	return b.String()
 }
