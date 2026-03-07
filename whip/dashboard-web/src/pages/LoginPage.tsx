@@ -12,6 +12,26 @@ export function LoginPage() {
 
   useEffect(() => {
     const autoConnect = async () => {
+      // Check URL param for auto-connect
+      const params = new URLSearchParams(window.location.search)
+      const urlParam = params.get('url')
+      if (urlParam) {
+        // Clear the URL param from address bar
+        window.history.replaceState({}, '', window.location.pathname)
+        const parsed = parseConnectURL(urlParam)
+        if (parsed) {
+          try {
+            const c = new WhipAPIClient(parsed.baseURL, parsed.token)
+            await c.getPeers()
+            saveAuth(parsed)
+            navigate('/dashboard')
+            return
+          } catch {
+            // Fall through to normal flow
+          }
+        }
+      }
+
       const client = getClient()
       if (!client) {
         setChecking(false)

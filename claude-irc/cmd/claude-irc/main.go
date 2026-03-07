@@ -703,8 +703,12 @@ func serveCmd() *cobra.Command {
 					if publicURL != "" {
 						connectURL = publicURL
 					}
+					fullURL := fmt.Sprintf("%s?token=%s", connectURL, info.Token)
+					webURL := fmt.Sprintf("https://whip.bang9.dev?url=%s", fullURL)
 					fmt.Fprintf(os.Stderr, "claude-irc serve started.\n")
-					fmt.Fprintf(os.Stderr, "Connect URL: %s?token=%s\n", connectURL, info.Token)
+					fmt.Fprintf(os.Stderr, "Connect URL: %s\n", fullURL)
+					fmt.Fprintf(os.Stderr, "\nShortcuts: [o] open in browser  [c] copy URL  [q] quit\n")
+					go serveKeyboardLoop(webURL, fullURL, cancel)
 				},
 			})
 		},
@@ -776,6 +780,46 @@ func upgradeCmd() *cobra.Command {
 			fmt.Fprintf(os.Stderr, "Updated to %s\n", latestVersion)
 			return nil
 		},
+	}
+}
+
+func serveKeyboardLoop(webURL, connectURL string, cancel context.CancelFunc) {
+	// Set terminal to raw mode to read single keystrokes
+	// Save and restore terminal state using stty
+	rawState, err := exec.Command("stty", "-g").Output()
+	if err != nil {
+		return
+	}
+	defer func() {
+		exec.Command("stty", strings.TrimSpace(string(rawState))).Run()
+	}()
+	exec.Command("stty", "raw", "-echo").Run()
+
+	buf := make([]byte, 1)
+	for {
+		n, err := os.Stdin.Read(buf)
+		if err != nil || n == 0 {
+			return
+		}
+		switch buf[0] {
+		case 'o', 'O':
+			exec.Command("stty", strings.TrimSpace(string(rawState))).Run()
+			exec.Command("open", webURL).Run()
+			fmt.Fprintf(os.Stderr, "\rOpened in browser\n")
+			exec.Command("stty", "raw", "-echo").Run()
+		case 'c', 'C':
+			exec.Command("stty", strings.TrimSpace(string(rawState))).Run()
+			cmd := exec.Command("pbcopy")
+			cmd.Stdin = strings.NewReader(connectURL)
+			cmd.Run()
+			fmt.Fprintf(os.Stderr, "\rCopied to clipboard\n")
+			exec.Command("stty", "raw", "-echo").Run()
+		case 'q', 'Q', 3: // 3 = Ctrl+C
+			exec.Command("stty", strings.TrimSpace(string(rawState))).Run()
+			fmt.Fprintf(os.Stderr, "\r\n")
+			cancel()
+			return
+		}
 	}
 }
 
