@@ -69,6 +69,7 @@ type DashboardModel struct {
 	cursor        int
 	view          viewState
 	selectedTask  *Task
+	detailScroll  int
 	tmuxContent   string
 	pendingAttach string
 }
@@ -231,6 +232,7 @@ func (m DashboardModel) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		if len(m.tasks) > 0 && m.cursor < len(m.tasks) {
 			m.selectedTask = m.tasks[m.cursor]
+			m.detailScroll = 0
 			m.view = viewDetail
 		}
 	}
@@ -242,6 +244,13 @@ func (m DashboardModel) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "esc", "backspace", "left":
 		m.view = viewList
 		m.selectedTask = nil
+		m.detailScroll = 0
+	case "up", "k":
+		if m.detailScroll > 0 {
+			m.detailScroll--
+		}
+	case "down", "j":
+		m.detailScroll++
 	case "a":
 		if m.selectedTask != nil && m.selectedTask.Runner == "tmux" && IsTmuxSession(m.selectedTask.ID) {
 			m.view = viewTmux
@@ -518,9 +527,44 @@ func (m DashboardModel) renderDetailView(w int) string {
 	// Description
 	if t.Description != "" {
 		b.WriteString("\n")
-		b.WriteString("  " + lipgloss.NewStyle().Bold(true).Foreground(colorAccent).Render("Description") + "\n")
+		descLabel := "Description"
+		descLines := strings.Split(t.Description, "\n")
+
+		// Calculate available lines for description:
+		// header(2) + breadcrumb(2) + fields + desc header(2) + footer(3) + padding(2)
+		overhead := 2 + 2 + len(fields) + 2 + 3 + 2
+		maxDescLines := m.height - overhead
+		if maxDescLines < 3 {
+			maxDescLines = 3
+		}
+
+		// Clamp scroll
+		totalDesc := len(descLines)
+		maxScroll := totalDesc - maxDescLines
+		if maxScroll < 0 {
+			maxScroll = 0
+		}
+		if m.detailScroll > maxScroll {
+			m.detailScroll = maxScroll
+		}
+
+		// Scroll indicator
+		if totalDesc > maxDescLines {
+			scrollInfo := lipgloss.NewStyle().Foreground(colorSubtle).Render(
+				fmt.Sprintf(" (%d-%d/%d ↑↓)", m.detailScroll+1, min(m.detailScroll+maxDescLines, totalDesc), totalDesc))
+			descLabel += scrollInfo
+		}
+
+		b.WriteString("  " + lipgloss.NewStyle().Bold(true).Foreground(colorAccent).Render("Description") + descLabel[len("Description"):] + "\n")
 		b.WriteString("  " + dimStyle.Render(strings.Repeat("─", w-4)) + "\n")
-		for _, line := range strings.Split(t.Description, "\n") {
+
+		// Apply scroll window
+		end := m.detailScroll + maxDescLines
+		if end > totalDesc {
+			end = totalDesc
+		}
+		visible := descLines[m.detailScroll:end]
+		for _, line := range visible {
 			b.WriteString("  " + lipgloss.NewStyle().Foreground(colorMuted).Render(line) + "\n")
 		}
 	}
@@ -746,7 +790,7 @@ func (m DashboardModel) renderListFooter() string {
 func (m DashboardModel) renderDetailFooter() string {
 	dot := lipgloss.NewStyle().Foreground(colorDim).Render("  ·  ")
 
-	line := "  " + footerKey("←/esc", "back")
+	line := "  " + footerKey("←/esc", "back") + dot + footerKey("↑↓", "scroll")
 
 	if m.selectedTask != nil && m.selectedTask.Runner == "tmux" && IsTmuxSession(m.selectedTask.ID) {
 		line += dot + footerKey("a", "attach tmux")
