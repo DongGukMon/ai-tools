@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"text/tabwriter"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"github.com/bang9/ai-tools/claude-irc/internal/irc"
 	"github.com/bang9/ai-tools/shared/upgrade"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 var (
@@ -320,7 +322,7 @@ func checkCmd() *cobra.Command {
 				}
 				hookOutput := map[string]interface{}{
 					"hookSpecificOutput": map[string]interface{}{
-						"hookEventName":    "PreToolUse",
+						"hookEventName":     "PreToolUse",
 						"additionalContext": strings.Join(lines, "\n"),
 					},
 				}
@@ -707,8 +709,10 @@ func serveCmd() *cobra.Command {
 					webURL := fmt.Sprintf("https://whip.bang9.dev?url=%s", fullURL)
 					fmt.Fprintf(os.Stderr, "claude-irc serve started.\n")
 					fmt.Fprintf(os.Stderr, "Connect URL: %s\n", fullURL)
-					fmt.Fprintf(os.Stderr, "\nShortcuts: [o] open in browser  [c] copy URL  [q] quit\n")
-					go serveKeyboardLoop(webURL, fullURL, cancel)
+					if keyboardShortcutsAvailable() {
+						fmt.Fprintf(os.Stderr, "\nShortcuts: [o] open in browser  [c] copy URL  [q] quit\n")
+						go serveKeyboardLoop(ctx, webURL, fullURL, cancel)
+					}
 				},
 			})
 		},
@@ -717,6 +721,14 @@ func serveCmd() *cobra.Command {
 	cmd.Flags().IntVar(&port, "port", 8585, "HTTP server port")
 	cmd.Flags().StringVar(&tunnel, "tunnel", "", "Cloudflare Tunnel hostname (empty for quick tunnel, or domain like irc.bang9.dev)")
 	return cmd
+}
+
+type keyboardLoopDeps struct {
+	stdin    io.Reader
+	stderr   io.Writer
+	makeRaw  func() (func(), error)
+	openURL  func(string) error
+	copyText func(string) error
 }
 
 func upgradeCmd() *cobra.Command {
@@ -734,40 +746,79 @@ func upgradeCmd() *cobra.Command {
 	}
 }
 
-func serveKeyboardLoop(webURL, connectURL string, cancel context.CancelFunc) {
-	// Set terminal to raw mode to read single keystrokes
-	// Save and restore terminal state using stty
-	rawState, err := exec.Command("stty", "-g").Output()
-	if err != nil {
+func keyboardShortcutsAvailable() bool {
+	return term.IsTerminal(int(os.Stdin.Fd()))
+}
+
+func serveKeyboardLoop(ctx context.Context, webURL, connectURL string, cancel context.CancelFunc) {
+	fd := int(os.Stdin.Fd())
+	if !term.IsTerminal(fd) {
 		return
 	}
-	defer func() {
-		exec.Command("stty", strings.TrimSpace(string(rawState))).Run()
+	serveKeyboardLoopWithDeps(ctx, webURL, connectURL, cancel, keyboardLoopDeps{
+		stdin:  os.Stdin,
+		stderr: os.Stderr,
+		makeRaw: func() (func(), error) {
+			state, err := term.MakeRaw(fd)
+			if err != nil {
+				return nil, err
+			}
+			return func() {
+				_ = term.Restore(fd, state)
+			}, nil
+		},
+		openURL: func(url string) error {
+			return exec.Command("open", url).Run()
+		},
+		copyText: func(text string) error {
+			cmd := exec.Command("pbcopy")
+			cmd.Stdin = strings.NewReader(text)
+			return cmd.Run()
+		},
+	})
+}
+
+func serveKeyboardLoopWithDeps(ctx context.Context, webURL, connectURL string, cancel context.CancelFunc, deps keyboardLoopDeps) {
+	restore, err := deps.makeRaw()
+	if err != nil {
+		fmt.Fprintf(deps.stderr, "\nShortcuts unavailable: %v\n", err)
+		return
+	}
+	var restoreOnce sync.Once
+	restoreTerminal := func() {
+		restoreOnce.Do(func() {
+			if restore != nil {
+				restore()
+			}
+		})
+	}
+	defer restoreTerminal()
+	go func() {
+		<-ctx.Done()
+		restoreTerminal()
 	}()
-	exec.Command("stty", "raw", "-echo").Run()
 
 	buf := make([]byte, 1)
 	for {
-		n, err := os.Stdin.Read(buf)
+		n, err := deps.stdin.Read(buf)
 		if err != nil || n == 0 {
 			return
 		}
 		switch buf[0] {
 		case 'o', 'O':
-			exec.Command("stty", strings.TrimSpace(string(rawState))).Run()
-			exec.Command("open", webURL).Run()
-			fmt.Fprintf(os.Stderr, "\rOpened in browser\n")
-			exec.Command("stty", "raw", "-echo").Run()
+			if err := deps.openURL(webURL); err != nil {
+				fmt.Fprintf(deps.stderr, "\rFailed to open browser: %v\n", err)
+				continue
+			}
+			fmt.Fprintf(deps.stderr, "\rOpened in browser\n")
 		case 'c', 'C':
-			exec.Command("stty", strings.TrimSpace(string(rawState))).Run()
-			cmd := exec.Command("pbcopy")
-			cmd.Stdin = strings.NewReader(connectURL)
-			cmd.Run()
-			fmt.Fprintf(os.Stderr, "\rCopied to clipboard\n")
-			exec.Command("stty", "raw", "-echo").Run()
+			if err := deps.copyText(connectURL); err != nil {
+				fmt.Fprintf(deps.stderr, "\rFailed to copy URL: %v\n", err)
+				continue
+			}
+			fmt.Fprintf(deps.stderr, "\rCopied to clipboard\n")
 		case 'q', 'Q', 3: // 3 = Ctrl+C
-			exec.Command("stty", strings.TrimSpace(string(rawState))).Run()
-			fmt.Fprintf(os.Stderr, "\r\n")
+			fmt.Fprintf(deps.stderr, "\r\n")
 			cancel()
 			return
 		}
