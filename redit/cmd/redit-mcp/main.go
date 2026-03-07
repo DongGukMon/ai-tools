@@ -89,6 +89,14 @@ var version = "dev"
 var store *redit.Store
 
 func main() {
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "version", "--version":
+			fmt.Printf("redit-mcp version %s\n", version)
+			return
+		}
+	}
+
 	var err error
 	store, err = redit.NewStore()
 	if err != nil {

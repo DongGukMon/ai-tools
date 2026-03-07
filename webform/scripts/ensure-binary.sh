@@ -8,12 +8,13 @@ BINARY_NAME="webform"
 INSTALL_MODE="global"
 VERSION_CHECK="cli"
 ENABLE_WINDOWS="false"
+SUPPORTED_PLATFORMS="darwin-arm64 darwin-amd64 linux-amd64"
 BUILD_TARGET="./cmd/webform"
 
 # === Common Logic ===
 # Default no-op hooks (overridden by conf if defined before this point)
-declare -f hook_pre_install > /dev/null 2>&1 || hook_pre_install() { :; }
-declare -f hook_post_install > /dev/null 2>&1 || hook_post_install() { :; }
+declare -f pre_upgrade_hook > /dev/null 2>&1 || pre_upgrade_hook() { :; }
+declare -f post_install_hook > /dev/null 2>&1 || post_install_hook() { :; }
 
 # --- Setup ---
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -83,10 +84,20 @@ else
         darwin|linux) ;;
         *) echo "Unsupported OS: $OS" >&2; exit 1 ;;
     esac
-    case "${OS}-${ARCH}" in
-        darwin-arm64|darwin-amd64|linux-amd64) ;;
-        *) echo "Unsupported platform: ${OS}/${ARCH}. Supported: darwin/arm64, darwin/amd64, linux/amd64" >&2; exit 1 ;;
-    esac
+fi
+
+if [ -n "${SUPPORTED_PLATFORMS:-}" ]; then
+    platform_supported=false
+    for supported in $SUPPORTED_PLATFORMS; do
+        if [ "$supported" = "${OS}-${ARCH}" ]; then
+            platform_supported=true
+            break
+        fi
+    done
+    if [ "$platform_supported" != "true" ]; then
+        echo "Unsupported platform: ${OS}/${ARCH}. Supported: ${SUPPORTED_PLATFORMS}" >&2
+        exit 1
+    fi
 fi
 
 # --- Download Setup ---
@@ -98,8 +109,8 @@ if [ "$OS" = "windows" ]; then
 fi
 DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/${DOWNLOAD_NAME}"
 
-# --- Pre-install Hook ---
-hook_pre_install
+# --- Pre-upgrade Hook ---
+pre_upgrade_hook
 
 echo "Downloading $BINARY_NAME ${VERSION}..." >&2
 
@@ -128,7 +139,7 @@ if command -v curl &> /dev/null; then
     if safe_install "$DOWNLOAD_URL" "$INSTALLED_BINARY"; then
         record_version
         echo "$BINARY_NAME ${VERSION} installed to $INSTALLED_BINARY" >&2
-        hook_post_install
+        post_install_hook
         exit 0
     fi
 elif command -v wget &> /dev/null; then
@@ -139,7 +150,7 @@ elif command -v wget &> /dev/null; then
         mv "$TMP_BINARY" "$INSTALLED_BINARY"
         record_version
         echo "$BINARY_NAME ${VERSION} installed to $INSTALLED_BINARY" >&2
-        hook_post_install
+        post_install_hook
         exit 0
     fi
     rm -f "$TMP_BINARY"
