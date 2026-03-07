@@ -6,7 +6,22 @@ set -e
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 OUTPUT="$REPO_ROOT/.claude-plugin/marketplace.json"
-VERSION="${1:-1.0.0}"
+VERSION="${1:-}"
+
+if [ -z "$VERSION" ] && [ -f "$OUTPUT" ]; then
+    VERSION="$(jq -r '.metadata.version // empty' "$OUTPUT")"
+fi
+
+if [ -z "$VERSION" ]; then
+    first_plugin="$(find "$REPO_ROOT" -path '*/.claude-plugin/plugin.json' -type f | sort | head -1)"
+    if [ -n "$first_plugin" ]; then
+        VERSION="$(jq -r '.version // empty' "$first_plugin")"
+    fi
+fi
+
+if [ -z "$VERSION" ]; then
+    VERSION="1.0.0"
+fi
 
 plugins="[]"
 
