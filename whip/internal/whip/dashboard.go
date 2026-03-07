@@ -2,6 +2,7 @@ package whip
 
 import (
 	"fmt"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -101,9 +102,17 @@ var (
 type tickMsg time.Time
 type cleanedMsg int
 
+type peerInfo struct {
+	Name   string
+	Online bool
+}
+type peersMsg []peerInfo
+
 type DashboardModel struct {
 	store        *Store
 	tasks        []*Task
+	peers        []peerInfo
+	version      string
 	width        int
 	height       int
 	err          error
@@ -111,16 +120,18 @@ type DashboardModel struct {
 	tickCount    int
 }
 
-func NewDashboardModel(store *Store) DashboardModel {
+func NewDashboardModel(store *Store, version string) DashboardModel {
 	return DashboardModel{
-		store: store,
-		width: 120,
+		store:   store,
+		version: version,
+		width:   120,
 	}
 }
 
 func (m DashboardModel) Init() tea.Cmd {
 	return tea.Batch(
 		m.loadTasks(),
+		loadPeers(),
 		tickCmd(),
 	)
 }
@@ -148,6 +159,27 @@ func (m DashboardModel) loadTasks() tea.Cmd {
 	}
 }
 
+func loadPeers() tea.Cmd {
+	return func() tea.Msg {
+		out, err := exec.Command("claude-irc", "who").Output()
+		if err != nil {
+			return peersMsg(nil)
+		}
+		var peers []peerInfo
+		for _, line := range strings.Split(string(out), "\n") {
+			fields := strings.Fields(line)
+			if len(fields) < 2 || fields[0] == "PEER" {
+				continue
+			}
+			peers = append(peers, peerInfo{
+				Name:   fields[0],
+				Online: fields[1] == "online",
+			})
+		}
+		return peersMsg(peers)
+	}
+}
+
 func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -168,6 +200,9 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.tasks = msg
 		m.err = nil
 
+	case peersMsg:
+		m.peers = []peerInfo(msg)
+
 	case cleanedMsg:
 		return m, m.loadTasks()
 
@@ -177,7 +212,7 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		m.spinnerIndex = (m.spinnerIndex + 1) % len(spinnerFrames)
 		m.tickCount++
-		return m, tea.Batch(m.loadTasks(), tickCmd())
+		return m, tea.Batch(m.loadTasks(), loadPeers(), tickCmd())
 	}
 
 	return m, nil
@@ -188,9 +223,14 @@ func (m DashboardModel) View() string {
 
 	// Header
 	spinner := lipgloss.NewStyle().Foreground(colorSecondary).Render(spinnerFrames[m.spinnerIndex])
+	versionStr := ""
+	if m.version != "" {
+		versionStr = "  " + lipgloss.NewStyle().Foreground(colorDim).Render(m.version)
+	}
 	header := headerStyle.Render(" WHIP ") +
 		" " +
 		titleStyle.Render("Task Orchestrator") +
+		versionStr +
 		"  " +
 		spinner +
 		" " +
@@ -222,6 +262,10 @@ func (m DashboardModel) View() string {
 		b.WriteString("\n")
 		b.WriteString(m.renderSummary())
 	}
+
+	// IRC peers
+	b.WriteString("\n")
+	b.WriteString(m.renderPeers())
 
 	// Footer
 	b.WriteString("\n")
@@ -329,6 +373,27 @@ func (m DashboardModel) renderSummary() string {
 	}
 
 	return summaryBoxStyle.Render(strings.Join(parts, "  ·  "))
+}
+
+func (m DashboardModel) renderPeers() string {
+	label := lipgloss.NewStyle().Bold(true).Foreground(colorText).Render("IRC")
+	if m.peers == nil {
+		return "  " + label + "  " + lipgloss.NewStyle().Foreground(colorDim).Render("not connected")
+	}
+	if len(m.peers) == 0 {
+		return "  " + label + "  " + lipgloss.NewStyle().Foreground(colorDim).Render("no peers")
+	}
+	var parts []string
+	for _, p := range m.peers {
+		nameStyle := lipgloss.NewStyle().Foreground(colorSuccess)
+		statusStr := "online"
+		if !p.Online {
+			nameStyle = lipgloss.NewStyle().Foreground(colorDim)
+			statusStr = "offline"
+		}
+		parts = append(parts, nameStyle.Render(p.Name)+" "+lipgloss.NewStyle().Foreground(colorDim).Render("("+statusStr+")"))
+	}
+	return "  " + label + "  " + strings.Join(parts, lipgloss.NewStyle().Foreground(colorDim).Render("  ·  "))
 }
 
 func renderStatus(s TaskStatus) string {

@@ -30,6 +30,7 @@ func main() {
 		listCmd(),
 		showCmd(),
 		assignCmd(),
+		attachCmd(),
 		unassignCmd(),
 		statusCmd(),
 		broadcastCmd(),
@@ -167,6 +168,9 @@ func showCmd() *cobra.Command {
 			fmt.Printf("Title:       %s\n", task.Title)
 			fmt.Printf("Status:      %s\n", task.Status)
 			fmt.Printf("CWD:         %s\n", task.CWD)
+			if task.Runner != "" {
+				fmt.Printf("Runner:      %s\n", task.Runner)
+			}
 			fmt.Printf("IRC:         %s\n", task.IRCName)
 			fmt.Printf("Master IRC:  %s\n", task.MasterIRCName)
 			if task.ShellPID > 0 {
@@ -262,10 +266,12 @@ func assignCmd() *cobra.Command {
 				return err
 			}
 
-			// Spawn terminal
-			if err := whip.SpawnTerminal(task, store.PromptPath(task.ID)); err != nil {
-				return fmt.Errorf("failed to spawn terminal: %w", err)
+			// Spawn session (tmux preferred, Terminal.app fallback)
+			runner, err := whip.Spawn(task, store.PromptPath(task.ID))
+			if err != nil {
+				return fmt.Errorf("failed to spawn session: %w", err)
 			}
+			task.Runner = runner
 
 			// Update task status
 			task.Status = whip.StatusAssigned
@@ -276,13 +282,47 @@ func assignCmd() *cobra.Command {
 				return err
 			}
 
-			fmt.Fprintf(os.Stderr, "Assigned task %s → IRC: %s\n", task.ID, task.IRCName)
+			fmt.Fprintf(os.Stderr, "Assigned task %s → IRC: %s (runner: %s)\n", task.ID, task.IRCName, task.Runner)
 			return nil
 		},
 	}
 
 	cmd.Flags().StringVar(&masterIRC, "master-irc", "", "Master session IRC name (saved for future use)")
 	return cmd
+}
+
+func attachCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "attach <id>",
+		Short: "Attach to a tmux task session",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			store, err := whip.NewStore()
+			if err != nil {
+				return err
+			}
+
+			id, err := store.ResolveID(args[0])
+			if err != nil {
+				return err
+			}
+
+			task, err := store.LoadTask(id)
+			if err != nil {
+				return err
+			}
+
+			if task.Runner != "tmux" {
+				return fmt.Errorf("attach is only supported for tmux sessions (task %s uses %q)", id, task.Runner)
+			}
+
+			if !whip.IsTmuxSession(id) {
+				return fmt.Errorf("tmux session for task %s not found", id)
+			}
+
+			return whip.AttachTmuxSession(id)
+		},
+	}
 }
 
 func unassignCmd() *cobra.Command {
@@ -310,13 +350,17 @@ func unassignCmd() *cobra.Command {
 				return fmt.Errorf("task %s is %s, not active", id, task.Status)
 			}
 
-			// Kill process if running
+			// Kill process / tmux session
+			if task.Runner == "tmux" && whip.IsTmuxSession(id) {
+				whip.KillTmuxSession(id)
+			}
 			if task.ShellPID > 0 {
 				whip.KillProcess(task.ShellPID)
 			}
 
 			// Reset
 			task.Status = whip.StatusCreated
+			task.Runner = ""
 			task.ShellPID = 0
 			task.IRCName = ""
 			task.AssignedAt = nil
@@ -519,6 +563,11 @@ func killCmd() *cobra.Command {
 				return err
 			}
 
+			if task.Runner == "tmux" && whip.IsTmuxSession(id) {
+				if err := whip.KillTmuxSession(id); err != nil {
+					fmt.Fprintf(os.Stderr, "Warning: kill tmux session: %v\n", err)
+				}
+			}
 			if task.ShellPID > 0 {
 				if err := whip.KillProcess(task.ShellPID); err != nil {
 					fmt.Fprintf(os.Stderr, "Warning: kill PID %d: %v\n", task.ShellPID, err)
@@ -575,7 +624,7 @@ func dashboardCmd() *cobra.Command {
 			}
 
 			p := tea.NewProgram(
-				whip.NewDashboardModel(store),
+				whip.NewDashboardModel(store, version),
 				tea.WithAltScreen(),
 			)
 			_, err = p.Run()
