@@ -65,11 +65,12 @@ Minimize analysis in the main session — include enough context in descriptions
 
 ### Step 2: Create & deploy agents
 
-Create all tasks, set dependencies if needed, then deploy all at once:
+Create all tasks, set dependencies if needed, then assign independent tasks. Tasks with dependencies will auto-assign when their prerequisites complete.
+
 ```bash
 whip create "<agent role/title>" --desc "<responsibility, context, acceptance criteria>"
 whip dep <task-id> --after <dependency-id>  # only if needed
-whip assign <task-id> --master-irc whip-master
+whip assign <task-id> --master-irc whip-master  # only assign tasks without unmet deps
 ```
 
 ### Step 3: Coordinate
@@ -86,7 +87,7 @@ As team lead:
 As agents complete:
 - Review their deliverables
 - Dependent agents auto-deploy when prerequisites are met
-- If an agent fails: `whip kill <id>` + `whip unassign <id>` + fix + `whip assign <id>`
+- If an agent fails: `whip unassign <id>` (kills session + resets to created) → fix → `whip assign <id>`
 
 ### Step 5: Wrap up
 
