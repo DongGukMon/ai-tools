@@ -48,15 +48,21 @@ type peerInfo struct {
 type peersMsg []peerInfo
 
 type DashboardModel struct {
-	store        *Store
-	tasks        []*Task
-	peers        []peerInfo
-	version      string
-	width        int
-	height       int
-	err          error
-	spinnerIndex int
-	tickCount    int
+	store         *Store
+	tasks         []*Task
+	peers         []peerInfo
+	version       string
+	width         int
+	height        int
+	err           error
+	spinnerIndex  int
+	tickCount     int
+	cursor        int
+	pendingAttach string
+}
+
+func (m DashboardModel) PendingAttach() string {
+	return m.pendingAttach
 }
 
 func NewDashboardModel(store *Store, version string) DashboardModel {
@@ -129,6 +135,28 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.loadTasks()
 		case "c":
 			return m, m.cleanTasks()
+		case "up", "k":
+			if len(m.tasks) > 0 {
+				m.cursor--
+				if m.cursor < 0 {
+					m.cursor = len(m.tasks) - 1
+				}
+			}
+		case "down", "j":
+			if len(m.tasks) > 0 {
+				m.cursor++
+				if m.cursor >= len(m.tasks) {
+					m.cursor = 0
+				}
+			}
+		case "enter":
+			if len(m.tasks) > 0 && m.cursor < len(m.tasks) {
+				t := m.tasks[m.cursor]
+				if t.Runner == "tmux" && IsTmuxSession(t.ID) {
+					m.pendingAttach = t.ID
+					return m, tea.Quit
+				}
+			}
 		}
 
 	case tea.WindowSizeMsg:
@@ -138,6 +166,9 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case []*Task:
 		m.tasks = msg
 		m.err = nil
+		if m.cursor >= len(m.tasks) && len(m.tasks) > 0 {
+			m.cursor = len(m.tasks) - 1
+		}
 
 	case peersMsg:
 		m.peers = []peerInfo(msg)
@@ -279,7 +310,13 @@ func (m DashboardModel) renderTable() string {
 	rows = append(rows, header)
 	rows = append(rows, underline)
 
-	for _, t := range m.tasks {
+	for i, t := range m.tasks {
+		selected := i == m.cursor
+		indicator := "  "
+		if selected {
+			indicator = lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render("▸ ")
+		}
+
 		id := padRight(idStyle.Render(truncate(t.ID, colID)), colID)
 		title := padRight(truncate(t.Title, colTitle), colTitle)
 		status := padRight(renderStatus(t.Status), colStatus)
@@ -304,7 +341,10 @@ func (m DashboardModel) renderTable() string {
 
 		updated := padRight(lipgloss.NewStyle().Foreground(colorSubtle).Render(timeAgo(t.UpdatedAt)), colUpdated)
 
-		row := "  " + strings.Join([]string{id, title, status, runner, irc, pid, deps, note, updated}, sep)
+		row := indicator + strings.Join([]string{id, title, status, runner, irc, pid, deps, note, updated}, sep)
+		if selected {
+			row = lipgloss.NewStyle().Background(lipgloss.Color("#1E1B4B")).Render(row)
+		}
 		rows = append(rows, row)
 	}
 
@@ -393,9 +433,18 @@ func (m DashboardModel) renderFooter() string {
 	dot := lipgloss.NewStyle().Foreground(colorDim).Render("  ·  ")
 	refresh := lipgloss.NewStyle().Foreground(colorDim).Render("↻ 2s")
 
-	return lipgloss.NewStyle().MarginTop(1).Render(
-		"  " + key("q", "quit") + dot + key("r", "refresh") + dot + key("c", "clean") + dot + refresh,
-	)
+	line := "  " + key("↑↓", "navigate") + dot + key("q", "quit") + dot + key("r", "refresh") + dot + key("c", "clean") + dot + refresh
+
+	// Show attach hint if selected task is a tmux session
+	if len(m.tasks) > 0 && m.cursor < len(m.tasks) {
+		t := m.tasks[m.cursor]
+		if t.Runner == "tmux" && IsTmuxSession(t.ID) {
+			hint := lipgloss.NewStyle().Foreground(colorSuccess).Bold(true).Render("  [enter: attach]")
+			line += hint
+		}
+	}
+
+	return lipgloss.NewStyle().MarginTop(1).Render(line)
 }
 
 // ── Status / cell renderers ────────────────────────────────────────

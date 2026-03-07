@@ -632,8 +632,16 @@ func dashboardCmd() *cobra.Command {
 				whip.NewDashboardModel(store, version),
 				tea.WithAltScreen(),
 			)
-			_, err = p.Run()
-			return err
+			m, err := p.Run()
+			if err != nil {
+				return err
+			}
+			if dm, ok := m.(whip.DashboardModel); ok {
+				if id := dm.PendingAttach(); id != "" {
+					return whip.AttachTmuxSession(id)
+				}
+			}
+			return nil
 		},
 	}
 }
