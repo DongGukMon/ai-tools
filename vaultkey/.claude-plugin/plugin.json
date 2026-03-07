@@ -1,0 +1,31 @@
+{
+  "name": "vaultkey",
+  "version": "v1.30.0",
+  "description": "Encrypted secrets manager for Claude Code sessions backed by a private Git repo",
+  "author": {
+    "name": "Airen Kang",
+    "url": "https://github.com/bang9"
+  },
+  "repository": "https://github.com/bang9/ai-tools",
+  "license": "MIT",
+  "keywords": [
+    "secrets",
+    "encryption",
+    "vault",
+    "credentials",
+    "git"
+  ],
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/ensure-binary.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

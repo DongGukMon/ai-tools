@@ -4,6 +4,8 @@ Encrypted secrets manager backed by a private Git repo. Store secrets locally wi
 
 ## Install
 
+### CLI
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/bang9/ai-tools/main/vaultkey/install.sh | bash
 ```
@@ -12,6 +14,15 @@ Or build from source:
 
 ```bash
 make build
+```
+
+### Plugin
+
+Installs the `vaultkey` CLI automatically in Claude Code sessions:
+
+```bash
+/plugin marketplace add bang9/ai-tools
+/plugin install vaultkey
 ```
 
 ## Quick Start

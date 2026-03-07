@@ -26,10 +26,11 @@ jobs:
         run: |
           cd vaultkey
           mkdir -p dist
-          GOOS=darwin GOARCH=arm64 go build -o dist/vaultkey-darwin-arm64 ./cmd/vaultkey
-          GOOS=darwin GOARCH=amd64 go build -o dist/vaultkey-darwin-amd64 ./cmd/vaultkey
-          GOOS=linux GOARCH=amd64 go build -o dist/vaultkey-linux-amd64 ./cmd/vaultkey
-          GOOS=windows GOARCH=amd64 go build -o dist/vaultkey-windows-amd64.exe ./cmd/vaultkey
+          LDFLAGS="-s -w -X main.version=${{ inputs.version }}"
+          GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/vaultkey-darwin-arm64 ./cmd/vaultkey
+          GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/vaultkey-darwin-amd64 ./cmd/vaultkey
+          GOOS=linux GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/vaultkey-linux-amd64 ./cmd/vaultkey
+          GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/vaultkey-windows-amd64.exe ./cmd/vaultkey
 
       - name: Upload binaries
         env:

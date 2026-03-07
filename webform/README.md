@@ -13,11 +13,20 @@ Terminal prompts are fine for simple inputs, but collecting complex, multi-field
 ## Quick Start
 
 ```bash
-# Install
+# Install CLI
 curl -fsSL https://raw.githubusercontent.com/bang9/ai-tools/main/webform/install.sh | bash
 
 # Open a form
 webform <<< '{"t":"API Config","f":[["key","pw","API Key",{"r":1}],["env","sel","Environment",{"o":["dev","staging","prod"]}]]}'
+```
+
+## Plugin
+
+Installs the `webform` CLI automatically in Claude Code sessions:
+
+```bash
+/plugin marketplace add bang9/ai-tools
+/plugin install webform
 ```
 
 ## Commands

@@ -29,8 +29,17 @@ Encrypted secrets manager backed by a private Git repo. AES-256-GCM encryption, 
 
 #### Installation
 
+**CLI**
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/bang9/ai-tools/main/vaultkey/install.sh | bash
+```
+
+**Plugin** (via Claude Code Plugin)
+
+```bash
+/plugin marketplace add bang9/ai-tools
+/plugin install vaultkey
 ```
 
 ### [claude-irc](./claude-irc)
@@ -58,8 +67,17 @@ Dynamic web form for collecting structured data from users. AI generates a compa
 
 #### Installation
 
+**CLI**
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/bang9/ai-tools/main/webform/install.sh | bash
+```
+
+**Plugin** (via Claude Code Plugin)
+
+```bash
+/plugin marketplace add bang9/ai-tools
+/plugin install webform
 ```
 
 ### [whip](./whip)

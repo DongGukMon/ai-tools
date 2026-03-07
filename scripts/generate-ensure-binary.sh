@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 LIB_FILE="$SCRIPT_DIR/lib/ensure-binary-lib.sh"
 
-TOOLS=(claude-irc whip webform redit)
+TOOLS=(claude-irc whip webform redit vaultkey)
 
 check_mode=false
 if [ "${1:-}" = "--check" ]; then
