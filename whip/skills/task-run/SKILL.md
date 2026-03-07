@@ -20,7 +20,8 @@ Look at the user's request and arguments:
 Minimal overhead. Create and assign immediately.
 
 ```bash
-claude-irc join whip-master
+# Join only if not already joined (idempotent)
+claude-irc join whip-master 2>/dev/null || true
 whip create "<title>" --desc "<detailed description with context>"
 whip assign <task-id> --master-irc whip-master
 ```
@@ -30,10 +31,7 @@ Enable monitoring:
 /loop 1m claude-irc inbox
 ```
 
-Wait for completion, then wrap up:
-```bash
-claude-irc quit
-```
+Wait for completion. Do NOT run `claude-irc quit` — the main session stays connected for future tasks.
 
 ---
 
@@ -53,7 +51,8 @@ Present the task breakdown to the user for approval before proceeding.
 ### Step 2: Initialize
 
 ```bash
-claude-irc join whip-master
+# Join only if not already joined (idempotent)
+claude-irc join whip-master 2>/dev/null || true
 ```
 
 ### Step 3: Create & Assign Tasks
@@ -87,9 +86,4 @@ As tasks complete:
 
 ### Step 6: Wrap Up
 
-When all tasks are complete:
-```bash
-claude-irc quit
-```
-
-Summarize what was accomplished across all tasks.
+When all tasks are complete, summarize what was accomplished. Do NOT run `claude-irc quit` — the main session stays connected for future tasks.
