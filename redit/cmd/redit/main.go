@@ -6,6 +6,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/bang9/ai-tools/redit/internal/redit"
+	"github.com/bang9/ai-tools/shared/upgrade"
 )
 
 var version = "dev"
@@ -21,6 +22,7 @@ Usage:
   redit reset <key>      Reset working file to origin
   redit drop <key>       Remove all files for key
   redit list             List all managed keys with status
+  redit upgrade          Upgrade to latest version
 
 Examples:
   # Initialize from MCP content
@@ -166,6 +168,16 @@ func main() {
 			fmt.Fprintf(w, "%s\t%s\t%s\n", item.Key, item.Status, item.Path)
 		}
 		w.Flush()
+
+	case "upgrade":
+		if err := upgrade.Run(upgrade.Config{
+			Repo:       "bang9/ai-tools",
+			BinaryName: "redit",
+			Version:    version,
+		}); err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
 
 	case "version", "--version":
 		fmt.Printf("redit version %s\n", version)

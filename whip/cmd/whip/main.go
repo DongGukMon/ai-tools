@@ -5,14 +5,13 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"runtime"
-	"path/filepath"
 	"strings"
 	"syscall"
 	"text/tabwriter"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/bang9/ai-tools/shared/upgrade"
 	"github.com/bang9/ai-tools/whip/internal/whip"
 	"github.com/spf13/cobra"
 )
@@ -911,66 +910,12 @@ func upgradeCmd() *cobra.Command {
 		Short: "Upgrade whip to the latest version",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			repo := "bang9/ai-tools"
-
-			fmt.Fprintln(os.Stderr, "Checking for updates...")
-			out, err := exec.Command("curl", "-sfSL",
-				fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", repo)).Output()
-			if err != nil {
-				return fmt.Errorf("failed to check latest version: %w", err)
-			}
-
-			latestVersion := ""
-			for _, line := range strings.Split(string(out), "\n") {
-				line = strings.TrimSpace(line)
-				if strings.Contains(line, `"tag_name"`) {
-					parts := strings.Split(line, `"`)
-					if len(parts) >= 4 {
-						latestVersion = parts[3]
-					}
-					break
-				}
-			}
-			if latestVersion == "" {
-				return fmt.Errorf("failed to parse latest version from GitHub")
-			}
-
-			if version != "dev" && latestVersion == version {
-				fmt.Fprintf(os.Stderr, "Already up to date (%s)\n", version)
-				return nil
-			}
-
-			binPath, err := os.Executable()
-			if err != nil {
-				binPath = filepath.Join(os.Getenv("HOME"), ".local", "bin", "whip")
-			}
-			if resolved, err := filepath.EvalSymlinks(binPath); err == nil {
-				binPath = resolved
-			}
-
-			installDir := filepath.Dir(binPath)
-
-			// Upgrade whip + required tools
-			tools := []string{"whip", "claude-irc", "webform"}
-			for _, tool := range tools {
-				toolBinary := fmt.Sprintf("%s-%s-%s", tool, runtime.GOOS, runtime.GOARCH)
-				toolURL := fmt.Sprintf("https://github.com/%s/releases/download/%s/%s",
-					repo, latestVersion, toolBinary)
-				toolPath := filepath.Join(installDir, tool)
-
-				fmt.Fprintf(os.Stderr, "Downloading %s %s...\n", tool, latestVersion)
-				dlCmd := exec.Command("curl", "-fsSL", "-o", toolPath, toolURL)
-				dlCmd.Stderr = os.Stderr
-				if err := dlCmd.Run(); err != nil {
-					fmt.Fprintf(os.Stderr, "Warning: failed to download %s: %v\n", tool, err)
-					continue
-				}
-				os.Chmod(toolPath, 0755)
-				fmt.Fprintf(os.Stderr, "  %s updated\n", tool)
-			}
-
-			fmt.Fprintf(os.Stderr, "All tools updated to %s\n", latestVersion)
-			return nil
+			return upgrade.Run(upgrade.Config{
+				Repo:           "bang9/ai-tools",
+				BinaryName:     "whip",
+				Version:        version,
+				CompanionTools: []string{"claude-irc", "webform"},
+			})
 		},
 	}
 }

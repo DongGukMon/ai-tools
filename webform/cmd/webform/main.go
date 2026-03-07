@@ -3,11 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
-	"os/exec"
-	"path/filepath"
-	"runtime"
-	"strings"
 
+	"github.com/bang9/ai-tools/shared/upgrade"
 	"github.com/bang9/ai-tools/webform/internal/schema"
 	"github.com/bang9/ai-tools/webform/internal/server"
 )
@@ -24,7 +21,11 @@ func main() {
 			fmt.Println(version)
 			return
 		case "upgrade":
-			if err := upgrade(); err != nil {
+			if err := upgrade.Run(upgrade.Config{
+				Repo:       "bang9/ai-tools",
+				BinaryName: "webform",
+				Version:    version,
+			}); err != nil {
 				fmt.Fprintf(os.Stderr, "error: %v\n", err)
 				os.Exit(1)
 			}
@@ -80,58 +81,3 @@ Example:
   webform <<< '{"t":"Config","f":[["key","pw","API Key",{"r":1}]]}'`)
 }
 
-func upgrade() error {
-	repo := "bang9/ai-tools"
-
-	fmt.Fprintln(os.Stderr, "Checking for updates...")
-	out, err := exec.Command("curl", "-sfSL",
-		fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", repo)).Output()
-	if err != nil {
-		return fmt.Errorf("failed to check latest version: %w", err)
-	}
-
-	latestVersion := ""
-	for _, line := range strings.Split(string(out), "\n") {
-		line = strings.TrimSpace(line)
-		if strings.Contains(line, `"tag_name"`) {
-			parts := strings.Split(line, `"`)
-			if len(parts) >= 4 {
-				latestVersion = parts[3]
-			}
-			break
-		}
-	}
-	if latestVersion == "" {
-		return fmt.Errorf("failed to parse latest version from GitHub")
-	}
-
-	if version != "dev" && latestVersion == version {
-		fmt.Fprintf(os.Stderr, "Already up to date (%s)\n", version)
-		return nil
-	}
-
-	binaryName := fmt.Sprintf("webform-%s-%s", runtime.GOOS, runtime.GOARCH)
-	downloadURL := fmt.Sprintf("https://github.com/%s/releases/download/%s/%s", repo, latestVersion, binaryName)
-
-	binPath, err := os.Executable()
-	if err != nil {
-		binPath = filepath.Join(os.Getenv("HOME"), ".local", "bin", "webform")
-	}
-	if resolved, err := filepath.EvalSymlinks(binPath); err == nil {
-		binPath = resolved
-	}
-
-	fmt.Fprintf(os.Stderr, "Downloading %s...\n", latestVersion)
-	dlCmd := exec.Command("curl", "-fsSL", "-o", binPath, downloadURL)
-	dlCmd.Stderr = os.Stderr
-	if err := dlCmd.Run(); err != nil {
-		return fmt.Errorf("download failed: %w", err)
-	}
-
-	if err := os.Chmod(binPath, 0755); err != nil {
-		return fmt.Errorf("chmod failed: %w", err)
-	}
-
-	fmt.Fprintf(os.Stderr, "Updated to %s\n", latestVersion)
-	return nil
-}
