@@ -1,0 +1,443 @@
+package irc
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"net"
+	"net/http"
+	"os"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strconv"
+	"strings"
+	"syscall"
+	"time"
+)
+
+// ServerConfig holds configuration for the HTTP API server.
+type ServerConfig struct {
+	Port    int
+	Store   *Store
+	OnReady func(info ServerInfo) // callback when server is ready
+}
+
+// ServerInfo contains details about a running server instance.
+type ServerInfo struct {
+	Token    string `json:"token"`
+	LocalURL string `json:"local_url"`
+}
+
+// RunServer starts the HTTP API server and blocks until the context is cancelled.
+func RunServer(ctx context.Context, cfg ServerConfig) error {
+	token, err := generateToken()
+	if err != nil {
+		return fmt.Errorf("generating token: %w", err)
+	}
+
+	mux := buildHandler(cfg.Store, token)
+
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.Port))
+	if err != nil {
+		return fmt.Errorf("listen: %w", err)
+	}
+
+	addr := listener.Addr().(*net.TCPAddr)
+	info := ServerInfo{
+		Token:    token,
+		LocalURL: fmt.Sprintf("http://localhost:%d", addr.Port),
+	}
+
+	if cfg.OnReady != nil {
+		cfg.OnReady(info)
+	}
+
+	srv := &http.Server{Handler: mux}
+
+	go func() {
+		<-ctx.Done()
+		srv.Shutdown(context.Background())
+	}()
+
+	if err := srv.Serve(listener); err != nil && err != http.ErrServerClosed {
+		return err
+	}
+	return nil
+}
+
+func generateToken() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
+
+// buildHandler creates the HTTP handler with auth and CORS middleware.
+func buildHandler(store *Store, token string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// CORS middleware
+		origin := r.Header.Get("Origin")
+		if isAllowedOrigin(origin) {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+		}
+
+		if r.Method == http.MethodOptions {
+			if isAllowedOrigin(origin) {
+				w.WriteHeader(http.StatusNoContent)
+			} else {
+				w.WriteHeader(http.StatusForbidden)
+			}
+			return
+		}
+
+		// Auth middleware
+		if !checkAuth(r, token) {
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+			return
+		}
+
+		// Route
+		route(w, r, store)
+	})
+}
+
+var localhostPattern = regexp.MustCompile(`^http://localhost(:\d+)?$`)
+
+func isAllowedOrigin(origin string) bool {
+	if origin == "https://whip.bang9.dev" {
+		return true
+	}
+	return localhostPattern.MatchString(origin)
+}
+
+func checkAuth(r *http.Request, token string) bool {
+	// Check Authorization header
+	auth := r.Header.Get("Authorization")
+	if strings.HasPrefix(auth, "Bearer ") {
+		if strings.TrimPrefix(auth, "Bearer ") == token {
+			return true
+		}
+	}
+	// Check query param
+	if r.URL.Query().Get("token") == token {
+		return true
+	}
+	return false
+}
+
+func route(w http.ResponseWriter, r *http.Request, store *Store) {
+	path := strings.TrimRight(r.URL.Path, "/")
+	segments := strings.Split(strings.TrimPrefix(path, "/"), "/")
+
+	// Match: /api/<resource>[/<param1>[/<param2>]]
+	if len(segments) < 2 || segments[0] != "api" {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+		return
+	}
+
+	resource := segments[1]
+
+	switch resource {
+	case "peers":
+		if r.Method == http.MethodGet && len(segments) == 2 {
+			handleGetPeers(w, store)
+			return
+		}
+
+	case "messages":
+		if len(segments) == 2 {
+			if r.Method == http.MethodPost {
+				handlePostMessage(w, r, store)
+				return
+			}
+		} else if len(segments) == 3 {
+			name := segments[2]
+			switch r.Method {
+			case http.MethodGet:
+				handleGetMessages(w, r, store, name)
+				return
+			case http.MethodDelete:
+				handleDeleteMessages(w, store, name)
+				return
+			}
+		} else if len(segments) == 4 && segments[3] == "read" {
+			name := segments[2]
+			if r.Method == http.MethodPost {
+				handleMarkRead(w, store, name)
+				return
+			}
+		}
+
+	case "topics":
+		if len(segments) == 3 {
+			name := segments[2]
+			if r.Method == http.MethodGet {
+				handleGetTopics(w, store, name)
+				return
+			}
+		} else if len(segments) == 4 {
+			name := segments[2]
+			indexStr := segments[3]
+			if r.Method == http.MethodGet {
+				handleGetTopic(w, store, name, indexStr)
+				return
+			}
+		}
+
+	case "tasks":
+		if len(segments) == 2 && r.Method == http.MethodGet {
+			handleGetTasks(w)
+			return
+		} else if len(segments) == 3 && r.Method == http.MethodGet {
+			handleGetTask(w, segments[2])
+			return
+		}
+	}
+
+	writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+}
+
+// IRC endpoint handlers
+
+func handleGetPeers(w http.ResponseWriter, store *Store) {
+	statuses, err := store.CheckAllPresence()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	if statuses == nil {
+		statuses = []PeerStatus{}
+	}
+	writeJSON(w, http.StatusOK, statuses)
+}
+
+func handlePostMessage(w http.ResponseWriter, r *http.Request, store *Store) {
+	var body struct {
+		To      string `json:"to"`
+		From    string `json:"from"`
+		Content string `json:"content"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	if body.To == "" || body.From == "" || body.Content == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "to, from, and content are required"})
+		return
+	}
+
+	if err := store.SendMessage(body.To, body.From, body.Content); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "sent"})
+}
+
+func handleGetMessages(w http.ResponseWriter, r *http.Request, store *Store, name string) {
+	var messages []Message
+	var err error
+
+	if r.URL.Query().Get("all") == "true" {
+		messages, err = store.ReadInbox(name)
+	} else {
+		messages, err = store.UnreadMessages(name)
+	}
+
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	if messages == nil {
+		messages = []Message{}
+	}
+	writeJSON(w, http.StatusOK, messages)
+}
+
+func handleMarkRead(w http.ResponseWriter, store *Store, name string) {
+	if err := store.MarkAllRead(name); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func handleDeleteMessages(w http.ResponseWriter, store *Store, name string) {
+	if err := store.ClearInbox(name); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func handleGetTopics(w http.ResponseWriter, store *Store, name string) {
+	topics, err := store.ListTopics(name)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	if topics == nil {
+		topics = []Topic{}
+	}
+	writeJSON(w, http.StatusOK, topics)
+}
+
+func handleGetTopic(w http.ResponseWriter, store *Store, name string, indexStr string) {
+	index, err := strconv.Atoi(indexStr)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid topic index"})
+		return
+	}
+
+	topic, err := store.GetTopic(name, index)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, topic)
+}
+
+// Whip task types (minimal, no whip package import)
+
+type whipNote struct {
+	Timestamp time.Time `json:"timestamp"`
+	Status    string    `json:"status"`
+	Content   string    `json:"content"`
+}
+
+type whipTask struct {
+	ID            string     `json:"id"`
+	Title         string     `json:"title"`
+	Description   string     `json:"description"`
+	CWD           string     `json:"cwd"`
+	Status        string     `json:"status"`
+	Runner        string     `json:"runner,omitempty"`
+	IRCName       string     `json:"irc_name"`
+	MasterIRCName string     `json:"master_irc_name"`
+	SessionID     string     `json:"session_id,omitempty"`
+	ShellPID      int        `json:"shell_pid"`
+	Note          string     `json:"note"`
+	Notes         []whipNote `json:"notes,omitempty"`
+	Difficulty    string     `json:"difficulty,omitempty"`
+	Review        bool       `json:"review,omitempty"`
+	DependsOn     []string   `json:"depends_on"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
+	AssignedAt    *time.Time `json:"assigned_at"`
+	CompletedAt   *time.Time `json:"completed_at"`
+	PIDAlive      bool       `json:"pid_alive"`
+}
+
+func whipTasksDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".whip", "tasks")
+}
+
+func readAllWhipTasks() ([]whipTask, error) {
+	dir := whipTasksDir()
+	if dir == "" {
+		return nil, fmt.Errorf("cannot determine home directory")
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []whipTask{}, nil
+		}
+		return nil, err
+	}
+
+	var tasks []whipTask
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		taskPath := filepath.Join(dir, entry.Name(), "task.json")
+		data, err := os.ReadFile(taskPath)
+		if err != nil {
+			continue
+		}
+		var t whipTask
+		if err := json.Unmarshal(data, &t); err != nil {
+			continue
+		}
+		t.PIDAlive = isWhipPIDAlive(t.ShellPID)
+		tasks = append(tasks, t)
+	}
+
+	sort.Slice(tasks, func(i, j int) bool {
+		return tasks[i].CreatedAt.Before(tasks[j].CreatedAt)
+	})
+
+	return tasks, nil
+}
+
+func readWhipTask(id string) (*whipTask, error) {
+	dir := whipTasksDir()
+	if dir == "" {
+		return nil, fmt.Errorf("cannot determine home directory")
+	}
+
+	taskPath := filepath.Join(dir, id, "task.json")
+	data, err := os.ReadFile(taskPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("task %s not found", id)
+		}
+		return nil, err
+	}
+
+	var t whipTask
+	if err := json.Unmarshal(data, &t); err != nil {
+		return nil, err
+	}
+	t.PIDAlive = isWhipPIDAlive(t.ShellPID)
+	return &t, nil
+}
+
+func isWhipPIDAlive(pid int) bool {
+	if pid <= 0 {
+		return false
+	}
+	err := syscall.Kill(pid, 0)
+	return err == nil
+}
+
+func handleGetTasks(w http.ResponseWriter) {
+	tasks, err := readAllWhipTasks()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	if tasks == nil {
+		tasks = []whipTask{}
+	}
+	writeJSON(w, http.StatusOK, tasks)
+}
+
+func handleGetTask(w http.ResponseWriter, id string) {
+	task, err := readWhipTask(id)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, task)
+}
+
+// Helpers
+
+func writeJSON(w http.ResponseWriter, status int, v interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(v)
+}
