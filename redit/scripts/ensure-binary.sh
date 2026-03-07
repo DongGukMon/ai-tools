@@ -4,12 +4,12 @@
 set -e
 
 # === Configuration & Hooks ===
-BINARY_NAME="redit-mcp"
-INSTALL_MODE="local"
+BINARY_NAME="redit"
+INSTALL_MODE="global"
 VERSION_CHECK="cli"
 ENABLE_WINDOWS="true"
 SUPPORTED_PLATFORMS=""
-BUILD_TARGET="./cmd/redit-mcp"
+BUILD_TARGET="./cmd/redit"
 
 # === Common Logic ===
 # Default no-op hooks (overridden by conf if defined before this point)

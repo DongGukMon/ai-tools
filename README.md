@@ -16,7 +16,7 @@ A local cache layer for editing remote documents (Confluence, Notion, etc.).
 curl -fsSL https://raw.githubusercontent.com/bang9/ai-tools/main/redit/install.sh | bash
 ```
 
-**MCP Server & Skill** (via Claude Code Plugin)
+**Skill** (via Claude Code Plugin)
 
 ```bash
 /plugin marketplace add bang9/ai-tools

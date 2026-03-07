@@ -57,12 +57,14 @@ redit drop "confluence:12345"                     # Clean up
 | `redit reset <key>` | Restore working file to original |
 | `redit drop <key>` | Remove all cached files for key |
 | `redit list` | List all managed keys with status |
+| `redit upgrade` | Upgrade to the latest version |
+| `redit version` | Show the current version |
 
-## MCP Server
+## Plugin Skill
 
 ### Installation
 
-Automatically available as `mcp__redit__*` tools when the plugin is installed:
+Installs the `/remote-edit` skill and ensures the `redit` CLI is available in Claude Code sessions:
 
 ```bash
 /plugin marketplace add bang9/ai-tools
@@ -73,25 +75,12 @@ Automatically available as `mcp__redit__*` tools when the plugin is installed:
 
 ```
 1. content = mcp__atlassian__get_page(id="12345")
-2. path = mcp__redit__init(key="confluence:12345", content=content)
+2. path = $(echo "$content" | redit init "confluence:12345")
 3. Edit <path> with partial modifications
-4. final = mcp__redit__read("confluence:12345")
+4. final = $(redit read "confluence:12345")
 5. mcp__atlassian__update_page(id="12345", content=final)
-6. mcp__redit__drop("confluence:12345")
+6. redit drop "confluence:12345"
 ```
-
-### Tool Reference
-
-| Tool | Description |
-|------|-------------|
-| `mcp__redit__init` | Store content locally, returns working file path |
-| `mcp__redit__get` | Get working file path |
-| `mcp__redit__read` | Read working file content |
-| `mcp__redit__status` | Check dirty/clean state |
-| `mcp__redit__diff` | Show unified diff |
-| `mcp__redit__reset` | Restore to original |
-| `mcp__redit__drop` | Remove cache |
-| `mcp__redit__list` | List all cached documents |
 
 ## Skill
 

@@ -17,7 +17,6 @@
     "notion"
   ],
   "skills": "./skills/",
-  "mcpServers": "./.mcp.json",
   "hooks": {
     "SessionStart": [
       {

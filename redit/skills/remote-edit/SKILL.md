@@ -3,7 +3,7 @@ name: remote-edit
 description: Efficiently edit remote documents (Confluence, Notion, etc.) using local cache. Use this when you need to make partial edits to documents fetched via MCP, avoiding full content regeneration.
 argument-hint: "[service:id] [description of changes]"
 user-invocable: true
-allowed-tools: Bash, Read, Edit, mcp__redit__init, mcp__redit__get, mcp__redit__read, mcp__redit__status, mcp__redit__diff, mcp__redit__reset, mcp__redit__drop, mcp__redit__list
+allowed-tools: Bash, Read, Edit
 ---
 
 # Remote Edit Workflow
@@ -16,14 +16,9 @@ redit provides a local cache layer for editing remote documents. Instead of rege
 
 ## Available Tools
 
-- `mcp__redit__init` - Store content locally, returns working file path
-- `mcp__redit__get` - Get working file path for an existing key
-- `mcp__redit__read` - Read working file content
-- `mcp__redit__status` - Check if document is dirty (modified) or clean
-- `mcp__redit__diff` - Show changes between original and working copy
-- `mcp__redit__reset` - Restore working copy to original
-- `mcp__redit__drop` - Remove local cache
-- `mcp__redit__list` - List all cached documents
+- `Bash` - Run `redit` commands for init/get/read/status/diff/reset/drop/list
+- `Read` - Inspect the working file before or after edits
+- `Edit` - Make precise partial modifications to the cached working file
 
 ## Workflow
 
@@ -38,7 +33,7 @@ content = mcp__xxx__get_document(id)
 Then initialize redit with a unique key:
 
 ```
-path = mcp__redit__init(key="service:document-id", content=content)
+path = $(echo "$content" | redit init "service:document-id")
 ```
 
 Key naming convention:
@@ -62,14 +57,14 @@ You can make multiple edits. Each edit only modifies the specific part you targe
 Check what's been modified:
 
 ```
-mcp__redit__status(key) → "dirty" or "clean"
-mcp__redit__diff(key) → unified diff output
+redit status "service:document-id" → "dirty" or "clean"
+redit diff "service:document-id" → unified diff output
 ```
 
 If you made a mistake:
 
 ```
-mcp__redit__reset(key) → restore to original
+redit reset "service:document-id" → restore to original
 ```
 
 ### Step 4: Commit
@@ -77,7 +72,7 @@ mcp__redit__reset(key) → restore to original
 Read the final content and update via MCP:
 
 ```
-final_content = mcp__redit__read(key)
+final_content = $(redit read "service:document-id")
 mcp__xxx__update_document(id, final_content)
 ```
 
@@ -86,7 +81,7 @@ mcp__xxx__update_document(id, final_content)
 Always clean up after committing:
 
 ```
-mcp__redit__drop(key)
+redit drop "service:document-id"
 ```
 
 ## Example: Edit Confluence Page Section
@@ -95,13 +90,13 @@ User request: "Update the 'Installation' section in Confluence page 12345"
 
 ```
 1. Fetch: content = mcp__atlassian__get_page(id="12345")
-2. Init: path = mcp__redit__init(key="confluence:12345", content=content)
+2. Init: path = $(echo "$content" | redit init "confluence:12345")
 3. Edit: Edit <path> to update the Installation section
-4. Verify: mcp__redit__diff("confluence:12345")
+4. Verify: redit diff "confluence:12345"
 5. Commit:
-   - final = mcp__redit__read("confluence:12345")
+   - final = $(redit read "confluence:12345")
    - mcp__atlassian__update_page(id="12345", content=final)
-6. Cleanup: mcp__redit__drop("confluence:12345")
+6. Cleanup: redit drop "confluence:12345"
 ```
 
 ## Important Notes
