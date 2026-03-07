@@ -8,9 +8,7 @@ import (
 func GeneratePrompt(task *Task) string {
 	var b strings.Builder
 
-	b.WriteString(`You are the owner of this task. You have full authority and responsibility
-to complete it. Make your own decisions, solve problems independently, and
-deliver quality results.
+	b.WriteString(`You are an agent working under a lead session. You own this task but coordinate with the lead on key decisions.
 
 ## Your Task
 `)
@@ -43,15 +41,24 @@ Run these commands to initialize your session:
 4. Enable periodic message check:
    /loop 1m claude-irc inbox
 
+## Checkpoint: Share your plan
+Before writing any code, share your approach with the lead:
+`)
+	fmt.Fprintf(&b, "   claude-irc msg %s \"Plan for %s: <your approach in 2-3 sentences>\"\n",
+		task.MasterIRCName, task.ID)
+	b.WriteString(`Then proceed — no need to wait for approval unless the task is ambiguous.
+
 ## How You Work
-- You own this task end-to-end. Plan your approach, execute, and verify.
 `)
 	fmt.Fprintf(&b, "- Work in: %s\n", task.CWD)
-	fmt.Fprintf(&b, "- Update your progress: whip status %s in_progress\n", task.ID)
+	fmt.Fprintf(&b, "- Update your progress: whip status %s in_progress --note \"your progress here\"\n", task.ID)
 	fmt.Fprintf(&b, "- Coordinate with the lead session (%s) via claude-irc\n", task.MasterIRCName)
-	b.WriteString(`  when you need alignment on cross-cutting decisions.
-- If you need user input that can't wait, use webform to collect it directly.
-- You can read peer topics with claude-irc board <peer> for shared context.
+	b.WriteString(`
+## When to ask the lead
+- Ambiguous requirements or multiple valid approaches — ask which direction
+- Changes that affect files other agents might be working on
+- Anything not covered in the task description
+- Use claude-irc msg to ask. If you need user input directly, use webform.
 
 ## Reporting
 - Share meaningful progress updates, not just status changes.
@@ -60,7 +67,7 @@ Run these commands to initialize your session:
 `)
 	fmt.Fprintf(&b, "- Update progress notes: whip status %s in_progress --note \"your progress here\"\n", task.ID)
 	b.WriteString(`- If blocked, say what you need specifically so it can be unblocked fast.
-- When you receive a message from the lead session, acknowledge it before continuing.
+- When you receive a message from the lead session, acknowledge and respond promptly.
 
 ## Completing Your Task
 When you've finished and verified your work:
