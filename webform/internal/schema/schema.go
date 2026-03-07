@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -21,17 +22,76 @@ func ReadFromStdin() (*Schema, error) {
 		return nil, err
 	}
 
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 {
+		return nil, fmt.Errorf("schema input is empty")
+	}
+
+	if trimmed[0] == '{' {
+		return parseJSON(data)
+	}
+
+	return parseDSL(string(data))
+}
+
+func parseJSON(data []byte) (*Schema, error) {
 	var s Schema
 	if err := json.Unmarshal(data, &s); err != nil {
 		return nil, fmt.Errorf("invalid JSON: %w", err)
 	}
 
-	if len(s.Fields) == 0 {
-		return nil, fmt.Errorf("schema must have at least one field")
+	if err := validate(&s); err != nil {
+		return nil, err
 	}
 
 	s.raw = string(data)
 	return &s, nil
+}
+
+func newSchema(title, description string, timeout int, fields []any) (*Schema, error) {
+	rawFields := make([]json.RawMessage, 0, len(fields))
+	for _, field := range fields {
+		data, err := json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("marshal field: %w", err)
+		}
+		rawFields = append(rawFields, data)
+	}
+
+	wire := map[string]any{
+		"t": title,
+		"f": fields,
+	}
+	if description != "" {
+		wire["d"] = description
+	}
+	if timeout > 0 {
+		wire["to"] = timeout
+	}
+
+	raw, err := json.Marshal(wire)
+	if err != nil {
+		return nil, fmt.Errorf("marshal schema: %w", err)
+	}
+
+	s := &Schema{
+		Title:       title,
+		Description: description,
+		Timeout:     timeout,
+		Fields:      rawFields,
+		raw:         string(raw),
+	}
+	if err := validate(s); err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+
+func validate(s *Schema) error {
+	if len(s.Fields) == 0 {
+		return fmt.Errorf("schema must have at least one field")
+	}
+	return nil
 }
 
 func (s *Schema) JSON() string {
@@ -43,28 +103,57 @@ func (s *Schema) SetRaw(raw string) {
 }
 
 func Reference() string {
-	return `Format: {"t":"title","d":"desc","to":timeout,"f":[[name,type,label,{opts}],...]}
+	return `Preferred input: DSL
+
+Header:
+  form "Title" [desc="Description"] [timeout=120]
+
+Field line:
+  <name> <type> "<label>" [opts...]
 
 Types:
-  t       text            pw      password        ta      textarea
-  n       number          sel     select          msel    multiselect
-  rad     radio           cb      checkbox        url     url
-  email   email           tel     tel             date    date
-  time    time            dt      datetime        color   color
-  range   range           file    file
-  json    json editor (returns parsed object or raw string on invalid JSON)
-  list    dynamic list    grp     field group
+  t pw ta n sel msel rad cb url email tel date time dt
+  color range file json list grp
 
-Opts:
-  r       required (1/0)          ph      placeholder
-  def     default value           o       options []
-  pat     regex pattern           min     min value/length
-  max     max value/length        step    step increment
-  rows    textarea rows           it      item type (list)
-  io      item opts (list)        f       sub fields (grp)
-  accept  file accept types       mul     multiple files (1/0)
+Flags:
+  req            required
+  multi          multiple files (file -> mul=1)
+
+Common opts:
+  ph="..."       placeholder
+  def="..."      default value
+  o=[a,b,c]      options for sel / msel / rad
+  min=1 max=10   numeric or length bounds
+  step=1         number / range step
+  rows=6         ta / json rows
+  accept="..."   file accept types
+  it=url         list item type
+  io.ph="..."    list item opts
+
+Group blocks:
+  profile grp "Profile" {
+    email email "Email" req
+    links list "Links" it=url io.ph="https://..."
+  }
+
+Value rules:
+  - Strings with spaces must be quoted
+  - Arrays use [a,b,c]
+  - Inline JSON values are allowed in opts, e.g. def={"enabled":true}
 
 Example:
-  {"t":"Config","f":[["key","pw","API Key",{"r":1}],["env","sel","Env",{"o":["dev","prod"]}]]}
+  form "Deploy Config" timeout=120
+  env sel "Environment" req o=[dev,staging,prod]
+  key pw "API Key" req
+  endpoints list "Endpoints" it=url io.ph="https://..."
+  advanced grp "Advanced" {
+    payload json "Payload" rows=8 def={"retries":3}
+    notify cb "Send notification" def=true
+  }
+
+JSON fallback:
+  {"t":"Deploy Config","f":[["env","sel","Environment",{"r":1,"o":["dev","staging","prod"]}]]}
+
+Need CLI flags instead? Run: webform --help
 `
 }

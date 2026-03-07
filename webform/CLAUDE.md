@@ -14,13 +14,11 @@ If you do not remember the schema format, run `webform schema` first.
 
 ```bash
 # 1. Define a compact schema
-webform <<< '{
-  "t":"API Config",
-  "f":[
-    ["key","pw","API Key",{"r":1}],
-    ["env","sel","Environment",{"o":["dev","staging","prod"],"r":1}]
-  ]
-}'
+webform <<'EOF'
+form "API Config"
+key pw "API Key" req
+env sel "Environment" req o=[dev,staging,prod]
+EOF
 
 # 2. Wait for the browser form to be submitted
 # 3. Read stdout JSON
@@ -29,7 +27,7 @@ webform <<< '{
 
 ## Help
 
-Run `webform --help` and `webform schema` when you need the full CLI or schema reference.
+Run `webform schema` when you need the DSL format, and `webform --help` for CLI flags.
 
 ## Notes
 

@@ -4,11 +4,11 @@ Dynamic web form for collecting structured data from users. AI generates a compa
 
 ## The Problem
 
-Terminal prompts are fine for simple inputs, but collecting complex, multi-field, or sensitive data (passwords, API keys) is clunky. Copy-pasting multi-line JSON or filling many sequential prompts is error-prone.
+Terminal prompts are fine for simple inputs, but collecting complex, multi-field, or sensitive data (passwords, API keys) is clunky. Filling a browser form is often faster and less error-prone.
 
 ## The Solution
 
-`webform` opens a real web form in the browser. The AI describes what it needs as a compact JSON schema, and the user fills it out with proper UI controls — dropdowns, checkboxes, password fields, file uploads, and more.
+`webform` opens a real web form in the browser. The AI describes what it needs as a compact schema, and the user fills it out with proper UI controls — dropdowns, checkboxes, password fields, file uploads, and more.
 
 ## Quick Start
 
@@ -17,7 +17,11 @@ Terminal prompts are fine for simple inputs, but collecting complex, multi-field
 curl -fsSL https://raw.githubusercontent.com/bang9/ai-tools/main/webform/install.sh | bash
 
 # Open a form
-webform <<< '{"t":"API Config","f":[["key","pw","API Key",{"r":1}],["env","sel","Environment",{"o":["dev","staging","prod"]}]]}'
+webform <<'EOF'
+form "API Config"
+key pw "API Key" req
+env sel "Environment" req o=[dev,staging,prod]
+EOF
 ```
 
 ## Plugin
@@ -41,8 +45,11 @@ Installs the `webform` CLI automatically in Claude Code sessions:
 
 ## Schema Format
 
+Preferred input is the DSL shown by `webform schema`. JSON still works as a fallback.
+
 ```
-{"t":"title","d":"desc","to":timeout,"f":[[name,type,label,{opts}],...]}
+form "Title" [desc="Description"] [timeout=120]
+<name> <type> "<label>" [opts...]
 ```
 
 **Field types:**
@@ -57,25 +64,30 @@ Installs the `webform` CLI automatically in Claude Code sessions:
 | `range` | range | `file` | file | `json` | json editor |
 | `list` | dynamic list | `grp` | field group | | |
 
-**Options:**
+**Common options:**
 
 | Key | Description | Key | Description |
 |-----|-------------|-----|-------------|
-| `r` | required (1/0) | `ph` | placeholder |
+| `req` | required | `ph` | placeholder |
 | `def` | default value | `o` | options array |
 | `pat` | regex pattern | `min` | min value/length |
 | `max` | max value/length | `step` | step increment |
 | `rows` | textarea rows | `accept` | file accept types |
+| `it` | list item type | `io.ph` | list item placeholder |
+| `multi` | multiple files (`file`) | | |
+
+Need the full syntax and examples? Run `webform schema`.
 
 ## Example
 
 ```bash
-webform <<< '{"t":"Deploy Config","to":120,"f":[
-  ["env","sel","Environment",{"o":["dev","staging","prod"],"r":1}],
-  ["key","pw","API Key",{"r":1}],
-  ["endpoints","list","Endpoints",{"it":"url"}],
-  ["notify","cb","Send notification"]
-]}'
+webform <<'EOF'
+form "Deploy Config" timeout=120
+env sel "Environment" req o=[dev,staging,prod]
+key pw "API Key" req
+endpoints list "Endpoints" it=url io.ph="https://..."
+notify cb "Send notification"
+EOF
 ```
 
 Result:
@@ -87,7 +99,7 @@ Status values: `submitted`, `cancelled`, `timeout`
 
 ## How It Works
 
-1. CLI reads schema JSON from stdin
+1. CLI reads a schema from stdin
 2. Starts a temporary local HTTP server on a random port
 3. Opens the form in the default browser
 4. User fills out and submits (or cancels / times out)

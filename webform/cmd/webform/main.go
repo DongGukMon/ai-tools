@@ -78,6 +78,12 @@ Options:
   --timeout N   Timeout in seconds (default: 300, overridden by schema "to" field)
 
 Example:
-  webform <<< '{"t":"Config","f":[["key","pw","API Key",{"r":1}]]}'`)
-}
+  webform <<'EOF'
+  form "Config"
+  key pw "API Key" req
+  env sel "Environment" req o=[dev,prod]
+  EOF
 
+Schema reference:
+  webform schema`)
+}
