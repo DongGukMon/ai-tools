@@ -99,6 +99,7 @@ var (
 )
 
 type tickMsg time.Time
+type cleanedMsg int
 
 type DashboardModel struct {
 	store        *Store
@@ -130,6 +131,13 @@ func tickCmd() tea.Cmd {
 	})
 }
 
+func (m DashboardModel) cleanTasks() tea.Cmd {
+	return func() tea.Msg {
+		count, _ := m.store.CleanTerminal()
+		return cleanedMsg(count)
+	}
+}
+
 func (m DashboardModel) loadTasks() tea.Cmd {
 	return func() tea.Msg {
 		tasks, err := m.store.ListTasks()
@@ -148,6 +156,8 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case "r":
 			return m, m.loadTasks()
+		case "c":
+			return m, m.cleanTasks()
 		}
 
 	case tea.WindowSizeMsg:
@@ -157,6 +167,9 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case []*Task:
 		m.tasks = msg
 		m.err = nil
+
+	case cleanedMsg:
+		return m, m.loadTasks()
 
 	case error:
 		m.err = msg
@@ -212,7 +225,7 @@ func (m DashboardModel) View() string {
 
 	// Footer
 	b.WriteString("\n")
-	b.WriteString(footerStyle.Render("  q quit  r refresh  Auto-refreshing every 2s"))
+	b.WriteString(footerStyle.Render("  q quit  r refresh  c clean completed  Auto-refreshing every 2s"))
 
 	return b.String()
 }

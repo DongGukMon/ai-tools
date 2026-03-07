@@ -32,7 +32,6 @@ Enable monitoring:
 
 Wait for completion, then wrap up:
 ```bash
-whip clean
 claude-irc quit
 ```
 
@@ -90,7 +89,6 @@ As tasks complete:
 
 When all tasks are complete:
 ```bash
-whip clean
 claude-irc quit
 ```
 
