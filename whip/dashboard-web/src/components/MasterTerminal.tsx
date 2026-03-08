@@ -283,29 +283,95 @@ export function MasterTerminal({ client, fullscreen, onToggleFullscreen }: Maste
 
         <div className="flex-1" />
 
-        {/* Fullscreen toggle */}
-        {onToggleFullscreen && (
+        {/* Control buttons */}
+        <div className="flex items-center gap-0.5">
+          {/* Arrow keys */}
           <button
-            onClick={onToggleFullscreen}
-            className="p-2 -mr-1 rounded-md transition-all active:scale-95"
+            onClick={() => { client.sendMasterKeys('\x1b[A').catch(() => {}) }}
+            className="p-1.5 rounded transition-all active:scale-90"
             style={{ color: T.dim }}
-            title={fullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen'}
+            title="Up"
+            disabled={!alive}
           >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              {fullscreen ? (
-                <>
-                  <polyline points="6 2 6 6 2 6" /><polyline points="10 14 10 10 14 10" />
-                  <polyline points="14 6 10 6 10 2" /><polyline points="2 10 6 10 6 14" />
-                </>
-              ) : (
-                <>
-                  <polyline points="2 6 2 2 6 2" /><polyline points="14 10 14 14 10 14" />
-                  <polyline points="10 2 14 2 14 6" /><polyline points="6 14 2 14 2 10" />
-                </>
-              )}
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="4 10 8 6 12 10" />
             </svg>
           </button>
-        )}
+          <button
+            onClick={() => { client.sendMasterKeys('\x1b[B').catch(() => {}) }}
+            className="p-1.5 rounded transition-all active:scale-90"
+            style={{ color: T.dim }}
+            title="Down"
+            disabled={!alive}
+          >
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="4 6 8 10 12 6" />
+            </svg>
+          </button>
+          <button
+            onClick={() => { client.sendMasterKeys('\x1b[D').catch(() => {}) }}
+            className="p-1.5 rounded transition-all active:scale-90"
+            style={{ color: T.dim }}
+            title="Left"
+            disabled={!alive}
+          >
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="10 4 6 8 10 12" />
+            </svg>
+          </button>
+          <button
+            onClick={() => { client.sendMasterKeys('\x1b[C').catch(() => {}) }}
+            className="p-1.5 rounded transition-all active:scale-90"
+            style={{ color: T.dim }}
+            title="Right"
+            disabled={!alive}
+          >
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="6 4 10 8 6 12" />
+            </svg>
+          </button>
+
+          {/* Divider */}
+          <div className="w-px h-4 mx-1" style={{ backgroundColor: T.border }} />
+
+          {/* Ctrl+C */}
+          <button
+            onClick={() => { client.sendMasterKeys('\x03').catch(() => {}) }}
+            className="px-1.5 py-1 rounded text-[10px] font-mono font-semibold transition-all active:scale-95 hover:brightness-125"
+            style={{ color: '#FF6B6B', backgroundColor: `${T.border}` }}
+            title="Send Ctrl+C"
+            disabled={!alive}
+          >
+            ^C
+          </button>
+
+          {/* Divider */}
+          <div className="w-px h-4 mx-1" style={{ backgroundColor: T.border }} />
+
+          {/* Fullscreen toggle */}
+          {onToggleFullscreen && (
+            <button
+              onClick={onToggleFullscreen}
+              className="p-1.5 -mr-1 rounded-md transition-all active:scale-95"
+              style={{ color: T.dim }}
+              title={fullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen'}
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                {fullscreen ? (
+                  <>
+                    <polyline points="6 2 6 6 2 6" /><polyline points="10 14 10 10 14 10" />
+                    <polyline points="14 6 10 6 10 2" /><polyline points="2 10 6 10 6 14" />
+                  </>
+                ) : (
+                  <>
+                    <polyline points="2 6 2 2 6 2" /><polyline points="14 10 14 14 10 14" />
+                    <polyline points="10 2 14 2 14 6" /><polyline points="6 14 2 14 2 10" />
+                  </>
+                )}
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Terminal viewport */}

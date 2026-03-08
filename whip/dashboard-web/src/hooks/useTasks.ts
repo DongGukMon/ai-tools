@@ -3,13 +3,23 @@ import type { Task } from '../api/types'
 import type { WhipAPIClient } from '../api/client'
 import { AuthError, ConnectionError } from '../api/client'
 
-const POLL_INTERVAL = 2000
+const DEFAULT_POLL_INTERVAL = 2000
 
-export function useTasks(client: WhipAPIClient | null, onAuthError: () => void) {
+interface Callbacks {
+  onAuthError: () => void
+  onConnectionError: () => void
+  onConnectionSuccess: () => void
+}
+
+export function useTasks(
+  client: WhipAPIClient | null,
+  callbacks: Callbacks,
+  pollInterval: number = DEFAULT_POLL_INTERVAL,
+) {
   const [tasks, setTasks] = useState<Task[]>([])
   const [error, setError] = useState<string | null>(null)
-  const onAuthErrorRef = useRef(onAuthError)
-  onAuthErrorRef.current = onAuthError
+  const callbacksRef = useRef(callbacks)
+  callbacksRef.current = callbacks
 
   const fetchTasks = useCallback(async () => {
     if (!client) return
@@ -17,9 +27,14 @@ export function useTasks(client: WhipAPIClient | null, onAuthError: () => void) 
       const data = await client.getTasks()
       setTasks(data)
       setError(null)
+      callbacksRef.current.onConnectionSuccess()
     } catch (err) {
-      if (err instanceof AuthError || err instanceof ConnectionError) {
-        onAuthErrorRef.current()
+      if (err instanceof AuthError) {
+        callbacksRef.current.onAuthError()
+        return
+      }
+      if (err instanceof ConnectionError) {
+        callbacksRef.current.onConnectionError()
         return
       }
       setError(err instanceof Error ? err.message : 'Failed to fetch tasks')
@@ -28,9 +43,9 @@ export function useTasks(client: WhipAPIClient | null, onAuthError: () => void) 
 
   useEffect(() => {
     fetchTasks()
-    const id = setInterval(fetchTasks, POLL_INTERVAL)
+    const id = setInterval(fetchTasks, pollInterval)
     return () => clearInterval(id)
-  }, [fetchTasks])
+  }, [fetchTasks, pollInterval])
 
   return { tasks, error }
 }

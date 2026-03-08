@@ -3,6 +3,7 @@ import type { Task, Peer, Message } from '../api/types'
 import { AuthError, ConnectionError } from '../api/client'
 import { getClient, clearAuth } from '../stores/auth'
 import { useTasks } from '../hooks/useTasks'
+import { useConnectionStatus, getBackoffInterval } from '../hooks/useConnectionStatus'
 import { TaskTable } from '../components/TaskTable'
 import { TaskDetail } from '../components/TaskDetail'
 import { SummaryStats } from '../components/SummaryStats'
@@ -46,12 +47,21 @@ export function DashboardPage({ onDisconnect }: Props) {
   const [sentMessages, setSentMessages] = useState<SentMessage[]>([])
   const [sending, setSending] = useState(false)
 
-  const handleDisconnected = useCallback(() => {
+  const handleLogout = useCallback(() => {
     clearAuth()
     onDisconnect()
   }, [onDisconnect])
 
-  const { tasks, error } = useTasks(client, handleDisconnected)
+  const connectionStatus = useConnectionStatus(handleLogout)
+  const pollInterval = connectionStatus.status === 'reconnecting'
+    ? getBackoffInterval(connectionStatus.retryCount)
+    : 2000
+
+  const { tasks, error } = useTasks(client, {
+    onAuthError: connectionStatus.onAuthError,
+    onConnectionError: connectionStatus.onConnectionError,
+    onConnectionSuccess: connectionStatus.onConnectionSuccess,
+  }, pollInterval)
   const sortedPeers = useMemo(() => sortPeers(peers), [peers])
 
   // Keep selected task in sync with latest data
@@ -65,26 +75,40 @@ export function DashboardPage({ onDisconnect }: Props) {
     if (!client) return
     let active = true
     const poll = () => {
-      client.getPeers().then(p => { if (active) setPeers(p) }).catch(err => {
-        if (err instanceof AuthError || err instanceof ConnectionError) handleDisconnected()
+      client.getPeers().then(p => {
+        if (active) {
+          setPeers(p)
+          connectionStatus.onConnectionSuccess()
+        }
+      }).catch(err => {
+        if (err instanceof AuthError) connectionStatus.onAuthError()
+        else if (err instanceof ConnectionError) connectionStatus.onConnectionError()
       })
     }
     poll()
-    const id = setInterval(poll, 2000)
+    const id = setInterval(poll, pollInterval)
     return () => { active = false; clearInterval(id) }
-  }, [client, handleDisconnected])
+  }, [client, pollInterval, connectionStatus])
 
   // Poll inbox every 2s
   useEffect(() => {
     if (!client) return
     let active = true
     const poll = () => {
-      client.getInbox('user', true).then(m => { if (active) setInboxMessages(m) }).catch(() => {})
+      client.getInbox('user', true).then(m => {
+        if (active) {
+          setInboxMessages(m)
+          connectionStatus.onConnectionSuccess()
+        }
+      }).catch(err => {
+        if (err instanceof AuthError) connectionStatus.onAuthError()
+        else if (err instanceof ConnectionError) connectionStatus.onConnectionError()
+      })
     }
     poll()
-    const id = setInterval(poll, 2000)
+    const id = setInterval(poll, pollInterval)
     return () => { active = false; clearInterval(id) }
-  }, [client])
+  }, [client, pollInterval, connectionStatus])
 
   useEffect(() => {
     if (sortedPeers.length === 0) {
@@ -163,6 +187,16 @@ export function DashboardPage({ onDisconnect }: Props) {
 
   return (
     <div>
+      {/* Reconnecting banner */}
+      {connectionStatus.status === 'reconnecting' && (
+        <div className="mb-3 px-4 py-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40 flex items-center gap-2">
+          <span className="inline-block w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+          <span className="text-sm text-amber-700 dark:text-amber-400">
+            Reconnecting… (attempt {connectionStatus.retryCount})
+          </span>
+        </div>
+      )}
+
       {/* Tab navigation */}
       <div className="flex items-center gap-4 mb-4">
         <button
@@ -197,7 +231,7 @@ export function DashboardPage({ onDisconnect }: Props) {
         </button>
         <div className="flex-1" />
         <button
-          onClick={handleDisconnected}
+          onClick={handleLogout}
           className="px-3 py-1.5 rounded-md text-sm text-gray-500 dark:text-gray-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
         >
           Disconnect
