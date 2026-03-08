@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { WhipAPIClient, parseConnectURL, AuthError } from '../api/client'
 import { saveAuth, clearAuth, getClient } from '../stores/auth'
 
@@ -7,6 +8,7 @@ interface Props {
 }
 
 export function LoginPage({ onLogin }: Props) {
+  const [searchParams] = useSearchParams()
   const [url, setUrl] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -14,10 +16,8 @@ export function LoginPage({ onLogin }: Props) {
 
   useEffect(() => {
     const autoConnect = async () => {
-      // Check hash or query param for auto-connect
-      const hash = window.location.hash.slice(1)
-      const params = new URLSearchParams(window.location.search)
-      const urlParam = hash || params.get('url')
+      // Check ?url= query param for auto-connect
+      const urlParam = searchParams.get('url')
       if (urlParam) {
         setUrl(urlParam)
         window.history.replaceState({}, '', window.location.pathname)
@@ -49,7 +49,7 @@ export function LoginPage({ onLogin }: Props) {
       }
     }
     autoConnect()
-  }, [onLogin])
+  }, [onLogin, searchParams])
 
   const handleSubmit = async (e: { preventDefault: () => void }) => {
     e.preventDefault()
@@ -96,7 +96,7 @@ export function LoginPage({ onLogin }: Props) {
           <div className="flex items-center gap-2 mb-1">
             <span className="bg-[#8B5CF6] text-white text-xs font-bold px-2 py-0.5 rounded">whip</span>
           </div>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Task Orchestrator</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Connect to your orchestrator</p>
         </div>
 
         <form onSubmit={handleSubmit}>
