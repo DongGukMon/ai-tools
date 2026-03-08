@@ -227,6 +227,11 @@ function TerminalDemo() {
   return (
     <section className="px-6 pb-20 sm:pb-28">
       <div className="max-w-5xl mx-auto">
+        <div className="mb-8">
+          <p className="text-xs font-mono tracking-widest uppercase text-[#8B5CF6] mb-3">Orchestrate</p>
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 dark:text-white mb-2">Parallel Task Dispatch</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 max-w-lg">Create tasks, wire dependencies, and watch agents work in parallel — with auto-assignment when prerequisites complete.</p>
+        </div>
         <div className="rounded-xl border border-gray-200 dark:border-slate-800 overflow-hidden shadow-sm dark:shadow-none">
           {/* Title bar */}
           <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 dark:bg-[#0D1526] border-b border-gray-200 dark:border-slate-800">
@@ -272,6 +277,206 @@ function TerminalDemo() {
               <div className="flex gap-2 mt-0.5">
                 <span className="text-[#8B5CF6] select-none shrink-0">$</span>
                 <span className="inline-block w-[7px] h-[14px] align-text-bottom bg-[#8B5CF6] animate-pulse rounded-sm" />
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ── TUI Dashboard Mock ─────────────────────────────────────────────
+
+const tuiTasks = [
+  { id: 't-a1', title: 'Auth module', status: 'in_progress', deps: '—', diff: 'medium' },
+  { id: 't-b2', title: 'API routes', status: 'in_progress', deps: '—', diff: 'easy' },
+  { id: 't-c3', title: 'Tests', status: 'completed', deps: '—', diff: 'easy' },
+  { id: 't-d4', title: 'Deploy', status: 'blocked', deps: 'a1,b2,c3', diff: 'easy' },
+  { id: 't-e5', title: 'Documentation', status: 'created', deps: '—', diff: 'easy' },
+] as const
+
+function statusDot(s: string) {
+  switch (s) {
+    case 'in_progress': return { color: '#8B5CF6', label: 'running', pulse: true }
+    case 'completed': return { color: '#34D399', label: 'done', pulse: false }
+    case 'blocked': return { color: '#FBBF24', label: 'blocked', pulse: false }
+    default: return { color: '#64748B', label: 'created', pulse: false }
+  }
+}
+
+function TuiDashboard() {
+  return (
+    <section className="px-6 pb-20 sm:pb-28">
+      <div className="max-w-5xl mx-auto">
+        <div className="mb-8">
+          <p className="text-xs font-mono tracking-widest uppercase text-[#8B5CF6] mb-3">Monitor</p>
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 dark:text-white mb-2">Real-time Dashboard</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 max-w-lg">Live TUI dashboard with task statuses, dependency tracking, and keyboard shortcuts. Also available as a web dashboard.</p>
+        </div>
+        <div className="rounded-xl border border-gray-200 dark:border-slate-800 overflow-hidden shadow-sm dark:shadow-none">
+          {/* Title bar */}
+          <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 dark:bg-[#0D1526] border-b border-gray-200 dark:border-slate-800">
+            <div className="flex gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-red-400/70" />
+              <span className="w-2.5 h-2.5 rounded-full bg-yellow-400/70" />
+              <span className="w-2.5 h-2.5 rounded-full bg-green-400/70" />
+            </div>
+            <span className="text-[10px] font-mono text-gray-400 dark:text-gray-600 ml-2">whip dashboard</span>
+          </div>
+          {/* Dashboard body */}
+          <div className="bg-[#FAFBFC] dark:bg-[#060E1F] font-mono text-xs sm:text-[13px]">
+            {/* Summary stats */}
+            <div className="flex items-center gap-4 sm:gap-6 px-4 sm:px-5 py-3 border-b border-gray-100 dark:border-slate-800/60">
+              <span className="text-gray-400 dark:text-gray-600">5 tasks</span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#8B5CF6] animate-pulse" />
+                <span style={{ color: '#8B5CF6' }}>2 running</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#34D399]" />
+                <span style={{ color: '#34D399' }}>1 done</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#FBBF24]" />
+                <span style={{ color: '#FBBF24' }}>1 blocked</span>
+              </span>
+            </div>
+            {/* Table header */}
+            <div className="grid grid-cols-[4.5rem_1fr_6rem_5rem_3.5rem] sm:grid-cols-[5rem_1fr_7rem_6rem_4.5rem] px-4 sm:px-5 py-2 text-[10px] sm:text-xs text-gray-400 dark:text-gray-600 uppercase tracking-wider border-b border-gray-100 dark:border-slate-800/60">
+              <span>ID</span><span>Title</span><span>Status</span><span>Deps</span><span>Diff</span>
+            </div>
+            {/* Task rows */}
+            {tuiTasks.map((t, i) => {
+              const s = statusDot(t.status)
+              return (
+                <div
+                  key={t.id}
+                  className={`grid grid-cols-[4.5rem_1fr_6rem_5rem_3.5rem] sm:grid-cols-[5rem_1fr_7rem_6rem_4.5rem] px-4 sm:px-5 py-2 border-b border-gray-50 dark:border-slate-800/30 ${i === 0 ? 'bg-[#8B5CF608]' : ''}`}
+                >
+                  <span className="text-gray-400 dark:text-gray-600">{t.id}</span>
+                  <span className="text-gray-800 dark:text-gray-200 truncate">{t.title}</span>
+                  <span className="flex items-center gap-1.5">
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${s.pulse ? 'animate-pulse' : ''}`} style={{ backgroundColor: s.color }} />
+                    <span style={{ color: s.color }}>{s.label}</span>
+                  </span>
+                  <span className="text-gray-400 dark:text-gray-600">{t.deps}</span>
+                  <span className="text-gray-400 dark:text-gray-600">{t.diff}</span>
+                </div>
+              )
+            })}
+            {/* Footer */}
+            <div className="flex items-center justify-between px-4 sm:px-5 py-2.5 text-[10px] text-gray-400 dark:text-gray-600">
+              <div className="flex items-center gap-3">
+                <span><kbd className="px-1 py-0.5 rounded bg-gray-100 dark:bg-slate-800 text-[9px]">R</kbd> remote</span>
+                <span><kbd className="px-1 py-0.5 rounded bg-gray-100 dark:bg-slate-800 text-[9px]">D</kbd> detail</span>
+                <span><kbd className="px-1 py-0.5 rounded bg-gray-100 dark:bg-slate-800 text-[9px]">Q</kbd> quit</span>
+              </div>
+              <span>↻ 2s auto-refresh</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ── IRC Demo ──────────────────────────────────────────────────────
+
+const agentColor: Record<string, string> = {
+  'whip-master': '#8B5CF6',
+  'task-auth': '#60A5FA',
+  'task-api': '#34D399',
+  'task-deploy': '#FBBF24',
+}
+
+const ircMessages = [
+  { from: 'whip-master', to: 'task-auth', text: 'Implement JWT auth with RS256 keys. See topic "Auth Spec".' },
+  { from: 'task-auth', to: 'whip-master', text: 'Auth module complete. Published types to topic "Auth Contract".' },
+  { from: 'task-auth', to: 'task-api', text: 'Check topic "Auth Contract" for the token verification interface.' },
+  { from: 'task-api', to: 'whip-master', text: '12 REST endpoints implemented. All integration tests passing.' },
+  { from: 'whip-master', to: 'task-deploy', text: 'All dependencies met. Begin staging deployment.' },
+  { from: 'task-deploy', to: 'whip-master', text: 'Deployed to staging. Health checks green.' },
+]
+
+function IrcDemo() {
+  const [visibleCount, setVisibleCount] = useState(0)
+  const cancelRef = useRef(false)
+
+  useEffect(() => {
+    cancelRef.current = false
+    const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
+    const done = () => cancelRef.current
+
+    const run = async () => {
+      while (!done()) {
+        setVisibleCount(0)
+        await sleep(1000)
+        for (let i = 1; i <= ircMessages.length; i++) {
+          if (done()) return
+          setVisibleCount(i)
+          await sleep(1200)
+        }
+        if (done()) return
+        await sleep(3500)
+      }
+    }
+
+    run()
+    return () => { cancelRef.current = true }
+  }, [])
+
+  return (
+    <section className="px-6 pb-20 sm:pb-28">
+      <div className="max-w-5xl mx-auto">
+        <div className="mb-8">
+          <p className="text-xs font-mono tracking-widest uppercase text-[#8B5CF6] mb-3">Coordinate</p>
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 dark:text-white mb-2">Agent Communication</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 max-w-lg">Agents talk to each other through claude-irc — sharing API contracts, syncing on blockers, and notifying the lead when work is done.</p>
+        </div>
+        <div className="rounded-xl border border-gray-200 dark:border-slate-800 overflow-hidden shadow-sm dark:shadow-none">
+          {/* Title bar */}
+          <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 dark:bg-[#0D1526] border-b border-gray-200 dark:border-slate-800">
+            <div className="flex gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-red-400/70" />
+              <span className="w-2.5 h-2.5 rounded-full bg-yellow-400/70" />
+              <span className="w-2.5 h-2.5 rounded-full bg-green-400/70" />
+            </div>
+            <span className="text-[10px] font-mono text-gray-400 dark:text-gray-600 ml-2">claude-irc</span>
+            {/* Online peers */}
+            <div className="flex items-center gap-2 ml-auto">
+              {Object.entries(agentColor).map(([name, color]) => (
+                <span key={name} className="flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />
+                  <span className="text-[10px] font-mono hidden sm:inline" style={{ color }}>{name}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+          {/* Messages */}
+          <div className="bg-[#FAFBFC] dark:bg-[#060E1F] px-4 sm:px-5 py-4 font-mono text-xs sm:text-[13px] leading-[1.7] min-h-[200px]">
+            {ircMessages.slice(0, visibleCount).map((msg, i) => (
+              <div
+                key={i}
+                className="flex gap-0 mb-3 last:mb-0 animate-[fadeSlideIn_0.3s_ease_forwards]"
+              >
+                <div className="shrink-0 w-full">
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <span className="font-semibold" style={{ color: agentColor[msg.from] }}>{msg.from}</span>
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-gray-300 dark:text-gray-700 shrink-0">
+                      <path d="M3 8h10M9 4l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    <span className="font-semibold" style={{ color: agentColor[msg.to] }}>{msg.to}</span>
+                  </div>
+                  <div className="pl-0 sm:pl-3 text-gray-600 dark:text-gray-400 leading-relaxed">
+                    "{msg.text}"
+                  </div>
+                </div>
+              </div>
+            ))}
+            {visibleCount === 0 && (
+              <div className="flex items-center justify-center h-[160px] text-gray-300 dark:text-gray-700 text-sm">
+                <span className="animate-pulse">connecting...</span>
               </div>
             )}
           </div>
@@ -381,6 +586,12 @@ export function LandingPage() {
 
       {/* Animated terminal demo */}
       <TerminalDemo />
+
+      {/* TUI Dashboard */}
+      <TuiDashboard />
+
+      {/* IRC Communication */}
+      <IrcDemo />
 
       {/* Features */}
       <section className="px-6 pb-20 sm:pb-28">
