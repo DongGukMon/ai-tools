@@ -12,6 +12,7 @@ import (
 
 var startDetachedShellCommand = func(command string) error {
 	cmd := exec.Command("sh", "-c", command)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	return cmd.Start()
 }
 
