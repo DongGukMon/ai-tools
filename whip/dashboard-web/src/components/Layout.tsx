@@ -8,7 +8,7 @@ interface LayoutProps {
 
 export function Layout({ children }: LayoutProps) {
   return (
-    <div className="min-h-screen bg-white dark:bg-[#0B1120] text-gray-900 dark:text-gray-100 transition-colors text-[0.9375rem]">
+    <div className="min-h-screen bg-white dark:bg-[#0B1120] text-gray-900 dark:text-gray-100 transition-colors text-[0.9375rem] overflow-x-hidden">
       <header className="border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-[#0B1120]">
         <div className="max-w-7xl mx-auto px-5 sm:px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3">

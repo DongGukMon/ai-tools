@@ -16,7 +16,7 @@ export function SummaryStats({ tasks }: { tasks: Task[] }) {
   }
 
   return (
-    <div className="inline-flex items-center gap-0 border border-gray-300 dark:border-gray-700 rounded-lg px-4 py-1.5 ml-2">
+    <div className="inline-flex items-center gap-0 border border-gray-300 dark:border-gray-700 rounded-lg px-4 py-1.5 ml-2 max-w-full overflow-x-auto">
       <span className="font-bold text-gray-900 dark:text-gray-100">
         {tasks.length} total
       </span>
