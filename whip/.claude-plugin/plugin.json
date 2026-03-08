@@ -1,6 +1,6 @@
 {
   "name": "whip",
-  "version": "v1.32.0",
+  "version": "v1.33.0",
   "description": "Task orchestrator for Claude Code — spawn and manage multiple task sessions",
   "author": {
     "name": "Airen Kang",
