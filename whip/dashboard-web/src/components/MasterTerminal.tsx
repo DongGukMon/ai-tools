@@ -173,15 +173,15 @@ export function MasterTerminal({ client, fullscreen, onToggleFullscreen }: Maste
 
             // Always clear and rewrite to avoid accumulation bugs
             term.reset()
-            term.write(content)
-
-            // Preserve scroll position
-            if (wasAtBottom) {
-              term.scrollToBottom()
-            } else {
-              const newBase = term.buffer.active.baseY
-              term.scrollToLine(Math.max(0, newBase - distFromBottom))
-            }
+            term.write(content, () => {
+              // Callback fires after write completes — buffer positions are final
+              if (wasAtBottom) {
+                term.scrollToBottom()
+              } else {
+                const newBase = term.buffer.active.baseY
+                term.scrollToLine(Math.max(0, newBase - distFromBottom))
+              }
+            })
           }
           prevContentRef.current = content
         }
