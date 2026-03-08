@@ -492,10 +492,25 @@ func handleMasterKeys(w http.ResponseWriter, r *http.Request, sessionName string
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "keys required"})
 		return
 	}
-	cmd := exec.Command("tmux", "send-keys", "-t", sessionName, "-l", body.Keys)
-	if err := cmd.Run(); err != nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "session not available"})
-		return
+	// Split into literal text and trailing Enter if present
+	keys := body.Keys
+	hasEnter := len(keys) > 0 && keys[len(keys)-1] == '\n'
+	if hasEnter {
+		keys = keys[:len(keys)-1]
+	}
+	if keys != "" {
+		cmd := exec.Command("tmux", "send-keys", "-t", sessionName, "-l", keys)
+		if err := cmd.Run(); err != nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "session not available"})
+			return
+		}
+	}
+	if hasEnter {
+		cmd := exec.Command("tmux", "send-keys", "-t", sessionName, "Enter")
+		if err := cmd.Run(); err != nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "session not available"})
+			return
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
