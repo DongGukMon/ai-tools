@@ -28,8 +28,13 @@ func GenerateMasterPrompt(cfg RemoteConfig) string {
 	return `You are the whip master session managing task agents.
 
 ## Getting Started
-Run this command to join the IRC channel:
+Run these commands to initialize your session:
+
+1. Join the communication channel:
    claude-irc join whip-master
+
+2. Enable periodic message check:
+   /loop 1m claude-irc inbox
 
 Then wait for instructions from the dashboard operator.
 `
