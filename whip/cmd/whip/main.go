@@ -50,6 +50,7 @@ func newRootCmd() *cobra.Command {
 		broadcastCmd(),
 		heartbeatCmd(),
 		killCmd(),
+		deleteCmd(),
 		cleanCmd(),
 		dashboardCmd(),
 		depCmd(),
@@ -811,6 +812,49 @@ func killCmd() *cobra.Command {
 			}
 
 			fmt.Fprintf(os.Stderr, "Killed task %s (PID: %d)\n", id, task.ShellPID)
+			return nil
+		},
+	}
+}
+
+func deleteCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "delete <id> [id...]",
+		Short: "Delete tasks and their sessions",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			store, err := whip.NewStore()
+			if err != nil {
+				return err
+			}
+
+			for _, arg := range args {
+				id, err := store.ResolveID(arg)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+					continue
+				}
+
+				task, err := store.LoadTask(id)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+					continue
+				}
+
+				// Kill running session if any
+				if task.Runner == "tmux" && whip.IsTmuxSession(id) {
+					_ = whip.KillTmuxSession(id)
+				}
+				if task.ShellPID > 0 && whip.IsProcessAlive(task.ShellPID) {
+					_ = whip.KillProcess(task.ShellPID)
+				}
+
+				if err := store.DeleteTask(id); err != nil {
+					fmt.Fprintf(os.Stderr, "Warning: delete %s: %v\n", id, err)
+					continue
+				}
+				fmt.Fprintf(os.Stderr, "Deleted task %s (%s)\n", id, task.Title)
+			}
 			return nil
 		},
 	}
