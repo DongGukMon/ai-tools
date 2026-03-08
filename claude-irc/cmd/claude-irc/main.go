@@ -708,9 +708,11 @@ func serveCmd() *cobra.Command {
 						connectURL = publicURL
 					}
 					fullURL := fmt.Sprintf("%s?token=%s", connectURL, info.Token)
+					shortURL := fmt.Sprintf("%s/s/%s", connectURL, info.ShortCode)
 					webURL := fmt.Sprintf("https://whip.bang9.dev#%s", fullURL)
 					fmt.Fprintf(os.Stderr, "claude-irc serve started.\n")
 					fmt.Fprintf(os.Stderr, "Connect URL: %s\n", fullURL)
+					fmt.Fprintf(os.Stderr, "Short URL: %s\n", shortURL)
 					if keyboardShortcutsAvailable() {
 						fmt.Fprintf(os.Stderr, "\nShortcuts: [o] open in browser  [c] copy URL  [q] quit\n")
 						go serveKeyboardLoop(ctx, webURL, fullURL, cancel)

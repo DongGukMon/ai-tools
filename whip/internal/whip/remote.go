@@ -87,10 +87,16 @@ func StopMasterSession() error {
 	return KillTmuxSessionName(MasterSessionName)
 }
 
+// ServeResult holds the parsed output from claude-irc serve.
+type ServeResult struct {
+	ConnectURL string
+	ShortURL   string
+}
+
 // StartServe starts `claude-irc serve` as a subprocess and returns the
-// process handle, the parsed connect URL, and any error.
+// process handle, the parsed URLs, and any error.
 // When silent is true, stdout/stderr are suppressed and stdin is detached (for TUI embedding).
-func StartServe(ctx context.Context, cfg RemoteConfig, silent bool) (*exec.Cmd, string, error) {
+func StartServe(ctx context.Context, cfg RemoteConfig, silent bool) (*exec.Cmd, ServeResult, error) {
 	args := []string{"serve", "--port", strconv.Itoa(cfg.Port), "--master-tmux", MasterSessionName}
 	if cfg.Tunnel != "" {
 		args = append(args, "--tunnel", cfg.Tunnel)
@@ -106,18 +112,19 @@ func StartServe(ctx context.Context, cfg RemoteConfig, silent bool) (*exec.Cmd, 
 
 	stderrPipe, err := cmd.StderrPipe()
 	if err != nil {
-		return nil, "", fmt.Errorf("stderr pipe: %w", err)
+		return nil, ServeResult{}, fmt.Errorf("stderr pipe: %w", err)
 	}
 
 	if err := cmd.Start(); err != nil {
-		return nil, "", fmt.Errorf("start claude-irc serve: %w", err)
+		return nil, ServeResult{}, fmt.Errorf("start claude-irc serve: %w", err)
 	}
 
-	// Parse connect URL from stderr with timeout
-	connectURL := ""
+	// Parse URLs from stderr with timeout
+	var result ServeResult
 	done := make(chan struct{})
 	go func() {
 		scanner := bufio.NewScanner(stderrPipe)
+		got := 0
 		for scanner.Scan() {
 			line := scanner.Text()
 			if !silent {
@@ -126,9 +133,19 @@ func StartServe(ctx context.Context, cfg RemoteConfig, silent bool) (*exec.Cmd, 
 			if strings.Contains(line, "Connect URL:") {
 				parts := strings.SplitN(line, "Connect URL:", 2)
 				if len(parts) == 2 {
-					connectURL = strings.TrimSpace(parts[1])
-					break
+					result.ConnectURL = strings.TrimSpace(parts[1])
+					got++
 				}
+			}
+			if strings.Contains(line, "Short URL:") {
+				parts := strings.SplitN(line, "Short URL:", 2)
+				if len(parts) == 2 {
+					result.ShortURL = strings.TrimSpace(parts[1])
+					got++
+				}
+			}
+			if got >= 2 {
+				break
 			}
 		}
 		// Drain remaining stderr in background
@@ -142,11 +159,11 @@ func StartServe(ctx context.Context, cfg RemoteConfig, silent bool) (*exec.Cmd, 
 		close(done)
 	}()
 
-	// Wait for URL with timeout (tunnel setup can take a while)
+	// Wait for URLs with timeout (tunnel setup can take a while)
 	select {
 	case <-done:
 	case <-time.After(30 * time.Second):
 	}
 
-	return cmd, connectURL, nil
+	return cmd, result, nil
 }

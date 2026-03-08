@@ -3,6 +3,7 @@ package irc
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -29,8 +30,9 @@ type ServerConfig struct {
 
 // ServerInfo contains details about a running server instance.
 type ServerInfo struct {
-	Token    string `json:"token"`
-	LocalURL string `json:"local_url"`
+	Token     string `json:"token"`
+	ShortCode string `json:"short_code"`
+	LocalURL  string `json:"local_url"`
 }
 
 const dashboardOperatorName = "user"
@@ -41,8 +43,9 @@ func RunServer(ctx context.Context, cfg ServerConfig) error {
 	if err != nil {
 		return fmt.Errorf("generating token: %w", err)
 	}
+	shortCode := shortCodeFromToken(token)
 
-	mux := buildHandler(cfg.Store, token, cfg.MasterTmux)
+	mux := buildHandler(cfg.Store, token, shortCode, cfg.MasterTmux)
 
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.Port))
 	if err != nil {
@@ -51,8 +54,9 @@ func RunServer(ctx context.Context, cfg ServerConfig) error {
 
 	addr := listener.Addr().(*net.TCPAddr)
 	info := ServerInfo{
-		Token:    token,
-		LocalURL: fmt.Sprintf("http://localhost:%d", addr.Port),
+		Token:     token,
+		ShortCode: shortCode,
+		LocalURL:  fmt.Sprintf("http://localhost:%d", addr.Port),
 	}
 
 	if cfg.OnReady != nil {
@@ -72,6 +76,11 @@ func RunServer(ctx context.Context, cfg ServerConfig) error {
 	return nil
 }
 
+func shortCodeFromToken(token string) string {
+	h := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(h[:4]) // 8 hex chars
+}
+
 func generateToken() (string, error) {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
@@ -81,8 +90,22 @@ func generateToken() (string, error) {
 }
 
 // buildHandler creates the HTTP handler with auth and CORS middleware.
-func buildHandler(store *Store, token string, masterTmux string) http.Handler {
+func buildHandler(store *Store, token string, shortCode string, masterTmux string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Short URL redirect (no auth required)
+		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/s/") {
+			code := strings.TrimPrefix(r.URL.Path, "/s/")
+			if code == shortCode {
+				host := r.Host
+				connectURL := fmt.Sprintf("https://%s?token=%s", host, token)
+				webURL := fmt.Sprintf("https://whip.bang9.dev#%s", connectURL)
+				http.Redirect(w, r, webURL, http.StatusFound)
+			} else {
+				http.NotFound(w, r)
+			}
+			return
+		}
+
 		// CORS middleware
 		origin := r.Header.Get("Origin")
 		if isAllowedOrigin(origin) {

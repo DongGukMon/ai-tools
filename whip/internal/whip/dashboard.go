@@ -13,7 +13,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	qrterminal "github.com/mdp/qrterminal/v3"
+	qrcode "github.com/skip2/go-qrcode"
 )
 
 var (
@@ -99,6 +99,7 @@ type DashboardModel struct {
 	// Remote/serve state
 	serveProcess   *exec.Cmd
 	serveURL       string
+	shortURL       string
 	webURL         string
 	masterAlive    bool
 	remoteStarting bool
@@ -282,6 +283,7 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.remoteErr = nil
 		m.serveProcess = msg.cmd
 		m.serveURL = msg.url
+		m.shortURL = msg.shortURL
 		if msg.url != "" {
 			m.webURL = fmt.Sprintf("https://whip.bang9.dev#%s", msg.url)
 		}
@@ -292,6 +294,7 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case remoteStoppedMsg:
 		m.serveProcess = nil
 		m.serveURL = ""
+		m.shortURL = ""
 		m.webURL = ""
 		m.masterAlive = false
 		m.view = viewList
@@ -631,9 +634,10 @@ func (m DashboardModel) sendIRCMsg(target, message string) tea.Cmd {
 // ── Remote config ──────────────────────────────────────────────────
 
 type remoteStartedMsg struct {
-	cmd *exec.Cmd
-	url string
-	err error
+	cmd      *exec.Cmd
+	url      string
+	shortURL string
+	err      error
 }
 type remoteStoppedMsg struct{}
 
@@ -705,11 +709,11 @@ func (m DashboardModel) startRemote(cfg RemoteConfig) tea.Cmd {
 			}
 		}
 		// Start serve
-		cmd, url, err := StartServe(context.Background(), cfg, true)
+		cmd, result, err := StartServe(context.Background(), cfg, true)
 		if err != nil {
 			return remoteStartedMsg{err: fmt.Errorf("start serve: %w", err)}
 		}
-		return remoteStartedMsg{cmd: cmd, url: url}
+		return remoteStartedMsg{cmd: cmd, url: result.ConnectURL, shortURL: result.ShortURL}
 	}
 }
 
@@ -813,9 +817,13 @@ func (m DashboardModel) renderRemoteStatusView(w int) string {
 		b.WriteString("  " + webLabel + " " + valStyle.Render(m.webURL) + "\n")
 	}
 
-	// QR code
-	if m.webURL != "" {
-		qr := renderQR(m.webURL)
+	// QR code (use short URL if available, otherwise web URL)
+	qrTarget := m.shortURL
+	if qrTarget == "" {
+		qrTarget = m.webURL
+	}
+	if qrTarget != "" {
+		qr := renderQR(qrTarget)
 		if qr != "" {
 			b.WriteString("\n")
 			for _, line := range strings.Split(qr, "\n") {
@@ -1713,18 +1721,42 @@ func tableContentWidth() int {
 	return total
 }
 
-// renderQR generates a compact QR code using qrterminal with inverted colors
-// (white background, black modules) for dark terminal backgrounds.
+// renderQR generates a QR code using ANSI background colors for reliable
+// rendering regardless of terminal theme. Uses half-block characters to
+// pack 2 rows per line. White bg = light module, black bg = dark module.
 func renderQR(text string) string {
-	var b strings.Builder
-	cfg := qrterminal.Config{
-		Level:      qrterminal.L,
-		Writer:     &b,
-		QuietZone:  2,
-		BlackChar:  qrterminal.WHITE,
-		WhiteChar:  qrterminal.BLACK,
-		HalfBlocks: true,
+	qr, err := qrcode.New(text, qrcode.Low)
+	if err != nil {
+		return ""
 	}
-	qrterminal.GenerateWithConfig(text, cfg)
+	qr.DisableBorder = false
+	bmp := qr.Bitmap()
+	rows := len(bmp)
+	if rows == 0 {
+		return ""
+	}
+	cols := len(bmp[0])
+
+	// Unicode block rendering (no ANSI colors needed).
+	// Light modules → filled block (text color), dark modules → space (bg color).
+	// Ref: github.com/gtanner/qrcode-terminal
+	var b strings.Builder
+	for y := 0; y < rows; y += 2 {
+		for x := 0; x < cols; x++ {
+			top := bmp[y][x] // true = dark module
+			bot := y+1 < rows && bmp[y+1][x]
+			switch {
+			case !top && !bot:
+				b.WriteRune('█') // both light
+			case !top && bot:
+				b.WriteRune('▀') // top light, bottom dark
+			case top && !bot:
+				b.WriteRune('▄') // top dark, bottom light
+			default:
+				b.WriteRune(' ') // both dark
+			}
+		}
+		b.WriteString("\n")
+	}
 	return strings.TrimRight(b.String(), "\n")
 }

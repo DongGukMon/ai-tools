@@ -1003,11 +1003,12 @@ func remoteCmd() *cobra.Command {
 			defer cancel()
 
 			fmt.Fprintln(os.Stderr, "Starting claude-irc serve...")
-			serveCmd, connectURL, err := whip.StartServe(ctx, remoteCfg, true)
+			serveCmd, serveResult, err := whip.StartServe(ctx, remoteCfg, true)
 			if err != nil {
 				return fmt.Errorf("failed to start serve: %w", err)
 			}
 
+			connectURL := serveResult.ConnectURL
 			// Build web dashboard URL
 			var webURL string
 			if connectURL != "" {
@@ -1019,6 +1020,9 @@ func remoteCmd() *cobra.Command {
 			if connectURL != "" {
 				fmt.Fprintf(os.Stderr, "  Connect URL:   %s\n", connectURL)
 				fmt.Fprintf(os.Stderr, "  Web Dashboard: %s\n", webURL)
+				if serveResult.ShortURL != "" {
+					fmt.Fprintf(os.Stderr, "  Short URL:     %s\n", serveResult.ShortURL)
+				}
 			}
 			fmt.Fprintf(os.Stderr, "  Master tmux:   tmux attach -t whip-master\n")
 			fmt.Fprintln(os.Stderr, "")
