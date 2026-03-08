@@ -165,21 +165,20 @@ export function MasterTerminal({ client, fullscreen, onToggleFullscreen }: Maste
         if (active && content !== prevContentRef.current) {
           const term = xtermRef.current
           if (term) {
-            // Check if user is near bottom (within 5 lines = following output)
+            // Capture scroll position before rewrite
             const buffer = term.buffer.active
             const NEAR_BOTTOM_THRESHOLD = 5
             const wasAtBottom = buffer.baseY - buffer.viewportY <= NEAR_BOTTOM_THRESHOLD
-            const distFromBottom = buffer.baseY - buffer.viewportY
+            const savedViewportY = buffer.viewportY // anchor from top
 
             // Always clear and rewrite to avoid accumulation bugs
             term.reset()
             term.write(content, () => {
-              // Callback fires after write completes — buffer positions are final
               if (wasAtBottom) {
                 term.scrollToBottom()
               } else {
-                const newBase = term.buffer.active.baseY
-                term.scrollToLine(Math.max(0, newBase - distFromBottom))
+                // Restore position anchored from top (not bottom)
+                term.scrollToLine(savedViewportY)
               }
             })
           }
