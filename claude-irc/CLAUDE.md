@@ -33,6 +33,26 @@ claude-irc watch --interval 10
 
 Run `claude-irc --help` for the full command list.
 
+## Serve Mode
+
+`claude-irc serve` starts an HTTP API server for remote dashboard access.
+
+```bash
+# Basic
+claude-irc serve --port 8585
+
+# With master tmux session endpoints
+claude-irc serve --port 8585 --master-tmux whip-master
+```
+
+When `--master-tmux` is set, three additional endpoints are available:
+
+- `GET /api/master/capture` — returns tmux pane content
+- `POST /api/master/keys` — sends keystrokes to the tmux session (`{"keys": "text\n"}`)
+- `GET /api/master/status` — checks if the tmux session is alive
+
+All endpoints require Bearer token authentication.
+
 ## Notes
 
 - Prefer short role-like names such as `backend`, `frontend`, `infra`, `auth`.

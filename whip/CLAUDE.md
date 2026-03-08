@@ -33,6 +33,34 @@ whip dashboard
 claude-irc inbox
 ```
 
+## Remote Mode
+
+`whip remote` spawns a master Claude Code session in tmux and starts `claude-irc serve` for HTTP API access. This enables the web dashboard to display the master session's terminal output in real-time with direct keyboard input.
+
+```bash
+# Basic usage (requires tmux)
+whip remote
+
+# With options
+whip remote --backend codex --difficulty medium --port 8585 --tunnel irc.bang9.dev
+```
+
+**Flags:**
+- `--backend` — AI backend: `claude` (default) or `codex`
+- `--difficulty` — Model effort level: `easy`, `medium`, `hard` (default)
+- `--port` — Serve port (default 8585)
+- `--tunnel` — Cloudflare tunnel hostname for remote access
+
+Tunnel and port settings are saved to `~/.whip/config.json` for reuse. Ctrl+C stops the serve process; the master tmux session persists for reattach.
+
+### TUI Dashboard
+
+Press `R` in the task list view to configure and start/stop remote mode. The dashboard footer shows serve status, URL, and master session health when active.
+
+### Web Dashboard
+
+The web dashboard at the configured URL includes a **Terminal** tab that renders the master session's tmux output with full ANSI color support (via xterm.js) and allows sending keyboard input directly.
+
 ## Help
 
 Run `whip --help` for the full command list. For guided usage, see `/whip-plan` and `/whip-start`.
@@ -42,3 +70,4 @@ Run `whip --help` for the full command list. For guided usage, see `/whip-plan` 
 - `assign` only works for tasks in `created` status whose dependencies are already complete.
 - Dependent tasks auto-assign when prerequisites become `completed`.
 - `tmux` is the preferred runner because it allows dashboard capture and attach.
+- `whip remote` requires `tmux` to be installed (`brew install tmux` on macOS).
