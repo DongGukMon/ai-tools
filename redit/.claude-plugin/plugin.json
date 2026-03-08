@@ -1,6 +1,6 @@
 {
   "name": "redit",
-  "version": "v1.34.3",
+  "version": "v1.34.4",
   "description": "Remote Edit Layer - Local cache for efficiently editing remote documents",
   "author": {
     "name": "Airen Kang",
