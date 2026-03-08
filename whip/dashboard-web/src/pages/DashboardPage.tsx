@@ -153,10 +153,11 @@ export function DashboardPage() {
     [selectedPeer, sortedPeers],
   )
 
-  if (!client) {
-    navigate('/')
-    return null
-  }
+  useEffect(() => {
+    if (!client) navigate('/')
+  }, [client, navigate])
+
+  if (!client) return null
 
   return (
     <div>
