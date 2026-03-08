@@ -12,12 +12,13 @@ export function LoginPage() {
 
   useEffect(() => {
     const autoConnect = async () => {
-      // Check URL param for auto-connect
+      // Check hash or query param for auto-connect
+      const hash = window.location.hash.slice(1)
       const params = new URLSearchParams(window.location.search)
-      const urlParam = params.get('url')
+      const urlParam = hash || params.get('url')
       if (urlParam) {
         setUrl(urlParam)
-        // Clear the URL param from address bar
+        // Clear from address bar
         window.history.replaceState({}, '', window.location.pathname)
         const parsed = parseConnectURL(urlParam)
         if (parsed) {

@@ -3,7 +3,6 @@ package whip
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"os"
 	"os/exec"
 	"sort"
@@ -284,7 +283,7 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.serveProcess = msg.cmd
 		m.serveURL = msg.url
 		if msg.url != "" {
-			m.webURL = fmt.Sprintf("https://whip.bang9.dev?url=%s", url.QueryEscape(msg.url))
+			m.webURL = fmt.Sprintf("https://whip.bang9.dev#%s", msg.url)
 		}
 		m.masterAlive = IsMasterSessionAlive()
 		m.view = viewRemoteStatus
@@ -814,9 +813,9 @@ func (m DashboardModel) renderRemoteStatusView(w int) string {
 		b.WriteString("  " + webLabel + " " + valStyle.Render(m.webURL) + "\n")
 	}
 
-	// QR code (use serveURL which is shorter, scannable on mobile)
-	if m.serveURL != "" {
-		qr := renderQR(m.serveURL)
+	// QR code
+	if m.webURL != "" {
+		qr := renderQR(m.webURL)
 		if qr != "" {
 			b.WriteString("\n")
 			for _, line := range strings.Split(qr, "\n") {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -1012,7 +1011,7 @@ func remoteCmd() *cobra.Command {
 			// Build web dashboard URL
 			var webURL string
 			if connectURL != "" {
-				webURL = fmt.Sprintf("https://whip.bang9.dev?url=%s", url.QueryEscape(connectURL))
+				webURL = fmt.Sprintf("https://whip.bang9.dev#%s", connectURL)
 			}
 
 			// Print connect info
