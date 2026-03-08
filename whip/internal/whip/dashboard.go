@@ -1,6 +1,7 @@
 package whip
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -13,7 +14,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	qrcode "github.com/skip2/go-qrcode"
+	"github.com/mdp/qrterminal/v3"
 )
 
 var (
@@ -1721,42 +1722,9 @@ func tableContentWidth() int {
 	return total
 }
 
-// renderQR generates a QR code using ANSI background colors for reliable
-// rendering regardless of terminal theme. Uses half-block characters to
-// pack 2 rows per line. White bg = light module, black bg = dark module.
+// renderQR generates a compact QR code using qrterminal half-block rendering.
 func renderQR(text string) string {
-	qr, err := qrcode.New(text, qrcode.Low)
-	if err != nil {
-		return ""
-	}
-	qr.DisableBorder = false
-	bmp := qr.Bitmap()
-	rows := len(bmp)
-	if rows == 0 {
-		return ""
-	}
-	cols := len(bmp[0])
-
-	// Unicode block rendering (no ANSI colors needed).
-	// Light modules → filled block (text color), dark modules → space (bg color).
-	// Ref: github.com/gtanner/qrcode-terminal
-	var b strings.Builder
-	for y := 0; y < rows; y += 2 {
-		for x := 0; x < cols; x++ {
-			top := bmp[y][x] // true = dark module
-			bot := y+1 < rows && bmp[y+1][x]
-			switch {
-			case !top && !bot:
-				b.WriteRune('█') // both light
-			case !top && bot:
-				b.WriteRune('▀') // top light, bottom dark
-			case top && !bot:
-				b.WriteRune('▄') // top dark, bottom light
-			default:
-				b.WriteRune(' ') // both dark
-			}
-		}
-		b.WriteString("\n")
-	}
-	return strings.TrimRight(b.String(), "\n")
+	var buf bytes.Buffer
+	qrterminal.GenerateHalfBlock(text, qrterminal.L, &buf)
+	return strings.TrimRight(buf.String(), "\n")
 }
