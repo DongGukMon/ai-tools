@@ -95,12 +95,56 @@ export function MasterTerminal({ client, fullscreen, onToggleFullscreen }: Maste
       try {
         const { content } = await client.getMasterCapture()
         if (active && content !== prevContentRef.current) {
-          prevContentRef.current = content
           const term = xtermRef.current
           if (term) {
-            term.clear()
-            term.write(content)
+            const oldContent = prevContentRef.current
+            const oldLines = oldContent ? oldContent.split('\n') : []
+            const newLines = content.split('\n')
+
+            // Check if user is scrolled to bottom (following output)
+            const buffer = term.buffer.active
+            const wasAtBottom = buffer.viewportY >= buffer.baseY
+
+            if (oldLines.length === 0) {
+              // First write — just render everything
+              term.write(content)
+            } else {
+              // Find overlap: longest suffix of oldLines matching a prefix of newLines
+              let overlapLen = 0
+              const maxCheck = Math.min(oldLines.length, newLines.length)
+              for (let len = maxCheck; len > 0; len--) {
+                let match = true
+                for (let i = 0; i < len; i++) {
+                  if (oldLines[oldLines.length - len + i] !== newLines[i]) {
+                    match = false
+                    break
+                  }
+                }
+                if (match) {
+                  overlapLen = len
+                  break
+                }
+              }
+
+              if (overlapLen > 0) {
+                // Append only the new lines after the overlap
+                const linesToAdd = newLines.slice(overlapLen)
+                if (linesToAdd.length > 0) {
+                  term.write('\n' + linesToAdd.join('\n'))
+                }
+              } else {
+                // No overlap found — content changed entirely, must rewrite
+                term.clear()
+                term.write(content)
+              }
+            }
+
+            // Preserve scroll position: only auto-scroll if user was at bottom
+            if (wasAtBottom) {
+              term.scrollToBottom()
+            }
           }
+          prevContentRef.current = content
         }
         if (active) setAvailable(true)
       } catch {
