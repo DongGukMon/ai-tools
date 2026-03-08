@@ -1,17 +1,21 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { useState, useCallback } from 'react'
 import { Layout } from './components/Layout'
 import { LoginPage } from './pages/LoginPage'
 import { DashboardPage } from './pages/DashboardPage'
+import { getClient } from './stores/auth'
 
 export default function App() {
+  const [authed, setAuthed] = useState(() => getClient() !== null)
+
+  const handleLogin = useCallback(() => setAuthed(true), [])
+  const handleLogout = useCallback(() => setAuthed(false), [])
+
   return (
-    <BrowserRouter>
-      <Layout>
-        <Routes>
-          <Route path="/" element={<LoginPage />} />
-          <Route path="/dashboard" element={<DashboardPage />} />
-        </Routes>
-      </Layout>
-    </BrowserRouter>
+    <Layout>
+      {authed
+        ? <DashboardPage onDisconnect={handleLogout} />
+        : <LoginPage onLogin={handleLogin} />
+      }
+    </Layout>
   )
 }

@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
 import type { Task, Peer, Message } from '../api/types'
 import { AuthError, ConnectionError } from '../api/client'
 import { getClient, clearAuth } from '../stores/auth'
@@ -20,8 +19,11 @@ interface SentMessage {
   timestamp: string
 }
 
-export function DashboardPage() {
-  const navigate = useNavigate()
+interface Props {
+  onDisconnect: () => void
+}
+
+export function DashboardPage({ onDisconnect }: Props) {
   const client = useMemo(() => getClient(), [])
   const [activeTab, setActiveTab] = useState<Tab>('tasks')
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
@@ -46,8 +48,8 @@ export function DashboardPage() {
 
   const handleDisconnected = useCallback(() => {
     clearAuth()
-    navigate('/')
-  }, [navigate])
+    onDisconnect()
+  }, [onDisconnect])
 
   const { tasks, error } = useTasks(client, handleDisconnected)
   const sortedPeers = useMemo(() => sortPeers(peers), [peers])
@@ -154,8 +156,8 @@ export function DashboardPage() {
   )
 
   useEffect(() => {
-    if (!client) navigate('/')
-  }, [client, navigate])
+    if (!client) onDisconnect()
+  }, [client, onDisconnect])
 
   if (!client) return null
 
@@ -253,12 +255,12 @@ export function DashboardPage() {
       )}
 
       {activeTab === 'terminal' && !terminalFullscreen && (
-        <div className="h-[calc(100vh-10rem)] rounded-xl border border-[#0A1A3A] overflow-hidden" style={{ backgroundColor: '#00102F' }}>
+        <div className="h-[calc(100vh-10rem)] rounded-xl border border-[#0E2550] overflow-hidden" style={{ backgroundColor: '#001A42' }}>
           <MasterTerminal client={client} fullscreen={false} onToggleFullscreen={() => setTerminalFullscreen(true)} />
         </div>
       )}
       {activeTab === 'terminal' && terminalFullscreen && (
-        <div className="fixed inset-0 z-50" style={{ backgroundColor: '#00102F' }}>
+        <div className="fixed inset-0 z-50" style={{ backgroundColor: '#001A42' }}>
           <MasterTerminal client={client} fullscreen={true} onToggleFullscreen={() => setTerminalFullscreen(false)} />
         </div>
       )}

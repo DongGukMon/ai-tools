@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { WhipAPIClient, parseConnectURL, AuthError } from '../api/client'
 import { saveAuth, clearAuth, getClient } from '../stores/auth'
 
-export function LoginPage() {
-  const navigate = useNavigate()
+interface Props {
+  onLogin: () => void
+}
+
+export function LoginPage({ onLogin }: Props) {
   const [url, setUrl] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -18,7 +20,6 @@ export function LoginPage() {
       const urlParam = hash || params.get('url')
       if (urlParam) {
         setUrl(urlParam)
-        // Clear from address bar
         window.history.replaceState({}, '', window.location.pathname)
         const parsed = parseConnectURL(urlParam)
         if (parsed) {
@@ -26,7 +27,7 @@ export function LoginPage() {
             const c = new WhipAPIClient(parsed.baseURL, parsed.token)
             await c.getPeers()
             saveAuth(parsed)
-            navigate('/dashboard')
+            onLogin()
             return
           } catch {
             // Fall through to normal flow
@@ -41,14 +42,14 @@ export function LoginPage() {
       }
       try {
         await client.getPeers()
-        navigate('/dashboard')
+        onLogin()
       } catch {
         clearAuth()
         setChecking(false)
       }
     }
     autoConnect()
-  }, [navigate])
+  }, [onLogin])
 
   const handleSubmit = async (e: { preventDefault: () => void }) => {
     e.preventDefault()
@@ -65,7 +66,7 @@ export function LoginPage() {
       const client = new WhipAPIClient(parsed.baseURL, parsed.token)
       await client.getPeers()
       saveAuth(parsed)
-      navigate('/dashboard')
+      onLogin()
     } catch (err) {
       if (err instanceof AuthError) {
         setError('Invalid token')
