@@ -153,6 +153,15 @@ claude-irc msg whip-<task-id> "Use the existing UserService, don't create a new 
 whip broadcast "API contract updated. Check the topic board."
 ```
 
+When the whip TUI sends a message to an agent, it arrives under the identity `user`. Agents can reply directly:
+
+```bash
+# Agent replies to a TUI message
+claude-irc msg user "Got it. Adjusting the approach now."
+```
+
+> **Note:** Master session CLI stream mirroring (capturing the master terminal's stdout/stderr into agent sessions) is outside the scope of this workflow.
+
 ### 6. Monitor Progress
 
 ```bash

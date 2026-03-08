@@ -153,6 +153,15 @@ claude-irc msg whip-<task-id> "기존 UserService를 사용해. 새로 만들지
 whip broadcast "API 계약이 업데이트되었습니다. 토픽 보드를 확인하세요."
 ```
 
+whip TUI가 에이전트에게 메시지를 보내면 `user` 신원으로 전달됩니다. 에이전트는 직접 답장할 수 있습니다:
+
+```bash
+# 에이전트가 TUI 메시지에 답장
+claude-irc msg user "확인했습니다. 접근 방식을 조정하겠습니다."
+```
+
+> **참고:** 마스터 세션 CLI 스트림 미러링(마스터 터미널의 stdout/stderr를 에이전트 세션으로 캡처)은 이 워크플로우의 범위 밖입니다.
+
 ### 6. 진행 모니터링
 
 ```bash

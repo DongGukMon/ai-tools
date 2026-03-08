@@ -527,7 +527,7 @@ func (m DashboardModel) updateIRCMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m DashboardModel) sendIRCMsg(target, message string) tea.Cmd {
 	return func() tea.Msg {
-		fullMsg := message + "\n\n---\n[From dashboard operator. This is a one-way message — do not reply to 'user'. If you need clarification, escalate through your agent or use webform to ask.]"
+		fullMsg := message + "\n\n---\n[Sent from dashboard operator via TUI]"
 		err := exec.Command("claude-irc", "--name", "user", "msg", target, fullMsg).Run()
 		return ircSendResultMsg{err: err}
 	}

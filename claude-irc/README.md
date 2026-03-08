@@ -66,7 +66,7 @@ Commands that need identity (`msg`, `inbox`, `topic`) resolve the peer name via:
 2. **`--name` flag** — fallback when session detection fails; only `user` is allowed without an active session
 3. Error if neither resolves
 
-**Reserved name:** `user` is a send-only observer for the dashboard operator. It can send messages to agents but cannot receive messages. Agents should not attempt to reply to `user`.
+**Reserved name:** `user` is the remote dashboard operator identity (the whip TUI or web dashboard). Agents may reply with `claude-irc msg user "..."`. The `--name user` flag is the only no-session override allowed.
 
 ## How It Works
 
