@@ -96,10 +96,13 @@ type ServeResult struct {
 // StartServe starts `claude-irc serve` as a subprocess and returns the
 // process handle, the parsed URLs, and any error.
 // When silent is true, stdout/stderr are suppressed and stdin is detached (for TUI embedding).
-func StartServe(ctx context.Context, cfg RemoteConfig, silent bool) (*exec.Cmd, ServeResult, error) {
+func StartServe(ctx context.Context, cfg RemoteConfig, token string, silent bool) (*exec.Cmd, ServeResult, error) {
 	args := []string{"serve", "--port", strconv.Itoa(cfg.Port), "--master-tmux", MasterSessionName}
 	if cfg.Tunnel != "" {
 		args = append(args, "--tunnel", cfg.Tunnel)
+	}
+	if token != "" {
+		args = append(args, "--token", token)
 	}
 
 	cmd := exec.CommandContext(ctx, "claude-irc", args...)

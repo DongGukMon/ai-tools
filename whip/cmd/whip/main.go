@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -1002,8 +1003,14 @@ func remoteCmd() *cobra.Command {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
+			// Load or generate token
+			serveToken := cfg.ServeToken
+			if cmd.Flags().Changed("new-token") {
+				serveToken = "" // force new token
+			}
+
 			fmt.Fprintln(os.Stderr, "Starting claude-irc serve...")
-			serveCmd, serveResult, err := whip.StartServe(ctx, remoteCfg, true)
+			serveCmd, serveResult, err := whip.StartServe(ctx, remoteCfg, serveToken, true)
 			if err != nil {
 				return fmt.Errorf("failed to start serve: %w", err)
 			}
@@ -1028,7 +1035,12 @@ func remoteCmd() *cobra.Command {
 			fmt.Fprintln(os.Stderr, "")
 			fmt.Fprintln(os.Stderr, "  Shortcuts: [o] open in browser  [c] copy URL  [q] quit")
 
-			// Save config if changed
+			// Extract token from connect URL and save config
+			if u, parseErr := url.Parse(connectURL); parseErr == nil {
+				if t := u.Query().Get("token"); t != "" {
+					cfg.ServeToken = t
+				}
+			}
 			configChanged := false
 			if tunnel != cfg.Tunnel {
 				cfg.Tunnel = tunnel
@@ -1036,6 +1048,9 @@ func remoteCmd() *cobra.Command {
 			}
 			if port != cfg.RemotePort {
 				cfg.RemotePort = port
+				configChanged = true
+			}
+			if cfg.ServeToken != "" {
 				configChanged = true
 			}
 			if configChanged {
@@ -1073,6 +1088,7 @@ func remoteCmd() *cobra.Command {
 	cmd.Flags().StringVar(&difficulty, "difficulty", "hard", "Task difficulty (hard, medium, easy)")
 	cmd.Flags().StringVar(&tunnel, "tunnel", "", "Cloudflare tunnel hostname")
 	cmd.Flags().IntVar(&port, "port", 8585, "Serve port")
+	cmd.Flags().Bool("new-token", false, "Generate a new auth token (discard saved token)")
 
 	return cmd
 }

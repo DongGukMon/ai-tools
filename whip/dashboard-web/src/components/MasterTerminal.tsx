@@ -40,7 +40,7 @@ export function MasterTerminal({ client, fullscreen, onToggleFullscreen }: Maste
     const term = new Terminal({
       cursorBlink: false,
       disableStdin: true,
-      fontSize: 13,
+      fontSize: 12,
       lineHeight: 1.1,
       fontFamily: '"SF Mono", SFMono-Regular, Menlo, Monaco, "Courier New", monospace',
       theme: {

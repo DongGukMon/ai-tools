@@ -665,6 +665,7 @@ func serveCmd() *cobra.Command {
 	var port int
 	var tunnel string
 	var masterTmux string
+	var token string
 
 	cmd := &cobra.Command{
 		Use:   "serve",
@@ -702,6 +703,7 @@ func serveCmd() *cobra.Command {
 				Port:       port,
 				Store:      store,
 				MasterTmux: masterTmux,
+				Token:      token,
 				OnReady: func(info irc.ServerInfo) {
 					connectURL := info.LocalURL
 					if publicURL != "" {
@@ -725,6 +727,7 @@ func serveCmd() *cobra.Command {
 	cmd.Flags().IntVar(&port, "port", 8585, "HTTP server port")
 	cmd.Flags().StringVar(&tunnel, "tunnel", "", "Cloudflare Tunnel hostname (empty for quick tunnel, or domain like irc.bang9.dev)")
 	cmd.Flags().StringVar(&masterTmux, "master-tmux", "", "Master tmux session name for capture/input endpoints")
+	cmd.Flags().StringVar(&token, "token", "", "Pre-set auth token (reuse across restarts); if empty, a new one is generated")
 	return cmd
 }
 

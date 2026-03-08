@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"sort"
@@ -709,11 +710,24 @@ func (m DashboardModel) startRemote(cfg RemoteConfig) tea.Cmd {
 				return remoteStartedMsg{err: fmt.Errorf("spawn master: %w", err)}
 			}
 		}
+		// Load saved token
+		storeCfg, _ := m.store.LoadConfig()
+		token := storeCfg.ServeToken
+
 		// Start serve
-		cmd, result, err := StartServe(context.Background(), cfg, true)
+		cmd, result, err := StartServe(context.Background(), cfg, token, true)
 		if err != nil {
 			return remoteStartedMsg{err: fmt.Errorf("start serve: %w", err)}
 		}
+
+		// Save token from connect URL
+		if u, parseErr := url.Parse(result.ConnectURL); parseErr == nil {
+			if t := u.Query().Get("token"); t != "" {
+				storeCfg.ServeToken = t
+				m.store.SaveConfig(storeCfg)
+			}
+		}
+
 		return remoteStartedMsg{cmd: cmd, url: result.ConnectURL, shortURL: result.ShortURL}
 	}
 }
@@ -755,6 +769,11 @@ func (m DashboardModel) updateRemoteStatus(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 			copyCmd.Stdin = strings.NewReader(url)
 			copyCmd.Run()
 		}
+	case "t":
+		// Reset token
+		storeCfg, _ := m.store.LoadConfig()
+		storeCfg.ServeToken = ""
+		m.store.SaveConfig(storeCfg)
 	case "T":
 		if IsMasterSessionAlive() {
 			m.pendingAttach = MasterSessionName
@@ -847,6 +866,7 @@ func (m DashboardModel) renderRemoteStatusView(w int) string {
 	if IsMasterSessionAlive() {
 		parts = append(parts, footerKey("T", "attach master"))
 	}
+	parts = append(parts, footerKey("t", "reset token"))
 	parts = append(parts, footerKey("S", "stop remote"))
 	line := "  " + strings.Join(parts, dot)
 	b.WriteString(lipgloss.NewStyle().MarginTop(1).Render(line))

@@ -25,6 +25,7 @@ type ServerConfig struct {
 	Port       int
 	Store      *Store
 	MasterTmux string
+	Token      string                // pre-set token; if empty, a new one is generated
 	OnReady    func(info ServerInfo) // callback when server is ready
 }
 
@@ -39,9 +40,13 @@ const dashboardOperatorName = "user"
 
 // RunServer starts the HTTP API server and blocks until the context is cancelled.
 func RunServer(ctx context.Context, cfg ServerConfig) error {
-	token, err := generateToken()
-	if err != nil {
-		return fmt.Errorf("generating token: %w", err)
+	token := cfg.Token
+	if token == "" {
+		var err error
+		token, err = generateToken()
+		if err != nil {
+			return fmt.Errorf("generating token: %w", err)
+		}
 	}
 	shortCode := shortCodeFromToken(token)
 
