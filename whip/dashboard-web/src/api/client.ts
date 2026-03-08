@@ -34,7 +34,10 @@ export class WhipAPIClient {
           ...options?.headers,
         },
       })
-    } catch {
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        throw err
+      }
       throw new ConnectionError()
     }
 
@@ -52,8 +55,8 @@ export class WhipAPIClient {
 
   // IRC
 
-  async getPeers(): Promise<Peer[]> {
-    return this.request<Peer[]>('/api/peers')
+  async getPeers(signal?: AbortSignal): Promise<Peer[]> {
+    return this.request<Peer[]>('/api/peers', { signal })
   }
 
   async sendMessage(to: string, content: string): Promise<void> {
@@ -68,9 +71,9 @@ export class WhipAPIClient {
     })
   }
 
-  async getInbox(name: string, all?: boolean): Promise<Message[]> {
+  async getInbox(name: string, all?: boolean, signal?: AbortSignal): Promise<Message[]> {
     const params = all ? '?all=true' : ''
-    return this.request<Message[]>(`/api/messages/${encodeURIComponent(name)}${params}`)
+    return this.request<Message[]>(`/api/messages/${encodeURIComponent(name)}${params}`, { signal })
   }
 
   async markRead(name: string): Promise<void> {
@@ -112,8 +115,8 @@ export class WhipAPIClient {
 
   // Tasks
 
-  async getTasks(): Promise<Task[]> {
-    return this.request<Task[]>('/api/tasks')
+  async getTasks(signal?: AbortSignal): Promise<Task[]> {
+    return this.request<Task[]>('/api/tasks', { signal })
   }
 
   async getTask(id: string): Promise<Task> {

@@ -21,14 +21,15 @@ export function useTasks(
   const callbacksRef = useRef(callbacks)
   callbacksRef.current = callbacks
 
-  const fetchTasks = useCallback(async () => {
+  const fetchTasks = useCallback(async (signal?: AbortSignal) => {
     if (!client) return
     try {
-      const data = await client.getTasks()
+      const data = await client.getTasks(signal)
       setTasks(data)
       setError(null)
       callbacksRef.current.onConnectionSuccess()
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return
       if (err instanceof AuthError) {
         callbacksRef.current.onAuthError()
         return
@@ -42,9 +43,13 @@ export function useTasks(
   }, [client])
 
   useEffect(() => {
-    fetchTasks()
-    const id = setInterval(fetchTasks, pollInterval)
-    return () => clearInterval(id)
+    const controller = new AbortController()
+    fetchTasks(controller.signal)
+    const id = setInterval(() => fetchTasks(controller.signal), pollInterval)
+    return () => {
+      controller.abort()
+      clearInterval(id)
+    }
   }, [fetchTasks, pollInterval])
 
   return { tasks, error }

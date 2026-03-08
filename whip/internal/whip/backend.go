@@ -164,6 +164,9 @@ func (b *CodexBackend) ResumeExec(task *Task) (string, []string, error) {
 }
 
 func (b *CodexBackend) SyncSession(task *Task, promptPath string, launchedAt time.Time) error {
+	if _, err := exec.LookPath("codex"); err != nil {
+		return fmt.Errorf("codex CLI not found. Install it with: npm install -g @openai/codex")
+	}
 	id, err := waitForCodexSession(task.CWD, promptPath, launchedAt, 8*time.Second)
 	if err != nil {
 		return err

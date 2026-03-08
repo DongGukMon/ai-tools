@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import type { Task, Peer, Message } from '../api/types'
 import { AuthError, ConnectionError } from '../api/client'
 import { getClient, clearAuth } from '../stores/auth'
@@ -70,45 +70,83 @@ export function DashboardPage({ onDisconnect }: Props) {
     : null
 
 
-  // Poll peers every 2s
-  useEffect(() => {
-    if (!client) return
-    let active = true
-    const poll = () => {
-      client.getPeers().then(p => {
-        if (active) {
-          setPeers(p)
-          connectionStatus.onConnectionSuccess()
-        }
-      }).catch(err => {
-        if (err instanceof AuthError) connectionStatus.onAuthError()
-        else if (err instanceof ConnectionError) connectionStatus.onConnectionError()
-      })
-    }
-    poll()
-    const id = setInterval(poll, pollInterval)
-    return () => { active = false; clearInterval(id) }
-  }, [client, pollInterval, connectionStatus])
+  // Stable refs for connection callbacks to avoid effect restarts
+  const onConnectionSuccessRef = useRef(connectionStatus.onConnectionSuccess)
+  onConnectionSuccessRef.current = connectionStatus.onConnectionSuccess
+  const onConnectionErrorRef = useRef(connectionStatus.onConnectionError)
+  onConnectionErrorRef.current = connectionStatus.onConnectionError
+  const onAuthErrorRef = useRef(connectionStatus.onAuthError)
+  onAuthErrorRef.current = connectionStatus.onAuthError
 
-  // Poll inbox every 2s
+  // Poll peers
   useEffect(() => {
     if (!client) return
-    let active = true
+    const controller = new AbortController()
+    let intervalId: ReturnType<typeof setInterval> | undefined
+
     const poll = () => {
-      client.getInbox('user', true).then(m => {
-        if (active) {
-          setInboxMessages(m)
-          connectionStatus.onConnectionSuccess()
+      if (document.visibilityState === 'hidden') return
+      client.getPeers(controller.signal).then(p => {
+        if (!controller.signal.aborted) {
+          setPeers(p)
+          onConnectionSuccessRef.current()
         }
       }).catch(err => {
-        if (err instanceof AuthError) connectionStatus.onAuthError()
-        else if (err instanceof ConnectionError) connectionStatus.onConnectionError()
+        if (controller.signal.aborted) return
+        if (err instanceof DOMException && err.name === 'AbortError') return
+        if (err instanceof AuthError) onAuthErrorRef.current()
+        else if (err instanceof ConnectionError) onConnectionErrorRef.current()
       })
     }
     poll()
-    const id = setInterval(poll, pollInterval)
-    return () => { active = false; clearInterval(id) }
-  }, [client, pollInterval, connectionStatus])
+    intervalId = setInterval(poll, pollInterval)
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') poll()
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+
+    return () => {
+      controller.abort()
+      clearInterval(intervalId)
+      document.removeEventListener('visibilitychange', handleVisibility)
+    }
+  }, [client, pollInterval])
+
+  // Poll inbox
+  useEffect(() => {
+    if (!client) return
+    const controller = new AbortController()
+    let intervalId: ReturnType<typeof setInterval> | undefined
+
+    const poll = () => {
+      if (document.visibilityState === 'hidden') return
+      client.getInbox('user', true, controller.signal).then(m => {
+        if (!controller.signal.aborted) {
+          setInboxMessages(m)
+          onConnectionSuccessRef.current()
+        }
+      }).catch(err => {
+        if (controller.signal.aborted) return
+        if (err instanceof DOMException && err.name === 'AbortError') return
+        if (err instanceof AuthError) onAuthErrorRef.current()
+        else if (err instanceof ConnectionError) onConnectionErrorRef.current()
+      })
+    }
+    poll()
+    intervalId = setInterval(poll, pollInterval)
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') poll()
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+
+    return () => {
+      controller.abort()
+      clearInterval(intervalId)
+      document.removeEventListener('visibilitychange', handleVisibility)
+    }
+  }, [client, pollInterval])
 
   useEffect(() => {
     if (sortedPeers.length === 0) {

@@ -1,10 +1,9 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 
 export type ConnectionStatus = 'connected' | 'reconnecting' | 'disconnected'
 
 const BASE_INTERVAL = 2000
 const MAX_INTERVAL = 30000
-const MAX_RETRIES = 20
 
 export function getBackoffInterval(retryCount: number): number {
   return Math.min(BASE_INTERVAL * Math.pow(2, retryCount), MAX_INTERVAL)
@@ -16,14 +15,22 @@ export function useConnectionStatus(onLogout: () => void) {
   const onLogoutRef = useRef(onLogout)
   onLogoutRef.current = onLogout
 
+  // Reset retry state when the page becomes visible again.
+  // Background-accumulated errors should not count toward disconnection.
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        setRetryCount(0)
+        setStatus('connected')
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [])
+
   const onConnectionError = useCallback(() => {
     setRetryCount(prev => {
       const next = prev + 1
-      if (next >= MAX_RETRIES) {
-        setStatus('disconnected')
-        onLogoutRef.current()
-        return 0
-      }
       setStatus('reconnecting')
       return next
     })

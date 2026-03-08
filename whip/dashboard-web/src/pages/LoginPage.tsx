@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { WhipAPIClient, parseConnectURL, AuthError } from '../api/client'
-import { saveAuth, clearAuth, getClient } from '../stores/auth'
+import { WhipAPIClient, parseConnectURL, AuthError, ConnectionError } from '../api/client'
+import { saveAuth, clearAuth, getClient, loadAuth } from '../stores/auth'
 
 interface Props {
   onLogin: () => void
@@ -43,8 +43,18 @@ export function LoginPage({ onLogin }: Props) {
       try {
         await client.getPeers()
         onLogin()
-      } catch {
-        clearAuth()
+      } catch (err) {
+        if (err instanceof ConnectionError) {
+          // Server temporarily unreachable — don't clear potentially valid credentials
+          const auth = loadAuth()
+          if (auth) {
+            setUrl(`${auth.baseURL}?token=${auth.token}`)
+          }
+          setError('Cannot connect to server')
+        } else {
+          // AuthError or unknown — credentials are invalid
+          clearAuth()
+        }
         setChecking(false)
       }
     }
