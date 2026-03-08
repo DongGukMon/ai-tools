@@ -114,6 +114,15 @@ func (m DashboardModel) PendingAttach() string {
 	return m.pendingAttach
 }
 
+// Cleanup kills the serve process if it's still running.
+// Must be called after the bubbletea program exits.
+func (m DashboardModel) Cleanup() {
+	if m.serveProcess != nil && m.serveProcess.Process != nil {
+		m.serveProcess.Process.Kill()
+		m.serveProcess.Wait()
+	}
+}
+
 func NewDashboardModel(store *Store, version string) DashboardModel {
 	cwd, _ := os.Getwd()
 	return DashboardModel{
@@ -335,6 +344,11 @@ func (m DashboardModel) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if len(peers) > 0 {
 			m.ircCursor = 0
 			m.view = viewIRC
+		}
+	case "T":
+		if IsMasterSessionAlive() {
+			m.pendingAttach = MasterSessionName
+			return m, tea.Quit
 		}
 	case "R":
 		if m.serveProcess != nil {
@@ -1507,7 +1521,12 @@ func (m DashboardModel) renderListFooter() string {
 		remoteHint = footerKey("R", "remote")
 	}
 
-	line := "  " + footerKey("↑↓", "navigate") + dot + footerKey("enter", "detail") + dot + footerKey("i", "irc") + dot + remoteHint + dot + footerKey("q", "quit") + dot + footerKey("c", "clean") + dot + refresh
+	var attachHint string
+	if IsMasterSessionAlive() {
+		attachHint = dot + footerKey("T", "attach master")
+	}
+
+	line := "  " + footerKey("↑↓", "navigate") + dot + footerKey("enter", "detail") + dot + footerKey("i", "irc") + dot + remoteHint + attachHint + dot + footerKey("q", "quit") + dot + footerKey("c", "clean") + dot + refresh
 
 	return lipgloss.NewStyle().MarginTop(1).Render(line)
 }

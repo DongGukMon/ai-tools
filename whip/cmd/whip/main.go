@@ -859,6 +859,7 @@ func dashboardCmd() *cobra.Command {
 				}
 				sessionName := dm.PendingAttach()
 				if sessionName == "" {
+					dm.Cleanup()
 					return nil
 				}
 				if whip.IsTmuxSessionName(sessionName) {
