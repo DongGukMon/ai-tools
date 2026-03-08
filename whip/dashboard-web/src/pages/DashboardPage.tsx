@@ -25,6 +25,17 @@ export function DashboardPage() {
   const client = useMemo(() => getClient(), [])
   const [activeTab, setActiveTab] = useState<Tab>('tasks')
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
+  const [terminalFullscreen, setTerminalFullscreen] = useState(false)
+
+  // Esc key to exit fullscreen
+  useEffect(() => {
+    if (!terminalFullscreen) return
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setTerminalFullscreen(false)
+    }
+    window.addEventListener('keydown', handleKey)
+    return () => window.removeEventListener('keydown', handleKey)
+  }, [terminalFullscreen])
 
   // IRC state
   const [peers, setPeers] = useState<Peer[]>([])
@@ -173,13 +184,12 @@ export function DashboardPage() {
         </button>
         <button
           onClick={() => setActiveTab('terminal')}
-          className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors inline-flex items-center gap-1.5 ${
+          className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
             activeTab === 'terminal'
               ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
               : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
           }`}
         >
-          <span className="font-mono text-xs">&#9618;</span>
           Terminal
         </button>
         <div className="flex-1" />
@@ -241,9 +251,14 @@ export function DashboardPage() {
         </div>
       )}
 
-      {activeTab === 'terminal' && (
-        <div className="h-[calc(100vh-10rem)] rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden bg-white dark:bg-[#0F172A]">
-          <MasterTerminal client={client} />
+      {activeTab === 'terminal' && !terminalFullscreen && (
+        <div className="h-[calc(100vh-10rem)] rounded-xl border border-[#0A1A3A] overflow-hidden" style={{ backgroundColor: '#00102F' }}>
+          <MasterTerminal client={client} fullscreen={false} onToggleFullscreen={() => setTerminalFullscreen(true)} />
+        </div>
+      )}
+      {activeTab === 'terminal' && terminalFullscreen && (
+        <div className="fixed inset-0 z-50" style={{ backgroundColor: '#00102F' }}>
+          <MasterTerminal client={client} fullscreen={true} onToggleFullscreen={() => setTerminalFullscreen(false)} />
         </div>
       )}
 
