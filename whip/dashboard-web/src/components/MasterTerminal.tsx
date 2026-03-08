@@ -80,35 +80,73 @@ export function MasterTerminal({ client, fullscreen, onToggleFullscreen }: Maste
     const handleResize = () => fitAddon.fit()
     window.addEventListener('resize', handleResize)
 
-    // Mobile touch scroll support
+    // Mobile touch scroll with momentum
     let touchStartY = 0
     let touchAccum = 0
-    const LINE_HEIGHT = 20 // approx pixels per scroll line
+    let velocity = 0
+    let lastMoveTime = 0
+    let momentumRaf = 0
+    const LINE_HEIGHT = 20
+    const FRICTION = 0.92
+    const MIN_VELOCITY = 0.5
     const el = termRef.current
 
+    const stopMomentum = () => {
+      if (momentumRaf) { cancelAnimationFrame(momentumRaf); momentumRaf = 0 }
+    }
+
+    const startMomentum = () => {
+      stopMomentum()
+      let accum = 0
+      const tick = () => {
+        velocity *= FRICTION
+        if (Math.abs(velocity) < MIN_VELOCITY) return
+        accum += velocity
+        const lines = Math.trunc(accum / LINE_HEIGHT)
+        if (lines !== 0) {
+          term.scrollLines(lines)
+          accum -= lines * LINE_HEIGHT
+        }
+        momentumRaf = requestAnimationFrame(tick)
+      }
+      momentumRaf = requestAnimationFrame(tick)
+    }
+
     const onTouchStart = (e: TouchEvent) => {
+      stopMomentum()
       touchStartY = e.touches[0].clientY
       touchAccum = 0
+      velocity = 0
+      lastMoveTime = Date.now()
     }
     const onTouchMove = (e: TouchEvent) => {
+      const now = Date.now()
       const dy = touchStartY - e.touches[0].clientY
+      const dt = Math.max(now - lastMoveTime, 1)
+      velocity = dy / dt * 16 // normalize to ~per-frame
       touchAccum += dy
       touchStartY = e.touches[0].clientY
+      lastMoveTime = now
       const lines = Math.trunc(touchAccum / LINE_HEIGHT)
       if (lines !== 0) {
         term.scrollLines(lines)
         touchAccum -= lines * LINE_HEIGHT
       }
-      // Prevent page scroll while scrolling terminal
       e.preventDefault()
+    }
+    const onTouchEnd = () => {
+      if (Math.abs(velocity) > MIN_VELOCITY) startMomentum()
     }
     el.addEventListener('touchstart', onTouchStart, { passive: true })
     el.addEventListener('touchmove', onTouchMove, { passive: false })
+    el.addEventListener('touchend', onTouchEnd, { passive: true })
 
     return () => {
+      stopMomentum()
       window.removeEventListener('resize', handleResize)
       el.removeEventListener('touchstart', onTouchStart)
       el.removeEventListener('touchmove', onTouchMove)
+      el.removeEventListener('touchend', onTouchEnd)
       term.dispose()
       xtermRef.current = null
       fitAddonRef.current = null
