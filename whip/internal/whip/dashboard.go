@@ -95,10 +95,12 @@ type DashboardModel struct {
 	ircLastSendAt  time.Time
 
 	// Remote/serve state
-	serveProcess *exec.Cmd
-	serveURL     string
-	webURL       string
-	masterAlive  bool
+	serveProcess   *exec.Cmd
+	serveURL       string
+	webURL         string
+	masterAlive    bool
+	remoteStarting bool
+	remoteErr      error
 
 	// Remote config input
 	tunnelInput  string
@@ -248,6 +250,13 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = msg
 
 	case remoteStartedMsg:
+		m.remoteStarting = false
+		if msg.err != nil {
+			m.remoteErr = msg.err
+			m.view = viewRemoteConfig
+			return m, nil
+		}
+		m.remoteErr = nil
 		m.serveProcess = msg.cmd
 		m.serveURL = msg.url
 		if msg.url != "" {
@@ -601,6 +610,7 @@ func (m DashboardModel) sendIRCMsg(target, message string) tea.Cmd {
 type remoteStartedMsg struct {
 	cmd *exec.Cmd
 	url string
+	err error
 }
 type remoteStoppedMsg struct{}
 
@@ -633,6 +643,9 @@ func (m DashboardModel) updateRemoteConfig(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 	case tea.KeyTab, tea.KeyUp, tea.KeyDown:
 		m.configCursor = (m.configCursor + 1) % 2
 	case tea.KeyEnter:
+		if m.remoteStarting {
+			return m, nil // already starting
+		}
 		port, _ := strconv.Atoi(strings.TrimSpace(m.portInput))
 		if port <= 0 {
 			port = 8585
@@ -649,6 +662,8 @@ func (m DashboardModel) updateRemoteConfig(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 		storeCfg.Tunnel = cfg.Tunnel
 		storeCfg.RemotePort = cfg.Port
 		m.store.SaveConfig(storeCfg)
+		m.remoteStarting = true
+		m.remoteErr = nil
 		return m, m.startRemote(cfg)
 	case tea.KeyEsc:
 		m.view = viewList
@@ -660,15 +675,16 @@ func (m DashboardModel) updateRemoteConfig(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 
 func (m DashboardModel) startRemote(cfg RemoteConfig) tea.Cmd {
 	return func() tea.Msg {
-		// Spawn master session
-		if err := SpawnMasterSession(cfg); err != nil {
-			return remoteStartedMsg{}
+		// Spawn master session (skip if already alive)
+		if !IsMasterSessionAlive() {
+			if err := SpawnMasterSession(cfg); err != nil {
+				return remoteStartedMsg{err: fmt.Errorf("spawn master: %w", err)}
+			}
 		}
 		// Start serve
 		cmd, url, err := StartServe(context.Background(), cfg, true)
 		if err != nil {
-			StopMasterSession()
-			return remoteStartedMsg{}
+			return remoteStartedMsg{err: fmt.Errorf("start serve: %w", err)}
 		}
 		return remoteStartedMsg{cmd: cmd, url: url}
 	}
@@ -829,6 +845,19 @@ func (m DashboardModel) renderRemoteConfigView(w int) string {
 	// Info
 	b.WriteString("\n")
 	b.WriteString(lipgloss.NewStyle().Foreground(colorSubtle).Render("  Backend: claude  ·  Difficulty: hard") + "\n")
+
+	// Loading state
+	if m.remoteStarting {
+		spinner := spinnerFrames[m.spinnerIndex%len(spinnerFrames)]
+		b.WriteString("\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorAccent).Render("  "+spinner+" Starting remote...") + "\n")
+	}
+
+	// Error
+	if m.remoteErr != nil {
+		b.WriteString("\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorDanger).Render(fmt.Sprintf("  ✗ %v", m.remoteErr)) + "\n")
+	}
 
 	// Footer
 	b.WriteString("\n")
