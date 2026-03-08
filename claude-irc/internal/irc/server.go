@@ -52,9 +52,17 @@ func RunServer(ctx context.Context, cfg ServerConfig) error {
 
 	mux := buildHandler(cfg.Store, token, shortCode, cfg.MasterTmux)
 
-	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.Port))
+	listenAddr := fmt.Sprintf(":%d", cfg.Port)
+	listener, err := net.Listen("tcp", listenAddr)
 	if err != nil {
-		return fmt.Errorf("listen: %w", err)
+		// Try to kill the process occupying the port and retry once
+		if killErr := killPortHolder(cfg.Port); killErr == nil {
+			time.Sleep(500 * time.Millisecond)
+			listener, err = net.Listen("tcp", listenAddr)
+		}
+		if err != nil {
+			return fmt.Errorf("listen: %w", err)
+		}
 	}
 
 	addr := listener.Addr().(*net.TCPAddr)
@@ -552,6 +560,23 @@ func handleMasterStatus(w http.ResponseWriter, sessionName string) {
 }
 
 // Helpers
+
+// killPortHolder finds and kills the process listening on the given port.
+func killPortHolder(port int) error {
+	// lsof -t -i :<port> returns PIDs
+	out, err := exec.Command("lsof", "-t", "-i", fmt.Sprintf(":%d", port)).Output()
+	if err != nil {
+		return err
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		pid, err := strconv.Atoi(strings.TrimSpace(line))
+		if err != nil || pid <= 0 {
+			continue
+		}
+		syscall.Kill(pid, syscall.SIGTERM)
+	}
+	return nil
+}
 
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
