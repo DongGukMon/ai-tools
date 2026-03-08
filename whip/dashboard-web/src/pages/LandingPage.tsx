@@ -409,9 +409,9 @@ export function LandingPage() {
           <p className="text-xs font-mono tracking-widest uppercase text-gray-400 dark:text-gray-600 mb-8">Quick start</p>
           <div className="grid sm:grid-cols-3 gap-6">
             {[
-              { step: '01', title: 'Install', code: 'claude install whip' },
-              { step: '02', title: 'Start remote', code: 'whip remote --tunnel your.domain' },
-              { step: '03', title: 'Connect', code: 'Open the dashboard URL' },
+              { step: '01', title: 'Install', code: 'curl -fsSL https://raw.githubusercontent.com/bang9/ai-tools/main/whip/install.sh | bash' },
+              { step: '02', title: 'Start remote', code: 'whip remote --tunnel your-domain.com' },
+              { step: '03', title: 'Connect', code: 'Open the generated dashboard URL' },
             ].map(s => (
               <div key={s.step}>
                 <span className="text-[10px] font-mono text-[#8B5CF6] tracking-widest">{s.step}</span>
