@@ -14,6 +14,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	qrcode "github.com/skip2/go-qrcode"
 )
 
 var (
@@ -811,6 +812,17 @@ func (m DashboardModel) renderRemoteStatusView(w int) string {
 	webLabel := labelStyle.Render("Web Dashboard")
 	if m.webURL != "" {
 		b.WriteString("  " + webLabel + " " + valStyle.Render(m.webURL) + "\n")
+	}
+
+	// QR code
+	if m.webURL != "" {
+		qr := renderQR(m.webURL)
+		if qr != "" {
+			b.WriteString("\n")
+			for _, line := range strings.Split(qr, "\n") {
+				b.WriteString("  " + line + "\n")
+			}
+		}
 	}
 
 	// Footer
@@ -1702,4 +1714,44 @@ func tableContentWidth() int {
 		}
 	}
 	return total
+}
+
+// renderQR generates a compact QR code using Unicode half-block characters.
+// Each character row represents 2 pixel rows. Black=dark, White=light.
+func renderQR(text string) string {
+	qr, err := qrcode.New(text, qrcode.Medium)
+	if err != nil {
+		return ""
+	}
+	qr.DisableBorder = true
+	bmp := qr.Bitmap()
+	rows := len(bmp)
+	if rows == 0 {
+		return ""
+	}
+	cols := len(bmp[0])
+
+	var b strings.Builder
+	for y := 0; y < rows; y += 2 {
+		for x := 0; x < cols; x++ {
+			top := bmp[y][x]
+			bot := false
+			if y+1 < rows {
+				bot = bmp[y+1][x]
+			}
+			// true = black (dark module), false = white (light)
+			switch {
+			case top && bot:
+				b.WriteRune('\u2588') // █ full block
+			case top && !bot:
+				b.WriteRune('\u2580') // ▀ upper half
+			case !top && bot:
+				b.WriteRune('\u2584') // ▄ lower half
+			default:
+				b.WriteRune(' ')
+			}
+		}
+		b.WriteRune('\n')
+	}
+	return strings.TrimRight(b.String(), "\n")
 }
