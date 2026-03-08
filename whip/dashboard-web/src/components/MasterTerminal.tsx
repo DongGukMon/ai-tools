@@ -80,8 +80,35 @@ export function MasterTerminal({ client, fullscreen, onToggleFullscreen }: Maste
     const handleResize = () => fitAddon.fit()
     window.addEventListener('resize', handleResize)
 
+    // Mobile touch scroll support
+    let touchStartY = 0
+    let touchAccum = 0
+    const LINE_HEIGHT = 20 // approx pixels per scroll line
+    const el = termRef.current
+
+    const onTouchStart = (e: TouchEvent) => {
+      touchStartY = e.touches[0].clientY
+      touchAccum = 0
+    }
+    const onTouchMove = (e: TouchEvent) => {
+      const dy = touchStartY - e.touches[0].clientY
+      touchAccum += dy
+      touchStartY = e.touches[0].clientY
+      const lines = Math.trunc(touchAccum / LINE_HEIGHT)
+      if (lines !== 0) {
+        term.scrollLines(lines)
+        touchAccum -= lines * LINE_HEIGHT
+      }
+      // Prevent page scroll while scrolling terminal
+      e.preventDefault()
+    }
+    el.addEventListener('touchstart', onTouchStart, { passive: true })
+    el.addEventListener('touchmove', onTouchMove, { passive: false })
+
     return () => {
       window.removeEventListener('resize', handleResize)
+      el.removeEventListener('touchstart', onTouchStart)
+      el.removeEventListener('touchmove', onTouchMove)
       term.dispose()
       xtermRef.current = null
       fitAddonRef.current = null
