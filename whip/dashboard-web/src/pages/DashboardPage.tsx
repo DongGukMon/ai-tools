@@ -10,8 +10,9 @@ import { SummaryStats } from '../components/SummaryStats'
 import { PeerList, sortPeers } from '../components/PeerList'
 import { Chat, type ChatMessage } from '../components/Chat'
 import { TopicBoard } from '../components/TopicBoard'
+import { MasterTerminal } from '../components/MasterTerminal'
 
-type Tab = 'tasks' | 'chat'
+type Tab = 'tasks' | 'chat' | 'terminal'
 
 interface SentMessage {
   to: string
@@ -170,6 +171,16 @@ export function DashboardPage() {
         >
           Chat
         </button>
+        <button
+          onClick={() => setActiveTab('terminal')}
+          className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+            activeTab === 'terminal'
+              ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
+              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+          }`}
+        >
+          Terminal
+        </button>
         <div className="flex-1" />
         <button
           onClick={handleDisconnected}
@@ -179,7 +190,7 @@ export function DashboardPage() {
         </button>
       </div>
 
-      {activeTab === 'tasks' ? (
+      {activeTab === 'tasks' && (
         <div>
           {/* Summary stats */}
           <div className="mb-4">
@@ -205,7 +216,9 @@ export function DashboardPage() {
             &#8635; 2s auto-refreshing
           </div>
         </div>
-      ) : (
+      )}
+
+      {activeTab === 'chat' && (
         <div className="flex gap-0 h-[calc(100vh-10rem)] rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden bg-white dark:bg-[#0F172A]">
           <PeerList
             peers={sortedPeers}
@@ -224,6 +237,12 @@ export function DashboardPage() {
               <TopicBoard client={client} peerName={selectedPeer} />
             )}
           </div>
+        </div>
+      )}
+
+      {activeTab === 'terminal' && (
+        <div className="h-[calc(100vh-10rem)] rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden bg-white dark:bg-[#0F172A]">
+          <MasterTerminal client={client} />
         </div>
       )}
 

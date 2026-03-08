@@ -93,6 +93,23 @@ export class WhipAPIClient {
     return this.request<Topic>(`/api/topics/${encodeURIComponent(name)}/${index}`)
   }
 
+  // Master session
+
+  async getMasterCapture(): Promise<{ content: string }> {
+    return this.request<{ content: string }>('/api/master/capture')
+  }
+
+  async sendMasterKeys(keys: string): Promise<void> {
+    await this.request<unknown>('/api/master/keys', {
+      method: 'POST',
+      body: JSON.stringify({ keys }),
+    })
+  }
+
+  async getMasterStatus(): Promise<{ session: string; alive: boolean }> {
+    return this.request<{ session: string; alive: boolean }>('/api/master/status')
+  }
+
   // Tasks
 
   async getTasks(): Promise<Task[]> {
