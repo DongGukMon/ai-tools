@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -114,12 +115,21 @@ func (m DashboardModel) PendingAttach() string {
 	return m.pendingAttach
 }
 
-// Cleanup kills the serve process if it's still running.
-// Must be called after the bubbletea program exits.
+// Cleanup gracefully stops the serve process if it's still running.
+// Sends SIGTERM so claude-irc can clean up its child processes (e.g. cloudflared).
 func (m DashboardModel) Cleanup() {
-	if m.serveProcess != nil && m.serveProcess.Process != nil {
+	if m.serveProcess == nil || m.serveProcess.Process == nil {
+		return
+	}
+	// SIGTERM for graceful shutdown (cloudflared cleanup)
+	m.serveProcess.Process.Signal(syscall.SIGTERM)
+	done := make(chan error, 1)
+	go func() { done <- m.serveProcess.Wait() }()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
 		m.serveProcess.Process.Kill()
-		m.serveProcess.Wait()
+		<-done
 	}
 }
 
@@ -711,7 +721,15 @@ func (m DashboardModel) startRemote(cfg RemoteConfig) tea.Cmd {
 func (m DashboardModel) stopRemote() tea.Cmd {
 	return func() tea.Msg {
 		if m.serveProcess != nil && m.serveProcess.Process != nil {
-			m.serveProcess.Process.Kill()
+			m.serveProcess.Process.Signal(syscall.SIGTERM)
+			done := make(chan error, 1)
+			go func() { done <- m.serveProcess.Wait() }()
+			select {
+			case <-done:
+			case <-time.After(5 * time.Second):
+				m.serveProcess.Process.Kill()
+				<-done
+			}
 		}
 		StopMasterSession()
 		return remoteStoppedMsg{}
