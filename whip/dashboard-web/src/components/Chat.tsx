@@ -14,9 +14,10 @@ interface ChatProps {
   messages: ChatMessage[]
   onSend: (content: string) => Promise<void>
   sending: boolean
+  onBack?: () => void
 }
 
-export function Chat({ peer, messages, onSend, sending }: ChatProps) {
+export function Chat({ peer, messages, onSend, sending, onBack }: ChatProps) {
   const [input, setInput] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -63,6 +64,16 @@ export function Chat({ peer, messages, onSend, sending }: ChatProps) {
     <div className="flex-1 flex flex-col rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-[#1E293B] min-h-0">
       {/* Header */}
       <div className="px-4 py-3 border-b border-gray-200 dark:border-slate-700 flex items-center gap-3 shrink-0">
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="md:hidden -ml-1 p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </button>
+        )}
         <span className={`text-xs ${peer.online ? 'text-emerald-500' : 'text-gray-400'}`}>
           {peer.online ? '\u25CF' : '\u25CB'}
         </span>

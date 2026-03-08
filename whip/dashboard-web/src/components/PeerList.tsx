@@ -26,7 +26,7 @@ export function PeerList({ peers, selectedPeer, unreadCounts, onSelectPeer }: Pe
   const sorted = sortPeers(peers)
 
   return (
-    <div className="w-64 shrink-0 flex flex-col border-r border-gray-200 dark:border-slate-700">
+    <div className="w-full md:w-64 shrink-0 flex flex-col border-r-0 md:border-r border-gray-200 dark:border-slate-700">
       <div className="px-4 py-3 border-b border-gray-200 dark:border-slate-700">
         <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
           Peers

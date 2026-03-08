@@ -29,6 +29,7 @@ export function DashboardPage({ onDisconnect }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('tasks')
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [terminalFullscreen, setTerminalFullscreen] = useState(false)
+  const [mobileChatOpen, setMobileChatOpen] = useState(false)
 
   // Esc key to exit fullscreen
   useEffect(() => {
@@ -306,18 +307,26 @@ export function DashboardPage({ onDisconnect }: Props) {
 
       {activeTab === 'chat' && (
         <div className="flex gap-0 h-[calc(100vh-10rem)] rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden bg-white dark:bg-[#0F172A]">
-          <PeerList
-            peers={sortedPeers}
-            selectedPeer={selectedPeer}
-            unreadCounts={unreadCounts}
-            onSelectPeer={setSelectedPeer}
-          />
-          <div className="flex-1 flex flex-col gap-3 p-3 min-w-0 bg-gray-50 dark:bg-[#0B1120]">
+          {/* Peer list: visible on desktop always, on mobile only when chat not open */}
+          <div className={`${mobileChatOpen ? 'hidden md:flex' : 'flex'} flex-col w-full md:w-auto`}>
+            <PeerList
+              peers={sortedPeers}
+              selectedPeer={selectedPeer}
+              unreadCounts={unreadCounts}
+              onSelectPeer={(name) => {
+                setSelectedPeer(name)
+                setMobileChatOpen(true)
+              }}
+            />
+          </div>
+          {/* Chat area: visible on desktop always, on mobile only when chat is open */}
+          <div className={`${mobileChatOpen ? 'flex' : 'hidden md:flex'} flex-1 flex-col gap-3 p-3 min-w-0 bg-gray-50 dark:bg-[#0B1120]`}>
             <Chat
               peer={selectedPeerInfo}
               messages={chatMessages}
               onSend={handleSend}
               sending={sending}
+              onBack={() => setMobileChatOpen(false)}
             />
             {selectedPeer && client && (
               <TopicBoard client={client} peerName={selectedPeer} />
