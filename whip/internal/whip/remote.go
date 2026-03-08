@@ -37,6 +37,9 @@ Run these commands to initialize your session:
    /loop 1m claude-irc inbox
 
 Then wait for instructions from the dashboard operator.
+
+## Restrictions
+NEVER use interactive or user-facing tools such as AskUserQuestion, webform, or any tool that requires user input via the terminal or browser. You are a background agent — all communication must go through claude-irc.
 `
 }
 
