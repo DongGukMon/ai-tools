@@ -1742,9 +1742,9 @@ func tableContentWidth() int {
 	return total
 }
 
-// renderQR generates a compact QR code using qrterminal half-block rendering.
+// renderQR generates a QR code using ANSI background colors (full-block mode).
 func renderQR(text string) string {
 	var buf bytes.Buffer
-	qrterminal.GenerateHalfBlock(text, qrterminal.L, &buf)
+	qrterminal.Generate(text, qrterminal.L, &buf)
 	return strings.TrimRight(buf.String(), "\n")
 }
