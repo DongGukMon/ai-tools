@@ -68,7 +68,6 @@ func findCodexSession(sessionsDir, cwd, promptPath string, launchedAt time.Time)
 		return "", fmt.Errorf("no recent Codex sessions found")
 	}
 
-	var fallback []codexSessionCandidate
 	for _, candidate := range candidates {
 		if canonicalizeSessionPath(candidate.cwd) != cwd {
 			continue
@@ -76,14 +75,6 @@ func findCodexSession(sessionsDir, cwd, promptPath string, launchedAt time.Time)
 		if candidate.contains {
 			return candidate.id, nil
 		}
-		fallback = append(fallback, candidate)
-	}
-
-	if len(fallback) == 1 {
-		return fallback[0].id, nil
-	}
-	if len(fallback) > 1 {
-		return "", fmt.Errorf("multiple Codex sessions found for cwd %s without prompt match %s", cwd, promptPath)
 	}
 	return "", fmt.Errorf("no matching Codex session found for %s", promptPath)
 }

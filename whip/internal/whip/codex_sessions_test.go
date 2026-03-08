@@ -24,33 +24,17 @@ func TestFindCodexSession_PromptMatchWins(t *testing.T) {
 	}
 }
 
-func TestFindCodexSession_FallbackSingleCandidate(t *testing.T) {
+func TestFindCodexSession_RejectsWithoutPromptMatch(t *testing.T) {
 	dir := t.TempDir()
 	launchedAt := time.Now()
 
 	writeCodexSessionFixture(t, dir, "a.jsonl", "session-a", "/repo", "no prompt yet", launchedAt.Add(1*time.Second))
 
-	id, err := findCodexSession(dir, "/repo", "/tmp/missing.txt", launchedAt)
-	if err != nil {
-		t.Fatalf("findCodexSession: %v", err)
-	}
-	if id != "session-a" {
-		t.Fatalf("id = %q, want %q", id, "session-a")
-	}
-}
-
-func TestFindCodexSession_ErrorsOnAmbiguousFallback(t *testing.T) {
-	dir := t.TempDir()
-	launchedAt := time.Now()
-
-	writeCodexSessionFixture(t, dir, "a.jsonl", "session-a", "/repo", "first", launchedAt.Add(1*time.Second))
-	writeCodexSessionFixture(t, dir, "b.jsonl", "session-b", "/repo", "second", launchedAt.Add(2*time.Second))
-
 	_, err := findCodexSession(dir, "/repo", "/tmp/missing.txt", launchedAt)
 	if err == nil {
-		t.Fatal("expected ambiguous fallback error")
+		t.Fatal("expected error when prompt path not found in session")
 	}
-	if !strings.Contains(err.Error(), "multiple Codex sessions found") {
+	if !strings.Contains(err.Error(), "no matching") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
