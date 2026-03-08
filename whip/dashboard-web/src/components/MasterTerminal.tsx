@@ -207,10 +207,20 @@ export function MasterTerminal({ client, fullscreen, onToggleFullscreen }: Maste
     return () => { active = false; clearInterval(id) }
   }, [client])
 
-  // Re-fit on fullscreen toggle
+  // Re-fit on fullscreen toggle + reset mobile zoom in fullscreen
   useEffect(() => {
-    const timeout = setTimeout(() => fitAddonRef.current?.fit(), 60)
-    return () => clearTimeout(timeout)
+    const meta = document.querySelector('meta[name="viewport"]')
+    const original = meta?.getAttribute('content') ?? ''
+    if (fullscreen && meta) {
+      meta.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover')
+    }
+    const timeout = setTimeout(() => fitAddonRef.current?.fit(), 80)
+    return () => {
+      clearTimeout(timeout)
+      if (fullscreen && meta && original) {
+        meta.setAttribute('content', original)
+      }
+    }
   }, [fullscreen])
 
   const handleSubmit = useCallback(async () => {
