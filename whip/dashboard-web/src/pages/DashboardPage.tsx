@@ -173,12 +173,13 @@ export function DashboardPage() {
         </button>
         <button
           onClick={() => setActiveTab('terminal')}
-          className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+          className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors inline-flex items-center gap-1.5 ${
             activeTab === 'terminal'
               ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
               : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
           }`}
         >
+          <span className="font-mono text-xs">&#9618;</span>
           Terminal
         </button>
         <div className="flex-1" />

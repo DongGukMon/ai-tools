@@ -98,8 +98,8 @@ export function MasterTerminal({ client }: MasterTerminalProps) {
   if (!available && !alive) {
     return (
       <div className="flex items-center justify-center h-full text-gray-400 dark:text-gray-500">
-        <div className="text-center space-y-2">
-          <div className="text-2xl">&#9000;</div>
+        <div className="text-center space-y-3">
+          <div className="text-3xl opacity-40">&#9618;</div>
           <div className="text-sm">Master session not running.</div>
           <div className="text-xs text-gray-400 dark:text-gray-600">
             Start with <code className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-slate-800 text-xs font-mono">whip remote</code> to enable.
@@ -112,33 +112,39 @@ export function MasterTerminal({ client }: MasterTerminalProps) {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-[#0F172A] text-sm font-mono">
-        <span className={alive ? 'text-green-400' : 'text-red-400'}>
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-[#0F172A] text-sm font-mono">
+        <span className={alive ? 'text-emerald-500' : 'text-gray-400 dark:text-gray-600'}>
           {alive ? '\u25CF' : '\u25CB'}
         </span>
         <span className="text-gray-700 dark:text-gray-300">whip-master</span>
+        <span className="text-xs text-gray-400 dark:text-gray-500">
+          {alive ? 'online' : 'offline'}
+        </span>
       </div>
 
       {/* Terminal */}
       <div ref={termRef} className="flex-1 min-h-0 bg-[#0B1120]" />
 
       {/* Input */}
-      <div className="flex gap-2 p-2 border-t border-gray-200 dark:border-slate-700 bg-white dark:bg-[#0F172A]">
-        <input
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-          placeholder="Type command and press Enter..."
-          disabled={!alive}
-          className="flex-1 bg-transparent text-sm font-mono text-gray-800 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-600 outline-none disabled:opacity-50"
-        />
-        <button
-          onClick={handleSubmit}
-          disabled={!alive || !input.trim()}
-          className="px-3 py-1 rounded text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 hover:bg-purple-200 dark:hover:bg-purple-900/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-        >
-          Send
-        </button>
+      <div className="px-4 py-3 border-t border-gray-200 dark:border-slate-700 bg-white dark:bg-[#0F172A]">
+        <div className="flex items-center gap-2">
+          <span className="text-gray-400 dark:text-gray-600 text-sm font-mono select-none">&#10095;</span>
+          <input
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleSubmit()}
+            placeholder="Type command and press Enter..."
+            disabled={!alive}
+            className="flex-1 rounded-lg border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-800 px-3 py-2 text-sm font-mono text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#8B5CF6]/50 focus:border-[#8B5CF6] disabled:opacity-50 transition-colors"
+          />
+          <button
+            onClick={handleSubmit}
+            disabled={!alive || !input.trim()}
+            className="shrink-0 px-3 py-2 rounded-lg text-xs font-medium bg-[#8B5CF6] text-white hover:bg-[#7C3AED] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            Send
+          </button>
+        </div>
       </div>
     </div>
   )
