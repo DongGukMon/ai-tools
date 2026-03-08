@@ -19,6 +19,8 @@ const (
 
 type Config struct {
 	MasterIRCName string `json:"master_irc_name"`
+	Tunnel        string `json:"tunnel,omitempty"`
+	RemotePort    int    `json:"remote_port,omitempty"`
 }
 
 type Store struct {

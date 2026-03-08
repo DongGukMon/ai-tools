@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -20,9 +21,10 @@ import (
 
 // ServerConfig holds configuration for the HTTP API server.
 type ServerConfig struct {
-	Port    int
-	Store   *Store
-	OnReady func(info ServerInfo) // callback when server is ready
+	Port       int
+	Store      *Store
+	MasterTmux string
+	OnReady    func(info ServerInfo) // callback when server is ready
 }
 
 // ServerInfo contains details about a running server instance.
@@ -40,7 +42,7 @@ func RunServer(ctx context.Context, cfg ServerConfig) error {
 		return fmt.Errorf("generating token: %w", err)
 	}
 
-	mux := buildHandler(cfg.Store, token)
+	mux := buildHandler(cfg.Store, token, cfg.MasterTmux)
 
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.Port))
 	if err != nil {
@@ -79,7 +81,7 @@ func generateToken() (string, error) {
 }
 
 // buildHandler creates the HTTP handler with auth and CORS middleware.
-func buildHandler(store *Store, token string) http.Handler {
+func buildHandler(store *Store, token string, masterTmux string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// CORS middleware
 		origin := r.Header.Get("Origin")
@@ -105,7 +107,7 @@ func buildHandler(store *Store, token string) http.Handler {
 		}
 
 		// Route
-		route(w, r, store)
+		route(w, r, store, masterTmux)
 	})
 }
 
@@ -133,7 +135,7 @@ func checkAuth(r *http.Request, token string) bool {
 	return false
 }
 
-func route(w http.ResponseWriter, r *http.Request, store *Store) {
+func route(w http.ResponseWriter, r *http.Request, store *Store, masterTmux string) {
 	path := strings.TrimRight(r.URL.Path, "/")
 	segments := strings.Split(strings.TrimPrefix(path, "/"), "/")
 
@@ -189,6 +191,31 @@ func route(w http.ResponseWriter, r *http.Request, store *Store) {
 			if r.Method == http.MethodGet {
 				handleGetTopic(w, store, name, indexStr)
 				return
+			}
+		}
+
+	case "master":
+		if masterTmux == "" {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "master session not configured"})
+			return
+		}
+		if len(segments) == 3 {
+			switch segments[2] {
+			case "capture":
+				if r.Method == http.MethodGet {
+					handleMasterCapture(w, masterTmux)
+					return
+				}
+			case "keys":
+				if r.Method == http.MethodPost {
+					handleMasterKeys(w, r, masterTmux)
+					return
+				}
+			case "status":
+				if r.Method == http.MethodGet {
+					handleMasterStatus(w, masterTmux)
+					return
+				}
 			}
 		}
 
@@ -439,6 +466,46 @@ func handleGetTask(w http.ResponseWriter, id string) {
 		return
 	}
 	writeJSON(w, http.StatusOK, task)
+}
+
+// Master tmux handlers
+
+func handleMasterCapture(w http.ResponseWriter, sessionName string) {
+	cmd := exec.Command("tmux", "capture-pane", "-t", sessionName, "-p", "-S", "-500")
+	out, err := cmd.Output()
+	if err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "session not available"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"content": string(out)})
+}
+
+func handleMasterKeys(w http.ResponseWriter, r *http.Request, sessionName string) {
+	var body struct {
+		Keys string `json:"keys"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
+		return
+	}
+	if body.Keys == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "keys required"})
+		return
+	}
+	cmd := exec.Command("tmux", "send-keys", "-t", sessionName, "-l", body.Keys)
+	if err := cmd.Run(); err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "session not available"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func handleMasterStatus(w http.ResponseWriter, sessionName string) {
+	alive := exec.Command("tmux", "has-session", "-t", sessionName).Run() == nil
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"session": sessionName,
+		"alive":   alive,
+	})
 }
 
 // Helpers

@@ -665,6 +665,7 @@ func isValidPeerName(name string) bool {
 func serveCmd() *cobra.Command {
 	var port int
 	var tunnel string
+	var masterTmux string
 
 	cmd := &cobra.Command{
 		Use:   "serve",
@@ -699,8 +700,9 @@ func serveCmd() *cobra.Command {
 			}
 
 			return irc.RunServer(ctx, irc.ServerConfig{
-				Port:  port,
-				Store: store,
+				Port:       port,
+				Store:      store,
+				MasterTmux: masterTmux,
 				OnReady: func(info irc.ServerInfo) {
 					connectURL := info.LocalURL
 					if publicURL != "" {
@@ -721,6 +723,7 @@ func serveCmd() *cobra.Command {
 
 	cmd.Flags().IntVar(&port, "port", 8585, "HTTP server port")
 	cmd.Flags().StringVar(&tunnel, "tunnel", "", "Cloudflare Tunnel hostname (empty for quick tunnel, or domain like irc.bang9.dev)")
+	cmd.Flags().StringVar(&masterTmux, "master-tmux", "", "Master tmux session name for capture/input endpoints")
 	return cmd
 }
 

@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"strings"
 	"syscall"
 	"text/tabwriter"
@@ -42,6 +44,7 @@ func main() {
 		cleanCmd(),
 		dashboardCmd(),
 		depCmd(),
+		remoteCmd(),
 		upgradeCmd(),
 		versionCmd(),
 	)
@@ -931,6 +934,125 @@ func depCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringArrayVar(&after, "after", nil, "Task ID that must complete first (repeatable)")
+	return cmd
+}
+
+func remoteCmd() *cobra.Command {
+	var backend, difficulty, tunnel string
+	var port int
+
+	cmd := &cobra.Command{
+		Use:   "remote",
+		Short: "Start master session with IRC serve",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			// Check tmux installed
+			if _, err := exec.LookPath("tmux"); err != nil {
+				return fmt.Errorf("tmux is required but not installed\n\nInstall with:\n  brew install tmux    (macOS)\n  apt install tmux     (Ubuntu/Debian)\n  pacman -S tmux       (Arch)")
+			}
+
+			store, err := whip.NewStore()
+			if err != nil {
+				return err
+			}
+
+			// Load config and merge CLI flags
+			cfg, err := store.LoadConfig()
+			if err != nil {
+				return err
+			}
+
+			if !cmd.Flags().Changed("tunnel") && cfg.Tunnel != "" {
+				tunnel = cfg.Tunnel
+			}
+			if !cmd.Flags().Changed("port") && cfg.RemotePort > 0 {
+				port = cfg.RemotePort
+			}
+
+			// Resolve CWD
+			cwd, err := os.Getwd()
+			if err != nil {
+				return fmt.Errorf("cannot determine working directory: %w", err)
+			}
+
+			remoteCfg := whip.RemoteConfig{
+				Backend:    backend,
+				Difficulty: difficulty,
+				Tunnel:     tunnel,
+				Port:       port,
+				CWD:        cwd,
+			}
+
+			// Check if master session already exists
+			if whip.IsMasterSessionAlive() {
+				fmt.Fprintln(os.Stderr, "Master session already running (whip-master)")
+				fmt.Fprintln(os.Stderr, "Attach with: tmux attach -t whip-master")
+			} else {
+				// Spawn master session
+				fmt.Fprintln(os.Stderr, "Spawning master session...")
+				if err := whip.SpawnMasterSession(remoteCfg); err != nil {
+					return fmt.Errorf("failed to spawn master session: %w", err)
+				}
+				fmt.Fprintln(os.Stderr, "Master session started (whip-master)")
+			}
+
+			// Start serve subprocess
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			fmt.Fprintln(os.Stderr, "Starting claude-irc serve...")
+			serveCmd, connectURL, err := whip.StartServe(ctx, remoteCfg)
+			if err != nil {
+				return fmt.Errorf("failed to start serve: %w", err)
+			}
+
+			// Print connect info
+			if connectURL != "" {
+				fmt.Fprintf(os.Stderr, "\nConnect URL: %s\n", connectURL)
+				fmt.Fprintf(os.Stderr, "Dashboard:   %s\n", connectURL)
+			}
+			fmt.Fprintf(os.Stderr, "\nMaster tmux: tmux attach -t whip-master\n")
+			fmt.Fprintln(os.Stderr, "Press Ctrl+C to stop serve (master session persists)")
+
+			// Save config if changed
+			configChanged := false
+			if tunnel != cfg.Tunnel {
+				cfg.Tunnel = tunnel
+				configChanged = true
+			}
+			if port != cfg.RemotePort {
+				cfg.RemotePort = port
+				configChanged = true
+			}
+			if configChanged {
+				if err := store.SaveConfig(cfg); err != nil {
+					fmt.Fprintf(os.Stderr, "Warning: save config: %v\n", err)
+				}
+			}
+
+			// Block on signal
+			sigCh := make(chan os.Signal, 1)
+			signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+			<-sigCh
+
+			// Cleanup: stop serve process
+			fmt.Fprintln(os.Stderr, "\nStopping serve...")
+			cancel()
+			if serveCmd.Process != nil {
+				_ = serveCmd.Process.Signal(syscall.SIGTERM)
+				_ = serveCmd.Wait()
+			}
+
+			fmt.Fprintln(os.Stderr, "Serve stopped. Master session still running — reattach with: tmux attach -t whip-master")
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&backend, "backend", "claude", "AI backend (claude or codex)")
+	cmd.Flags().StringVar(&difficulty, "difficulty", "hard", "Task difficulty (hard, medium, easy)")
+	cmd.Flags().StringVar(&tunnel, "tunnel", "", "Cloudflare tunnel hostname")
+	cmd.Flags().IntVar(&port, "port", 8585, "Serve port")
+
 	return cmd
 }
 

@@ -21,7 +21,7 @@ func setupTestServer(t *testing.T) (*httptest.Server, *Store, string) {
 	}
 
 	token := "test-token-abc123"
-	handler := buildHandler(store, token)
+	handler := buildHandler(store, token, "")
 	ts := httptest.NewServer(handler)
 	t.Cleanup(ts.Close)
 
