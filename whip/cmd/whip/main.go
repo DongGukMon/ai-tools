@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -11,6 +12,7 @@ import (
 	"syscall"
 	"text/tabwriter"
 	"time"
+	"unsafe"
 
 	"github.com/bang9/ai-tools/shared/upgrade"
 	"github.com/bang9/ai-tools/whip/internal/whip"
@@ -1001,18 +1003,26 @@ func remoteCmd() *cobra.Command {
 			defer cancel()
 
 			fmt.Fprintln(os.Stderr, "Starting claude-irc serve...")
-			serveCmd, connectURL, err := whip.StartServe(ctx, remoteCfg, false)
+			serveCmd, connectURL, err := whip.StartServe(ctx, remoteCfg, true)
 			if err != nil {
 				return fmt.Errorf("failed to start serve: %w", err)
 			}
 
-			// Print connect info
+			// Build web dashboard URL
+			var webURL string
 			if connectURL != "" {
-				fmt.Fprintf(os.Stderr, "\nConnect URL: %s\n", connectURL)
-				fmt.Fprintf(os.Stderr, "Dashboard:   %s\n", connectURL)
+				webURL = fmt.Sprintf("https://whip.bang9.dev?url=%s", url.QueryEscape(connectURL))
 			}
-			fmt.Fprintf(os.Stderr, "\nMaster tmux: tmux attach -t whip-master\n")
-			fmt.Fprintln(os.Stderr, "Press Ctrl+C to stop serve (master session persists)")
+
+			// Print connect info
+			fmt.Fprintln(os.Stderr, "")
+			if connectURL != "" {
+				fmt.Fprintf(os.Stderr, "  Connect URL:   %s\n", connectURL)
+				fmt.Fprintf(os.Stderr, "  Web Dashboard: %s\n", webURL)
+			}
+			fmt.Fprintf(os.Stderr, "  Master tmux:   tmux attach -t whip-master\n")
+			fmt.Fprintln(os.Stderr, "")
+			fmt.Fprintln(os.Stderr, "  Shortcuts: [o] open in browser  [c] copy URL  [q] quit")
 
 			// Save config if changed
 			configChanged := false
@@ -1030,10 +1040,17 @@ func remoteCmd() *cobra.Command {
 				}
 			}
 
-			// Block on signal
+			// Keyboard loop + signal handling
 			sigCh := make(chan os.Signal, 1)
 			signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-			<-sigCh
+
+			quitCh := make(chan struct{})
+			go remoteKeyboardLoop(connectURL, webURL, quitCh)
+
+			select {
+			case <-sigCh:
+			case <-quitCh:
+			}
 
 			// Cleanup: stop serve process
 			fmt.Fprintln(os.Stderr, "\nStopping serve...")
@@ -1043,7 +1060,7 @@ func remoteCmd() *cobra.Command {
 				_ = serveCmd.Wait()
 			}
 
-			fmt.Fprintln(os.Stderr, "Serve stopped. Master session still running — reattach with: tmux attach -t whip-master")
+			fmt.Fprintln(os.Stderr, "Serve stopped. Master session persists — reattach with: tmux attach -t whip-master")
 			return nil
 		},
 	}
@@ -1054,6 +1071,70 @@ func remoteCmd() *cobra.Command {
 	cmd.Flags().IntVar(&port, "port", 8585, "Serve port")
 
 	return cmd
+}
+
+// termios for raw mode keyboard reading
+type termios struct {
+	Iflag  uint64
+	Oflag  uint64
+	Cflag  uint64
+	Lflag  uint64
+	Cc     [20]byte
+	Ispeed uint64
+	Ospeed uint64
+}
+
+func makeRaw(fd int) (*termios, error) {
+	var old termios
+	if _, _, errno := syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), uintptr(syscall.TIOCGETA), uintptr(unsafe.Pointer(&old))); errno != 0 {
+		return nil, errno
+	}
+	raw := old
+	raw.Lflag &^= syscall.ECHO | syscall.ICANON | syscall.ISIG
+	raw.Iflag &^= syscall.ICRNL
+	raw.Cc[syscall.VMIN] = 1
+	raw.Cc[syscall.VTIME] = 0
+	if _, _, errno := syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), uintptr(syscall.TIOCSETA), uintptr(unsafe.Pointer(&raw))); errno != 0 {
+		return nil, errno
+	}
+	return &old, nil
+}
+
+func restore(fd int, t *termios) {
+	syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), uintptr(syscall.TIOCSETA), uintptr(unsafe.Pointer(t)))
+}
+
+func remoteKeyboardLoop(connectURL, webURL string, quit chan struct{}) {
+	old, err := makeRaw(int(os.Stdin.Fd()))
+	if err != nil {
+		// Not a terminal, just block
+		select {}
+	}
+	defer restore(int(os.Stdin.Fd()), old)
+
+	buf := make([]byte, 1)
+	for {
+		n, err := os.Stdin.Read(buf)
+		if err != nil || n == 0 {
+			return
+		}
+		switch buf[0] {
+		case 'q', 'Q':
+			close(quit)
+			return
+		case 'o', 'O':
+			if webURL != "" {
+				exec.Command("open", webURL).Start()
+			}
+		case 'c', 'C':
+			if connectURL != "" {
+				c := exec.Command("pbcopy")
+				c.Stdin = strings.NewReader(connectURL)
+				c.Run()
+				fmt.Fprintln(os.Stderr, "  URL copied to clipboard")
+			}
+		}
+	}
 }
 
 func upgradeCmd() *cobra.Command {
