@@ -165,9 +165,10 @@ export function MasterTerminal({ client, fullscreen, onToggleFullscreen }: Maste
         if (active && content !== prevContentRef.current) {
           const term = xtermRef.current
           if (term) {
-            // Check if user is scrolled to bottom (following output)
+            // Check if user is near bottom (within 5 lines = following output)
             const buffer = term.buffer.active
-            const wasAtBottom = buffer.viewportY >= buffer.baseY
+            const NEAR_BOTTOM_THRESHOLD = 5
+            const wasAtBottom = buffer.baseY - buffer.viewportY <= NEAR_BOTTOM_THRESHOLD
             const distFromBottom = buffer.baseY - buffer.viewportY
 
             // Always clear and rewrite to avoid accumulation bugs
@@ -231,6 +232,8 @@ export function MasterTerminal({ client, fullscreen, onToggleFullscreen }: Maste
     try {
       await client.sendMasterKeys(input + '\n')
       setInput('')
+      // Auto-scroll to bottom on send
+      xtermRef.current?.scrollToBottom()
     } catch { /* ignore */ }
   }, [client, input])
 
