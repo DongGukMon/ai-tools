@@ -3,6 +3,7 @@ package whip
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os/exec"
 	"sort"
 	"strconv"
@@ -62,9 +63,10 @@ const (
 	viewList viewState = iota
 	viewDetail
 	viewTmux
-	viewIRC          // peer selection list
-	viewIRCMsg       // message text input
-	viewRemoteConfig // tunnel/port config input
+	viewIRC           // peer selection list
+	viewIRCMsg        // message text input
+	viewRemoteConfig  // tunnel/port config input
+	viewRemoteStatus  // remote running status page
 )
 
 type ircSendResultMsg struct{ err error }
@@ -95,6 +97,7 @@ type DashboardModel struct {
 	// Remote/serve state
 	serveProcess *exec.Cmd
 	serveURL     string
+	webURL       string
 	masterAlive  bool
 
 	// Remote config input
@@ -183,6 +186,8 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateIRCMsg(msg)
 		case viewRemoteConfig:
 			return m.updateRemoteConfig(msg)
+		case viewRemoteStatus:
+			return m.updateRemoteStatus(msg)
 		}
 
 	case tea.WindowSizeMsg:
@@ -245,14 +250,19 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case remoteStartedMsg:
 		m.serveProcess = msg.cmd
 		m.serveURL = msg.url
+		if msg.url != "" {
+			m.webURL = fmt.Sprintf("https://whip.bang9.dev?url=%s", url.QueryEscape(msg.url))
+		}
 		m.masterAlive = IsMasterSessionAlive()
-		m.view = viewList
+		m.view = viewRemoteStatus
 		return m, m.loadTasks()
 
 	case remoteStoppedMsg:
 		m.serveProcess = nil
 		m.serveURL = ""
+		m.webURL = ""
 		m.masterAlive = false
+		m.view = viewList
 		return m, nil
 
 	case tickMsg:
@@ -315,17 +325,19 @@ func (m DashboardModel) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "R":
 		if m.serveProcess != nil {
-			return m, m.stopRemote()
-		}
-		cfg, _ := m.store.LoadConfig()
-		m.tunnelInput = cfg.Tunnel
-		if cfg.RemotePort > 0 {
-			m.portInput = strconv.Itoa(cfg.RemotePort)
+			// Show remote status page (stop from there)
+			m.view = viewRemoteStatus
 		} else {
-			m.portInput = "8585"
+			cfg, _ := m.store.LoadConfig()
+			m.tunnelInput = cfg.Tunnel
+			if cfg.RemotePort > 0 {
+				m.portInput = strconv.Itoa(cfg.RemotePort)
+			} else {
+				m.portInput = "8585"
+			}
+			m.configCursor = 0
+			m.view = viewRemoteConfig
 		}
-		m.configCursor = 0
-		m.view = viewRemoteConfig
 	}
 	return m, nil
 }
@@ -653,7 +665,7 @@ func (m DashboardModel) startRemote(cfg RemoteConfig) tea.Cmd {
 			return remoteStartedMsg{}
 		}
 		// Start serve
-		cmd, url, err := StartServe(context.Background(), cfg)
+		cmd, url, err := StartServe(context.Background(), cfg, true)
 		if err != nil {
 			StopMasterSession()
 			return remoteStartedMsg{}
@@ -670,6 +682,86 @@ func (m DashboardModel) stopRemote() tea.Cmd {
 		StopMasterSession()
 		return remoteStoppedMsg{}
 	}
+}
+
+func (m DashboardModel) updateRemoteStatus(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "s", "S":
+		// Stop remote
+		m.view = viewList
+		return m, m.stopRemote()
+	case "o":
+		// Open web dashboard in browser
+		if m.webURL != "" {
+			exec.Command("open", m.webURL).Start()
+		}
+	case "esc", "left", "backspace":
+		m.view = viewList
+	case "q":
+		return m, tea.Quit
+	case "ctrl+c":
+		return m, tea.Quit
+	}
+	return m, nil
+}
+
+func (m DashboardModel) renderRemoteStatusView(w int) string {
+	var b strings.Builder
+
+	// Breadcrumb
+	breadcrumb := lipgloss.NewStyle().Foreground(colorSubtle).Render("  Tasks") +
+		lipgloss.NewStyle().Foreground(colorDim).Render(" › ") +
+		lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render("Remote")
+	b.WriteString(breadcrumb + "\n\n")
+
+	labelStyle := lipgloss.NewStyle().Bold(true).Foreground(colorMuted).Width(14)
+	valStyle := lipgloss.NewStyle().Foreground(colorText)
+
+	// Status
+	var statusDot string
+	if m.serveProcess != nil {
+		statusDot = lipgloss.NewStyle().Foreground(colorSuccess).Render("●") + " " +
+			lipgloss.NewStyle().Foreground(colorSuccess).Render("running")
+	} else {
+		statusDot = lipgloss.NewStyle().Foreground(colorDanger).Render("●") + " " +
+			lipgloss.NewStyle().Foreground(colorDanger).Render("stopped")
+	}
+	b.WriteString("  " + labelStyle.Render("Status") + " " + statusDot + "\n")
+
+	// Master session
+	var masterDot string
+	if m.masterAlive {
+		masterDot = lipgloss.NewStyle().Foreground(colorSuccess).Render("●") + " " +
+			lipgloss.NewStyle().Foreground(colorSuccess).Render("alive")
+	} else {
+		masterDot = lipgloss.NewStyle().Foreground(colorDanger).Render("○") + " " +
+			lipgloss.NewStyle().Foreground(colorSubtle).Render("dead")
+	}
+	b.WriteString("  " + labelStyle.Render("Master") + " " + masterDot + "\n")
+
+	// Connect URL
+	if m.serveURL != "" {
+		b.WriteString("  " + labelStyle.Render("Connect URL") + " " + valStyle.Render(m.serveURL) + "\n")
+	}
+
+	// Web Dashboard URL
+	if m.webURL != "" {
+		b.WriteString("  " + labelStyle.Render("Web Dashboard") + " " + valStyle.Render(m.webURL) + "\n")
+	}
+
+	// Footer
+	b.WriteString("\n")
+	dot := lipgloss.NewStyle().Foreground(colorDim).Render("  ·  ")
+	var parts []string
+	parts = append(parts, footerKey("esc", "back"))
+	if m.webURL != "" {
+		parts = append(parts, footerKey("o", "open in browser"))
+	}
+	parts = append(parts, footerKey("S", "stop remote"))
+	line := "  " + strings.Join(parts, dot)
+	b.WriteString(lipgloss.NewStyle().MarginTop(1).Render(line))
+
+	return b.String()
 }
 
 func (m DashboardModel) renderRemoteConfigView(w int) string {
@@ -828,6 +920,8 @@ func (m DashboardModel) View() string {
 		b.WriteString(m.renderIRCMsgView(w))
 	case viewRemoteConfig:
 		b.WriteString(m.renderRemoteConfigView(w))
+	case viewRemoteStatus:
+		b.WriteString(m.renderRemoteStatusView(w))
 	}
 
 	return b.String()
@@ -1360,7 +1454,7 @@ func (m DashboardModel) renderListFooter() string {
 
 	var remoteHint string
 	if m.serveProcess != nil {
-		remoteHint = footerKey("R", "stop remote")
+		remoteHint = footerKey("R", "remote status")
 	} else {
 		remoteHint = footerKey("R", "remote")
 	}

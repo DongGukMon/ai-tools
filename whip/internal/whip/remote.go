@@ -88,14 +88,17 @@ func StopMasterSession() error {
 
 // StartServe starts `claude-irc serve` as a subprocess and returns the
 // process handle, the parsed connect URL, and any error.
-func StartServe(ctx context.Context, cfg RemoteConfig) (*exec.Cmd, string, error) {
+// When silent is true, stdout/stderr are suppressed (for TUI embedding).
+func StartServe(ctx context.Context, cfg RemoteConfig, silent bool) (*exec.Cmd, string, error) {
 	args := []string{"serve", "--port", strconv.Itoa(cfg.Port), "--master-tmux", MasterSessionName}
 	if cfg.Tunnel != "" {
 		args = append(args, "--tunnel", cfg.Tunnel)
 	}
 
 	cmd := exec.CommandContext(ctx, "claude-irc", args...)
-	cmd.Stdout = os.Stdout
+	if !silent {
+		cmd.Stdout = os.Stdout
+	}
 
 	stderrPipe, err := cmd.StderrPipe()
 	if err != nil {
@@ -111,7 +114,9 @@ func StartServe(ctx context.Context, cfg RemoteConfig) (*exec.Cmd, string, error
 	scanner := bufio.NewScanner(stderrPipe)
 	for scanner.Scan() {
 		line := scanner.Text()
-		fmt.Fprintln(os.Stderr, line)
+		if !silent {
+			fmt.Fprintln(os.Stderr, line)
+		}
 		if strings.Contains(line, "Connect URL:") {
 			parts := strings.SplitN(line, "Connect URL:", 2)
 			if len(parts) == 2 {
@@ -128,10 +133,12 @@ func StartServe(ctx context.Context, cfg RemoteConfig) (*exec.Cmd, string, error
 		}
 	}
 
-	// Drain remaining stderr in background
+	// Drain remaining stderr in background (suppress in silent mode)
 	go func() {
 		for scanner.Scan() {
-			fmt.Fprintln(os.Stderr, scanner.Text())
+			if !silent {
+				fmt.Fprintln(os.Stderr, scanner.Text())
+			}
 		}
 	}()
 

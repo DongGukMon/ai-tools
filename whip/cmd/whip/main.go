@@ -1001,7 +1001,7 @@ func remoteCmd() *cobra.Command {
 			defer cancel()
 
 			fmt.Fprintln(os.Stderr, "Starting claude-irc serve...")
-			serveCmd, connectURL, err := whip.StartServe(ctx, remoteCfg)
+			serveCmd, connectURL, err := whip.StartServe(ctx, remoteCfg, false)
 			if err != nil {
 				return fmt.Errorf("failed to start serve: %w", err)
 			}
