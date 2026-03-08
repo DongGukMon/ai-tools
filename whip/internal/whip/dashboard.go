@@ -356,11 +356,6 @@ func (m DashboardModel) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.ircCursor = 0
 			m.view = viewIRC
 		}
-	case "T":
-		if IsMasterSessionAlive() {
-			m.pendingAttach = MasterSessionName
-			return m, tea.Quit
-		}
 	case "R":
 		if m.serveProcess != nil {
 			// Show remote status page (stop from there)
@@ -756,6 +751,11 @@ func (m DashboardModel) updateRemoteStatus(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 			copyCmd.Stdin = strings.NewReader(url)
 			copyCmd.Run()
 		}
+	case "T":
+		if IsMasterSessionAlive() {
+			m.pendingAttach = MasterSessionName
+			return m, tea.Quit
+		}
 	case "esc", "left", "backspace":
 		m.view = viewList
 	case "q":
@@ -814,9 +814,9 @@ func (m DashboardModel) renderRemoteStatusView(w int) string {
 		b.WriteString("  " + webLabel + " " + valStyle.Render(m.webURL) + "\n")
 	}
 
-	// QR code
-	if m.webURL != "" {
-		qr := renderQR(m.webURL)
+	// QR code (use serveURL which is shorter, scannable on mobile)
+	if m.serveURL != "" {
+		qr := renderQR(m.serveURL)
 		if qr != "" {
 			b.WriteString("\n")
 			for _, line := range strings.Split(qr, "\n") {
@@ -835,6 +835,9 @@ func (m DashboardModel) renderRemoteStatusView(w int) string {
 	}
 	if m.webURL != "" {
 		parts = append(parts, footerKey("o", "open in browser"))
+	}
+	if IsMasterSessionAlive() {
+		parts = append(parts, footerKey("T", "attach master"))
 	}
 	parts = append(parts, footerKey("S", "stop remote"))
 	line := "  " + strings.Join(parts, dot)
@@ -1551,12 +1554,7 @@ func (m DashboardModel) renderListFooter() string {
 		remoteHint = footerKey("R", "remote")
 	}
 
-	var attachHint string
-	if IsMasterSessionAlive() {
-		attachHint = dot + footerKey("T", "attach master")
-	}
-
-	line := "  " + footerKey("↑↓", "navigate") + dot + footerKey("enter", "detail") + dot + footerKey("i", "irc") + dot + remoteHint + attachHint + dot + footerKey("q", "quit") + dot + footerKey("c", "clean") + dot + refresh
+	line := "  " + footerKey("↑↓", "navigate") + dot + footerKey("enter", "detail") + dot + footerKey("i", "irc") + dot + remoteHint + dot + footerKey("q", "quit") + dot + footerKey("c", "clean") + dot + refresh
 
 	return lipgloss.NewStyle().MarginTop(1).Render(line)
 }
@@ -1716,15 +1714,16 @@ func tableContentWidth() int {
 	return total
 }
 
-// renderQR generates a compact QR code using qrterminal (quarter-block mode).
+// renderQR generates a compact QR code using qrterminal with inverted colors
+// (white background, black modules) for dark terminal backgrounds.
 func renderQR(text string) string {
 	var b strings.Builder
 	cfg := qrterminal.Config{
 		Level:      qrterminal.L,
 		Writer:     &b,
-		QuietZone:  1,
-		BlackChar:  qrterminal.BLACK,
-		WhiteChar:  qrterminal.WHITE,
+		QuietZone:  2,
+		BlackChar:  qrterminal.WHITE,
+		WhiteChar:  qrterminal.BLACK,
 		HalfBlocks: true,
 	}
 	qrterminal.GenerateWithConfig(text, cfg)
