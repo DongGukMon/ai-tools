@@ -42,6 +42,7 @@ whip dashboard
 | `clean` | Remove completed/failed tasks |
 | `dashboard` | Live TUI dashboard |
 | `remote` | Start remote mode with web dashboard |
+| `hello` | Print hello world |
 
 ## Task Lifecycle
 

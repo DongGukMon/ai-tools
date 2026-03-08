@@ -23,6 +23,13 @@ import (
 var version = "dev"
 
 func main() {
+	root := newRootCmd()
+	if err := root.Execute(); err != nil {
+		os.Exit(1)
+	}
+}
+
+func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:     "whip",
 		Short:   "Task orchestrator for AI coding sessions",
@@ -47,13 +54,12 @@ func main() {
 		dashboardCmd(),
 		depCmd(),
 		remoteCmd(),
+		helloCmd(),
 		upgradeCmd(),
 		versionCmd(),
 	)
 
-	if err := root.Execute(); err != nil {
-		os.Exit(1)
-	}
+	return root
 }
 
 func createCmd() *cobra.Command {
@@ -1137,6 +1143,17 @@ func upgradeCmd() *cobra.Command {
 				Version:        version,
 				CompanionTools: []string{"claude-irc", "webform"},
 			})
+		},
+	}
+}
+
+func helloCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "hello",
+		Short: "Print hello world",
+		Args:  cobra.NoArgs,
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Fprintln(cmd.OutOrStdout(), "hello world")
 		},
 	}
 }
