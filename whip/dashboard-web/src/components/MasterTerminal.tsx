@@ -6,14 +6,14 @@ import type { WhipAPIClient } from '../api/client'
 
 // bang-shell-profile.terminal palette
 const T = {
-  bg: '#00102F',
+  bg: '#001A42',
   fg: '#FFB255',
   bold: '#EC9B4B',
   dim: '#7A6840',
-  headerBg: '#000B1F',
-  border: '#0A1A3A',
-  inputBg: '#001840',
-  inputBorder: '#0A2A5A',
+  headerBg: '#001233',
+  border: '#0E2550',
+  inputBg: '#002050',
+  inputBorder: '#0E3060',
   selection: '#FFB25530',
   glow: '#FFB25518',
 } as const
