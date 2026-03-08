@@ -3,6 +3,8 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import type { WhipAPIClient } from '../api/client'
+import { useVirtualKeys } from '../hooks/useVirtualKeys'
+import { VirtualKeyBar } from './VirtualKeyBar'
 
 // bang-shell-profile.terminal palette
 const T = {
@@ -33,6 +35,7 @@ export function MasterTerminal({ client, fullscreen, onToggleFullscreen }: Maste
   const prevContentRef = useRef<string>('')
   const [input, setInput] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
+  const vk = useVirtualKeys()
 
   // Initialize xterm.js
   useEffect(() => {
@@ -229,12 +232,13 @@ export function MasterTerminal({ client, fullscreen, onToggleFullscreen }: Maste
   const handleSubmit = useCallback(async () => {
     if (!input.trim()) return
     try {
-      await client.sendMasterKeys(input + '\n')
+      const keys = vk.applyModifiers(input)
+      await client.sendMasterKeys(keys)
       setInput('')
-      // Auto-scroll to bottom on send
+      vk.clearModifiers()
       xtermRef.current?.scrollToBottom()
     } catch { /* ignore */ }
-  }, [client, input])
+  }, [client, input, vk])
 
   // Empty state
   if (!available && !alive) {
@@ -285,69 +289,6 @@ export function MasterTerminal({ client, fullscreen, onToggleFullscreen }: Maste
 
         {/* Control buttons */}
         <div className="flex items-center gap-0.5">
-          {/* Arrow keys */}
-          <button
-            onClick={() => { client.sendMasterKeys('\x1b[A').catch(() => {}) }}
-            className="p-1.5 rounded transition-all active:scale-90"
-            style={{ color: T.dim }}
-            title="Up"
-            disabled={!alive}
-          >
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="4 10 8 6 12 10" />
-            </svg>
-          </button>
-          <button
-            onClick={() => { client.sendMasterKeys('\x1b[B').catch(() => {}) }}
-            className="p-1.5 rounded transition-all active:scale-90"
-            style={{ color: T.dim }}
-            title="Down"
-            disabled={!alive}
-          >
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="4 6 8 10 12 6" />
-            </svg>
-          </button>
-          <button
-            onClick={() => { client.sendMasterKeys('\x1b[D').catch(() => {}) }}
-            className="p-1.5 rounded transition-all active:scale-90"
-            style={{ color: T.dim }}
-            title="Left"
-            disabled={!alive}
-          >
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="10 4 6 8 10 12" />
-            </svg>
-          </button>
-          <button
-            onClick={() => { client.sendMasterKeys('\x1b[C').catch(() => {}) }}
-            className="p-1.5 rounded transition-all active:scale-90"
-            style={{ color: T.dim }}
-            title="Right"
-            disabled={!alive}
-          >
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="6 4 10 8 6 12" />
-            </svg>
-          </button>
-
-          {/* Divider */}
-          <div className="w-px h-4 mx-1" style={{ backgroundColor: T.border }} />
-
-          {/* Ctrl+C */}
-          <button
-            onClick={() => { client.sendMasterKeys('\x03').catch(() => {}) }}
-            className="px-1.5 py-1 rounded text-[10px] font-mono font-semibold transition-all active:scale-95 hover:brightness-125"
-            style={{ color: '#FF6B6B', backgroundColor: `${T.border}` }}
-            title="Send Ctrl+C"
-            disabled={!alive}
-          >
-            ^C
-          </button>
-
-          {/* Divider */}
-          <div className="w-px h-4 mx-1" style={{ backgroundColor: T.border }} />
-
           {/* Fullscreen toggle */}
           {onToggleFullscreen && (
             <button
@@ -386,14 +327,43 @@ export function MasterTerminal({ client, fullscreen, onToggleFullscreen }: Maste
           paddingBottom: fullscreen ? 'max(env(safe-area-inset-bottom, 0px), 8px)' : undefined,
         }}
       >
+        {/* Virtual key bar */}
+        {vk.showKeys && (
+          <VirtualKeyBar
+            modifiers={vk.modifiers}
+            disabled={!alive}
+            onToggleModifier={(mod) => { vk.toggleModifier(mod); inputRef.current?.focus() }}
+            onSendKey={(key) => { client.sendMasterKeys(key).catch(() => {}); inputRef.current?.focus() }}
+          />
+        )}
         <div className="flex items-center gap-2">
-          <span className="font-mono text-xs select-none shrink-0 hidden sm:block" style={{ color: T.dim }}>$</span>
+          {/* Virtual keyboard toggle */}
+          <button
+            onClick={vk.togglePanel}
+            className="p-1.5 rounded transition-all active:scale-95 shrink-0"
+            style={{ color: vk.showKeys ? T.bold : T.dim }}
+            title="Toggle virtual keys"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="4" width="20" height="16" rx="2" />
+              <line x1="6" y1="8" x2="6" y2="8" /><line x1="10" y1="8" x2="10" y2="8" /><line x1="14" y1="8" x2="14" y2="8" /><line x1="18" y1="8" x2="18" y2="8" />
+              <line x1="6" y1="12" x2="6" y2="12" /><line x1="10" y1="12" x2="10" y2="12" /><line x1="14" y1="12" x2="14" y2="12" /><line x1="18" y1="12" x2="18" y2="12" />
+              <line x1="8" y1="16" x2="16" y2="16" />
+            </svg>
+          </button>
+          {vk.hasModifier ? (
+            <span className="font-mono text-xs select-none shrink-0" style={{ color: T.bold }}>
+              {vk.modifierLabel}
+            </span>
+          ) : (
+            <span className="font-mono text-xs select-none shrink-0 hidden sm:block" style={{ color: T.dim }}>$</span>
+          )}
           <input
             ref={inputRef}
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSubmit() } }}
-            placeholder="Send to terminal..."
+            placeholder={vk.modifierLabel ? `Type a key for ${vk.modifierLabel}...` : 'Send to terminal...'}
             disabled={!alive}
             autoComplete="off"
             autoCorrect="off"
