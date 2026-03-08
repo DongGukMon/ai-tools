@@ -286,7 +286,9 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.serveProcess = msg.cmd
 		m.serveURL = msg.url
 		m.shortURL = msg.shortURL
-		if msg.url != "" {
+		if msg.shortURL != "" {
+			m.webURL = msg.shortURL
+		} else if msg.url != "" {
 			m.webURL = fmt.Sprintf("https://whip.bang9.dev#%s", msg.url)
 		}
 		m.masterAlive = IsMasterSessionAlive()
@@ -757,16 +759,23 @@ func (m DashboardModel) updateRemoteStatus(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 		m.view = viewList
 		return m, m.stopRemote()
 	case "o":
-		// Open web dashboard in browser
-		if m.webURL != "" {
-			exec.Command("open", m.webURL).Start()
+		// Open URL in browser
+		openURL := m.shortURL
+		if openURL == "" {
+			openURL = m.webURL
+		}
+		if openURL != "" {
+			exec.Command("open", openURL).Start()
 		}
 	case "c":
-		// Copy connect URL to clipboard
-		url := m.serveURL
-		if url != "" {
+		// Copy URL to clipboard
+		copyURL := m.shortURL
+		if copyURL == "" {
+			copyURL = m.serveURL
+		}
+		if copyURL != "" {
 			copyCmd := exec.Command("pbcopy")
-			copyCmd.Stdin = strings.NewReader(url)
+			copyCmd.Stdin = strings.NewReader(copyURL)
 			copyCmd.Run()
 		}
 	case "t":
@@ -823,18 +832,16 @@ func (m DashboardModel) renderRemoteStatusView(w int) string {
 	}
 	b.WriteString("  " + labelStyle.Render("Master") + " " + masterDot + "\n")
 
-	// Connect URL
-	urlLabel := labelStyle.Render("Connect URL")
-	if m.serveURL != "" {
-		b.WriteString("  " + urlLabel + " " + valStyle.Render(m.serveURL) + "\n")
+	// URL (prefer short URL)
+	urlLabel := labelStyle.Render("URL")
+	displayURL := m.shortURL
+	if displayURL == "" {
+		displayURL = m.serveURL
+	}
+	if displayURL != "" {
+		b.WriteString("  " + urlLabel + " " + valStyle.Render(displayURL) + "\n")
 	} else {
 		b.WriteString("  " + urlLabel + " " + lipgloss.NewStyle().Foreground(colorSubtle).Italic(true).Render("(parsing...)") + "\n")
-	}
-
-	// Web Dashboard URL
-	webLabel := labelStyle.Render("Web Dashboard")
-	if m.webURL != "" {
-		b.WriteString("  " + webLabel + " " + valStyle.Render(m.webURL) + "\n")
 	}
 
 	// QR code (use short URL if available, otherwise web URL)
@@ -857,10 +864,8 @@ func (m DashboardModel) renderRemoteStatusView(w int) string {
 	dot := lipgloss.NewStyle().Foreground(colorDim).Render("  ·  ")
 	var parts []string
 	parts = append(parts, footerKey("←/esc", "back"))
-	if m.serveURL != "" {
+	if m.shortURL != "" || m.serveURL != "" {
 		parts = append(parts, footerKey("c", "copy URL"))
-	}
-	if m.webURL != "" {
 		parts = append(parts, footerKey("o", "open in browser"))
 	}
 	if IsMasterSessionAlive() {

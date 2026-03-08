@@ -1016,20 +1016,14 @@ func remoteCmd() *cobra.Command {
 			}
 
 			connectURL := serveResult.ConnectURL
-			// Build web dashboard URL
-			var webURL string
-			if connectURL != "" {
-				webURL = fmt.Sprintf("https://whip.bang9.dev#%s", connectURL)
-			}
+			shortURL := serveResult.ShortURL
 
 			// Print connect info
 			fmt.Fprintln(os.Stderr, "")
-			if connectURL != "" {
-				fmt.Fprintf(os.Stderr, "  Connect URL:   %s\n", connectURL)
-				fmt.Fprintf(os.Stderr, "  Web Dashboard: %s\n", webURL)
-				if serveResult.ShortURL != "" {
-					fmt.Fprintf(os.Stderr, "  Short URL:     %s\n", serveResult.ShortURL)
-				}
+			if shortURL != "" {
+				fmt.Fprintf(os.Stderr, "  URL: %s\n", shortURL)
+			} else if connectURL != "" {
+				fmt.Fprintf(os.Stderr, "  URL: %s\n", connectURL)
 			}
 			fmt.Fprintf(os.Stderr, "  Master tmux:   tmux attach -t whip-master\n")
 			fmt.Fprintln(os.Stderr, "")
@@ -1064,7 +1058,11 @@ func remoteCmd() *cobra.Command {
 			signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
 			quitCh := make(chan struct{})
-			go remoteKeyboardLoop(connectURL, webURL, quitCh)
+			primaryURL := shortURL
+			if primaryURL == "" {
+				primaryURL = connectURL
+			}
+			go remoteKeyboardLoop(primaryURL, quitCh)
 
 			select {
 			case <-sigCh:
@@ -1093,7 +1091,7 @@ func remoteCmd() *cobra.Command {
 	return cmd
 }
 
-func remoteKeyboardLoop(connectURL, webURL string, quit chan struct{}) {
+func remoteKeyboardLoop(primaryURL string, quit chan struct{}) {
 	fd := int(os.Stdin.Fd())
 	old, err := term.MakeRaw(fd)
 	if err != nil {
@@ -1113,13 +1111,13 @@ func remoteKeyboardLoop(connectURL, webURL string, quit chan struct{}) {
 			close(quit)
 			return
 		case 'o', 'O':
-			if webURL != "" {
-				exec.Command("open", webURL).Start()
+			if primaryURL != "" {
+				exec.Command("open", primaryURL).Start()
 			}
 		case 'c', 'C':
-			if connectURL != "" {
+			if primaryURL != "" {
 				c := exec.Command("pbcopy")
-				c.Stdin = strings.NewReader(connectURL)
+				c.Stdin = strings.NewReader(primaryURL)
 				c.Run()
 				fmt.Fprintln(os.Stderr, "  URL copied to clipboard")
 			}
