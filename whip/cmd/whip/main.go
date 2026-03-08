@@ -12,12 +12,12 @@ import (
 	"syscall"
 	"text/tabwriter"
 	"time"
-	"unsafe"
 
 	"github.com/bang9/ai-tools/shared/upgrade"
 	"github.com/bang9/ai-tools/whip/internal/whip"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 var version = "dev"
@@ -1073,44 +1073,14 @@ func remoteCmd() *cobra.Command {
 	return cmd
 }
 
-// termios for raw mode keyboard reading
-type termios struct {
-	Iflag  uint64
-	Oflag  uint64
-	Cflag  uint64
-	Lflag  uint64
-	Cc     [20]byte
-	Ispeed uint64
-	Ospeed uint64
-}
-
-func makeRaw(fd int) (*termios, error) {
-	var old termios
-	if _, _, errno := syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), uintptr(syscall.TIOCGETA), uintptr(unsafe.Pointer(&old))); errno != 0 {
-		return nil, errno
-	}
-	raw := old
-	raw.Lflag &^= syscall.ECHO | syscall.ICANON | syscall.ISIG
-	raw.Iflag &^= syscall.ICRNL
-	raw.Cc[syscall.VMIN] = 1
-	raw.Cc[syscall.VTIME] = 0
-	if _, _, errno := syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), uintptr(syscall.TIOCSETA), uintptr(unsafe.Pointer(&raw))); errno != 0 {
-		return nil, errno
-	}
-	return &old, nil
-}
-
-func restore(fd int, t *termios) {
-	syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), uintptr(syscall.TIOCSETA), uintptr(unsafe.Pointer(t)))
-}
-
 func remoteKeyboardLoop(connectURL, webURL string, quit chan struct{}) {
-	old, err := makeRaw(int(os.Stdin.Fd()))
+	fd := int(os.Stdin.Fd())
+	old, err := term.MakeRaw(fd)
 	if err != nil {
 		// Not a terminal, just block
 		select {}
 	}
-	defer restore(int(os.Stdin.Fd()), old)
+	defer term.Restore(fd, old)
 
 	buf := make([]byte, 1)
 	for {
