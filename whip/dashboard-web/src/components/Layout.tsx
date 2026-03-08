@@ -24,6 +24,11 @@ export function Layout({ children }: LayoutProps) {
       <main className="max-w-7xl mx-auto px-5 sm:px-6 py-6">
         {children}
       </main>
+      <footer className="max-w-7xl mx-auto px-5 sm:px-6 pb-4">
+        <p className="text-[10px] text-gray-400 dark:text-gray-600" title={__BUILD_TIME__}>
+          built {new Date(__BUILD_TIME__).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+        </p>
+      </footer>
     </div>
   )
 }

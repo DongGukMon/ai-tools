@@ -259,7 +259,7 @@ export function MasterTerminal({ client, fullscreen, onToggleFullscreen }: Maste
       </div>
 
       {/* Terminal viewport */}
-      <div ref={termRef} className="flex-1 min-h-0" style={{ backgroundColor: T.bg }} />
+      <div ref={termRef} className="flex-1 min-h-0 px-1 sm:px-0" style={{ backgroundColor: T.bg }} />
 
       {/* Input bar */}
       <div
@@ -281,7 +281,11 @@ export function MasterTerminal({ client, fullscreen, onToggleFullscreen }: Maste
             disabled={!alive}
             autoComplete="off"
             autoCorrect="off"
+            autoCapitalize="off"
             spellCheck={false}
+            data-1p-ignore
+            data-lpignore="true"
+            data-form-type="other"
             className="flex-1 min-w-0 rounded-md px-3 py-2 text-sm font-mono transition-colors focus:outline-none disabled:opacity-40"
             style={{
               backgroundColor: T.inputBg,
