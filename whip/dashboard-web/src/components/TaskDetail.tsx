@@ -8,8 +8,8 @@ interface TaskDetailProps {
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-start gap-3 py-1">
-      <span className="w-32 shrink-0 font-bold text-gray-400 dark:text-gray-500">
+    <div className="flex flex-col sm:flex-row sm:items-start gap-0.5 sm:gap-3 py-1.5 sm:py-1">
+      <span className="text-xs sm:text-sm sm:w-32 shrink-0 font-bold text-gray-400 dark:text-gray-500">
         {label}
       </span>
       <span className="text-gray-900 dark:text-gray-100 min-w-0">{children}</span>
@@ -60,8 +60,8 @@ export function TaskDetail({ task, onClose }: TaskDetailProps) {
         onClick={onClose}
       />
       {/* Panel */}
-      <div className="relative w-full max-w-2xl bg-white dark:bg-[#0F172A] border-l border-gray-200 dark:border-gray-700 overflow-y-auto shadow-xl">
-        <div className="p-6">
+      <div className="relative w-full max-w-full sm:max-w-2xl bg-white dark:bg-[#0F172A] border-l-0 sm:border-l border-gray-200 dark:border-gray-700 overflow-y-auto shadow-xl">
+        <div className="p-4 sm:p-6">
           {/* Breadcrumb */}
           <div className="flex items-center gap-2 text-sm mb-6">
             <button

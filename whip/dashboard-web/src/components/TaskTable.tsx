@@ -51,17 +51,20 @@ function DepsCell({ deps }: { deps: string[] }) {
   return <span className="text-amber-500 dark:text-amber-400">{short.join(',')}</span>
 }
 
+// hidden = hidden on mobile, visible on md+
+const H = 'hidden md:table-cell'
+
 const columns = [
-  { key: 'id', label: 'ID', width: 'w-[4.5rem]' },
-  { key: 'title', label: 'TITLE', width: 'min-w-[10rem] flex-1' },
-  { key: 'status', label: 'STATUS', width: 'w-[8.5rem]' },
-  { key: 'backend', label: 'BACKEND', width: 'w-[5.5rem]' },
-  { key: 'runner', label: 'RUNNER', width: 'w-[5rem]' },
-  { key: 'pid', label: 'PID', width: 'w-[6rem]' },
-  { key: 'irc', label: 'IRC', width: 'w-[7.5rem]' },
-  { key: 'deps', label: 'DEPS', width: 'w-[8rem]' },
-  { key: 'note', label: 'NOTE', width: 'w-[10rem]' },
-  { key: 'updated', label: 'UPDATED', width: 'w-[6rem]' },
+  { key: 'id', label: 'ID', width: 'w-[4.5rem]', hide: '' },
+  { key: 'title', label: 'TITLE', width: 'min-w-[10rem] flex-1', hide: '' },
+  { key: 'status', label: 'STATUS', width: 'w-[8.5rem]', hide: '' },
+  { key: 'backend', label: 'BACKEND', width: 'w-[5.5rem]', hide: H },
+  { key: 'runner', label: 'RUNNER', width: 'w-[5rem]', hide: H },
+  { key: 'pid', label: 'PID', width: 'w-[6rem]', hide: H },
+  { key: 'irc', label: 'IRC', width: 'w-[7.5rem]', hide: H },
+  { key: 'deps', label: 'DEPS', width: 'w-[8rem]', hide: H },
+  { key: 'note', label: 'NOTE', width: 'w-[10rem]', hide: H },
+  { key: 'updated', label: 'UPDATED', width: 'w-[6rem]', hide: '' },
 ] as const
 
 export function TaskTable({ tasks, selectedId, onSelect }: TaskTableProps) {
@@ -75,7 +78,7 @@ export function TaskTable({ tasks, selectedId, onSelect }: TaskTableProps) {
             {columns.map(col => (
               <th
                 key={col.key}
-                className={`text-left py-2 px-1.5 font-bold text-gray-400 dark:text-gray-500 ${col.width}`}
+                className={`text-left py-2 px-1.5 font-bold text-gray-400 dark:text-gray-500 ${col.width} ${col.hide}`}
               >
                 {col.label}
               </th>
@@ -109,16 +112,16 @@ export function TaskTable({ tasks, selectedId, onSelect }: TaskTableProps) {
                 <td className="py-1.5 px-1.5">
                   <StatusBadge status={task.status} />
                 </td>
-                <td className="py-1.5 px-1.5">
+                <td className={`py-1.5 px-1.5 ${H}`}>
                   <BackendCell backend={task.backend} />
                 </td>
-                <td className="py-1.5 px-1.5">
+                <td className={`py-1.5 px-1.5 ${H}`}>
                   <RunnerCell runner={task.runner} />
                 </td>
-                <td className="py-1.5 px-1.5">
+                <td className={`py-1.5 px-1.5 ${H}`}>
                   <PidCell pid={task.shell_pid} alive={task.pid_alive} status={task.status} />
                 </td>
-                <td className="py-1.5 px-1.5">
+                <td className={`py-1.5 px-1.5 ${H}`}>
                   {task.irc_name ? (
                     <span className="text-gray-700 dark:text-gray-300">
                       {truncate(task.irc_name, 10)}
@@ -127,10 +130,10 @@ export function TaskTable({ tasks, selectedId, onSelect }: TaskTableProps) {
                     <span className="text-gray-400 dark:text-gray-700">&mdash;</span>
                   )}
                 </td>
-                <td className="py-1.5 px-1.5">
+                <td className={`py-1.5 px-1.5 ${H}`}>
                   <DepsCell deps={task.depends_on} />
                 </td>
-                <td className="py-1.5 px-1.5">
+                <td className={`py-1.5 px-1.5 ${H}`}>
                   {task.note ? (
                     <span className="text-gray-500 dark:text-gray-400">
                       {truncate(task.note, 18)}
