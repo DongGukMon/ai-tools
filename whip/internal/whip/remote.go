@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const MasterSessionName = "whip-master"
@@ -88,7 +89,7 @@ func StopMasterSession() error {
 
 // StartServe starts `claude-irc serve` as a subprocess and returns the
 // process handle, the parsed connect URL, and any error.
-// When silent is true, stdout/stderr are suppressed (for TUI embedding).
+// When silent is true, stdout/stderr are suppressed and stdin is detached (for TUI embedding).
 func StartServe(ctx context.Context, cfg RemoteConfig, silent bool) (*exec.Cmd, string, error) {
 	args := []string{"serve", "--port", strconv.Itoa(cfg.Port), "--master-tmux", MasterSessionName}
 	if cfg.Tunnel != "" {
@@ -96,7 +97,10 @@ func StartServe(ctx context.Context, cfg RemoteConfig, silent bool) (*exec.Cmd, 
 	}
 
 	cmd := exec.CommandContext(ctx, "claude-irc", args...)
-	if !silent {
+	if silent {
+		// Detach stdin so serve's keyboard loop won't interfere with TUI
+		cmd.Stdin = nil
+	} else {
 		cmd.Stdout = os.Stdout
 	}
 
@@ -109,38 +113,40 @@ func StartServe(ctx context.Context, cfg RemoteConfig, silent bool) (*exec.Cmd, 
 		return nil, "", fmt.Errorf("start claude-irc serve: %w", err)
 	}
 
-	// Parse connect URL from stderr output
+	// Parse connect URL from stderr with timeout
 	connectURL := ""
-	scanner := bufio.NewScanner(stderrPipe)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if !silent {
-			fmt.Fprintln(os.Stderr, line)
-		}
-		if strings.Contains(line, "Connect URL:") {
-			parts := strings.SplitN(line, "Connect URL:", 2)
-			if len(parts) == 2 {
-				connectURL = strings.TrimSpace(parts[1])
-				break
-			}
-		}
-		// Also check for listen address as fallback
-		if strings.Contains(line, "listening on") || strings.Contains(line, "Listening on") {
-			parts := strings.SplitN(line, "on ", 2)
-			if len(parts) == 2 && connectURL == "" {
-				connectURL = strings.TrimSpace(parts[1])
-			}
-		}
-	}
-
-	// Drain remaining stderr in background (suppress in silent mode)
+	done := make(chan struct{})
 	go func() {
+		scanner := bufio.NewScanner(stderrPipe)
 		for scanner.Scan() {
+			line := scanner.Text()
 			if !silent {
-				fmt.Fprintln(os.Stderr, scanner.Text())
+				fmt.Fprintln(os.Stderr, line)
+			}
+			if strings.Contains(line, "Connect URL:") {
+				parts := strings.SplitN(line, "Connect URL:", 2)
+				if len(parts) == 2 {
+					connectURL = strings.TrimSpace(parts[1])
+					break
+				}
 			}
 		}
+		// Drain remaining stderr in background
+		go func() {
+			for scanner.Scan() {
+				if !silent {
+					fmt.Fprintln(os.Stderr, scanner.Text())
+				}
+			}
+		}()
+		close(done)
 	}()
+
+	// Wait for URL with timeout (tunnel setup can take a while)
+	select {
+	case <-done:
+	case <-time.After(30 * time.Second):
+	}
 
 	return cmd, connectURL, nil
 }

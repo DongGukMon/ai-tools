@@ -695,6 +695,14 @@ func (m DashboardModel) updateRemoteStatus(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 		if m.webURL != "" {
 			exec.Command("open", m.webURL).Start()
 		}
+	case "c":
+		// Copy connect URL to clipboard
+		url := m.serveURL
+		if url != "" {
+			copyCmd := exec.Command("pbcopy")
+			copyCmd.Stdin = strings.NewReader(url)
+			copyCmd.Run()
+		}
 	case "esc", "left", "backspace":
 		m.view = viewList
 	case "q":
@@ -740,20 +748,27 @@ func (m DashboardModel) renderRemoteStatusView(w int) string {
 	b.WriteString("  " + labelStyle.Render("Master") + " " + masterDot + "\n")
 
 	// Connect URL
+	urlLabel := labelStyle.Render("Connect URL")
 	if m.serveURL != "" {
-		b.WriteString("  " + labelStyle.Render("Connect URL") + " " + valStyle.Render(m.serveURL) + "\n")
+		b.WriteString("  " + urlLabel + " " + valStyle.Render(m.serveURL) + "\n")
+	} else {
+		b.WriteString("  " + urlLabel + " " + lipgloss.NewStyle().Foreground(colorSubtle).Italic(true).Render("(parsing...)") + "\n")
 	}
 
 	// Web Dashboard URL
+	webLabel := labelStyle.Render("Web Dashboard")
 	if m.webURL != "" {
-		b.WriteString("  " + labelStyle.Render("Web Dashboard") + " " + valStyle.Render(m.webURL) + "\n")
+		b.WriteString("  " + webLabel + " " + valStyle.Render(m.webURL) + "\n")
 	}
 
 	// Footer
 	b.WriteString("\n")
 	dot := lipgloss.NewStyle().Foreground(colorDim).Render("  ·  ")
 	var parts []string
-	parts = append(parts, footerKey("esc", "back"))
+	parts = append(parts, footerKey("←/esc", "back"))
+	if m.serveURL != "" {
+		parts = append(parts, footerKey("c", "copy URL"))
+	}
 	if m.webURL != "" {
 		parts = append(parts, footerKey("o", "open in browser"))
 	}
