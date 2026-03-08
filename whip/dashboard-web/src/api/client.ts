@@ -60,7 +60,7 @@ export class WhipAPIClient {
     const body = {
       from: 'user',
       to,
-      content: `${content}\n\n---\n[From web dashboard. Reply via: claude-irc msg user "..."]`,
+      content,
     }
     await this.request<unknown>('/api/messages', {
       method: 'POST',

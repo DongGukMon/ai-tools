@@ -7,7 +7,7 @@ interface PeerListProps {
   onSelectPeer: (name: string) => void
 }
 
-function sortPeers(peers: Peer[]): Peer[] {
+export function sortPeers(peers: Peer[]): Peer[] {
   const filtered = peers.filter(p => p.name !== 'user')
   let master: Peer | null = null
   const rest: Peer[] = []

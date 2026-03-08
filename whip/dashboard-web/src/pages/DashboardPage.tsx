@@ -7,11 +7,11 @@ import { useTasks } from '../hooks/useTasks'
 import { TaskTable } from '../components/TaskTable'
 import { TaskDetail } from '../components/TaskDetail'
 import { SummaryStats } from '../components/SummaryStats'
-import { PeerList } from '../components/PeerList'
+import { PeerList, sortPeers } from '../components/PeerList'
 import { Chat, type ChatMessage } from '../components/Chat'
 import { TopicBoard } from '../components/TopicBoard'
 
-type Tab = 'tasks' | 'irc'
+type Tab = 'tasks' | 'chat'
 
 interface SentMessage {
   to: string
@@ -38,6 +38,7 @@ export function DashboardPage() {
   }, [navigate])
 
   const { tasks, error } = useTasks(client, handleDisconnected)
+  const sortedPeers = useMemo(() => sortPeers(peers), [peers])
 
   // Keep selected task in sync with latest data
   const currentSelected = selectedTask
@@ -71,19 +72,34 @@ export function DashboardPage() {
     return () => { active = false; clearInterval(id) }
   }, [client])
 
+  useEffect(() => {
+    if (sortedPeers.length === 0) {
+      if (selectedPeer !== null) {
+        setSelectedPeer(null)
+      }
+      return
+    }
+
+    if (selectedPeer && sortedPeers.some(peer => peer.name === selectedPeer)) {
+      return
+    }
+
+    setSelectedPeer(sortedPeers[0].name)
+  }, [selectedPeer, sortedPeers])
+
   // Mark messages as read when viewing a peer's chat
   useEffect(() => {
-    if (!client || !selectedPeer) return
+    if (!client || !selectedPeer || activeTab !== 'chat') return
     const hasUnread = inboxMessages.some(m => m.from === selectedPeer && !m.read)
     if (hasUnread) {
       client.markRead('user').catch(() => {})
     }
-  }, [client, selectedPeer, inboxMessages])
+  }, [activeTab, client, selectedPeer, inboxMessages])
 
   // Unread counts per peer
   const unreadCounts: Record<string, number> = {}
   for (const msg of inboxMessages) {
-    if (!msg.read) {
+    if (msg.from !== 'user' && !msg.read) {
       unreadCounts[msg.from] = (unreadCounts[msg.from] || 0) + 1
     }
   }
@@ -105,18 +121,25 @@ export function DashboardPage() {
   }, [client, selectedPeer])
 
   // Merge sent + received for selected peer
-  const chatMessages: ChatMessage[] = selectedPeer
-    ? [
-        ...inboxMessages
-          .filter(m => m.from === selectedPeer)
-          .map(m => ({ from: m.from, content: m.content, timestamp: m.timestamp, direction: 'received' as const })),
-        ...sentMessages
-          .filter(m => m.to === selectedPeer)
-          .map(m => ({ from: 'user', content: m.content, timestamp: m.timestamp, direction: 'sent' as const })),
-      ].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
-    : []
+  const chatMessages = useMemo<ChatMessage[]>(() => {
+    if (!selectedPeer) {
+      return []
+    }
 
-  const selectedPeerInfo = peers.find(p => p.name === selectedPeer) ?? null
+    return [
+      ...inboxMessages
+        .filter(m => m.from === selectedPeer)
+        .map(m => ({ from: m.from, content: m.content, timestamp: m.timestamp, direction: 'received' as const })),
+      ...sentMessages
+        .filter(m => m.to === selectedPeer)
+        .map(m => ({ from: 'user', content: m.content, timestamp: m.timestamp, direction: 'sent' as const })),
+    ].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+  }, [inboxMessages, selectedPeer, sentMessages])
+
+  const selectedPeerInfo = useMemo(
+    () => sortedPeers.find(peer => peer.name === selectedPeer) ?? null,
+    [selectedPeer, sortedPeers],
+  )
 
   if (!client) {
     navigate('/')
@@ -138,14 +161,14 @@ export function DashboardPage() {
           Tasks
         </button>
         <button
-          onClick={() => setActiveTab('irc')}
+          onClick={() => setActiveTab('chat')}
           className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-            activeTab === 'irc'
+            activeTab === 'chat'
               ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
               : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
           }`}
         >
-          IRC
+          Chat
         </button>
         <div className="flex-1" />
         <button
@@ -185,7 +208,7 @@ export function DashboardPage() {
       ) : (
         <div className="flex gap-0 h-[calc(100vh-10rem)] rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden bg-white dark:bg-[#0F172A]">
           <PeerList
-            peers={peers}
+            peers={sortedPeers}
             selectedPeer={selectedPeer}
             unreadCounts={unreadCounts}
             onSelectPeer={setSelectedPeer}
