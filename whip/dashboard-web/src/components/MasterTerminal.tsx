@@ -283,6 +283,11 @@ export function MasterTerminal({ client, fullscreen, onToggleFullscreen }: Maste
             autoCorrect="off"
             autoCapitalize="off"
             spellCheck={false}
+            enterKeyHint="send"
+            inputMode="text"
+            data-gramm="false"
+            data-gramm_editor="false"
+            data-enable-grammarly="false"
             data-1p-ignore
             data-lpignore="true"
             data-form-type="other"
