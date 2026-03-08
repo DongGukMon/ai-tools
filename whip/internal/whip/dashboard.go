@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"os"
 	"os/exec"
 	"sort"
 	"strconv"
@@ -106,6 +107,7 @@ type DashboardModel struct {
 	tunnelInput  string
 	portInput    string
 	configCursor int // 0=tunnel, 1=port
+	cwd          string
 }
 
 func (m DashboardModel) PendingAttach() string {
@@ -113,10 +115,12 @@ func (m DashboardModel) PendingAttach() string {
 }
 
 func NewDashboardModel(store *Store, version string) DashboardModel {
+	cwd, _ := os.Getwd()
 	return DashboardModel{
 		store:   store,
 		version: version,
 		width:   120,
+		cwd:     cwd,
 	}
 }
 
@@ -655,7 +659,7 @@ func (m DashboardModel) updateRemoteConfig(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 			Difficulty: "hard",
 			Tunnel:     strings.TrimSpace(m.tunnelInput),
 			Port:       port,
-			CWD:        m.store.BaseDir,
+			CWD:        m.cwd,
 		}
 		// Save to config for next time
 		storeCfg, _ := m.store.LoadConfig()
