@@ -86,9 +86,10 @@ export function MasterTerminal({ client, fullscreen, onToggleFullscreen }: Maste
     let velocity = 0
     let lastMoveTime = 0
     let momentumRaf = 0
-    const LINE_HEIGHT = 20
-    const FRICTION = 0.92
-    const MIN_VELOCITY = 0.5
+    const LINE_HEIGHT = 14
+    const FRICTION = 0.96
+    const MIN_VELOCITY = 0.2
+    const VELOCITY_SMOOTH = 0.4 // EMA smoothing factor
     const el = termRef.current
 
     const stopMomentum = () => {
@@ -123,7 +124,9 @@ export function MasterTerminal({ client, fullscreen, onToggleFullscreen }: Maste
       const now = Date.now()
       const dy = touchStartY - e.touches[0].clientY
       const dt = Math.max(now - lastMoveTime, 1)
-      velocity = dy / dt * 16 // normalize to ~per-frame
+      const instantV = dy / dt * 16
+      // Smooth velocity with EMA to avoid jerky momentum starts
+      velocity = velocity * (1 - VELOCITY_SMOOTH) + instantV * VELOCITY_SMOOTH
       touchAccum += dy
       touchStartY = e.touches[0].clientY
       lastMoveTime = now
