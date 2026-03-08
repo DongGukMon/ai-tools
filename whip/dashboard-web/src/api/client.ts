@@ -134,11 +134,14 @@ export class WhipAPIClient {
 
 export function parseConnectURL(input: string): { baseURL: string; token: string } | null {
   try {
+    // Handle web dashboard URL with hash fragment (e.g. https://whip.bang9.dev#https://host?token=xxx)
     const url = new URL(input)
-    const token = url.searchParams.get('token')
+    const raw = url.hash ? url.hash.slice(1) : input
+    const connectURL = new URL(raw)
+    const token = connectURL.searchParams.get('token')
     if (!token) return null
-    url.search = ''
-    return { baseURL: url.toString(), token }
+    connectURL.search = ''
+    return { baseURL: connectURL.toString(), token }
   } catch {
     return null
   }
