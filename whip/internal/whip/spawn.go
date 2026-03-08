@@ -10,6 +10,11 @@ import (
 	"time"
 )
 
+var startDetachedShellCommand = func(command string) error {
+	cmd := exec.Command("sh", "-c", command)
+	return cmd.Start()
+}
+
 // tmuxSessionName returns the tmux session name for a task.
 func tmuxSessionName(taskID string) string {
 	return "whip-" + taskID
@@ -174,6 +179,13 @@ func KillProcess(pid int) error {
 	if pid <= 0 {
 		return fmt.Errorf("invalid PID: %d", pid)
 	}
+
+	if pgid, err := syscall.Getpgid(pid); err == nil && pgid > 0 {
+		if err := syscall.Kill(-pgid, syscall.SIGTERM); err == nil {
+			return nil
+		}
+	}
+
 	proc, err := os.FindProcess(pid)
 	if err != nil {
 		return err
@@ -183,6 +195,40 @@ func KillProcess(pid int) error {
 		return err
 	}
 	return nil
+}
+
+// ScheduleTaskTermination asynchronously terminates the runner for a terminal task.
+func ScheduleTaskTermination(task *Task) error {
+	command := terminationCommand(task)
+	if command == "" {
+		return nil
+	}
+	return startDetachedShellCommand(command)
+}
+
+func terminationCommand(task *Task) string {
+	if task == nil || !task.Status.IsTerminal() || task.ShellPID <= 0 {
+		return ""
+	}
+
+	if task.Runner == "tmux" {
+		return fmt.Sprintf(
+			"sleep 3 && tmux kill-session -t %s 2>/dev/null",
+			shellEscape(tmuxSessionName(task.ID)),
+		)
+	}
+
+	if pgid, err := syscall.Getpgid(task.ShellPID); err == nil && pgid > 0 {
+		return fmt.Sprintf(
+			"sleep 3 && kill -TERM -- -%d 2>/dev/null || kill -TERM %d 2>/dev/null; sleep 2 && kill -KILL -- -%d 2>/dev/null || kill -KILL %d 2>/dev/null",
+			pgid, task.ShellPID, pgid, task.ShellPID,
+		)
+	}
+
+	return fmt.Sprintf(
+		"sleep 3 && kill -TERM %d 2>/dev/null; sleep 2 && kill -KILL %d 2>/dev/null",
+		task.ShellPID, task.ShellPID,
+	)
 }
 
 // BroadcastMessage sends a claude-irc message to all active task sessions.

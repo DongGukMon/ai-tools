@@ -37,6 +37,8 @@ var (
 	}
 )
 
+const dashboardOperatorName = "user"
+
 func main() {
 	root := &cobra.Command{
 		Use:     "claude-irc",
@@ -189,13 +191,15 @@ func msgCmd() *cobra.Command {
 				return fmt.Errorf("cannot send message to yourself")
 			}
 
-			// Verify peer exists in registry
-			peers, err := store.ListPeers()
-			if err != nil {
-				return err
-			}
-			if _, ok := peers[peer]; !ok {
-				return fmt.Errorf("peer '%s' not found (use 'who' to list peers)", peer)
+			// `user` is a virtual remote-operator inbox. It does not need a live registry entry.
+			if peer != dashboardOperatorName {
+				peers, err := store.ListPeers()
+				if err != nil {
+					return err
+				}
+				if _, ok := peers[peer]; !ok {
+					return fmt.Errorf("peer '%s' not found (use 'who' to list peers)", peer)
+				}
 			}
 
 			if err := store.SendMessage(peer, from, content); err != nil {

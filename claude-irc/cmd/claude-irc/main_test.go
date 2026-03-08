@@ -148,6 +148,47 @@ func TestMsgCmd_SendToUserWhenRegistered(t *testing.T) {
 	}
 }
 
+func TestMsgCmd_SendToUserWithoutRegistration(t *testing.T) {
+	origDetect := detectSession
+	defer func() { detectSession = origDetect }()
+
+	tmpHome := t.TempDir()
+	t.Setenv("HOME", tmpHome)
+
+	store, err := irc.NewStoreWithBaseDir(filepath.Join(tmpHome, ".claude-irc"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Register("agent-1", os.Getpid()); err != nil {
+		t.Fatal(err)
+	}
+
+	detectSession = func(pid int) (*irc.Store, string, error) {
+		return store, "agent-1", nil
+	}
+
+	nameFlag = ""
+
+	cmd := msgCmd()
+	if err := cmd.RunE(cmd, []string{"user", "reply"}); err != nil {
+		t.Fatalf("msgCmd should allow sending to virtual user inbox: %v", err)
+	}
+
+	messages, err := store.ReadInbox("user")
+	if err != nil {
+		t.Fatalf("failed to read user inbox: %v", err)
+	}
+	if len(messages) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(messages))
+	}
+	if messages[0].From != "agent-1" {
+		t.Fatalf("expected message from 'agent-1', got %q", messages[0].From)
+	}
+	if messages[0].Content != "reply" {
+		t.Fatalf("expected message content 'reply', got %q", messages[0].Content)
+	}
+}
+
 // TestMsgCmd_UserCanSend verifies that "user" can send messages (acts as sender).
 func TestMsgCmd_UserCanSend(t *testing.T) {
 	origDetect := detectSession
