@@ -252,7 +252,7 @@ function TerminalDemo() {
           <div
             ref={termRef}
             className="bg-[#FAFBFC] dark:bg-[#060E1F] px-4 sm:px-5 py-4 font-mono text-xs sm:text-[13px] leading-[1.7] overflow-y-auto"
-            style={{ maxHeight: 260 }}
+            style={{ height: 260 }}
           >
             {lines.map((line, i) => (
               <div key={i} className="flex gap-2">
@@ -454,7 +454,7 @@ function IrcDemo() {
             </div>
           </div>
           {/* Messages */}
-          <div className="bg-[#FAFBFC] dark:bg-[#060E1F] px-4 sm:px-5 py-4 font-mono text-xs sm:text-[13px] leading-[1.7] min-h-[200px]">
+          <div className="bg-[#FAFBFC] dark:bg-[#060E1F] px-4 sm:px-5 py-4 font-mono text-xs sm:text-[13px] leading-[1.7] min-h-[360px]">
             {ircMessages.slice(0, visibleCount).map((msg, i) => (
               <div
                 key={i}
