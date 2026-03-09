@@ -62,6 +62,6 @@ func assignCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&masterIRC, "master-irc", "", "Master session IRC name for this assignment")
-	cmd.Flags().BoolVar(&saveMasterIRC, "save-master-irc", false, "Persist --master-irc to config.json for future assignments")
+	cmd.Flags().BoolVar(&saveMasterIRC, "save-master-irc", false, "Save --master-irc to config.json for future assignments in the global workspace only")
 	return cmd
 }
