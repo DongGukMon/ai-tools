@@ -56,7 +56,7 @@ created --> assigned --> in_progress --> completed
 - **created**: Task stored in `global` (`~/.whip/tasks/<id>/task.json`) or a named workspace (`~/.whip/workspaces/<name>/tasks/<id>/task.json`)
 - **assigned**: `whip assign` spawns a new Terminal tab with Claude Code and a prompt file
 - **in_progress**: Agent calls `whip heartbeat`, registering its PID
-- **completed**: Agent finishes work; dependent tasks auto-assign
+- **completed**: Agent finishes work; downstream stack tasks auto-assign
 - **failed**: Agent couldn't complete; handoff note preserved for retry
 
 ### Communication Layer
@@ -119,14 +119,14 @@ Implement JWT authentication with refresh tokens.
 
 The structured format (Objective / Scope / Acceptance Criteria / Context) helps agents self-orient and work independently.
 
-### 3. Set Dependencies (if needed)
+### 3. Encode Stack Order (if needed)
 
 ```bash
-# Deploy task depends on both auth and API tasks
+# Deploy waits on both auth and API tasks
 whip dep <deploy-id> --after <auth-id> --after <api-id>
 ```
 
-Tasks with unmet dependencies cannot be assigned. When a dependency completes, `whip` automatically assigns any unblocked dependents.
+Tasks with unmet prerequisites cannot be assigned. `whip dep` is the low-level command that encodes stack order. When a prerequisite completes, `whip` automatically assigns any unblocked downstream task.
 
 ### 4. Assign Tasks
 
@@ -187,7 +187,7 @@ whip dashboard
 whip show <task-id>
 ```
 
-The dashboard shows task status, PID liveness, dependency graph, and progress notes.
+The dashboard shows task status, PID liveness, blocked-by relationships, and progress notes.
 
 ### 7. Task Completion
 
@@ -201,7 +201,7 @@ whip status <id> completed --note "JWT + refresh token auth. Files: src/auth/, s
 # Session auto-terminates
 ```
 
-When a task completes, `whip` checks if any dependent tasks are now unblocked and auto-assigns them.
+When a task completes, `whip` checks if any downstream stack tasks are now unblocked and auto-assigns them.
 
 ### 8. Handling Failures
 
@@ -259,7 +259,7 @@ whip create "API endpoints" --workspace issue-sweep --desc "..."     # → id: d
 whip create "Frontend pages" --workspace issue-sweep --desc "..."    # → id: g5h6i
 whip create "Deploy" --workspace issue-sweep --desc "..."            # → id: j7k8l
 
-# Step 2: Set dependencies
+# Step 2: Encode stack order
 whip dep j7k8l --after a1b2c --after d3e4f --after g5h6i
 
 # Step 3: Assign root tasks inside the same workspace
@@ -277,7 +277,7 @@ Key differences from Solo Flow:
 |--------|-----------|-----------|
 | Agents | 1 | 2+ parallel |
 | Planning | Minimal | Define roles, interfaces, ownership |
-| Dependencies | None | Set with `whip dep` |
+| Stack order | None | Encode with `whip dep` |
 | Communication | Master <-> Agent | Master <-> Agents + relay between agents |
 | Coordination | Low | Master relays context, manages interfaces |
 
@@ -292,12 +292,12 @@ flowchart TB
     end
 
     subgraph "Team Flow"
-        T_Create[whip create x N] --> T_Dep[whip dep]
+        T_Create[whip create x N] --> T_Dep[encode stack order]
         T_Dep --> T_Assign[whip assign independent tasks]
         T_Assign --> T_A1[Agent A]
         T_Assign --> T_A2[Agent B]
         T_Assign --> T_A3[Agent C]
-        T_A1 --> T_Auto[Auto-assign dependents]
+        T_A1 --> T_Auto[Auto-assign downstream stack tasks]
         T_A2 --> T_Auto
         T_A3 --> T_Auto
         T_Auto --> T_A4[Agent D - Deploy]
@@ -312,7 +312,7 @@ flowchart TB
 
 ## Dependency-Based Auto-Assignment
 
-One of whip's most powerful features is automatic task assignment based on dependencies.
+One of whip's most powerful features is automatic task assignment based on stacked prerequisites.
 
 ```mermaid
 flowchart LR
@@ -329,9 +329,9 @@ flowchart LR
 In this example:
 - Auth (completed), API (completed), Frontend (in_progress), Deploy (blocked)
 - When Frontend completes, Deploy is **automatically assigned** — no manual intervention needed
-- The spawned Deploy agent receives all context, including the completion notes from its dependencies
+- The spawned Deploy agent receives all context, including the completion notes from its stack prerequisites
 
-This enables fire-and-forget orchestration: define the dependency graph upfront, assign the root tasks, and let whip handle the rest.
+This enables fire-and-forget orchestration: define the stacked order upfront, assign the root tasks, and let whip handle the rest.
 
 ---
 
@@ -371,7 +371,7 @@ Write docs/workflow.md covering whip + claude-irc workflow...
 - Reference README.md, SKILL.md, CLAUDE.md for content"
 # → Created task 3aae4
 
-# Assign both tasks (no dependencies between them)
+# Assign both tasks (no stack prerequisite between them)
 whip assign a1b2c --master-irc whip-master
 whip assign 3aae4 --master-irc whip-master
 
@@ -413,7 +413,7 @@ whip clean
 | `whip kill <id>` | Force kill a session |
 | `whip clean` | Remove completed/failed tasks |
 | `whip dashboard` | Live TUI dashboard |
-| `whip dep <id> --after <id>` | Set task dependencies |
+| `whip dep <id> --after <id>` | Encode stack prerequisites |
 
 ### claude-irc commands
 

@@ -9,7 +9,7 @@ You are the lead. Dispatch work to agent sessions via whip.
 ## Inputs
 
 - If the user provides a plan file path, read that file first.
-- Treat the plan file as the source of truth for task titles, descriptions, difficulty, dependencies, and execution order.
+- Treat the plan file as the source of truth for task titles, descriptions, difficulty, stack prerequisites, and execution order.
 - If the plan file includes an `## Execution` section with `/whip-start <path>`, that is an instruction to use this skill with the same file path, not content to send to `whip`.
 
 ## Workspace model
@@ -107,18 +107,18 @@ Monitor the agent: review its initial plan when it arrives, respond to questions
 Define each agent's role and scope. Each agent should:
 - Have a clear, specific responsibility
 - Be able to work independently
-- Have minimal dependencies on other agents
+- Have minimal cross-task coupling with other agents
 
 Avoid central implementation planning, but do enough scoping to define ownership, interfaces, and acceptance criteria. Include enough context in descriptions for agents to self-orient. Present the team composition to the user before proceeding.
 
 Parallelization guardrails:
 - If two tasks need to edit the same file, shared interface, or session plumbing, do not parallelize that part.
-- Create a single owner task for shared files or contracts first, then make dependent tasks consume the result.
+- Create a single owner task for shared files or contracts first, then make downstream stack tasks consume the result.
 - If a task says "match Task X" or "implement the shared interface", that task is `medium` minimum and usually should wait for the owner task to land.
 
 ### Step 2: Create and deploy agents
 
-Create all tasks, set dependencies if needed, then assign independent tasks. Tasks with dependencies will auto-assign when their prerequisites complete.
+Create all tasks, encode stack order if needed, then assign independent tasks. Downstream stack tasks auto-assign when their prerequisites complete.
 
 ```bash
 whip create "<agent role/title>" --workspace <workspace-name> --backend <chosen-backend> --difficulty <level> --desc "## Objective
@@ -134,8 +134,8 @@ whip create "<agent role/title>" --workspace <workspace-name> --backend <chosen-
 
 ## Context
 <any additional context the agent needs>"
-whip dep <task-id> --after <dependency-id>  # only if needed
-whip assign <task-id>  # only assign tasks without unmet deps
+whip dep <task-id> --after <prerequisite-id>  # only if needed; this encodes stack order
+whip assign <task-id>  # only assign tasks without unmet prerequisites
 ```
 
 ### Step 3: Coordinate

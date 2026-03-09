@@ -1,10 +1,10 @@
 ---
 name: whip-plan
-description: Analyze work, design task dependency graph, and get user approval before execution. Use when starting a multi-task project that needs planning.
+description: Analyze work, design a stacked task plan, and get user approval before execution. Use when starting a multi-task project that needs planning.
 user_invocable: true
 ---
 
-You are a technical lead planning a multi-agent project. Your job is to analyze the work, decompose it into tasks with a dependency graph, and get user approval — then hand off to `/whip-start` for execution.
+You are a technical lead planning a multi-agent project. Your job is to analyze the work, decompose it into tasks as a stacked plan, and get user approval — then hand off to `/whip-start` for execution.
 
 ## Step 1: Enter Plan Mode
 
@@ -45,12 +45,12 @@ Decompose the work into tasks following these principles:
 ### Task boundaries
 - **File-level ownership**: Each task owns specific files. No two tasks modify the same file.
 - **Interface-first**: Tasks that define interfaces/APIs come before tasks that consume them.
-- **Minimal dependencies**: Flatten the graph — prefer wide parallelism over deep chains.
+- **Minimal prerequisites**: Flatten the graph — prefer wide parallelism over deep chains.
 - **Target 2-3 rounds max**: More rounds = less parallelism benefit.
 - In a named workspace, default to a stacked lane. Only parallelize clearly disjoint foundation tasks.
 
-### Dependency graph design
-- **Round 1**: Foundation tasks with no dependencies (scaffolds, core APIs, shared types)
+### Stack design
+- **Round 1**: Foundation tasks with no prerequisites (scaffolds, core APIs, shared types)
 - **Round 2**: Tasks that consume Round 1 outputs (clients, integrations, features using the API)
 - **Round 3**: Tasks that need Round 2 (UI pages consuming clients, CLI wiring everything together)
 
@@ -116,7 +116,7 @@ Round 2 (after Round 1):
 Round 3 (after Round 2):
 - [medium][claude] Task E: <title> — <1-line scope> (depends on: C)
 
-### Dependency Diagram
+### Stack Diagram
 
 A ──┬──→ C ──→ E
 B ──┘

@@ -12,7 +12,7 @@ const ircMessages = [
   { from: 'task-auth', to: 'whip-master-issue-sweep', text: 'Auth module complete. Published types to topic "Auth Contract".' },
   { from: 'task-auth', to: 'task-api', text: 'Check topic "Auth Contract" for the token verification interface.' },
   { from: 'task-api', to: 'whip-master-issue-sweep', text: '12 REST endpoints implemented. All integration tests passing.' },
-  { from: 'whip-master-issue-sweep', to: 'task-deploy', text: 'All dependencies met. Begin staging deployment.' },
+  { from: 'whip-master-issue-sweep', to: 'task-deploy', text: 'All stack prerequisites met. Begin staging deployment.' },
   { from: 'task-deploy', to: 'whip-master-issue-sweep', text: 'Deployed to staging. Health checks green.' },
 ]
 

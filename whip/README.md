@@ -37,7 +37,7 @@ whip dashboard
 | `assign <id> [--master-irc <name>]` | Spawn agent session |
 | `unassign <id>` | Kill session, reset to created |
 | `status <id> [new-status] [--note]` | Get/set status with notes |
-| `dep <id> --after <id>` | Set task dependencies |
+| `dep <id> --after <id>` | Wire stack prerequisites (compatibility dependency command) |
 | `broadcast "message"` | Message all active sessions |
 | `retry <id>` | Retry failed task |
 | `resume <id>` | Resume task session interactively |
@@ -57,12 +57,13 @@ created → assigned → in_progress → completed
 - `global` tasks stay on the legacy path: `~/.whip/tasks/<id>/task.json`
 - Named workspace tasks are stored under `~/.whip/workspaces/<name>/tasks/<id>/task.json`
 - `assign` spawns a tmux session (or Terminal.app tab) with Claude Code
-- Dependent tasks auto-assign when prerequisites complete
+- `whip dep` remains the compatibility command for encoding stack order inside a workspace
+- Downstream stack tasks auto-assign when prerequisites complete
 - Sessions communicate via shared `claude-irc`, while master identity is scoped by workspace
 
 ## Dashboard
 
-`whip dashboard` — live TUI with task list, status indicators, dependency graph, and auto-refresh.
+`whip dashboard` — live TUI with task list, status indicators, blocked-by tracking, and auto-refresh.
 
 ## Remote Mode
 
@@ -105,7 +106,7 @@ Settings are saved to `~/.whip/config.json` for reuse. With a tunnel, a **short 
 1. Master session creates tasks in `global` or a named workspace
 2. Each task spawns a tmux session running Claude Code with a prompt file
 3. Sessions coordinate via shared `claude-irc`, using workspace-scoped master identities
-4. On completion, dependent tasks auto-assign and the workspace master is notified
+4. On completion, downstream stack tasks auto-assign and the workspace master is notified
 
 See [Workflow Guide (EN)](docs/workflow-en.md) | [워크플로우 가이드 (KO)](docs/workflow-ko.md)
 

@@ -63,7 +63,7 @@ const columns = [
   { key: 'runner', label: 'RUNNER', width: 'w-[5rem]', hide: H },
   { key: 'pid', label: 'PID', width: 'w-[6rem]', hide: H },
   { key: 'irc', label: 'IRC', width: 'w-[7.5rem]', hide: H },
-  { key: 'deps', label: 'DEPS', width: 'w-[8rem]', hide: H },
+  { key: 'deps', label: 'BLOCKED BY', width: 'w-[8rem]', hide: H },
   { key: 'note', label: 'NOTE', width: 'w-[10rem]', hide: H },
   { key: 'updated', label: 'UPDATED', width: 'w-[6rem]', hide: '' },
 ] as const

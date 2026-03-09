@@ -1,9 +1,9 @@
 const tuiTasks = [
-  { id: 't-a1', title: 'Auth module', status: 'in_progress', deps: '—', diff: 'medium' },
-  { id: 't-b2', title: 'API routes', status: 'in_progress', deps: '—', diff: 'easy' },
-  { id: 't-c3', title: 'Tests', status: 'completed', deps: '—', diff: 'easy' },
-  { id: 't-d4', title: 'Deploy', status: 'blocked', deps: 'a1,b2,c3', diff: 'easy' },
-  { id: 't-e5', title: 'Documentation', status: 'created', deps: '—', diff: 'easy' },
+  { id: 't-a1', title: 'Auth module', status: 'in_progress', blockedBy: '—', diff: 'medium' },
+  { id: 't-b2', title: 'API routes', status: 'in_progress', blockedBy: '—', diff: 'easy' },
+  { id: 't-c3', title: 'Tests', status: 'completed', blockedBy: '—', diff: 'easy' },
+  { id: 't-d4', title: 'Deploy', status: 'blocked', blockedBy: 'a1,b2,c3', diff: 'easy' },
+  { id: 't-e5', title: 'Documentation', status: 'created', blockedBy: '—', diff: 'easy' },
 ] as const
 
 function statusDot(s: string) {
@@ -22,7 +22,7 @@ export function TuiDashboard() {
         <div className="mb-8">
           <p className="text-xs font-mono tracking-widest uppercase text-[#8B5CF6] mb-3">Monitor</p>
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 dark:text-white mb-2">Real-time Dashboard</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400 max-w-lg">Live TUI dashboard with task statuses, dependency tracking, and keyboard shortcuts. Also available as a web dashboard.</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 max-w-lg">Live TUI dashboard with task statuses, stack progress, and keyboard shortcuts. Also available as a web dashboard.</p>
         </div>
         <div className="rounded-xl border border-gray-200 dark:border-slate-800 overflow-hidden shadow-sm dark:shadow-none">
           <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 dark:bg-[#0D1526] border-b border-gray-200 dark:border-slate-800">
@@ -49,15 +49,15 @@ export function TuiDashboard() {
                 <span style={{ color: '#FBBF24' }}>1 blocked</span>
               </span>
             </div>
-            <div className="grid grid-cols-[4.5rem_1fr_6rem_5rem_3.5rem] sm:grid-cols-[5rem_1fr_7rem_6rem_4.5rem] px-4 sm:px-5 py-2 text-[10px] sm:text-xs text-gray-400 dark:text-gray-600 uppercase tracking-wider border-b border-gray-100 dark:border-slate-800/60">
-              <span>ID</span><span>Title</span><span>Status</span><span>Deps</span><span>Diff</span>
+            <div className="grid grid-cols-[4.5rem_1fr_6rem_6.5rem_3.5rem] sm:grid-cols-[5rem_1fr_7rem_7.5rem_4.5rem] px-4 sm:px-5 py-2 text-[10px] sm:text-xs text-gray-400 dark:text-gray-600 uppercase tracking-wider border-b border-gray-100 dark:border-slate-800/60">
+              <span>ID</span><span>Title</span><span>Status</span><span>Blocked By</span><span>Diff</span>
             </div>
             {tuiTasks.map((t, i) => {
               const s = statusDot(t.status)
               return (
                 <div
                   key={t.id}
-                  className={`grid grid-cols-[4.5rem_1fr_6rem_5rem_3.5rem] sm:grid-cols-[5rem_1fr_7rem_6rem_4.5rem] px-4 sm:px-5 py-2 border-b border-gray-50 dark:border-slate-800/30 ${i === 0 ? 'bg-[#8B5CF608]' : ''}`}
+                  className={`grid grid-cols-[4.5rem_1fr_6rem_6.5rem_3.5rem] sm:grid-cols-[5rem_1fr_7rem_7.5rem_4.5rem] px-4 sm:px-5 py-2 border-b border-gray-50 dark:border-slate-800/30 ${i === 0 ? 'bg-[#8B5CF608]' : ''}`}
                 >
                   <span className="text-gray-400 dark:text-gray-600">{t.id}</span>
                   <span className="text-gray-800 dark:text-gray-200 truncate">{t.title}</span>
@@ -65,7 +65,7 @@ export function TuiDashboard() {
                     <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${s.pulse ? 'animate-pulse' : ''}`} style={{ backgroundColor: s.color }} />
                     <span style={{ color: s.color }}>{s.label}</span>
                   </span>
-                  <span className="text-gray-400 dark:text-gray-600">{t.deps}</span>
+                  <span className="text-gray-400 dark:text-gray-600">{t.blockedBy}</span>
                   <span className="text-gray-400 dark:text-gray-600">{t.diff}</span>
                 </div>
               )

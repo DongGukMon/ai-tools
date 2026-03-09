@@ -174,7 +174,7 @@ func showCmd() *cobra.Command {
 				fmt.Printf("Shell PID:   %s\n", formatShellPID(task))
 			}
 			if len(task.DependsOn) > 0 {
-				fmt.Printf("Depends on:  %s\n", strings.Join(task.DependsOn, ", "))
+				fmt.Printf("Blocked by:  %s\n", strings.Join(task.DependsOn, ", "))
 			}
 			fmt.Printf("Created:     %s\n", task.CreatedAt.Format(time.RFC3339))
 			fmt.Printf("Updated:     %s\n", task.UpdatedAt.Format(time.RFC3339))
@@ -224,7 +224,7 @@ func depCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "dep <id>",
-		Short: "Set task dependencies",
+		Short: "Set stack prerequisites (dependency edges)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(after) == 0 {
@@ -271,11 +271,11 @@ func depCmd() *cobra.Command {
 				return err
 			}
 
-			fmt.Fprintf(os.Stderr, "Task %s depends on: %s\n", id, strings.Join(task.DependsOn, ", "))
+			fmt.Fprintf(os.Stderr, "Task %s is now blocked by: %s\n", id, strings.Join(task.DependsOn, ", "))
 			return nil
 		},
 	}
 
-	cmd.Flags().StringArrayVar(&after, "after", nil, "Task ID that must complete first (repeatable)")
+	cmd.Flags().StringArrayVar(&after, "after", nil, "Task ID that must complete first in the stack (repeatable)")
 	return cmd
 }

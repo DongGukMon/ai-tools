@@ -26,12 +26,12 @@ const timeline: TimelineEntry[] = [
   { delay: 350, line: { prompt: true, text: 'whip create "Tests" --difficulty easy', typing: true } },
   { delay: 250, line: { text: '✓ t-c3 created', color: '#34D399' }, dag: { tests: 'created' } },
   { delay: 350, line: { prompt: true, text: 'whip create "Deploy" --depends-on t-a1,t-b2,t-c3', typing: true } },
-  { delay: 250, line: { text: '✓ t-d4 created (blocked by 3 deps)', color: '#34D399' }, dag: { deploy: 'created' } },
+  { delay: 250, line: { text: '✓ t-d4 created (blocked by 3 stack steps)', color: '#34D399' }, dag: { deploy: 'created' } },
   { delay: 500, line: { prompt: true, text: 'whip assign --all', typing: true } },
   { delay: 250, line: { text: '⟳ t-a1 Auth module → in_progress', color: '#A78BFA' }, dag: { auth: 'in_progress' } },
   { delay: 120, line: { text: '⟳ t-b2 API routes → in_progress', color: '#A78BFA' }, dag: { api: 'in_progress' } },
   { delay: 120, line: { text: '⟳ t-c3 Tests → in_progress', color: '#A78BFA' }, dag: { tests: 'in_progress' } },
-  { delay: 80, line: { text: '⏸ t-d4 Deploy — waiting for dependencies', color: '#64748B' } },
+  { delay: 80, line: { text: '⏸ t-d4 Deploy — waiting on stack prerequisites', color: '#64748B' } },
   { delay: 1400, line: { text: '✓ t-b2 API routes → completed', color: '#34D399' }, dag: { api: 'completed' } },
   { delay: 1100, line: { text: '✓ t-a1 Auth module → completed', color: '#34D399' }, dag: { auth: 'completed' } },
   { delay: 900, line: { text: '✓ t-c3 Tests → completed', color: '#34D399' }, dag: { tests: 'completed' } },
@@ -215,7 +215,7 @@ export function TerminalDemo() {
         <div className="mb-8">
           <p className="text-xs font-mono tracking-widest uppercase text-[#8B5CF6] mb-3">Orchestrate</p>
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 dark:text-white mb-2">Parallel Task Dispatch</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400 max-w-lg">Create tasks, wire dependencies, and watch agents work in parallel — with auto-assignment when prerequisites complete.</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 max-w-lg">Create tasks, wire the stack order, and watch agents work in parallel — with auto-assignment when prerequisites complete.</p>
         </div>
         <div className="rounded-xl border border-gray-200 dark:border-slate-800 overflow-hidden shadow-sm dark:shadow-none">
           <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 dark:bg-[#0D1526] border-b border-gray-200 dark:border-slate-800">

@@ -5,7 +5,7 @@
 Use `whip` when one Claude session should act as a lead and dispatch work to other Claude sessions.
 
 - Split a larger task into parallel sub-tasks
-- Track ownership, status, and dependencies between tasks
+- Track ownership, status, and stack order between tasks
 - Resume or retry agent sessions with preserved context
 - Coordinate a team through `claude-irc`
 
@@ -36,7 +36,7 @@ claude-irc join whip-master-issue-sweep
 
 whip create "Auth module" --workspace issue-sweep --difficulty medium --desc "Implement JWT auth"
 whip create "Deploy" --workspace issue-sweep --difficulty easy --desc "Deploy after auth"
-whip dep <deploy-id> --after <auth-id>
+whip dep <deploy-id> --after <auth-id>   # lower-level command that encodes stack order
 whip assign <auth-id>
 whip list
 whip dashboard
@@ -97,8 +97,9 @@ Run `whip --help` for the full command list. For guided usage, see `/whip-plan`,
 
 ## Notes
 
-- `assign` only works for tasks in `created` status whose dependencies are already complete.
+- `assign` only works for tasks in `created` status whose stack prerequisites are already complete.
 - `whip create --workspace <name>` stores tasks under a named workspace while keeping `global` on the legacy default path.
-- Dependent tasks auto-assign when prerequisites become `completed`.
+- `whip dep` is still the compatibility command for wiring `stacked` order. Treat it as a low-level mechanism, not the primary user-facing concept.
+- Downstream stack tasks auto-assign when their prerequisites become `completed`.
 - `tmux` is the preferred runner because it allows dashboard capture and attach.
 - `whip remote` requires `tmux` to be installed (`brew install tmux` on macOS).

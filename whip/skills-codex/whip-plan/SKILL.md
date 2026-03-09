@@ -1,10 +1,10 @@
 ---
 name: whip-plan
-description: Analyze work, design a whip task graph, and get user approval before execution. Use when starting a multi-task project that needs planning.
+description: Analyze work, design a stacked whip plan, and get user approval before execution. Use when starting a multi-task project that needs planning.
 user_invocable: true
 ---
 
-You are a technical lead planning a multi-agent project. Analyze the work, decompose it into tasks with a dependency graph, get user approval, then hand off to `$whip-start` for execution.
+You are a technical lead planning a multi-agent project. Analyze the work, decompose it into tasks as a stacked plan, get user approval, then hand off to `$whip-start` for execution.
 
 ## Step 1: Enter Plan Mode
 
@@ -45,13 +45,13 @@ Decompose the work into tasks following these principles.
 
 - File-level ownership: each task owns specific files
 - Interface-first: tasks that define interfaces or APIs come before tasks that consume them
-- Minimal dependencies: prefer wide parallelism over deep chains
+- Minimal prerequisites: prefer wide parallelism over deep chains
 - Target 2-3 rounds max
 - In a named workspace, default to a stacked lane. Only parallelize clearly disjoint foundation tasks.
 
-### Dependency graph design
+### Stack design
 
-- Round 1: foundation tasks with no dependencies
+- Round 1: foundation tasks with no prerequisites
 - Round 2: tasks that consume Round 1 outputs
 - Round 3: tasks that need Round 2
 
@@ -118,7 +118,7 @@ Round 2 (after Round 1):
 Round 3 (after Round 2):
 - [medium][claude] Task E: <title> — <1-line scope> (depends on: C)
 
-### Dependency Diagram
+### Stack Diagram
 
 A ──┬──→ C ──→ E
 B ──┘

@@ -117,7 +117,7 @@ export function TaskDetail({ task, onClose }: TaskDetailProps) {
               </Field>
             )}
             {task.depends_on && task.depends_on.length > 0 && (
-              <Field label="Depends On">
+              <Field label="Blocked By">
                 <span className="text-amber-500 dark:text-amber-400">
                   {task.depends_on.join(', ')}
                 </span>

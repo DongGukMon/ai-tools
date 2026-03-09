@@ -168,7 +168,7 @@ func (m DashboardModel) renderTable() string {
 		padRight(hdrStyle.Render("RUNNER"), colRunner),
 		padRight(hdrStyle.Render("PID"), colPID),
 		padRight(hdrStyle.Render("IRC"), colIRC),
-		padRight(hdrStyle.Render("DEPS"), colDeps),
+		padRight(hdrStyle.Render("BLOCKED BY"), colDeps),
 		padRight(hdrStyle.Render("NOTE"), colNote),
 		padRight(hdrStyle.Render("UPDATED"), colUpdated),
 	}
