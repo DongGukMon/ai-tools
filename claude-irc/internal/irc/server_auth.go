@@ -59,16 +59,6 @@ type authExchangeResponse struct {
 	DeviceLabel   string    `json:"device_label,omitempty"`
 }
 
-type authSessionResponse struct {
-	Mode        string     `json:"mode"`
-	Workspace   string     `json:"workspace"`
-	SessionID   string     `json:"session_id,omitempty"`
-	CreatedAt   *time.Time `json:"created_at,omitempty"`
-	LastSeenAt  *time.Time `json:"last_seen_at,omitempty"`
-	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
-	DeviceLabel string     `json:"device_label,omitempty"`
-}
-
 func normalizeServerAuthMode(raw string) (string, error) {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
 	case "", serverAuthModeToken:
@@ -186,13 +176,6 @@ func handleAuthRoute(w http.ResponseWriter, r *http.Request, cfg serverAuthConfi
 		}
 		handleExchangeAuthChallenge(w, r, cfg)
 		return
-	case "/api/auth/session":
-		if r.Method != http.MethodGet {
-			writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
-			return
-		}
-		handleGetAuthSession(w, r, cfg)
-		return
 	default:
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
 		return
@@ -226,6 +209,10 @@ func handleCreateAuthChallenge(w http.ResponseWriter, r *http.Request, cfg serve
 	now := time.Now().UTC()
 	challenge, otp, err := cfg.RemoteAuth.CreateChallenge(now, remoteAuthOriginFromRequest(r), req.DeviceLabel)
 	if err != nil {
+		if errors.Is(err, ErrRemoteAuthChallengeRateLimited) {
+			writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": err.Error()})
+			return
+		}
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
@@ -308,36 +295,6 @@ func handleExchangeAuthChallenge(w http.ResponseWriter, r *http.Request, cfg ser
 	})
 }
 
-func handleGetAuthSession(w http.ResponseWriter, r *http.Request, cfg serverAuthConfig) {
-	resp := authSessionResponse{
-		Mode:      cfg.Mode,
-		Workspace: cfg.Workspace,
-	}
-	if cfg.Mode != serverAuthModeDevice || cfg.RemoteAuth == nil {
-		writeJSON(w, http.StatusOK, resp)
-		return
-	}
-
-	sessionID, sessionSecret, ok := parseWhipSessionHeader(strings.TrimSpace(r.Header.Get("Authorization")))
-	if !ok {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
-		return
-	}
-
-	session, err := cfg.RemoteAuth.AuthenticateSession(time.Now().UTC(), sessionID, sessionSecret)
-	if err != nil {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
-		return
-	}
-
-	resp.SessionID = session.SessionID
-	resp.DeviceLabel = session.DeviceLabel
-	resp.CreatedAt = ptrTimeValue(session.CreatedAt)
-	resp.LastSeenAt = ptrTimeValue(session.LastSeenAt)
-	resp.ExpiresAt = ptrTimeValue(session.ExpiresAt)
-	writeJSON(w, http.StatusOK, resp)
-}
-
 func remoteAuthOriginFromRequest(r *http.Request) RemoteAuthOrigin {
 	return RemoteAuthOrigin{
 		RemoteAddr:   strings.TrimSpace(r.RemoteAddr),
@@ -346,11 +303,6 @@ func remoteAuthOriginFromRequest(r *http.Request) RemoteAuthOrigin {
 		Origin:       strings.TrimSpace(r.Header.Get("Origin")),
 		Host:         strings.TrimSpace(r.Host),
 	}
-}
-
-func ptrTimeValue(t time.Time) *time.Time {
-	tt := t
-	return &tt
 }
 
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {

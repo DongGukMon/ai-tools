@@ -269,17 +269,6 @@ func TestAPIDeviceAuthFlowUsesWhipSessionHeader(t *testing.T) {
 	if peersResp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200 with device session, got %d", peersResp.StatusCode)
 	}
-
-	sessionResp := doRequestWithAuthorization(t, ts, sessionHeader, http.MethodGet, "/api/auth/session", nil)
-	defer sessionResp.Body.Close()
-	if sessionResp.StatusCode != http.StatusOK {
-		t.Fatalf("expected 200 from auth session endpoint, got %d", sessionResp.StatusCode)
-	}
-	var sessionBody authSessionResponse
-	decodeJSON(t, sessionResp, &sessionBody)
-	if sessionBody.SessionID != exchangeBody.SessionID {
-		t.Fatalf("session id = %q, want %q", sessionBody.SessionID, exchangeBody.SessionID)
-	}
 }
 
 func TestAPIDeviceAuthWrongOTPInvalidatesChallenge(t *testing.T) {
@@ -330,6 +319,29 @@ func TestAPIDeviceAuthWrongOTPInvalidatesChallenge(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusGone {
 		t.Fatalf("expected 410 after invalidation, got %d", resp.StatusCode)
+	}
+}
+
+func TestAPIDeviceChallengeRateLimit(t *testing.T) {
+	ts, _, _ := setupDeviceTestServer(t, "demo")
+
+	var resp *http.Response
+	for i := 0; i < RemoteAuthAttemptLimit; i++ {
+		resp = doRequest(t, ts, "", http.MethodPost, "/api/auth/challenges", map[string]string{
+			"device_label": "Rate Limited Device",
+		})
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusCreated {
+			t.Fatalf("expected 201 before limit, got %d on attempt %d", resp.StatusCode, i+1)
+		}
+	}
+
+	resp = doRequest(t, ts, "", http.MethodPost, "/api/auth/challenges", map[string]string{
+		"device_label": "Rate Limited Device",
+	})
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("expected 429 after limit, got %d", resp.StatusCode)
 	}
 }
 

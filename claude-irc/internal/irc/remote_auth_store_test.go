@@ -1,6 +1,7 @@
 package irc
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -33,7 +34,7 @@ func TestNewRemoteAuthStoreUsesWHIPHOME(t *testing.T) {
 
 func TestRemoteAuthStoreCreateChallengeHashesOTP(t *testing.T) {
 	store := newTestRemoteAuthStore(t, "demo")
-	now := time.Date(2026, 3, 9, 12, 0, 0, 0, time.UTC)
+	now := time.Now().UTC().Truncate(time.Second)
 
 	challenge, otp, err := store.CreateChallenge(now, RemoteAuthOrigin{UserAgent: "Safari"}, "")
 	if err != nil {
@@ -71,7 +72,7 @@ func TestRemoteAuthStoreCreateChallengeHashesOTP(t *testing.T) {
 
 func TestRemoteAuthStoreWrongOTPInvalidatesChallenge(t *testing.T) {
 	store := newTestRemoteAuthStore(t, "demo")
-	now := time.Date(2026, 3, 9, 12, 0, 0, 0, time.UTC)
+	now := time.Now().UTC().Add(-30 * time.Second).Truncate(time.Second)
 
 	challenge, otp, err := store.CreateChallenge(now, RemoteAuthOrigin{UserAgent: "Firefox"}, "")
 	if err != nil {
@@ -99,7 +100,7 @@ func TestRemoteAuthStoreWrongOTPInvalidatesChallenge(t *testing.T) {
 
 func TestRemoteAuthStoreExchangeCreatesHashedSession(t *testing.T) {
 	store := newTestRemoteAuthStore(t, "demo")
-	now := time.Date(2026, 3, 9, 12, 0, 0, 0, time.UTC)
+	now := time.Now().UTC().Add(-30 * time.Second).Truncate(time.Second)
 
 	challenge, otp, err := store.CreateChallenge(now, RemoteAuthOrigin{UserAgent: "Chrome"}, "MacBook Pro")
 	if err != nil {
@@ -176,6 +177,74 @@ func TestRemoteAuthStoreAuthenticateSessionRefreshPolicy(t *testing.T) {
 	wantExpiry := secondSeen.Add(RemoteAuthSessionTTL)
 	if !refreshed.ExpiresAt.Equal(wantExpiry) {
 		t.Fatalf("ExpiresAt = %v, want %v", refreshed.ExpiresAt, wantExpiry)
+	}
+}
+
+func TestRemoteAuthStoreCreateChallengeRateLimitPerDevice(t *testing.T) {
+	store := newTestRemoteAuthStore(t, "demo")
+	start := time.Date(2026, 3, 9, 12, 0, 0, 0, time.UTC)
+	origin := RemoteAuthOrigin{
+		RemoteAddr: "203.0.113.10:4242",
+		UserAgent:  "Safari",
+	}
+
+	for i := 0; i < RemoteAuthAttemptLimit; i++ {
+		if _, _, err := store.CreateChallenge(start.Add(time.Duration(i)*time.Hour), origin, "iPhone Safari"); err != nil {
+			t.Fatalf("CreateChallenge #%d: %v", i+1, err)
+		}
+	}
+
+	if _, _, err := store.CreateChallenge(start.Add(5*time.Hour), origin, "iPhone Safari"); !errors.Is(err, ErrRemoteAuthChallengeRateLimited) {
+		t.Fatalf("CreateChallenge rate limit error = %v, want %v", err, ErrRemoteAuthChallengeRateLimited)
+	}
+
+	if _, _, err := store.CreateChallenge(start.Add(25*time.Hour), origin, "iPhone Safari"); err != nil {
+		t.Fatalf("CreateChallenge after window reset: %v", err)
+	}
+
+	data, err := os.ReadFile(store.Path)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	var state RemoteAuthState
+	if err := json.Unmarshal(data, &state); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if len(state.Attempts) != RemoteAuthAttemptLimit {
+		t.Fatalf("attempt count = %d, want %d", len(state.Attempts), RemoteAuthAttemptLimit)
+	}
+}
+
+func TestRemoteAuthStorePrunesExpiredRecords(t *testing.T) {
+	store := newTestRemoteAuthStore(t, "demo")
+	start := time.Date(2000, 1, 1, 12, 0, 0, 0, time.UTC)
+
+	challenge, otp, err := store.CreateChallenge(start, RemoteAuthOrigin{UserAgent: "Chrome"}, "Old Device")
+	if err != nil {
+		t.Fatalf("CreateChallenge: %v", err)
+	}
+	session, sessionSecret, err := store.ExchangeChallenge(start.Add(time.Minute), challenge.ChallengeID, otp, "Old Device")
+	if err != nil {
+		t.Fatalf("ExchangeChallenge: %v", err)
+	}
+
+	_, err = store.AuthenticateSession(start.Add(RemoteAuthSessionTTL+time.Hour), session.SessionID, sessionSecret)
+	if !errors.Is(err, ErrRemoteAuthSessionExpired) {
+		t.Fatalf("AuthenticateSession expired error = %v, want %v", err, ErrRemoteAuthSessionExpired)
+	}
+
+	state, err := store.LoadState()
+	if err != nil {
+		t.Fatalf("LoadState: %v", err)
+	}
+	if state.PendingChallenge != nil {
+		t.Fatalf("expected expired challenge to be pruned, got %+v", state.PendingChallenge)
+	}
+	if len(state.Sessions) != 0 {
+		t.Fatalf("expected expired session to be pruned, got %d session(s)", len(state.Sessions))
+	}
+	if len(state.Attempts) != 0 {
+		t.Fatalf("expected expired attempts to be pruned, got %d attempt(s)", len(state.Attempts))
 	}
 }
 

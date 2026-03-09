@@ -67,16 +67,6 @@ export interface AuthChallenge {
   device_label?: string
 }
 
-export interface AuthSession {
-  mode: RemoteAuthMode
-  workspace: string
-  session_id?: string
-  created_at?: string
-  last_seen_at?: string
-  expires_at?: string
-  device_label?: string
-}
-
 interface AuthExchangeResponse {
   session_id: string
   session_secret: string
@@ -347,15 +337,6 @@ export async function exchangeAuthChallenge(
     sessionId: response.session_id,
     sessionSecret: response.session_secret,
   }
-}
-
-export async function fetchAuthSession(target: RemoteSessionConnectTarget): Promise<AuthSession> {
-  return requestJSON<AuthSession>(
-    normalizeBaseURL(target.baseURL),
-    '/api/auth/session',
-    undefined,
-    remoteAuthHeader(target),
-  )
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

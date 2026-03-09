@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"net"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -21,6 +22,8 @@ const (
 	remoteAuthDirName           = "remote-auth"
 	defaultRemoteAuthWorkspace  = "global"
 	RemoteAuthChallengeTTL      = 120 * time.Second
+	RemoteAuthAttemptWindow     = 24 * time.Hour
+	RemoteAuthAttemptLimit      = 5
 	RemoteAuthSessionTTL        = 72 * time.Hour
 	RemoteAuthSessionRefreshTTL = 24 * time.Hour
 )
@@ -32,6 +35,7 @@ var (
 	ErrRemoteAuthChallengeUsed    = errors.New("auth challenge already used")
 	ErrRemoteAuthChallengeFailed  = errors.New("auth challenge already invalidated")
 	ErrRemoteAuthChallengeExpired = errors.New("auth challenge expired")
+	ErrRemoteAuthChallengeRateLimited = errors.New("otp attempt limit reached for this device")
 	ErrRemoteAuthInvalidOTP       = errors.New("invalid otp")
 	ErrRemoteAuthSessionNotFound  = errors.New("device session not found")
 	ErrRemoteAuthSessionRevoked   = errors.New("device session revoked")
@@ -47,6 +51,7 @@ type RemoteAuthStore struct {
 type RemoteAuthState struct {
 	Workspace        string               `json:"workspace"`
 	PendingChallenge *RemoteAuthChallenge `json:"pending_challenge,omitempty"`
+	Attempts         []RemoteAuthAttempt  `json:"attempts,omitempty"`
 	Sessions         []RemoteAuthSession  `json:"sessions,omitempty"`
 	UpdatedAt        time.Time            `json:"updated_at,omitempty"`
 }
@@ -73,6 +78,11 @@ type RemoteAuthSession struct {
 	RevokedAt         *time.Time       `json:"revoked_at,omitempty"`
 	DeviceLabel       string           `json:"device_label,omitempty"`
 	Origin            RemoteAuthOrigin `json:"origin,omitempty"`
+}
+
+type RemoteAuthAttempt struct {
+	Fingerprint string    `json:"fingerprint"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 type RemoteAuthOrigin struct {
@@ -121,8 +131,9 @@ func NewRemoteAuthStoreWithRoot(whipRoot, workspace string) (*RemoteAuthStore, e
 func (s *RemoteAuthStore) LoadState() (*RemoteAuthState, error) {
 	var stateCopy *RemoteAuthState
 	err := s.withLockedState(func(state *RemoteAuthState) (bool, error) {
+		changed := pruneRemoteAuthState(state, time.Now().UTC())
 		stateCopy = cloneRemoteAuthState(state)
-		return false, nil
+		return changed, nil
 	})
 	return stateCopy, err
 }
@@ -132,11 +143,20 @@ func (s *RemoteAuthStore) CreateChallenge(now time.Time, origin RemoteAuthOrigin
 	var rawOTP string
 
 	err := s.withLockedState(func(state *RemoteAuthState) (bool, error) {
+		pruneRemoteAuthState(state, now)
+		fingerprint := remoteAuthAttemptFingerprint(deviceLabel, origin)
+		if countRecentRemoteAuthAttempts(state.Attempts, fingerprint, now) >= RemoteAuthAttemptLimit {
+			return false, ErrRemoteAuthChallengeRateLimited
+		}
 		record, otp, err := newRemoteAuthChallenge(now, origin, deviceLabel)
 		if err != nil {
 			return false, err
 		}
 		state.PendingChallenge = record
+		state.Attempts = append(state.Attempts, RemoteAuthAttempt{
+			Fingerprint: fingerprint,
+			CreatedAt:   now.UTC(),
+		})
 		state.UpdatedAt = now.UTC()
 		challenge = cloneRemoteAuthChallenge(record)
 		rawOTP = otp
@@ -152,19 +172,19 @@ func (s *RemoteAuthStore) ExchangeChallenge(now time.Time, challengeID, otp, dev
 	err := s.withLockedState(func(state *RemoteAuthState) (bool, error) {
 		challenge := state.PendingChallenge
 		if challenge == nil {
-			return false, ErrRemoteAuthNoChallenge
+			return pruneRemoteAuthState(state, now), ErrRemoteAuthNoChallenge
 		}
 		if challenge.ChallengeID != challengeID {
-			return false, ErrRemoteAuthNoChallenge
+			return pruneRemoteAuthState(state, now), ErrRemoteAuthNoChallenge
 		}
 		if challenge.Used {
-			return false, ErrRemoteAuthChallengeUsed
+			return pruneRemoteAuthState(state, now), ErrRemoteAuthChallengeUsed
 		}
 		if challenge.Failed {
-			return false, ErrRemoteAuthChallengeFailed
+			return pruneRemoteAuthState(state, now), ErrRemoteAuthChallengeFailed
 		}
 		if !now.Before(challenge.ExpiresAt) {
-			return false, ErrRemoteAuthChallengeExpired
+			return pruneRemoteAuthState(state, now), ErrRemoteAuthChallengeExpired
 		}
 		if !constantTimeEqualHash(challenge.OTPHash, hashRemoteAuthValue(strings.TrimSpace(otp))) {
 			failedAt := now.UTC()
@@ -194,19 +214,23 @@ func (s *RemoteAuthStore) ExchangeChallenge(now time.Time, challengeID, otp, dev
 func (s *RemoteAuthStore) AuthenticateSession(now time.Time, sessionID, sessionSecret string) (*RemoteAuthSession, error) {
 	var sessionCopy *RemoteAuthSession
 	err := s.withLockedState(func(state *RemoteAuthState) (bool, error) {
+		var authErr error
 		for i := range state.Sessions {
 			session := &state.Sessions[i]
 			if session.SessionID != sessionID {
 				continue
 			}
 			if session.RevokedAt != nil {
-				return false, ErrRemoteAuthSessionRevoked
+				authErr = ErrRemoteAuthSessionRevoked
+				break
 			}
 			if !now.Before(session.ExpiresAt) {
-				return false, ErrRemoteAuthSessionExpired
+				authErr = ErrRemoteAuthSessionExpired
+				break
 			}
 			if !constantTimeEqualHash(session.SessionSecretHash, hashRemoteAuthValue(strings.TrimSpace(sessionSecret))) {
-				return false, ErrRemoteAuthSessionNotFound
+				authErr = ErrRemoteAuthSessionNotFound
+				break
 			}
 
 			session.LastSeenAt = now.UTC()
@@ -217,9 +241,130 @@ func (s *RemoteAuthStore) AuthenticateSession(now time.Time, sessionID, sessionS
 			sessionCopy = cloneRemoteAuthSession(session)
 			return true, nil
 		}
-		return false, ErrRemoteAuthSessionNotFound
+		changed := pruneRemoteAuthState(state, now)
+		if authErr != nil {
+			return changed, authErr
+		}
+		return changed, ErrRemoteAuthSessionNotFound
 	})
 	return sessionCopy, err
+}
+
+func pruneRemoteAuthState(state *RemoteAuthState, now time.Time) bool {
+	if state == nil {
+		return false
+	}
+
+	changed := false
+	if state.PendingChallenge != nil && shouldPruneRemoteAuthChallenge(state.PendingChallenge, now) {
+		state.PendingChallenge = nil
+		changed = true
+	}
+
+	if len(state.Sessions) > 0 {
+		kept := state.Sessions[:0]
+		for i := range state.Sessions {
+			session := state.Sessions[i]
+			if shouldPruneRemoteAuthSession(&session, now) {
+				changed = true
+				continue
+			}
+			kept = append(kept, session)
+		}
+		if len(kept) == 0 {
+			state.Sessions = nil
+		} else {
+			state.Sessions = kept
+		}
+	}
+
+	if len(state.Attempts) > 0 {
+		kept := state.Attempts[:0]
+		cutoff := now.Add(-RemoteAuthAttemptWindow)
+		for i := range state.Attempts {
+			attempt := state.Attempts[i]
+			if attempt.CreatedAt.Before(cutoff) {
+				changed = true
+				continue
+			}
+			kept = append(kept, attempt)
+		}
+		if len(kept) == 0 {
+			state.Attempts = nil
+		} else {
+			state.Attempts = kept
+		}
+	}
+
+	if changed {
+		state.UpdatedAt = now.UTC()
+	}
+	return changed
+}
+
+func shouldPruneRemoteAuthChallenge(challenge *RemoteAuthChallenge, now time.Time) bool {
+	if challenge == nil {
+		return false
+	}
+	return !now.Before(challenge.ExpiresAt)
+}
+
+func shouldPruneRemoteAuthSession(session *RemoteAuthSession, now time.Time) bool {
+	if session == nil {
+		return false
+	}
+	return session.RevokedAt != nil || !now.Before(session.ExpiresAt)
+}
+
+func countRecentRemoteAuthAttempts(attempts []RemoteAuthAttempt, fingerprint string, now time.Time) int {
+	if fingerprint == "" {
+		return 0
+	}
+	cutoff := now.Add(-RemoteAuthAttemptWindow)
+	count := 0
+	for i := range attempts {
+		if attempts[i].Fingerprint != fingerprint {
+			continue
+		}
+		if attempts[i].CreatedAt.Before(cutoff) {
+			continue
+		}
+		count++
+	}
+	return count
+}
+
+func remoteAuthAttemptFingerprint(deviceLabel string, origin RemoteAuthOrigin) string {
+	label := strings.ToLower(strings.TrimSpace(deviceLabel))
+	if label == "" {
+		label = strings.ToLower(strings.TrimSpace(origin.UserAgent))
+	}
+	if label == "" {
+		label = "device"
+	}
+
+	source := strings.TrimSpace(firstRemoteAuthIP(origin))
+	if source == "" {
+		source = strings.ToLower(strings.TrimSpace(origin.Host))
+	}
+	return hashRemoteAuthValue(label + "|" + source)
+}
+
+func firstRemoteAuthIP(origin RemoteAuthOrigin) string {
+	if forwarded := strings.TrimSpace(origin.ForwardedFor); forwarded != "" {
+		first := strings.TrimSpace(strings.Split(forwarded, ",")[0])
+		if first != "" {
+			return first
+		}
+	}
+	if remoteAddr := strings.TrimSpace(origin.RemoteAddr); remoteAddr != "" {
+		host, _, err := net.SplitHostPort(remoteAddr)
+		if err == nil {
+			return host
+		}
+		return remoteAddr
+	}
+	return ""
 }
 
 func normalizeRemoteAuthWorkspace(workspace string) (string, error) {
@@ -345,6 +490,9 @@ func cloneRemoteAuthState(state *RemoteAuthState) *RemoteAuthState {
 		for i := range state.Sessions {
 			clone.Sessions[i] = *cloneRemoteAuthSession(&state.Sessions[i])
 		}
+	}
+	if len(state.Attempts) > 0 {
+		clone.Attempts = append([]RemoteAuthAttempt(nil), state.Attempts...)
 	}
 	return clone
 }
