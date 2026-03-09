@@ -71,6 +71,12 @@ The web dashboard at the configured URL includes a **Terminal** tab that renders
 
 Sub-agents may reference `~/.whip/home/memory.md` and `~/.whip/home/projects.md` as read-only context.
 
+## Code Conventions
+
+- Prefer splitting large files by responsibility using stable prefixes such as `backend_*`, `prompt_*`, `dashboard_*`, `store_*`, `task_*`, and `spawn_*`.
+- Keep package boundaries small and avoid premature subpackage splits; prefer same-package file splits first, then extract a package only when the shared API is clear.
+- Split tests by topic as the production code grows. Avoid returning to single catch-all files like `backend_test.go` or `server_test.go`.
+
 ## Help
 
 Run `whip --help` for the full command list. For guided usage, see `/whip-plan`, `/whip-start`, and `/whip-lesson-learn`.

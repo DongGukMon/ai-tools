@@ -48,6 +48,12 @@ When `--master-tmux` is set, three additional endpoints are available:
 
 All endpoints require Bearer token authentication.
 
+## Code Conventions
+
+- Prefer responsibility-based file splits with consistent prefixes such as `server_*` and `store_*` when a file starts mixing routes, auth, process logic, or path helpers.
+- Keep the main package entrypoint thin. Command wiring can stay in `main.go`, but command behavior should move into focused `cmd_*` files.
+- Split tests by endpoint or subsystem as behavior grows. Avoid rebuilding large mixed files once topics have been separated.
+
 ## Notes
 
 - Prefer short role-like names such as `backend`, `frontend`, `infra`, `auth`.
