@@ -163,6 +163,7 @@ func tickCmd() tea.Cmd {
 func (m DashboardModel) cleanTasks() tea.Cmd {
 	return func() tea.Msg {
 		count, _ := m.store.CleanTerminal()
+		exec.Command("claude-irc", "clean").Run()
 		return cleanedMsg(count)
 	}
 }
@@ -542,29 +543,31 @@ func (m DashboardModel) updateTmux(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // ircPeers returns the peer list with 'user' filtered out,
-// sorted alphabetically with 'whip-master' always first.
+// sorted: master first, then online peers ABC, then offline peers ABC.
 func (m DashboardModel) ircPeers() []peerInfo {
 	var master *peerInfo
-	var rest []peerInfo
+	var online, offline []peerInfo
 	for _, p := range m.peers {
 		if p.Name == "user" {
 			continue
 		}
-		if p.Name == "whip-master" {
+		if strings.HasPrefix(p.Name, "whip-master") {
 			cp := p
 			master = &cp
+		} else if p.Online {
+			online = append(online, p)
 		} else {
-			rest = append(rest, p)
+			offline = append(offline, p)
 		}
 	}
-	sort.Slice(rest, func(i, j int) bool {
-		return rest[i].Name < rest[j].Name
-	})
+	sort.Slice(online, func(i, j int) bool { return online[i].Name < online[j].Name })
+	sort.Slice(offline, func(i, j int) bool { return offline[i].Name < offline[j].Name })
 	var result []peerInfo
 	if master != nil {
 		result = append(result, *master)
 	}
-	result = append(result, rest...)
+	result = append(result, online...)
+	result = append(result, offline...)
 	return result
 }
 

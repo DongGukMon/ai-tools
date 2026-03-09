@@ -877,6 +877,9 @@ func cleanCmd() *cobra.Command {
 			}
 
 			fmt.Fprintf(os.Stderr, "Cleaned %d task(s)\n", count)
+
+			// Also clean stale IRC peers
+			exec.Command("claude-irc", "clean").Run()
 			return nil
 		},
 	}
