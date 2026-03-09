@@ -8,7 +8,7 @@ When running multiple Claude Code sessions in parallel (e.g., one on server code
 
 ## The Solution
 
-`claude-irc` creates a machine-wide shared communication channel. Sessions "join" the channel, send messages, publish structured context, and detect each other's online presence via Unix sockets.
+`claude-irc` creates a machine-wide shared communication channel. Sessions "join" the channel, send messages, and detect each other's online presence via Unix sockets.
 
 ## Quick Start
 
@@ -37,12 +37,6 @@ claude-irc msg server "Got it. Need avatarUrl in UserResponse"
 | `inbox <number>` | Read full message by index |
 | `inbox --all` | Show all messages including read |
 | `inbox clear` | Delete all messages |
-| `check [--quiet]` | Check for unread messages (hook-friendly) |
-| `watch [--interval N]` | One-shot watcher: print unread, mark read, exit; restart for next batch |
-| `topic "<title>"` | Publish structured context (stdin, same title = update) |
-| `topic --delete <n>` | Delete a topic by index |
-| `topic --clear` | Delete all your topics |
-| `board <peer> [n]` | List or read a peer's published topics |
 | `quit` | Leave the channel and clean up |
 | `upgrade` | Update to latest version |
 | `--version` | Show current version |
@@ -51,17 +45,13 @@ claude-irc msg server "Got it. Need avatarUrl in UserResponse"
 
 - **Real-time presence**: Unix domain socket per session for instant online/offline detection
 - **File-based messaging**: Reliable, persistent messages that survive process restarts
-- **Structured context**: Publish API contracts, schemas, or any structured information as topics
 - **Machine-wide**: All sessions on the same machine share a single channel
 - **Hook integration**: `PreToolUse` hook auto-surfaces new messages to Claude
-- **Background monitoring**: `watch` command enables event-driven reception via one-shot background tasks
 - **Stale cleanup**: Dead sessions are automatically detected and cleaned up
-
-For conversational ping-pong, treat `watch` as a one-shot trigger: when it exits with unread messages, start a new `watch` first, then read/process/respond while the new watcher waits for the next batch.
 
 ## Name Resolution
 
-Commands that need identity (`msg`, `inbox`, `topic`) resolve the peer name via:
+Commands that need identity (`msg`, `inbox`) resolve the peer name via:
 1. **Session marker** — written by `join`, matched by ancestor PID
 2. **`--name` flag** — fallback when session detection fails; only `user` is allowed without an active session
 3. Error if neither resolves
@@ -80,12 +70,7 @@ Session A (server)                    Session B (client)
     ├── claude-irc msg client "..."       │
     │   └── Write to inbox/client/        │
     │                                     │
-    │                         [PreToolUse hook fires]
-    │                         claude-irc check --quiet
-    │                         → reads inbox/client/
-    │                         → "[claude-irc] server: ..."
-    │                                     │
-    │                         Claude B sees the message
+    │                         Claude B reads inbox
     │                         and incorporates into work
 ```
 
@@ -97,8 +82,7 @@ Data is stored at `~/.claude-irc/`:
 ~/.claude-irc/
 ├── registry.json          # Registered peers
 ├── sockets/               # Unix domain sockets + PID files
-├── inbox/<peer>/           # Messages (JSON files)
-└── topics/<peer>/          # Published context (JSON files)
+└── inbox/<peer>/           # Messages (JSON files)
 ```
 
 ## Plugin Installation

@@ -50,7 +50,6 @@ func (s *Store) SocketsDir() string            { return filepath.Join(s.BaseDir,
 func (s *Store) SocketPath(name string) string { return filepath.Join(s.SocketsDir(), name+".sock") }
 func (s *Store) PIDPath(name string) string    { return filepath.Join(s.SocketsDir(), name+".pid") }
 func (s *Store) InboxDir(name string) string   { return filepath.Join(s.BaseDir, "inbox", name) }
-func (s *Store) TopicsDir(name string) string  { return filepath.Join(s.BaseDir, "topics", name) }
 
 // Session marker: allows check command to detect current session without running git.
 // Markers are keyed by daemonPID (unique per peer) and store "name\nsessionPID".

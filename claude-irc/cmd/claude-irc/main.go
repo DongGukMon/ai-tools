@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -52,10 +51,6 @@ func main() {
 		whoCmd(),
 		msgCmd(),
 		inboxCmd(),
-		checkCmd(),
-		watchCmd(),
-		topicCmd(),
-		boardCmd(),
 		quitCmd(),
 		daemonCmd(),
 		upgradeCmd(),
@@ -134,7 +129,7 @@ func whoCmd() *cobra.Command {
 				return err
 			}
 
-			// Clean up orphan inbox/topics directories
+			// Clean up orphan inbox directories
 			store.CleanOrphanDirs()
 
 			if len(statuses) == 0 {
@@ -290,258 +285,6 @@ func inboxCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&all, "all", false, "Show all messages including read")
 	cmd.Flags().SetInterspersed(false)
 	cmd.FParseErrWhitelist = cobra.FParseErrWhitelist{UnknownFlags: true} // Allow "inbox -1"
-	return cmd
-}
-
-func checkCmd() *cobra.Command {
-	var quiet bool
-	cmd := &cobra.Command{
-		Use:   "check",
-		Short: "Check for unread messages (hook-friendly)",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			ppid := os.Getppid()
-
-			// Fast path: scan for session marker without running git
-			store, name, err := irc.DetectSession(ppid)
-			if err != nil {
-				return nil // Not joined, exit silently
-			}
-
-			unread, err := store.UnreadMessages(name)
-			if err != nil || len(unread) == 0 {
-				return nil // No messages, exit silently
-			}
-
-			if quiet {
-				// Hook mode: output structured JSON for Claude Code PreToolUse hook
-				// Plain stdout is NOT visible to the agent; additionalContext is.
-				var lines []string
-				for _, msg := range unread {
-					lines = append(lines, fmt.Sprintf("[claude-irc] %s: %s", msg.From, msg.Content))
-				}
-				hookOutput := map[string]interface{}{
-					"hookSpecificOutput": map[string]interface{}{
-						"hookEventName":     "PreToolUse",
-						"additionalContext": strings.Join(lines, "\n"),
-					},
-				}
-				json.NewEncoder(os.Stdout).Encode(hookOutput)
-			} else {
-				fmt.Printf("%d unread message(s):\n", len(unread))
-				for _, msg := range unread {
-					fmt.Printf("  [%s] %s: %s\n",
-						msg.Timestamp.Format("15:04"), msg.From, msg.Content)
-				}
-			}
-
-			// Mark as read after displaying
-			store.MarkAllRead(name)
-
-			return nil
-		},
-	}
-	cmd.Flags().BoolVar(&quiet, "quiet", false, "Minimal output for hook integration")
-	return cmd
-}
-
-func watchCmd() *cobra.Command {
-	var interval int
-	cmd := &cobra.Command{
-		Use:   "watch",
-		Short: "One-shot watcher: print unread, mark read, exit; restart for the next batch",
-		Long: `Checks for unread messages immediately, then polls every N seconds until
-at least one unread message exists.
-
-When unread messages are found, watch:
-  1. Prints all unread messages to stdout
-  2. Marks them as read
-  3. Exits with code 0
-
-This is a one-shot watcher, not a continuous stream. Restart it after each
-task-notification if you want ongoing monitoring.
-
-Recommended conversational loop:
-  1. Start watch in the background
-  2. When it exits with unread messages, immediately start a new watch
-  3. Then read/process/respond while the new watch waits for the next batch
-
-Designed for use as a Claude Code background task:
-  claude-irc watch --interval 10
-  claude-irc --name my-session watch --interval 10
-
-Use --name when running watch outside the exact shell/process tree that ran
-'claude-irc join', otherwise session auto-detection may fail.`,
-		Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			ppid := os.Getppid()
-
-			store, name, err := irc.DetectSession(ppid)
-			if err != nil {
-				return fmt.Errorf("not joined (run 'claude-irc join <name>' first)")
-			}
-
-			ticker := time.NewTicker(time.Duration(interval) * time.Second)
-			defer ticker.Stop()
-
-			// Check immediately on start
-			if msgs, err := store.UnreadMessages(name); err == nil && len(msgs) > 0 {
-				for _, msg := range msgs {
-					fmt.Printf("[%s] %s\n", msg.From, msg.Content)
-				}
-				store.MarkAllRead(name)
-				return nil
-			}
-
-			for range ticker.C {
-				msgs, err := store.UnreadMessages(name)
-				if err != nil || len(msgs) == 0 {
-					continue
-				}
-				for _, msg := range msgs {
-					fmt.Printf("[%s] %s\n", msg.From, msg.Content)
-				}
-				store.MarkAllRead(name)
-				return nil
-			}
-
-			return nil
-		},
-	}
-	cmd.Flags().IntVar(&interval, "interval", 10, "Polling interval in seconds after the immediate unread check")
-	return cmd
-}
-
-func topicCmd() *cobra.Command {
-	var deleteIndex int
-	var clear bool
-	cmd := &cobra.Command{
-		Use:   "topic [title]",
-		Short: "Publish, delete, or clear topics",
-		Args:  cobra.MaximumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			store, err := irc.NewStore()
-			if err != nil {
-				return err
-			}
-
-			name, err := resolveMyName(store)
-			if err != nil {
-				return err
-			}
-
-			// Handle --clear
-			if clear {
-				if err := store.ClearTopics(name); err != nil {
-					return err
-				}
-				fmt.Fprintln(os.Stderr, "All topics cleared.")
-				return nil
-			}
-
-			// Handle --delete <index>
-			if cmd.Flags().Changed("delete") {
-				if deleteIndex < 1 {
-					return fmt.Errorf("invalid topic index: %d (must be >= 1)", deleteIndex)
-				}
-				topic, err := store.GetTopic(name, deleteIndex)
-				if err != nil {
-					return err
-				}
-				if err := store.DeleteTopic(name, deleteIndex); err != nil {
-					return err
-				}
-				fmt.Fprintf(os.Stderr, "Deleted topic #%d: \"%s\"\n", deleteIndex, topic.Title)
-				return nil
-			}
-
-			// Publish: requires title arg + stdin
-			if len(args) == 0 {
-				return fmt.Errorf("usage: topic <title> (pipe content via stdin), topic --delete <index>, or topic --clear")
-			}
-
-			title := args[0]
-			if strings.TrimSpace(title) == "" {
-				return fmt.Errorf("topic title cannot be empty")
-			}
-
-			content, err := io.ReadAll(os.Stdin)
-			if err != nil {
-				return fmt.Errorf("failed to read stdin: %w", err)
-			}
-
-			contentStr := strings.TrimSpace(string(content))
-			if contentStr == "" {
-				return fmt.Errorf("topic content cannot be empty (pipe content via stdin)")
-			}
-			if len(contentStr) > 51200 {
-				return fmt.Errorf("topic too large (%d bytes, max 50KB)", len(contentStr))
-			}
-
-			if err := store.PublishTopic(name, title, contentStr); err != nil {
-				return err
-			}
-
-			fmt.Fprintf(os.Stderr, "Published: \"%s\"\n", title)
-			return nil
-		},
-	}
-	cmd.Flags().IntVar(&deleteIndex, "delete", 0, "Delete topic by index")
-	cmd.Flags().BoolVar(&clear, "clear", false, "Delete all your topics")
-	return cmd
-}
-
-func boardCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "board <peer> [index]",
-		Short: "Read a peer's published topics",
-		Args:  cobra.RangeArgs(1, 2),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			peer := args[0]
-
-			store, err := irc.NewStore()
-			if err != nil {
-				return err
-			}
-
-			// If index is given, show specific topic
-			if len(args) == 2 {
-				index, err := strconv.Atoi(args[1])
-				if err != nil {
-					return fmt.Errorf("invalid index: %s", args[1])
-				}
-
-				topic, err := store.GetTopic(peer, index)
-				if err != nil {
-					return err
-				}
-
-				fmt.Printf("[%s] %s (%s)\n\n%s\n",
-					peer, topic.Title, timeAgo(topic.Timestamp), topic.Content)
-				return nil
-			}
-
-			// List all topics
-			topics, err := store.ListTopics(peer)
-			if err != nil {
-				return err
-			}
-
-			if len(topics) == 0 {
-				fmt.Printf("No topics from '%s'.\n", peer)
-				return nil
-			}
-
-			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-			fmt.Fprintln(w, "#\tTITLE\tTIME")
-			for i, t := range topics {
-				fmt.Fprintf(w, "%d\t%s\t%s\n", i+1, t.Title, timeAgo(t.Timestamp))
-			}
-			w.Flush()
-			return nil
-		},
-	}
-	cmd.Flags().SetInterspersed(false) // Allow "board peer -1" without flag parsing
 	return cmd
 }
 

@@ -214,22 +214,6 @@ func route(w http.ResponseWriter, r *http.Request, store *Store, masterTmux stri
 			}
 		}
 
-	case "topics":
-		if len(segments) == 3 {
-			name := segments[2]
-			if r.Method == http.MethodGet {
-				handleGetTopics(w, store, name)
-				return
-			}
-		} else if len(segments) == 4 {
-			name := segments[2]
-			indexStr := segments[3]
-			if r.Method == http.MethodGet {
-				handleGetTopic(w, store, name, indexStr)
-				return
-			}
-		}
-
 	case "master":
 		if masterTmux == "" {
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "master session not configured"})
@@ -344,33 +328,6 @@ func handleDeleteMessages(w http.ResponseWriter, store *Store, name string) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
-}
-
-func handleGetTopics(w http.ResponseWriter, store *Store, name string) {
-	topics, err := store.ListTopics(name)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	if topics == nil {
-		topics = []Topic{}
-	}
-	writeJSON(w, http.StatusOK, topics)
-}
-
-func handleGetTopic(w http.ResponseWriter, store *Store, name string, indexStr string) {
-	index, err := strconv.Atoi(indexStr)
-	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid topic index"})
-		return
-	}
-
-	topic, err := store.GetTopic(name, index)
-	if err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, topic)
 }
 
 // Whip task types (minimal, no whip package import)

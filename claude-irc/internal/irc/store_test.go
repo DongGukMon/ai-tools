@@ -25,9 +25,6 @@ func TestPathHelpers(t *testing.T) {
 	if got := store.InboxDir("server"); !containsPath(got, "inbox/server") {
 		t.Errorf("unexpected inbox dir: %s", got)
 	}
-	if got := store.TopicsDir("server"); !containsPath(got, "topics/server") {
-		t.Errorf("unexpected topics dir: %s", got)
-	}
 }
 
 func TestSessionMarker(t *testing.T) {

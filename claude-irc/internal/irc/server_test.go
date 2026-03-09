@@ -387,53 +387,6 @@ func TestAPIUserInboxFlow(t *testing.T) {
 	}
 }
 
-// --- Topics ---
-
-func TestAPITopics(t *testing.T) {
-	ts, store, token := setupTestServer(t)
-
-	// Publish topics
-	store.PublishTopic("alice", "API Contract", "GET /users -> []User")
-	time.Sleep(10 * time.Millisecond) // ensure different timestamps
-	store.PublishTopic("alice", "Auth Flow", "JWT + refresh tokens")
-
-	// List topics
-	resp := doRequest(t, ts, token, "GET", "/api/topics/alice", nil)
-	var topics []Topic
-	decodeJSON(t, resp, &topics)
-	if len(topics) != 2 {
-		t.Fatalf("expected 2 topics, got %d", len(topics))
-	}
-	if topics[0].Title != "API Contract" {
-		t.Errorf("expected first topic 'API Contract', got %q", topics[0].Title)
-	}
-
-	// Get single topic
-	resp = doRequest(t, ts, token, "GET", "/api/topics/alice/2", nil)
-	var topic Topic
-	decodeJSON(t, resp, &topic)
-	if topic.Title != "Auth Flow" {
-		t.Errorf("expected topic 'Auth Flow', got %q", topic.Title)
-	}
-
-	// Invalid index
-	resp = doRequest(t, ts, token, "GET", "/api/topics/alice/99", nil)
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusNotFound {
-		t.Errorf("expected 404 for invalid index, got %d", resp.StatusCode)
-	}
-}
-
-func TestAPITopicsEmpty(t *testing.T) {
-	ts, _, token := setupTestServer(t)
-	resp := doRequest(t, ts, token, "GET", "/api/topics/nobody", nil)
-	var topics []Topic
-	decodeJSON(t, resp, &topics)
-	if len(topics) != 0 {
-		t.Errorf("expected 0 topics, got %d", len(topics))
-	}
-}
-
 // --- Tasks ---
 
 func TestAPITasks(t *testing.T) {

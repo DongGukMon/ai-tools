@@ -110,23 +110,22 @@ func (s *Store) tryCleanStalePeer(name string) {
 			}
 		}
 
-		// Clean up orphan inbox and topics directories
+		// Clean up orphan inbox directory
 		os.RemoveAll(s.InboxDir(name))
-		os.RemoveAll(s.TopicsDir(name))
 
 		// Unregister from registry
 		s.Unregister(name)
 	}
 }
 
-// CleanOrphanDirs removes inbox/topics directories for peers not in the registry.
+// CleanOrphanDirs removes inbox directories for peers not in the registry.
 func (s *Store) CleanOrphanDirs() {
 	peers, err := s.ListPeers()
 	if err != nil {
 		return
 	}
 
-	for _, subdir := range []string{"inbox", "topics"} {
+	for _, subdir := range []string{"inbox"} {
 		dir := filepath.Join(s.BaseDir, subdir)
 		entries, err := os.ReadDir(dir)
 		if err != nil {
