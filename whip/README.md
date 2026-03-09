@@ -92,6 +92,7 @@ Settings are saved to `~/.whip/config.json` for reuse. With a tunnel, a **short 
 |-------|-------------|
 | `/whip-plan` | Decompose work into tasks with dependency graph |
 | `/whip-start` | Dispatch agents with parallel execution |
+| `/whip-lesson-learn` | Write a real-world whip case-study under `.whip/lesson-learn/` |
 
 ## How It Works
 

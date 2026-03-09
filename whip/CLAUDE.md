@@ -9,7 +9,7 @@ Use `whip` when one Claude session should act as a lead and dispatch work to oth
 - Resume or retry agent sessions with preserved context
 - Coordinate a team through `claude-irc`
 
-For ad hoc execution, use the CLI directly. For guided planning and dispatch, prefer `/whip-plan` and `/whip-start`.
+For ad hoc execution, use the CLI directly. For guided planning and dispatch, prefer `/whip-plan` and `/whip-start`. To capture a completed run as a reusable case study, use `/whip-lesson-learn`.
 
 ## Typical Workflow
 
@@ -73,7 +73,7 @@ Sub-agents may reference `~/.whip/home/memory.md` and `~/.whip/home/projects.md`
 
 ## Help
 
-Run `whip --help` for the full command list. For guided usage, see `/whip-plan` and `/whip-start`.
+Run `whip --help` for the full command list. For guided usage, see `/whip-plan`, `/whip-start`, and `/whip-lesson-learn`.
 
 ## Notes
 
