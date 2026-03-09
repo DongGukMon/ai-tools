@@ -473,6 +473,62 @@ func TestAPIUserInboxFlow(t *testing.T) {
 	}
 }
 
+func TestAPIMessageRoutesRejectInvalidIdentifiers(t *testing.T) {
+	ts, store, token := setupTestServer(t)
+
+	sentinel := filepath.Join(store.BaseDir, "sentinel.txt")
+	if err := os.WriteFile(sentinel, []byte("keep"), 0644); err != nil {
+		t.Fatalf("failed to write sentinel: %v", err)
+	}
+
+	postBodies := []map[string]string{
+		{"to": "..", "from": "user", "content": "blocked traversal"},
+		{"to": "agent/1", "from": "user", "content": "blocked separator"},
+	}
+	for _, body := range postBodies {
+		resp := doRequest(t, ts, token, "POST", "/api/messages", body)
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("POST /api/messages with %q: expected 400, got %d", body["to"], resp.StatusCode)
+		}
+		var result map[string]string
+		decodeJSON(t, resp, &result)
+		if result["error"] != "invalid identifier: invalid peer name" {
+			t.Fatalf("POST /api/messages with %q: unexpected error %q", body["to"], result["error"])
+		}
+	}
+
+	matches, err := filepath.Glob(filepath.Join(store.BaseDir, "*.json"))
+	if err != nil {
+		t.Fatalf("failed to glob base dir: %v", err)
+	}
+	if len(matches) != 0 {
+		t.Fatalf("expected no root-level message files after invalid POSTs, got %v", matches)
+	}
+
+	for _, tc := range []struct {
+		method string
+		path   string
+	}{
+		{method: http.MethodGet, path: "/api/messages/.."},
+		{method: http.MethodPost, path: "/api/messages/../read"},
+		{method: http.MethodDelete, path: "/api/messages/.."},
+	} {
+		resp := doRequest(t, ts, token, tc.method, tc.path, nil)
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("%s %s: expected 400, got %d", tc.method, tc.path, resp.StatusCode)
+		}
+		var result map[string]string
+		decodeJSON(t, resp, &result)
+		if result["error"] != "invalid identifier: invalid peer name" {
+			t.Fatalf("%s %s: unexpected error %q", tc.method, tc.path, result["error"])
+		}
+	}
+
+	if _, err := os.Stat(sentinel); err != nil {
+		t.Fatalf("expected sentinel to survive invalid inbox paths: %v", err)
+	}
+}
+
 // --- Tasks ---
 
 func TestAPITasks(t *testing.T) {
@@ -578,6 +634,45 @@ func TestAPITaskPIDAlive(t *testing.T) {
 	decodeJSON(t, resp, &result)
 	if !result.PIDAlive {
 		t.Error("expected pid_alive=true for our own PID")
+	}
+}
+
+func TestAPITasksRejectInvalidID(t *testing.T) {
+	origHome := os.Getenv("HOME")
+	tmpHome := t.TempDir()
+	os.Setenv("HOME", tmpHome)
+	t.Cleanup(func() { os.Setenv("HOME", origHome) })
+
+	whipDir := filepath.Join(tmpHome, ".whip")
+	if err := os.MkdirAll(whipDir, 0755); err != nil {
+		t.Fatalf("failed to create whip dir: %v", err)
+	}
+
+	escapedTask := map[string]interface{}{
+		"id":         "escaped",
+		"title":      "Should not be reachable",
+		"status":     "in_progress",
+		"shell_pid":  0,
+		"depends_on": []string{},
+		"created_at": time.Now().Format(time.RFC3339Nano),
+		"updated_at": time.Now().Format(time.RFC3339Nano),
+	}
+	data, _ := json.MarshalIndent(escapedTask, "", "  ")
+	if err := os.WriteFile(filepath.Join(whipDir, "task.json"), data, 0644); err != nil {
+		t.Fatalf("failed to write escaped task: %v", err)
+	}
+
+	ts, _, token := setupTestServer(t)
+
+	resp := doRequest(t, ts, token, "GET", "/api/tasks/..", nil)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", resp.StatusCode)
+	}
+
+	var body map[string]string
+	decodeJSON(t, resp, &body)
+	if body["error"] != "invalid identifier: invalid task id" {
+		t.Fatalf("unexpected error: %q", body["error"])
 	}
 }
 
