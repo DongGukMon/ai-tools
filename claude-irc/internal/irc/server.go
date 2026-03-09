@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -384,6 +385,10 @@ func handlePostMessage(w http.ResponseWriter, r *http.Request, store *Store) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "to, from, and content are required"})
 		return
 	}
+	if err := validatePeerName(body.To); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
 	if body.From != dashboardOperatorName {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "only 'user' may send messages over HTTP"})
 		return
@@ -408,7 +413,7 @@ func handleGetMessages(w http.ResponseWriter, r *http.Request, store *Store, nam
 	}
 
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		writeJSON(w, statusForIdentifierError(err), map[string]string{"error": err.Error()})
 		return
 	}
 	if messages == nil {
@@ -419,7 +424,7 @@ func handleGetMessages(w http.ResponseWriter, r *http.Request, store *Store, nam
 
 func handleMarkRead(w http.ResponseWriter, store *Store, name string) {
 	if err := store.MarkAllRead(name); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		writeJSON(w, statusForIdentifierError(err), map[string]string{"error": err.Error()})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -427,10 +432,17 @@ func handleMarkRead(w http.ResponseWriter, store *Store, name string) {
 
 func handleDeleteMessages(w http.ResponseWriter, store *Store, name string) {
 	if err := store.ClearInbox(name); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		writeJSON(w, statusForIdentifierError(err), map[string]string{"error": err.Error()})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func statusForIdentifierError(err error) int {
+	if errors.Is(err, ErrInvalidIdentifier) {
+		return http.StatusBadRequest
+	}
+	return http.StatusInternalServerError
 }
 
 // Whip task types (minimal, no whip package import)
@@ -513,6 +525,10 @@ func readAllWhipTasks() ([]whipTask, error) {
 }
 
 func readWhipTask(id string) (*whipTask, error) {
+	if err := validateTaskID(id); err != nil {
+		return nil, err
+	}
+
 	dir := whipTasksDir()
 	if dir == "" {
 		return nil, fmt.Errorf("cannot determine home directory")
@@ -558,7 +574,14 @@ func handleGetTasks(w http.ResponseWriter) {
 func handleGetTask(w http.ResponseWriter, id string) {
 	task, err := readWhipTask(id)
 	if err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+		status := http.StatusInternalServerError
+		switch {
+		case errors.Is(err, ErrInvalidIdentifier):
+			status = http.StatusBadRequest
+		case os.IsNotExist(err), strings.Contains(err.Error(), "not found"):
+			status = http.StatusNotFound
+		}
+		writeJSON(w, status, map[string]string{"error": err.Error()})
 		return
 	}
 	writeJSON(w, http.StatusOK, task)

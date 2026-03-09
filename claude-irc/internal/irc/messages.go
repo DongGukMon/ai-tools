@@ -20,6 +20,10 @@ type Message struct {
 
 // SendMessage writes a message to a peer's inbox directory.
 func (s *Store) SendMessage(to, from, content string) error {
+	if err := validatePeerName(to); err != nil {
+		return err
+	}
+
 	dir := s.InboxDir(to)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("failed to create inbox dir: %w", err)
@@ -44,6 +48,10 @@ func (s *Store) SendMessage(to, from, content string) error {
 
 // ReadInbox returns all messages for a peer, sorted chronologically.
 func (s *Store) ReadInbox(name string) ([]Message, error) {
+	if err := validatePeerName(name); err != nil {
+		return nil, err
+	}
+
 	dir := s.InboxDir(name)
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -106,12 +114,20 @@ func (s *Store) UnreadCount(name string) (int, error) {
 
 // ClearInbox removes all messages from a peer's inbox.
 func (s *Store) ClearInbox(name string) error {
+	if err := validatePeerName(name); err != nil {
+		return err
+	}
+
 	dir := s.InboxDir(name)
 	return os.RemoveAll(dir)
 }
 
 // MarkAllRead marks all messages in a peer's inbox as read.
 func (s *Store) MarkAllRead(name string) error {
+	if err := validatePeerName(name); err != nil {
+		return err
+	}
+
 	dir := s.InboxDir(name)
 	entries, err := os.ReadDir(dir)
 	if err != nil {

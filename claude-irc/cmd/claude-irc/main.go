@@ -70,7 +70,7 @@ func joinCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
 
-			if !isValidPeerName(name) {
+			if !irc.IsValidPeerName(name) {
 				return fmt.Errorf("invalid peer name '%s': only letters, numbers, hyphens, and underscores allowed (max 32 chars)", name)
 			}
 
@@ -161,7 +161,7 @@ func msgCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			peer, content := args[0], args[1]
 
-			if !isValidPeerName(peer) {
+			if !irc.IsValidPeerName(peer) {
 				return fmt.Errorf("invalid peer name '%s'", peer)
 			}
 			if strings.TrimSpace(content) == "" {
@@ -392,19 +392,6 @@ func resolveMyName(store *irc.Store) (string, error) {
 	}
 
 	return "", fmt.Errorf("not joined (run 'claude-irc join <name>' first, or use --name)")
-}
-
-// isValidPeerName checks that a peer name contains only safe characters.
-func isValidPeerName(name string) bool {
-	if name == "" || len(name) > 32 {
-		return false
-	}
-	for _, c := range name {
-		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_') {
-			return false
-		}
-	}
-	return true
 }
 
 func serveCmd() *cobra.Command {
