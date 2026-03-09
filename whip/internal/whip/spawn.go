@@ -277,75 +277,7 @@ func AutoAssignDependents(store *Store, completedID string) ([]string, error) {
 			continue
 		}
 
-		masterIRC := cfg.MasterIRCName
-		if masterIRC == "" {
-			masterIRC = MasterSessionName
-		}
-
-		dep, err = store.UpdateTask(dep.ID, func(task *Task) error {
-			if task.Status != StatusCreated {
-				return fmt.Errorf("task %s is %s, must be created to auto-assign", task.ID, task.Status)
-			}
-			task.IRCName = "whip-" + task.ID
-			task.MasterIRCName = masterIRC
-			if task.Backend == "" {
-				task.Backend = DefaultBackendName
-			}
-			from := task.Status
-			task.Status = StatusAssigned
-			now := currentTime()
-			task.AssignedAt = &now
-			task.UpdatedAt = now
-			task.RecordEvent("auto", "auto-assign", "assigned", from, task.Status, fmt.Sprintf("irc=%s master=%s", task.IRCName, task.MasterIRCName))
-			return nil
-		})
-		if err != nil {
-			continue
-		}
-
-		prompt := GeneratePrompt(dep)
-		if err := store.SavePrompt(dep.ID, prompt); err != nil {
-			_, _ = store.UpdateTask(dep.ID, func(task *Task) error {
-				from := task.Status
-				task.Status = StatusCreated
-				task.Runner = ""
-				task.IRCName = ""
-				task.MasterIRCName = ""
-				task.AssignedAt = nil
-				task.UpdatedAt = currentTime()
-				task.AddNote("auto-assign aborted before spawn: failed to save prompt")
-				task.RecordEvent("auto", "auto-assign", "reverted", from, task.Status, "failed to save prompt")
-				return nil
-			})
-			continue
-		}
-
-		runner, err := Spawn(dep, store.PromptPath(dep.ID))
-		if err != nil {
-			_, _ = store.UpdateTask(dep.ID, func(task *Task) error {
-				from := task.Status
-				task.Status = StatusCreated
-				task.Runner = ""
-				task.IRCName = ""
-				task.MasterIRCName = ""
-				task.AssignedAt = nil
-				task.UpdatedAt = currentTime()
-				task.AddNote(fmt.Sprintf("auto-assign spawn failed: %v", err))
-				task.RecordEvent("auto", "auto-assign", "reverted", from, task.Status, err.Error())
-				return nil
-			})
-			continue
-		}
-
-		dep, err = store.UpdateTask(dep.ID, func(task *Task) error {
-			task.Runner = runner
-			if dep.SessionID != "" {
-				task.SessionID = dep.SessionID
-			}
-			task.UpdatedAt = currentTime()
-			task.RecordEvent("auto", "auto-assign", "spawned", task.Status, task.Status, fmt.Sprintf("runner=%s session_id=%s", runner, task.SessionID))
-			return nil
-		})
+		dep, err = AssignCreatedTask(store, dep.ID, LaunchSource{Actor: "auto", Command: "auto-assign"}, DefaultMasterIRCName(cfg))
 		if err != nil {
 			continue
 		}

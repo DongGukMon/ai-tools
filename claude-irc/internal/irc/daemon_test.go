@@ -288,4 +288,3 @@ func TestKillDaemonRemovesFiles(t *testing.T) {
 		t.Error("socket file should be removed after KillDaemon")
 	}
 }
-
