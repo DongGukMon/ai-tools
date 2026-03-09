@@ -21,14 +21,6 @@ type SessionBackend interface {
 	// May modify task fields (e.g., SessionID) for session tracking.
 	BuildLaunchCmd(task *Task, promptPath string) string
 
-	// BuildResumeCmd returns a shell command string to resume a session.
-	// Used to spawn a resume session in tmux.
-	BuildResumeCmd(task *Task) string
-
-	// ResumeExec returns the binary path and args for syscall.Exec resume.
-	// Used by the `resume` CLI command for interactive resume.
-	ResumeExec(task *Task) (path string, args []string, err error)
-
 	// SyncSession updates backend-specific session tracking after spawn.
 	// Backends that can predeclare session IDs may return nil immediately.
 	SyncSession(task *Task, promptPath string, launchedAt time.Time) error

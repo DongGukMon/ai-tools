@@ -79,7 +79,7 @@ Pick the backend before creating tasks, and make it explicit on each task with `
 - Valid values are `claude` and `codex`.
 - Do not mix backends across tightly coupled tasks unless there is a clear reason.
 
-Whip owns the backend-specific prompt, model, effort, and session-forking behavior. Do not describe raw backend flags in the task description unless the user explicitly asked for that level of detail.
+Whip owns the backend-specific prompt, model, effort, and session tracking behavior. Do not describe raw backend flags in the task description unless the user explicitly asked for that level of detail.
 
 ---
 

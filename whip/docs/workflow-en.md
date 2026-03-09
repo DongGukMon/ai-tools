@@ -480,7 +480,7 @@ whip task clean
 | `whip task clean` | Remove completed/canceled tasks |
 | `whip task delete <id>` | Delete a task |
 
-Removed task commands: `status`, `retry`, `resume`, `attach`, `unassign`, `kill`
+Legacy task commands from the old generic status flow have been removed.
 
 ### whip workspace commands
 

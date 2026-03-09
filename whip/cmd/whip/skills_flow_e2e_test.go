@@ -72,7 +72,7 @@ func TestWhipStartSoloFlowRegression(t *testing.T) {
 	}
 	previousSessionID := failedTask.SessionID
 	if previousSessionID == "" {
-		t.Fatalf("failed task should preserve session lineage")
+		t.Fatalf("failed task should preserve the last session id")
 	}
 
 	runWhipCLI(t, "task", "assign", failingID)
@@ -84,7 +84,7 @@ func TestWhipStartSoloFlowRegression(t *testing.T) {
 		t.Fatalf("reassigned status = %s, want %s", reassignedTask.Status, whiplib.StatusAssigned)
 	}
 	if reassignedTask.SessionID == previousSessionID {
-		t.Fatalf("reassigned task should fork to a new session id")
+		t.Fatalf("reassigned task should overwrite the previous session id")
 	}
 	runWhipCLI(t, "task", "cancel", failingID, "--note", "Canceled after reassignment")
 
@@ -97,6 +97,12 @@ func TestWhipStartSoloFlowRegression(t *testing.T) {
 	}
 	if canceledTask.Runner != "" || canceledTask.IRCName != "" || canceledTask.ShellPID != 0 {
 		t.Fatalf("canceled task runtime should be cleared: runner=%q irc=%q pid=%d", canceledTask.Runner, canceledTask.IRCName, canceledTask.ShellPID)
+	}
+	if canceledTask.SessionID == "" {
+		t.Fatalf("canceled task should preserve the last session id")
+	}
+	if canceledTask.SessionID != reassignedTask.SessionID {
+		t.Fatalf("canceled task should keep the last assigned session id: got %q want %q", canceledTask.SessionID, reassignedTask.SessionID)
 	}
 
 	ircLog := readIRCLog(t, h.fake.ircLogPath)
@@ -452,7 +458,9 @@ func assertNoTasksRemain(t *testing.T, store *whiplib.Store, workspace string) {
 	}
 }
 
-func assertActionSet(t *testing.T, actions []struct{ Name string `json:"name"` }, want ...string) {
+func assertActionSet(t *testing.T, actions []struct {
+	Name string `json:"name"`
+}, want ...string) {
 	t.Helper()
 
 	got := make([]string, 0, len(actions))

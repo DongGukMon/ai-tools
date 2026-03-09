@@ -19,28 +19,8 @@ func (b *CodexBackend) GeneratePrompt(task *Task) string {
 func (b *CodexBackend) BuildLaunchCmd(task *Task, promptPath string) string {
 	args := append([]string{"codex"}, b.commonArgs(task)...)
 	prompt := codexPromptArg(promptPath)
-	if task.SessionID != "" {
-		args = append(args, "fork", task.SessionID, prompt)
-	} else {
-		args = append(args, prompt)
-	}
+	args = append(args, prompt)
 	return shellJoin(args)
-}
-
-func (b *CodexBackend) BuildResumeCmd(task *Task) string {
-	args := append([]string{"codex"}, b.commonArgs(task)...)
-	args = append(args, "resume", task.SessionID)
-	return shellJoin(args)
-}
-
-func (b *CodexBackend) ResumeExec(task *Task) (string, []string, error) {
-	codexPath, err := exec.LookPath("codex")
-	if err != nil {
-		return "", nil, fmt.Errorf("codex not found: %w", err)
-	}
-	args := append([]string{"codex"}, b.commonArgs(task)...)
-	args = append(args, "resume", task.SessionID)
-	return codexPath, args, nil
 }
 
 func (b *CodexBackend) SyncSession(task *Task, promptPath string, launchedAt time.Time) error {

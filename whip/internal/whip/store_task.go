@@ -11,7 +11,6 @@ import (
 
 func (s *Store) SaveTask(task *Task) error {
 	task.Workspace = NormalizeWorkspaceName(task.Workspace)
-	task.Status = NormalizeTaskStatus(task.Status)
 	return s.withTaskLockInWorkspace(task.Workspace, task.ID, func() error {
 		return s.saveTaskUnlocked(task)
 	})
@@ -19,7 +18,9 @@ func (s *Store) SaveTask(task *Task) error {
 
 func (s *Store) saveTaskUnlocked(task *Task) error {
 	task.Workspace = NormalizeWorkspaceName(task.Workspace)
-	task.Status = NormalizeTaskStatus(task.Status)
+	if !task.Status.IsValid() {
+		return fmt.Errorf("invalid task status %q", task.Status)
+	}
 	dir := s.taskDirInWorkspace(task.Workspace, task.ID)
 	if err := ensurePrivateDir(dir); err != nil {
 		return err
@@ -48,7 +49,9 @@ func (s *Store) loadTaskUnlocked(id string) (*Task, error) {
 		return nil, fmt.Errorf("corrupt task %s: %w", id, err)
 	}
 	task.Workspace = NormalizeWorkspaceName(task.Workspace)
-	task.Status = NormalizeTaskStatus(task.Status)
+	if !task.Status.IsValid() {
+		return nil, fmt.Errorf("task %s has invalid status %q", id, task.Status)
+	}
 	return &task, nil
 }
 

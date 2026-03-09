@@ -38,7 +38,6 @@ func DefaultMasterIRCName(cfg *Config) string {
 func AssignTask(store *Store, id string, source LaunchSource, masterIRC string) (*Task, error) {
 	var prev taskRuntimeSnapshot
 	task, err := store.UpdateTask(id, func(task *Task) error {
-		task.Status = NormalizeTaskStatus(task.Status)
 		if err := requireTaskStatuses(task, StatusCreated, StatusFailed); err != nil {
 			return err
 		}
@@ -83,7 +82,6 @@ func AssignTask(store *Store, id string, source LaunchSource, masterIRC string) 
 
 func StartTask(store *Store, id string, source LaunchSource, note string) (*Task, error) {
 	return store.UpdateTask(id, func(task *Task) error {
-		task.Status = NormalizeTaskStatus(task.Status)
 		if err := requireTaskStatuses(task, StatusAssigned); err != nil {
 			return err
 		}
@@ -118,7 +116,6 @@ func ApproveTask(store *Store, id string, source LaunchSource, note string) (*Ta
 
 func CompleteTask(store *Store, id string, source LaunchSource, note string) (*Task, error) {
 	return store.UpdateTask(id, func(task *Task) error {
-		task.Status = NormalizeTaskStatus(task.Status)
 		if err := requireTaskStatuses(task, StatusInProgress, StatusApproved); err != nil {
 			return err
 		}
@@ -180,7 +177,6 @@ func AddTaskNote(store *Store, id string, source LaunchSource, note string) (*Ta
 		return nil, fmt.Errorf("note cannot be empty")
 	}
 	return store.UpdateTask(id, func(task *Task) error {
-		task.Status = NormalizeTaskStatus(task.Status)
 		task.AddNote(note)
 		task.UpdatedAt = currentTime()
 		task.RecordEvent(source.Actor, source.Command, "note", task.Status, task.Status, note)
@@ -190,7 +186,6 @@ func AddTaskNote(store *Store, id string, source LaunchSource, note string) (*Ta
 
 func transitionTaskStatus(store *Store, id string, source LaunchSource, action string, newStatus TaskStatus, note string, allowedFrom ...TaskStatus) (*Task, error) {
 	return store.UpdateTask(id, func(task *Task) error {
-		task.Status = NormalizeTaskStatus(task.Status)
 		if err := requireTaskStatuses(task, allowedFrom...); err != nil {
 			return err
 		}

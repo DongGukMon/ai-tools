@@ -16,7 +16,7 @@ const (
 )
 
 func (s TaskStatus) IsValid() bool {
-	switch NormalizeTaskStatus(s) {
+	switch s {
 	case StatusCreated, StatusAssigned, StatusInProgress, StatusReview, StatusApproved, StatusFailed, StatusCompleted, StatusCanceled:
 		return true
 	}
@@ -24,28 +24,16 @@ func (s TaskStatus) IsValid() bool {
 }
 
 func (s TaskStatus) IsTerminal() bool {
-	s = NormalizeTaskStatus(s)
 	return s == StatusCompleted || s == StatusCanceled
 }
 
 func (s TaskStatus) IsActive() bool {
-	s = NormalizeTaskStatus(s)
 	return s == StatusAssigned || s == StatusInProgress || s == StatusReview || s == StatusApproved
-}
-
-func NormalizeTaskStatus(s TaskStatus) TaskStatus {
-	switch s {
-	case "approved_pending_finalize":
-		return StatusApproved
-	default:
-		return s
-	}
 }
 
 // ValidateTransition checks if a status transition is allowed.
 func (t *Task) ValidateTransition(newStatus TaskStatus) error {
-	current := NormalizeTaskStatus(t.Status)
-	newStatus = NormalizeTaskStatus(newStatus)
+	current := t.Status
 	if !newStatus.IsValid() {
 		return fmt.Errorf("invalid status: %s", newStatus)
 	}

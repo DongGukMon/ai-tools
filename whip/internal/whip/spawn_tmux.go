@@ -9,10 +9,6 @@ func tmuxSessionName(taskID string) string {
 	return "whip-" + taskID
 }
 
-func tmuxResumeSessionName(taskID string) string {
-	return "whip-resume-" + taskID
-}
-
 func SpawnTmuxSession(sessionName string, shellCmd string) error {
 	cmd := exec.Command("tmux", "new-session", "-d",
 		"-s", sessionName,

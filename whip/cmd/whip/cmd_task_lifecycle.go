@@ -389,7 +389,7 @@ func taskAllowsAction(task *whip.Task, spec whip.TaskLifecycleActionSpec) bool {
 	if task == nil {
 		return false
 	}
-	status := whip.NormalizeTaskStatus(task.Status)
+	status := task.Status
 	if task.Review && spec.Name == "complete" && status == whip.StatusInProgress {
 		return false
 	}

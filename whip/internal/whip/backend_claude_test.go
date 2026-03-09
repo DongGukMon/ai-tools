@@ -28,7 +28,7 @@ func TestClaudeBackend_BuildLaunchCmd_FirstSpawn(t *testing.T) {
 	}
 }
 
-func TestClaudeBackend_BuildLaunchCmd_ForksRetrySession(t *testing.T) {
+func TestClaudeBackend_BuildLaunchCmd_AlwaysStartsFreshSession(t *testing.T) {
 	b := &ClaudeBackend{}
 	task := NewTask("Test", "desc", "/tmp")
 	oldID := "11111111-1111-4111-8111-111111111111"
@@ -36,23 +36,23 @@ func TestClaudeBackend_BuildLaunchCmd_ForksRetrySession(t *testing.T) {
 
 	cmd := b.BuildLaunchCmd(task, "/path/to/prompt.txt")
 
-	if !strings.Contains(cmd, "--resume") {
-		t.Errorf("cmd should contain --resume: %s", cmd)
+	if strings.Contains(cmd, "--resume") {
+		t.Errorf("cmd should not contain --resume: %s", cmd)
 	}
-	if !strings.Contains(cmd, oldID) {
-		t.Errorf("cmd should reference old session ID: %s", cmd)
+	if strings.Contains(cmd, "--fork-session") {
+		t.Errorf("cmd should not contain --fork-session: %s", cmd)
 	}
-	if !strings.Contains(cmd, "--fork-session") {
-		t.Errorf("cmd should contain --fork-session: %s", cmd)
+	if strings.Contains(cmd, oldID) {
+		t.Errorf("cmd should not reference old session ID: %s", cmd)
 	}
 	if !strings.Contains(cmd, "--session-id") {
-		t.Errorf("cmd should contain --session-id for forked retries: %s", cmd)
+		t.Errorf("cmd should contain --session-id: %s", cmd)
 	}
 	if task.SessionID == oldID {
-		t.Error("SessionID should be updated after resume BuildLaunchCmd")
+		t.Error("SessionID should be replaced with a fresh value")
 	}
 	if task.SessionID == "" {
-		t.Error("SessionID should not be empty after resume BuildLaunchCmd")
+		t.Error("SessionID should not be empty after refresh")
 	}
 	if _, err := uuid.Parse(task.SessionID); err != nil {
 		t.Fatalf("SessionID should be a valid UUID, got %q: %v", task.SessionID, err)
@@ -88,51 +88,6 @@ func TestClaudeBackend_ModelFlags_Difficulty(t *testing.T) {
 		} else if strings.Contains(cmd, "--model") {
 			t.Errorf("difficulty=%q: cmd should not contain --model: %s", tt.difficulty, cmd)
 		}
-	}
-}
-
-func TestClaudeBackend_BuildResumeCmd(t *testing.T) {
-	b := &ClaudeBackend{}
-	task := NewTask("Test", "desc", "/tmp")
-	task.SessionID = "test-session-123"
-
-	cmd := b.BuildResumeCmd(task)
-
-	if !strings.Contains(cmd, "claude --resume") {
-		t.Errorf("cmd should contain 'claude --resume': %s", cmd)
-	}
-	if !strings.Contains(cmd, "test-session-123") {
-		t.Errorf("cmd should contain session ID: %s", cmd)
-	}
-}
-
-func TestClaudeBackend_ResumeExec(t *testing.T) {
-	b := &ClaudeBackend{}
-	task := NewTask("Test", "desc", "/tmp")
-	task.SessionID = "test-session-456"
-
-	path, args, err := b.ResumeExec(task)
-	if err != nil {
-		if !strings.Contains(err.Error(), "claude not found") {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		return
-	}
-
-	if path == "" {
-		t.Error("path should not be empty")
-	}
-	if len(args) != 3 {
-		t.Fatalf("args len = %d, want 3", len(args))
-	}
-	if args[0] != "claude" {
-		t.Errorf("args[0] = %q, want %q", args[0], "claude")
-	}
-	if args[1] != "--resume" {
-		t.Errorf("args[1] = %q, want %q", args[1], "--resume")
-	}
-	if args[2] != "test-session-456" {
-		t.Errorf("args[2] = %q, want %q", args[2], "test-session-456")
 	}
 }
 

@@ -1,8 +1,10 @@
 package whip
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -240,5 +242,54 @@ func TestSaveTask_UsesWorkspaceNamespace(t *testing.T) {
 	}
 	if string(data) != promptContent {
 		t.Fatalf("prompt = %q, want %q", string(data), promptContent)
+	}
+}
+
+func TestSaveTask_InvalidStatusFails(t *testing.T) {
+	s := tempStore(t)
+	task := NewTask("Invalid Status", "desc", "/tmp")
+	task.Status = TaskStatus("approved_pending_finalize")
+
+	err := s.SaveTask(task)
+	if err == nil {
+		t.Fatal("SaveTask should fail for an invalid status")
+	}
+	if !strings.Contains(err.Error(), "invalid task status") {
+		t.Fatalf("SaveTask error = %v, want invalid task status", err)
+	}
+}
+
+func TestLoadTask_InvalidStatusFails(t *testing.T) {
+	s := tempStore(t)
+	task := NewTask("Legacy Status", "desc", "/tmp")
+
+	dir := filepath.Join(s.BaseDir, tasksDir, task.ID)
+	if err := os.MkdirAll(dir, privateDirPerm); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+
+	payload := map[string]any{
+		"id":          task.ID,
+		"title":       task.Title,
+		"description": task.Description,
+		"cwd":         task.CWD,
+		"status":      "approved_pending_finalize",
+		"created_at":  task.CreatedAt,
+		"updated_at":  task.UpdatedAt,
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("json.Marshal: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, taskFile), data, privateFilePerm); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	_, err = s.LoadTask(task.ID)
+	if err == nil {
+		t.Fatal("LoadTask should fail for an invalid status")
+	}
+	if !strings.Contains(err.Error(), `invalid status "approved_pending_finalize"`) {
+		t.Fatalf("LoadTask error = %v, want invalid legacy status", err)
 	}
 }

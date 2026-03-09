@@ -21,7 +21,7 @@ var taskLifecycleActionSpecs = []TaskLifecycleActionSpec{
 		To:      StatusAssigned,
 		SideEffects: []string{
 			"spawns a fresh task session",
-			"reuses prior backend session context when available",
+			"replaces the stored backend session id with the new run on successful spawn",
 		},
 	},
 	{
@@ -67,7 +67,7 @@ var taskLifecycleActionSpecs = []TaskLifecycleActionSpec{
 		To:      StatusFailed,
 		SideEffects: []string{
 			"stops any running task session",
-			"preserves notes and backend session lineage for reassignment",
+			"preserves notes and the last backend session id for inspection",
 		},
 	},
 	{
@@ -78,6 +78,7 @@ var taskLifecycleActionSpecs = []TaskLifecycleActionSpec{
 		SideEffects: []string{
 			"records the terminal timestamp",
 			"stops any running task session",
+			"preserves the last backend session id for inspection",
 		},
 	},
 }
