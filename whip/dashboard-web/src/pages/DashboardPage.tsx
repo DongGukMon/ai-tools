@@ -11,6 +11,7 @@ import { PeerList, sortPeers } from '../components/PeerList'
 import { Chat, type ChatMessage } from '../components/Chat'
 import { TopicBoard } from '../components/TopicBoard'
 import { MasterTerminal } from '../components/MasterTerminal'
+import { Seo } from '../components/Seo'
 
 type Tab = 'tasks' | 'chat' | 'terminal'
 
@@ -225,7 +226,14 @@ export function DashboardPage({ onDisconnect }: Props) {
   if (!client) return null
 
   return (
-    <div>
+    <>
+      <Seo
+        title="Connected whip dashboard"
+        description="Monitor tasks, peers, chat, and the lead terminal in a running whip remote session."
+        path="/dashboard"
+        noindex
+      />
+      <div>
       {/* Reconnecting banner */}
       {connectionStatus.status === 'reconnecting' && (
         <div className="mb-3 px-4 py-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40 flex items-center gap-2">
@@ -353,6 +361,7 @@ export function DashboardPage({ onDisconnect }: Props) {
           onClose={() => setSelectedTask(null)}
         />
       )}
-    </div>
+      </div>
+    </>
   )
 }

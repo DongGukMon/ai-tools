@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { WhipAPIClient, buildConnectURL, parseConnectURL, AuthError, ConnectionError } from '../api/client'
+import { Seo } from '../components/Seo'
 import { saveAuth, clearAuth, getClient, loadAuth } from '../stores/auth'
 
 interface Props {
@@ -90,18 +91,23 @@ export function LoginPage({ onLogin }: Props) {
 
   if (checking) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <svg className="animate-spin h-6 w-6 text-[#8B5CF6]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-        </svg>
-      </div>
+      <>
+        <Seo title="Connect to whip dashboard" description="Connect to a running whip remote session." path="/login" noindex />
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <svg className="animate-spin h-6 w-6 text-[#8B5CF6]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+        </div>
+      </>
     )
   }
 
   return (
-    <div className="flex items-center justify-center min-h-[60vh] px-4">
-      <div className="w-full max-w-sm p-8 rounded-xl bg-white dark:bg-[#1E293B] border border-gray-200 dark:border-slate-700 shadow-sm">
+    <>
+      <Seo title="Connect to whip dashboard" description="Connect to a running whip remote session." path="/login" noindex />
+      <div className="flex items-center justify-center min-h-[60vh] px-4">
+        <div className="w-full max-w-sm p-8 rounded-xl bg-white dark:bg-[#1E293B] border border-gray-200 dark:border-slate-700 shadow-sm">
         <div className="mb-6">
           <div className="flex items-center gap-2 mb-1">
             <span className="bg-[#8B5CF6] text-white text-xs font-bold px-2 py-0.5 rounded">whip</span>
@@ -144,7 +150,8 @@ export function LoginPage({ onLogin }: Props) {
             ) : 'Connect'}
           </button>
         </form>
+        </div>
       </div>
-    </div>
+    </>
   )
 }

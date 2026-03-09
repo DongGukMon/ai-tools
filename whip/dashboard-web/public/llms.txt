@@ -1,0 +1,16 @@
+# ai-tools / whip
+
+Whip is a task orchestrator for AI agent work. It lives inside the ai-tools repository and works alongside claude-irc, redit, vaultkey, webform, and vaultkey-action.
+
+Primary pages:
+- https://whip.bang9.dev/ : product landing page for whip
+- https://whip.bang9.dev/tools : catalog of the tools shipped in ai-tools
+- https://whip.bang9.dev/how-it-works : scroll-driven workflow story from the operator point of view
+
+Key concepts:
+- global: default execution mode for a single task
+- workspace: named execution mode for stacked task lanes
+- claude-irc: shared messaging bus for agents and leads
+
+Repository:
+- https://github.com/bang9/ai-tools

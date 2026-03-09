@@ -4,6 +4,8 @@ import { Layout } from './components/Layout'
 import { LandingPage } from './pages/LandingPage'
 import { LoginPage } from './pages/LoginPage'
 import { DashboardPage } from './pages/DashboardPage'
+import { ToolsPage } from './pages/ToolsPage'
+import { WorkflowPage } from './pages/WorkflowPage'
 import { getClient, saveAuth } from './stores/auth'
 import { WhipAPIClient, parseConnectURL } from './api/client'
 
@@ -54,6 +56,10 @@ export default function App() {
         <Route path="/" element={
           authed ? <Navigate to="/dashboard" replace /> : <LandingPage />
         } />
+        <Route path="/tools" element={<ToolsPage />} />
+        <Route path="/how-it-works" element={<WorkflowPage />} />
+        <Route path="/real-world" element={<Navigate to="/how-it-works" replace />} />
+        <Route path="/real-world/issue-sweep" element={<Navigate to="/how-it-works" replace />} />
         <Route path="/login" element={
           authed
             ? <Navigate to="/dashboard" replace />

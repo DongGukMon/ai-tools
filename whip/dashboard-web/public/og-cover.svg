@@ -1,0 +1,43 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="95" y1="64" x2="1082" y2="585" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#070B16"/>
+      <stop offset="1" stop-color="#111A33"/>
+    </linearGradient>
+    <radialGradient id="glowA" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(910 92) rotate(128.568) scale(406.524 430.362)">
+      <stop stop-color="#4F46E5" stop-opacity="0.36"/>
+      <stop offset="1" stop-color="#4F46E5" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowB" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(278 132) rotate(65.665) scale(312.988 350.184)">
+      <stop stop-color="#60A5FA" stop-opacity="0.24"/>
+      <stop offset="1" stop-color="#60A5FA" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="630" rx="30" fill="url(#bg)"/>
+  <rect width="1200" height="630" rx="30" fill="url(#glowA)"/>
+  <rect width="1200" height="630" rx="30" fill="url(#glowB)"/>
+
+  <rect x="76" y="78" width="170" height="48" rx="24" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.14)"/>
+  <text x="107" y="109" fill="#C7D2FE" font-family="ui-sans-serif, system-ui, sans-serif" font-size="20" font-weight="700" letter-spacing="0.18em">whip</text>
+
+  <text x="76" y="220" fill="#F8FAFC" font-family="ui-sans-serif, system-ui, sans-serif" font-size="74" font-weight="700">Task orchestrator</text>
+  <text x="76" y="304" fill="#F8FAFC" font-family="ui-sans-serif, system-ui, sans-serif" font-size="74" font-weight="700">for AI agent runs.</text>
+  <text x="76" y="378" fill="#A5B4FC" font-family="ui-sans-serif, system-ui, sans-serif" font-size="30">
+    Plan, dispatch, review, and close from one lead surface.
+  </text>
+
+  <rect x="74" y="442" width="248" height="108" rx="24" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.12)"/>
+  <text x="102" y="474" fill="#93C5FD" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" letter-spacing="0.16em">GLOBAL</text>
+  <text x="102" y="515" fill="#F8FAFC" font-family="ui-sans-serif, system-ui, sans-serif" font-size="28" font-weight="600">Direct task</text>
+
+  <rect x="344" y="442" width="314" height="108" rx="24" fill="rgba(79,70,229,0.18)" stroke="rgba(199,210,254,0.18)"/>
+  <text x="374" y="474" fill="#C7D2FE" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" letter-spacing="0.16em">WORKSPACE</text>
+  <text x="374" y="515" fill="#F8FAFC" font-family="ui-sans-serif, system-ui, sans-serif" font-size="28" font-weight="600">Stacked task lane</text>
+
+  <rect x="812" y="184" width="296" height="266" rx="28" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.12)"/>
+  <text x="844" y="230" fill="#93C5FD" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" letter-spacing="0.16em">HOW IT WORKS</text>
+  <text x="844" y="284" fill="#F8FAFC" font-family="ui-sans-serif, system-ui, sans-serif" font-size="26" font-weight="600">Ship one large feature</text>
+  <text x="844" y="320" fill="#CBD5E1" font-family="ui-sans-serif, system-ui, sans-serif" font-size="20">define outcome -> shape the run</text>
+  <text x="844" y="352" fill="#CBD5E1" font-family="ui-sans-serif, system-ui, sans-serif" font-size="20">dispatch -> review -> close</text>
+  <text x="844" y="416" fill="#C7D2FE" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18">whip / claude-irc / ai-tools</text>
+</svg>
