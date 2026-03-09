@@ -36,12 +36,13 @@ jobs:
 
           BODY=""
           PRODUCTS="whip claude-irc redit vaultkey webform"
+          EXCLUDED_COMMIT_PATTERN='^chore: update plugin versions to '
 
           for product in $PRODUCTS; do
             if [ -n "$PREV_TAG" ]; then
-              COMMITS=$(git log --oneline "${PREV_TAG}..${TAG}" -- "${product}/")
+              COMMITS=$(git log --oneline --invert-grep --grep "$EXCLUDED_COMMIT_PATTERN" "${PREV_TAG}..${TAG}" -- "${product}/")
             else
-              COMMITS=$(git log --oneline "${TAG}" -- "${product}/")
+              COMMITS=$(git log --oneline --invert-grep --grep "$EXCLUDED_COMMIT_PATTERN" "${TAG}" -- "${product}/")
             fi
 
             BODY="${BODY}## ${product}"$'\n'
