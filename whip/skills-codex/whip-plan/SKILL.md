@@ -1,56 +1,58 @@
 ---
 name: whip-plan
-description: Analyze work, design task dependency graph, and get user approval before execution. Use when starting a multi-task project that needs planning.
+description: Analyze work, design a whip task graph, and get user approval before execution. Use when starting a multi-task project that needs planning.
 user_invocable: true
 ---
 
-You are a technical lead planning a multi-agent project. Your job is to analyze the work, decompose it into tasks with a dependency graph, and get user approval — then hand off to `/whip-start` for execution.
+You are a technical lead planning a multi-agent project. Analyze the work, decompose it into tasks with a dependency graph, get user approval, then hand off to `$whip-start` for execution.
 
 ## Step 1: Enter Plan Mode
 
-Start by entering plan mode. This keeps focus on analysis and design without accidentally modifying code.
+Start in plan mode so you can explore and design without accidentally editing implementation files.
 
-```
-Use the EnterPlanMode tool to switch to planning mode.
-```
+- If your environment exposes `EnterPlanMode`, use it.
+- Otherwise switch to plan mode through the client UI before proceeding.
 
-Plan mode allows read-only exploration (Read, Glob, Grep, Explore agents, Bash for inspection commands) but prevents file modifications — which is exactly what we want during planning.
+Plan mode should be used for read-only exploration, architecture decisions, and task graph design.
 
 ## Step 2: Understand the request
 
-Read the user's request carefully. If it's vague, ask clarifying questions before proceeding. You need enough context to make architectural decisions.
+Read the user's request carefully. If it is vague, ask clarifying questions before proceeding. You need enough context to make architectural decisions.
 
 ## Step 3: Explore the codebase
 
-Use the Explore agent, Glob, Grep, Read, and Bash (for `whip list`, build checks, etc.) to understand:
+Use the available read and inspection tools to understand:
 - Existing code structure, patterns, and conventions
 - Files and modules that will be affected
 - Interfaces between components
 - Test patterns in use
-- Current whip task state (anything already in progress?)
+- Current whip task state, including anything already in progress
 
 Spend enough time here to make informed decisions. Bad planning from insufficient context wastes more time than thorough exploration.
 
 ## Step 4: Design the task graph
 
-Decompose the work into tasks following these principles:
+Decompose the work into tasks following these principles.
 
 ### Task boundaries
-- **File-level ownership**: Each task owns specific files. No two tasks modify the same file.
-- **Interface-first**: Tasks that define interfaces/APIs come before tasks that consume them.
-- **Minimal dependencies**: Flatten the graph — prefer wide parallelism over deep chains.
-- **Target 2-3 rounds max**: More rounds = less parallelism benefit.
+
+- File-level ownership: each task owns specific files
+- Interface-first: tasks that define interfaces or APIs come before tasks that consume them
+- Minimal dependencies: prefer wide parallelism over deep chains
+- Target 2-3 rounds max
 
 ### Dependency graph design
-- **Round 1**: Foundation tasks with no dependencies (scaffolds, core APIs, shared types)
-- **Round 2**: Tasks that consume Round 1 outputs (clients, integrations, features using the API)
-- **Round 3**: Tasks that need Round 2 (UI pages consuming clients, CLI wiring everything together)
+
+- Round 1: foundation tasks with no dependencies
+- Round 2: tasks that consume Round 1 outputs
+- Round 3: tasks that need Round 2
 
 ### Task sizing
+
 - Each task should be completable by a single agent in one session
-- Too small = overhead of coordination exceeds the work
-- Too large = agent loses focus or hits context limits
-- Sweet spot: 1-3 files, clear scope, 1 well-defined deliverable
+- Too small means coordination overhead dominates
+- Too large means the agent loses focus or context
+- Aim for 1-3 files and one clear deliverable
 
 ### Difficulty assignment
 
@@ -58,25 +60,25 @@ Decompose the work into tasks following these principles:
 |---------|------------------|----------------------------------------------|
 | `hard` | `--difficulty hard` | Complex architecture, multi-file refactors, subtle bugs, security-sensitive work |
 | `medium`| `--difficulty medium` | Moderate features, cross-file changes with clear scope, interface implementation |
-| `easy` | `--difficulty easy` | Truly mechanical: config files, boilerplate scaffolds, copy-paste patterns, docs |
+| `easy` | `--difficulty easy` | Truly mechanical work: config files, boilerplate scaffolds, copy-paste patterns, docs |
 
-**Choosing the right level is critical.** An under-leveled task produces subtle bugs that cost more to fix than the savings. Apply these rules:
+Apply these rules:
 
-1. **Interface boundaries require `medium` minimum.** If a task must match an API contract, type signature, or protocol defined elsewhere, it needs higher-reasoning mode. Lower-effort settings may approximate names or paths instead of matching exactly.
+1. Interface boundaries require `medium` minimum. If a task must match an API contract, type signature, or protocol defined elsewhere, it needs higher-reasoning mode.
    - Bad: `[easy] API client` that must match server endpoints or a shared session contract
-   - Good: `[medium] API client` — cross-referencing another task's interface needs precision
+   - Good: `[medium] API client` or session integration task
 
-2. **`easy` is only for tasks with zero ambiguity.** The agent should be able to complete the task by following the description literally, with no judgment calls.
-   - Good `easy`: CI/CD workflow YAML, project scaffold from template, rename/move files
+2. `easy` is only for tasks with zero ambiguity.
+   - Good `easy`: CI workflow YAML, project scaffold from template, rename or move files
    - Bad `easy`: anything that says "match the existing pattern", "implement the interface from Task X", or "touch shared plumbing"
 
-3. **When in doubt, use `medium`.** The cost difference between `easy` and `medium` is small compared to the cost of a bug that requires master intervention or rework.
+3. When in doubt, use `medium`.
 
-4. **Reserve `hard` for tasks where correctness is non-obvious.** Multi-file refactors where changes must be consistent, security-sensitive code, complex state machines, subtle concurrency.
+4. Reserve `hard` for correctness-heavy work: multi-file refactors, security-sensitive code, complex state machines, subtle concurrency.
 
 ### Backend assignment
 
-Choose the backend during planning whenever portability or execution quality matters.
+Choose the backend during planning whenever execution quality or portability matters.
 
 - If the user explicitly requests `claude` or `codex`, record that backend in the task spec.
 - Default heuristics when the user did not specify:
@@ -84,13 +86,13 @@ Choose the backend during planning whenever portability or execution quality mat
   - Use `claude` for faster execution, strong ideation, or straightforward coding tasks that benefit from momentum over deep investigation.
 - If different tasks should use different backends, make that explicit per task.
 - If all tasks should use one backend, say so clearly in the plan and still record it in each task spec.
-- If backend is omitted, the executing `/whip-start` skill's default backend will apply. Avoid relying on this when the plan may be executed by different environments.
+- If backend is omitted, the executing `$whip-start` skill default applies. In this Codex environment, that default is `codex`.
 
 ## Step 5: Present the plan
 
 Present a clear, structured plan to the user:
 
-```
+```text
 ## Plan: <project title>
 
 ### Task Graph
@@ -118,25 +120,19 @@ A ──→ D
 - <potential risks or trade-offs>
 ```
 
-## Step 6: Iterate with user
+## Step 6: Iterate with the user
 
-The user may:
-- **Approve** → Proceed to save and hand off
-- **Request changes** → Adjust the plan and re-present
-- **Ask questions** → Explain your reasoning
+The user may approve, request changes, or ask questions. Do not proceed until the user explicitly approves.
 
-Do NOT proceed until the user explicitly approves.
+## Step 7: Write the plan to the bound file
 
-## Step 7: Write plan to the bound file
+Once the user approves, write the full plan content directly to the plan-mode bound file shown by the client.
 
-Once the user approves, write the full plan content **directly to the plan mode bound file** (the file shown in the plan mode system message, e.g., `~/.claude/plans/serialized-strolling-lightning.md`).
+- Plan mode binds one file per conversation. Edit that file directly.
+- Do not create a second ad hoc plan file elsewhere.
+- If the bound file contains an older plan, overwrite it completely.
 
-**IMPORTANT — Plan mode file binding:**
-- Plan mode binds ONE file per conversation. You can ONLY edit this file while in plan mode.
-- Do NOT try to write to a separate `~/.claude/plans/<slug>.md` — that will fail in plan mode.
-- If the bound file has old content from a previous plan, **overwrite it entirely** with the new plan.
-
-The plan file takes the high-level graph from plan mode and fleshes it out into concrete, agent-ready task specifications. Use the codebase knowledge gathered during exploration (Step 3) to fill in exact file paths, function signatures, API shapes, and existing code references. Each task must include enough detail for an agent to work independently — the agent won't have any of the planning context.
+The plan file should flesh out the high-level graph into concrete, agent-ready task specifications using the codebase knowledge gathered during exploration.
 
 ```markdown
 # <Project Title>
@@ -162,29 +158,28 @@ The plan file takes the high-level graph from plan mode and fleshes it out into 
   ## Acceptance Criteria
   - <specific, verifiable condition>
   - <specific, verifiable condition>
-
-### Task 2: <title>
-...
 ```
 
-**What makes a good task description:**
+What makes a good task description:
 - Explicit backend choice when it matters or when the user specified one
 - File paths and function names, not vague references
-- Exact API shapes (request/response JSON, endpoint paths, headers)
+- Exact API shapes
 - Existing code references with file:line pointers
-- Explicit "Out of scope" to prevent agents from wandering
+- Explicit out-of-scope boundaries
 
-**At the end of the plan file**, always include the execution instruction:
+At the end of the plan file, always include:
 
 ```markdown
 ## Execution
 
-Run `/whip-start <bound-file-path>` to execute this plan.
+Run `$whip-start <bound-plan-file>` to execute this plan.
 ```
 
-Replace `<bound-file-path>` with the actual bound file path (e.g., `~/.claude/plans/serialized-strolling-lightning.md`).
-Prefer explicit `Backend` fields in the task specs so the plan behaves the same whether `/whip-start` runs in Claude or Codex.
+Prefer explicit `Backend` fields so the plan behaves the same regardless of where it is executed.
 
-## Step 8: Exit plan mode
+## Step 8: Exit Plan Mode
 
-Call **ExitPlanMode**. The user sees the plan content (including the `/whip-start` command) and can approve or request changes.
+- If your environment exposes `ExitPlanMode`, use it.
+- Otherwise leave plan mode through the client UI.
+
+The user should then see the plan content, including the `$whip-start` execution instruction.

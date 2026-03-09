@@ -1,10 +1,10 @@
 ---
 name: whip-lesson-learn
-description: Create a real-world whip case-study or lessons-learned markdown file under .whip/lesson-learn/<file-name>.md. Use when the user wants to capture an actual whip run, prompts, decisions, IRC coordination, outcomes, or lessons learned.
+description: Create a real-world whip case-study or lessons-learned markdown file under .whip/lesson-learn/<file-name>.md. Use when the user wants to capture an actual whip run, prompts, decisions, IRC coordination, outcomes, or lessons learned. Prefer the explicitly requested language; otherwise use the user's conversation language.
 user_invocable: true
 ---
 
-Use this skill when the user wants to turn a real `whip` run into a reusable case study, lesson learned, postmortem, or discussion draft.
+Use this skill when the user wants to document a real `whip` run as a reusable case study, lesson learned, postmortem, or discussion draft.
 
 ## Goal
 
@@ -12,17 +12,13 @@ Create or update a markdown file at:
 
 `.whip/lesson-learn/<file-name>.md`
 
-After writing it, tell the user:
-
-- the final path
-- whether a new file was created or an existing file was updated
-- a short summary of what was captured
+After writing it, tell the user the final path and a short summary of what was captured.
 
 ## Language
 
 - If the user explicitly requests a language, write in that language.
-- Otherwise write in the language the user is currently using.
-- Do not mix languages except for literal commands, file paths, URLs, issue numbers, PR numbers, and short quoted fragments.
+- Otherwise write in the language the user is currently using with you.
+- Do not mix languages except for literal command names, file paths, or very short quoted fragments.
 
 ### Prompt language rule
 
@@ -35,8 +31,7 @@ After writing it, tell the user:
 - Use the user-provided file name when given.
 - If the user does not provide a file name, derive one as `YYYY-MM-DD-<short-case-name>.md`.
 - Use lowercase hyphen-case and keep it concise.
-- Create the directory if it does not exist.
-- If the same case already exists, update it instead of creating a duplicate unless the user asks for a new file.
+- Create the `.whip/lesson-learn/` directory if it does not already exist.
 
 ## Required structure
 
@@ -53,27 +48,27 @@ If IRC did not matter for the case, omit section 5.
 
 ## Workflow
 
-1. Gather concrete artifacts from the run:
+1. Gather concrete artifacts from the current run:
    - user prompts
    - tools and backends used
-   - worktree, branch, and PR topology
+   - worktree/branch/PR topology
    - review findings
    - IRC messages that changed decisions
-   - final merge, cleanup, and issue-closing results
+   - final merge and cleanup results
 2. Preserve literal commands and identifiers exactly.
-3. Distinguish initial plan from final corrected execution if review changed the direction.
+3. Distinguish initial plan from final corrected execution if the direction changed during review.
 4. Include only IRC messages that materially changed decisions; do not dump full transcripts.
 5. Keep operator mistakes and recovery steps when they are part of the lesson.
 6. Create or update the markdown file.
-7. Tell the user the path and a concise summary.
+7. Tell the user the path you wrote and a concise summary.
 
 ## Writing rules
 
 - Prefer factual chronology over promotional tone.
 - Keep the file concrete; this is a case study, not a generic manual.
-- Use plain `#123` issue and PR references, not backticked issue numbers, when GitHub linking is useful.
+- Use plain `#123` issue/PR references, not backticked issue numbers, when GitHub linking is useful.
 - Keep secrets, tokens, and sensitive values out of the document.
-- If the user wants a public discussion post, write the local `.whip/lesson-learn/` file first, then adapt from there.
+- If the same case already exists, update it instead of creating a duplicate unless the user asks for a new file.
 
 ## Default outline
 
