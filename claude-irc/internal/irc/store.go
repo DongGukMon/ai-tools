@@ -55,10 +55,14 @@ func resolveWhipBaseDir() (string, error) {
 
 // NewStoreWithBaseDir creates a Store with a custom base directory (used for testing).
 func NewStoreWithBaseDir(dir string) (*Store, error) {
-	if err := ensureStoreRoot(dir, claudeIRCStoreKind); err != nil {
+	canonicalDir, err := canonicalizeStorePath(dir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve store directory: %w", err)
+	}
+	if err := ensureStoreRoot(canonicalDir, claudeIRCStoreKind); err != nil {
 		return nil, fmt.Errorf("failed to create store directory: %w", err)
 	}
-	return &Store{BaseDir: dir}, nil
+	return &Store{BaseDir: canonicalDir}, nil
 }
 
 func resolveValidatedBaseDir(envName string, defaultLeaf string, kind string) (string, error) {
