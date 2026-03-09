@@ -75,7 +75,7 @@ Before diving in, share your approach with the lead:
 	fmt.Fprintf(&b, "- Work in: %s\n", task.CWD)
 	fmt.Fprintf(&b, "- Coordinate with the lead session (%s) via claude-irc\n", task.MasterIRCName)
 	b.WriteString("  when you need alignment on cross-cutting decisions.\n")
-	b.WriteString("- Home context (READ-ONLY): ~/.whip/home/\n")
+	b.WriteString("- Home context (READ-ONLY): WHIP_HOME/home/ (default: ~/.whip/home/)\n")
 	b.WriteString("  - memory.md: User preferences and operational guidelines\n")
 	b.WriteString("  - projects.md: Project registry with paths and tech stacks\n")
 	b.WriteString("- If you need user input, escalate to the lead first. If urgent and the lead is unresponsive, use webform to collect it directly.\n")
@@ -119,10 +119,17 @@ Before marking complete, verify your work (run tests, build checks, or whatever 
 		// Review flow: agent reports for review, does NOT commit
 		b.WriteString("**IMPORTANT: This task requires review before completion.**\n")
 		b.WriteString("- Do NOT commit your changes.\n")
-		b.WriteString("- When your work is ready, report for review instead of marking completed.\n\n")
-		fmt.Fprintf(&b, "1. claude-irc msg %s \"Task %s ready for review. Here's what I delivered: <concrete summary>\"\n",
+		b.WriteString("- When your work is ready, report for review instead of marking completed.\n")
+		b.WriteString("- Your review handoff must be good enough for the lead to finish or hand off the task without reopening your whole session.\n\n")
+		b.WriteString("Your review summary and note must include:\n")
+		b.WriteString("- changed files\n")
+		b.WriteString("- verification you ran (or what you could not run)\n")
+		b.WriteString("- suggested commit message\n")
+		b.WriteString("- remaining risks or follow-ups\n")
+		b.WriteString("- exact next step for the lead if they need to take over\n\n")
+		fmt.Fprintf(&b, "1. claude-irc msg %s \"Task %s ready for review. Delivered: <summary>. Files: <files>. Verification: <checks>. Suggested commit: <message>. Risks/follow-ups: <items>. Takeover note: <what the lead should do next>.\"\n",
 			task.MasterIRCName, task.ID)
-		fmt.Fprintf(&b, "2. whip status %s review --note \"summary of what was delivered\"\n", task.ID)
+		fmt.Fprintf(&b, "2. whip status %s review --note \"Delivered: <summary>. Files: <files>. Verification: <checks>. Suggested commit: <message>. Risks/follow-ups: <items>. Takeover note: <what the lead should do next>.\"\n", task.ID)
 		b.WriteString("3. Wait for the lead to approve. You will receive an IRC message when approved.\n")
 		b.WriteString("4. After receiving approval: commit your changes, then run:\n")
 		b.WriteString("   When committing:\n")
@@ -180,5 +187,16 @@ func generateCodexPrompt(task *Task) string {
    - Run claude-irc inbox after each meaningful chunk of work
    - Run claude-irc inbox before status changes or when you think the lead replied
 `
-	return strings.Replace(prompt, old, new, 1)
+	prompt = strings.Replace(prompt, old, new, 1)
+	if task.Review {
+		prompt += `
+
+## Codex Review Handoff
+Because this backend may not stay attached through approval/finalization, treat the review report as a real handoff.
+- Do not leave the lead guessing what to commit, what to verify, or what remains risky.
+- If approval arrives later, great — finish it yourself.
+- If the lead takes over, your review message and review note should already contain everything needed to finalize safely.
+`
+	}
+	return prompt
 }

@@ -109,3 +109,34 @@ func TestSpawnMasterSession_UsesHomePromptPath(t *testing.T) {
 		}
 	}
 }
+
+func TestSpawnMasterSession_UsesWHIPHOMEOverride(t *testing.T) {
+	tempRoot := t.TempDir()
+	override := filepath.Join(tempRoot, "custom-whip-home")
+	t.Setenv("WHIP_HOME", override)
+
+	var gotShellCmd string
+
+	origSpawn := spawnMasterTmuxSession
+	spawnMasterTmuxSession = func(sessionName string, shellCmd string) error {
+		gotShellCmd = shellCmd
+		return nil
+	}
+	defer func() {
+		spawnMasterTmuxSession = origSpawn
+	}()
+
+	cfg := RemoteConfig{
+		Backend:    "claude",
+		Difficulty: "medium",
+		CWD:        t.TempDir(),
+	}
+	if err := SpawnMasterSession(cfg); err != nil {
+		t.Fatalf("SpawnMasterSession: %v", err)
+	}
+
+	wantPromptPath := filepath.Join(override, whipHomeDirName, whipHomePromptFile)
+	if !strings.Contains(gotShellCmd, wantPromptPath) {
+		t.Fatalf("shell command should reference %q: %s", wantPromptPath, gotShellCmd)
+	}
+}

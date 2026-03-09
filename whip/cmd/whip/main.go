@@ -63,6 +63,20 @@ func newRootCmd() *cobra.Command {
 	return root
 }
 
+func resolveMasterIRCName(cfg *whip.Config, override string) string {
+	if strings.TrimSpace(override) != "" {
+		return strings.TrimSpace(override)
+	}
+	if cfg != nil && strings.TrimSpace(cfg.MasterIRCName) != "" {
+		return strings.TrimSpace(cfg.MasterIRCName)
+	}
+	return whip.MasterSessionName
+}
+
+func ptrTime(t time.Time) *time.Time {
+	return &t
+}
+
 func createCmd() *cobra.Command {
 	var desc, file, cwd, difficulty, backend string
 	var review bool
@@ -114,6 +128,7 @@ func createCmd() *cobra.Command {
 			task.Difficulty = difficulty
 			task.Review = review
 			task.Backend = backend
+			task.RecordEvent("cli", "create", "created", "", task.Status, title)
 			if err := store.SaveTask(task); err != nil {
 				return err
 			}
@@ -233,6 +248,9 @@ func showCmd() *cobra.Command {
 			if task.AssignedAt != nil {
 				fmt.Printf("Assigned:    %s\n", task.AssignedAt.Format(time.RFC3339))
 			}
+			if task.HeartbeatAt != nil {
+				fmt.Printf("Heartbeat:   %s\n", task.HeartbeatAt.Format(time.RFC3339))
+			}
 			if task.CompletedAt != nil {
 				fmt.Printf("Completed:   %s\n", task.CompletedAt.Format(time.RFC3339))
 			}
@@ -249,6 +267,19 @@ func showCmd() *cobra.Command {
 			if task.Description != "" {
 				fmt.Printf("\n--- Description ---\n%s\n", task.Description)
 			}
+			if len(task.Events) > 0 {
+				fmt.Printf("\n--- Events ---\n")
+				for _, e := range task.Events {
+					fmt.Printf("[%s] actor=%s command=%s action=%s", e.Timestamp.Format(time.RFC3339), e.Actor, e.Command, e.Action)
+					if e.FromStatus != "" || e.ToStatus != "" {
+						fmt.Printf(" %s→%s", e.FromStatus, e.ToStatus)
+					}
+					if e.Detail != "" {
+						fmt.Printf(" (%s)", e.Detail)
+					}
+					fmt.Println()
+				}
+			}
 
 			return nil
 		},
@@ -257,6 +288,7 @@ func showCmd() *cobra.Command {
 
 func assignCmd() *cobra.Command {
 	var masterIRC string
+	var saveMasterIRC bool
 
 	cmd := &cobra.Command{
 		Use:   "assign <id>",
@@ -296,45 +328,91 @@ func assignCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if masterIRC != "" {
-				cfg.MasterIRCName = masterIRC
-				if err := store.SaveConfig(cfg); err != nil {
+			resolvedMasterIRC := resolveMasterIRCName(cfg, masterIRC)
+			if masterIRC != "" && saveMasterIRC {
+				if _, err := store.UpdateConfig(func(cfg *whip.Config) error {
+					cfg.MasterIRCName = resolvedMasterIRC
+					return nil
+				}); err != nil {
 					return err
 				}
 			}
-			if cfg.MasterIRCName == "" {
-				cfg.MasterIRCName = "whip-master"
-				store.SaveConfig(cfg)
+
+			task, err = store.UpdateTask(id, func(task *whip.Task) error {
+				if task.Status != whip.StatusCreated {
+					return fmt.Errorf("task %s is %s, must be 'created' to assign", id, task.Status)
+				}
+				met, unmet, err := store.AreDependenciesMet(task)
+				if err != nil {
+					return err
+				}
+				if !met {
+					return fmt.Errorf("unmet dependencies: %s", strings.Join(unmet, ", "))
+				}
+
+				task.IRCName = "whip-" + task.ID
+				task.MasterIRCName = resolvedMasterIRC
+				if task.Backend == "" {
+					task.Backend = whip.DefaultBackendName
+				}
+
+				from := task.Status
+				task.Status = whip.StatusAssigned
+				now := time.Now()
+				task.AssignedAt = &now
+				task.UpdatedAt = now
+				task.RecordEvent("cli", "assign", "assigned", from, task.Status, fmt.Sprintf("irc=%s master=%s", task.IRCName, task.MasterIRCName))
+				return nil
+			})
+			if err != nil {
+				return err
 			}
 
-			// Set task IRC names
-			task.IRCName = "whip-" + task.ID
-			task.MasterIRCName = cfg.MasterIRCName
-
-			// Ensure backend is persisted so retry/resume use the same backend
-			if task.Backend == "" {
-				task.Backend = whip.DefaultBackendName
-			}
-
-			// Generate prompt
 			prompt := whip.GeneratePrompt(task)
 			if err := store.SavePrompt(task.ID, prompt); err != nil {
+				_, _ = store.UpdateTask(task.ID, func(task *whip.Task) error {
+					from := task.Status
+					task.Status = whip.StatusCreated
+					task.Runner = ""
+					task.IRCName = ""
+					task.MasterIRCName = ""
+					task.AssignedAt = nil
+					task.UpdatedAt = time.Now()
+					task.AddNote("assign aborted before spawn: failed to save prompt")
+					task.RecordEvent("cli", "assign", "reverted", from, task.Status, "failed to save prompt")
+					return nil
+				})
 				return err
 			}
 
 			// Spawn session (tmux preferred, Terminal.app fallback)
 			runner, err := whip.Spawn(task, store.PromptPath(task.ID))
 			if err != nil {
+				_, _ = store.UpdateTask(task.ID, func(task *whip.Task) error {
+					from := task.Status
+					task.Status = whip.StatusCreated
+					task.Runner = ""
+					task.IRCName = ""
+					task.MasterIRCName = ""
+					task.AssignedAt = nil
+					task.UpdatedAt = time.Now()
+					task.AddNote(fmt.Sprintf("assign spawn failed: %v", err))
+					task.RecordEvent("cli", "assign", "reverted", from, task.Status, err.Error())
+					return nil
+				})
 				return fmt.Errorf("failed to spawn session: %w", err)
 			}
-			task.Runner = runner
 
-			// Update task status
-			task.Status = whip.StatusAssigned
-			now := time.Now()
-			task.AssignedAt = &now
-			task.UpdatedAt = now
-			if err := store.SaveTask(task); err != nil {
+			task, err = store.UpdateTask(task.ID, func(current *whip.Task) error {
+				current.Runner = runner
+				if task.SessionID != "" {
+					current.SessionID = task.SessionID
+				}
+				current.UpdatedAt = time.Now()
+				current.RecordEvent("cli", "assign", "spawned", current.Status, current.Status, fmt.Sprintf("runner=%s session_id=%s", runner, current.SessionID))
+				return nil
+			})
+			if err != nil {
 				return err
 			}
 
@@ -343,7 +421,8 @@ func assignCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&masterIRC, "master-irc", "", "Master session IRC name (saved for future use)")
+	cmd.Flags().StringVar(&masterIRC, "master-irc", "", "Master session IRC name for this assignment")
+	cmd.Flags().BoolVar(&saveMasterIRC, "save-master-irc", false, "Persist --master-irc to config.json for future assignments")
 	return cmd
 }
 
@@ -415,13 +494,19 @@ func unassignCmd() *cobra.Command {
 			}
 
 			// Reset
-			task.Status = whip.StatusCreated
-			task.Runner = ""
-			task.ShellPID = 0
-			task.IRCName = ""
-			task.AssignedAt = nil
-			task.UpdatedAt = time.Now()
-			if err := store.SaveTask(task); err != nil {
+			task, err = store.UpdateTask(id, func(task *whip.Task) error {
+				from := task.Status
+				task.Status = whip.StatusCreated
+				task.Runner = ""
+				task.ShellPID = 0
+				task.IRCName = ""
+				task.AssignedAt = nil
+				task.HeartbeatAt = nil
+				task.UpdatedAt = time.Now()
+				task.RecordEvent("cli", "unassign", "unassigned", from, task.Status, "session reset to created")
+				return nil
+			})
+			if err != nil {
 				return err
 			}
 
@@ -464,25 +549,36 @@ func statusCmd() *cobra.Command {
 			}
 
 			// Update status
+			var newStatus whip.TaskStatus
 			if len(args) == 2 {
-				newStatus := whip.TaskStatus(args[1])
+				newStatus = whip.TaskStatus(args[1])
 				if err := task.ValidateTransition(newStatus); err != nil {
 					return err
 				}
-				task.Status = newStatus
+			}
 
-				if newStatus == whip.StatusCompleted || newStatus == whip.StatusFailed {
-					now := time.Now()
-					task.CompletedAt = &now
+			task, err = store.UpdateTask(id, func(task *whip.Task) error {
+				if len(args) == 2 {
+					if err := task.ValidateTransition(newStatus); err != nil {
+						return err
+					}
+					from := task.Status
+					task.Status = newStatus
+					if newStatus == whip.StatusCompleted || newStatus == whip.StatusFailed {
+						now := time.Now()
+						task.CompletedAt = &now
+					}
+					task.RecordEvent("cli", "status", "status_change", from, task.Status, "")
 				}
-			}
 
-			if cmd.Flags().Changed("note") {
-				task.AddNote(note)
-			}
-			task.UpdatedAt = time.Now()
-
-			if err := store.SaveTask(task); err != nil {
+				if cmd.Flags().Changed("note") {
+					task.AddNote(note)
+					task.RecordEvent("cli", "status", "note", task.Status, task.Status, note)
+				}
+				task.UpdatedAt = time.Now()
+				return nil
+			})
+			if err != nil {
 				return err
 			}
 
@@ -521,7 +617,7 @@ func statusCmd() *cobra.Command {
 func approveCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "approve <id>",
-		Short: "Approve a task in review status (notifies agent to commit and complete)",
+		Short: "Mark a review task approved and notify the assignee to finalize",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store, err := whip.NewStore()
@@ -534,26 +630,32 @@ func approveCmd() *cobra.Command {
 				return err
 			}
 
-			task, err := store.LoadTask(id)
+			task, err := store.UpdateTask(id, func(task *whip.Task) error {
+				if task.Status != whip.StatusReview {
+					return fmt.Errorf("task %s is %s, must be 'review' to approve", id, task.Status)
+				}
+				from := task.Status
+				task.Status = whip.StatusApprovedPendingFinalize
+				task.UpdatedAt = time.Now()
+				task.RecordEvent("cli", "approve", "approved", from, task.Status, "review approved; awaiting finalize")
+				return nil
+			})
 			if err != nil {
 				return err
 			}
 
-			if task.Status != whip.StatusReview {
-				return fmt.Errorf("task %s is %s, must be 'review' to approve", id, task.Status)
-			}
-
-			// Notify agent via IRC to commit and complete
 			if task.IRCName != "" {
-				commitMsg := fmt.Sprintf("Task %s approved. Please commit your changes and run `whip status %s completed --note \"...\"` to finalize.", id, id)
+				commitMsg := fmt.Sprintf("Task %s approved. Status is now approved_pending_finalize. Commit your changes and run `whip status %s completed --note \"...\"` to finalize.", id, id)
 				ircCmd := exec.Command("claude-irc", "msg", task.IRCName, commitMsg)
 				ircCmd.Stderr = os.Stderr
 				if err := ircCmd.Run(); err != nil {
-					return fmt.Errorf("failed to notify agent via IRC: %w", err)
+					fmt.Fprintf(os.Stderr, "Warning: approval state recorded, but IRC notification failed: %v\n", err)
 				}
+			} else {
+				fmt.Fprintf(os.Stderr, "Warning: task %s has no IRC target; approval state recorded without agent notification\n", id)
 			}
 
-			fmt.Fprintf(os.Stderr, "Approved task %s — agent notified to commit and complete\n", id)
+			fmt.Fprintf(os.Stderr, "Task %s → %s (approval recorded; finalization still requires a later completed/failed transition)\n", id, task.Status)
 			return nil
 		},
 	}
@@ -575,52 +677,74 @@ func retryCmd() *cobra.Command {
 				return err
 			}
 
-			task, err := store.LoadTask(id)
-			if err != nil {
-				return err
-			}
-
-			// Retry resets status to created but preserves SessionID
-			if err := task.Retry(); err != nil {
-				return err
-			}
-
-			// Resolve master IRC name
 			cfg, err := store.LoadConfig()
 			if err != nil {
 				return err
 			}
-			if cfg.MasterIRCName == "" {
-				cfg.MasterIRCName = "whip-master"
+			resolvedMasterIRC := resolveMasterIRCName(cfg, "")
+
+			task, err := store.UpdateTask(id, func(task *whip.Task) error {
+				from := task.Status
+				if err := task.Retry(); err != nil {
+					return err
+				}
+				task.IRCName = "whip-" + task.ID
+				task.MasterIRCName = resolvedMasterIRC
+				if task.Backend == "" {
+					task.Backend = whip.DefaultBackendName
+				}
+
+				task.Status = whip.StatusAssigned
+				now := time.Now()
+				task.AssignedAt = &now
+				task.UpdatedAt = now
+				task.RecordEvent("cli", "retry", "assigned", from, task.Status, fmt.Sprintf("irc=%s master=%s", task.IRCName, task.MasterIRCName))
+				return nil
+			})
+			if err != nil {
+				return err
 			}
 
-			// Set task IRC names
-			task.IRCName = "whip-" + task.ID
-			task.MasterIRCName = cfg.MasterIRCName
-
-			// Ensure backend is persisted (normalize legacy empty-backend tasks)
-			if task.Backend == "" {
-				task.Backend = whip.DefaultBackendName
-			}
-
-			// Generate prompt and spawn (will use --resume if SessionID exists)
 			prompt := whip.GeneratePrompt(task)
 			if err := store.SavePrompt(task.ID, prompt); err != nil {
+				_, _ = store.UpdateTask(task.ID, func(task *whip.Task) error {
+					from := task.Status
+					task.Status = whip.StatusFailed
+					now := time.Now()
+					task.CompletedAt = &now
+					task.UpdatedAt = now
+					task.AddNote("retry aborted before spawn: failed to save prompt")
+					task.RecordEvent("cli", "retry", "spawn_failed", from, task.Status, "failed to save prompt")
+					return nil
+				})
 				return err
 			}
 
 			runner, err := whip.Spawn(task, store.PromptPath(task.ID))
 			if err != nil {
+				_, _ = store.UpdateTask(task.ID, func(task *whip.Task) error {
+					from := task.Status
+					task.Status = whip.StatusFailed
+					now := time.Now()
+					task.CompletedAt = &now
+					task.UpdatedAt = now
+					task.AddNote(fmt.Sprintf("retry spawn failed: %v", err))
+					task.RecordEvent("cli", "retry", "spawn_failed", from, task.Status, err.Error())
+					return nil
+				})
 				return fmt.Errorf("failed to spawn session: %w", err)
 			}
-			task.Runner = runner
 
-			// Update task status to assigned
-			task.Status = whip.StatusAssigned
-			now := time.Now()
-			task.AssignedAt = &now
-			task.UpdatedAt = now
-			if err := store.SaveTask(task); err != nil {
+			task, err = store.UpdateTask(task.ID, func(current *whip.Task) error {
+				current.Runner = runner
+				if task.SessionID != "" {
+					current.SessionID = task.SessionID
+				}
+				current.UpdatedAt = time.Now()
+				current.RecordEvent("cli", "retry", "spawned", current.Status, current.Status, fmt.Sprintf("runner=%s session_id=%s", runner, current.SessionID))
+				return nil
+			})
+			if err != nil {
 				return err
 			}
 
@@ -672,12 +796,18 @@ func resumeCmd() *cobra.Command {
 				}
 			}
 
-			task.ShellPID = os.Getpid()
-			if task.Status == whip.StatusAssigned {
-				task.Status = whip.StatusInProgress
-			}
-			task.UpdatedAt = time.Now()
-			if err := store.SaveTask(task); err != nil {
+			task, err = store.UpdateTask(id, func(task *whip.Task) error {
+				from := task.Status
+				task.ShellPID = os.Getpid()
+				task.HeartbeatAt = ptrTime(time.Now())
+				if task.Status == whip.StatusAssigned {
+					task.Status = whip.StatusInProgress
+				}
+				task.UpdatedAt = time.Now()
+				task.RecordEvent("cli", "resume", "resume", from, task.Status, fmt.Sprintf("shell_pid=%d session_id=%s", task.ShellPID, task.SessionID))
+				return nil
+			})
+			if err != nil {
 				return err
 			}
 
@@ -749,22 +879,19 @@ func heartbeatCmd() *cobra.Command {
 				return err
 			}
 
-			task, err := store.LoadTask(id)
+			_, err = store.UpdateTask(id, func(task *whip.Task) error {
+				now := time.Now()
+				task.ShellPID = shellPID
+				task.HeartbeatAt = &now
+				task.UpdatedAt = now
+				task.RecordEvent("cli", "heartbeat", "heartbeat", task.Status, task.Status, fmt.Sprintf("shell_pid=%d", shellPID))
+				return nil
+			})
 			if err != nil {
 				return err
 			}
 
-			task.ShellPID = shellPID
-			if task.Status == whip.StatusAssigned {
-				task.Status = whip.StatusInProgress
-			}
-			task.UpdatedAt = time.Now()
-
-			if err := store.SaveTask(task); err != nil {
-				return err
-			}
-
-			fmt.Fprintf(os.Stderr, "Heartbeat: task %s, PID %d → in_progress\n", id, shellPID)
+			fmt.Fprintf(os.Stderr, "Heartbeat: task %s, PID %d recorded\n", id, shellPID)
 			return nil
 		},
 	}
@@ -802,12 +929,17 @@ func killCmd() *cobra.Command {
 				}
 			}
 
-			task.Status = whip.StatusFailed
-			task.AddNote("killed")
-			now := time.Now()
-			task.CompletedAt = &now
-			task.UpdatedAt = now
-			if err := store.SaveTask(task); err != nil {
+			task, err = store.UpdateTask(id, func(task *whip.Task) error {
+				from := task.Status
+				task.Status = whip.StatusFailed
+				task.AddNote("killed")
+				now := time.Now()
+				task.CompletedAt = &now
+				task.UpdatedAt = now
+				task.RecordEvent("cli", "kill", "killed", from, task.Status, fmt.Sprintf("shell_pid=%d", task.ShellPID))
+				return nil
+			})
+			if err != nil {
 				return err
 			}
 
@@ -1083,25 +1215,16 @@ func remoteCmd() *cobra.Command {
 			fmt.Fprintln(os.Stderr, "  Shortcuts: [o] open in browser  [c] copy URL  [q] quit")
 
 			// Extract token from connect URL and save config
-			if t := connectURLToken(connectURL); t != "" {
-				cfg.ServeToken = t
-			}
-			configChanged := false
-			if tunnel != cfg.Tunnel {
+			tokenFromURL := connectURLToken(connectURL)
+			if _, err := store.UpdateConfig(func(cfg *whip.Config) error {
 				cfg.Tunnel = tunnel
-				configChanged = true
-			}
-			if port != cfg.RemotePort {
 				cfg.RemotePort = port
-				configChanged = true
-			}
-			if cfg.ServeToken != "" {
-				configChanged = true
-			}
-			if configChanged {
-				if err := store.SaveConfig(cfg); err != nil {
-					fmt.Fprintf(os.Stderr, "Warning: save config: %v\n", err)
+				if tokenFromURL != "" {
+					cfg.ServeToken = tokenFromURL
 				}
+				return nil
+			}); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: save config: %v\n", err)
 			}
 
 			// Keyboard loop + signal handling

@@ -529,6 +529,9 @@ type whipTask struct {
 }
 
 func whipTasksDir() string {
+	if override := strings.TrimSpace(os.Getenv("WHIP_HOME")); override != "" {
+		return filepath.Join(override, "tasks")
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""

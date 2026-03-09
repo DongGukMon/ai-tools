@@ -272,7 +272,7 @@ func TestCodexBackend_GeneratePrompt(t *testing.T) {
 	if strings.Contains(prompt, "/loop 1m claude-irc inbox") {
 		t.Fatalf("prompt should not contain Claude-only loop command")
 	}
-	if !strings.Contains(prompt, "Home context (READ-ONLY): ~/.whip/home/") {
+	if !strings.Contains(prompt, "Home context (READ-ONLY): WHIP_HOME/home/ (default: ~/.whip/home/)") {
 		t.Fatalf("prompt should include whip home guidance")
 	}
 	if !strings.Contains(prompt, "memory.md: User preferences and operational guidelines") {
@@ -336,7 +336,7 @@ func TestClaudeBackend_GeneratePrompt(t *testing.T) {
 	if !strings.Contains(prompt, "whip-master") {
 		t.Error("prompt should contain master IRC name")
 	}
-	if !strings.Contains(prompt, "Home context (READ-ONLY): ~/.whip/home/") {
+	if !strings.Contains(prompt, "Home context (READ-ONLY): WHIP_HOME/home/ (default: ~/.whip/home/)") {
 		t.Error("prompt should include whip home guidance")
 	}
 	if !strings.Contains(prompt, "memory.md: User preferences and operational guidelines") {

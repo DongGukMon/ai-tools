@@ -5,6 +5,7 @@ const statusDisplay: { key: TaskStatus; icon: string; className: string }[] = [
   { key: 'assigned', icon: '◐', className: 'text-amber-500 dark:text-amber-400' },
   { key: 'in_progress', icon: '▶', className: 'text-indigo-500 dark:text-indigo-400' },
   { key: 'review', icon: '◎', className: 'text-pink-500 dark:text-pink-400' },
+  { key: 'approved_pending_finalize', icon: '◉', className: 'text-emerald-500 dark:text-emerald-400' },
   { key: 'completed', icon: '✓', className: 'text-emerald-500 dark:text-emerald-400' },
   { key: 'failed', icon: '✗', className: 'text-red-500 dark:text-red-400' },
 ]

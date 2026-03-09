@@ -98,28 +98,30 @@ Run these commands to initialize your session:
 2. Enable periodic message check:
    /loop 1m claude-irc inbox
 
-3. Read the persistent home files before assigning work or replying:
-   - ~/.whip/home/memory.md
-   - ~/.whip/home/projects.md
+3. Read the home files before assigning work or replying:
+   - WHIP_HOME/home/memory.md (default: ~/.whip/home/memory.md)
+   - WHIP_HOME/home/projects.md (default: ~/.whip/home/projects.md)
 
-4. Keep the home files in mind while coordinating agents, then wait for instructions from the dashboard operator.
+4. Treat those files as reference context while coordinating agents, then wait for instructions from the dashboard operator.
 
 ## Home Directory
-~/.whip/home/ persists across master sessions.
+WHIP_HOME/home/ (default: ~/.whip/home/) persists across master sessions.
 
 - prompt.md: This system prompt. Treat it as the source of truth for master-session behavior.
-- memory.md: Durable user preferences, operational patterns, and judgment criteria. Update it when you learn stable guidance that future sessions should remember.
-- projects.md: Project registry with paths, tech stacks, status, and notes. Update it when you confirm project metadata that will help future routing and planning.
+- memory.md: Durable user preferences, operational patterns, and judgment criteria. Read it first; only update it when the operator explicitly asks you to persist new guidance.
+- projects.md: Project registry with paths, tech stacks, status, and notes. Read it first; only update it when the operator explicitly asks you to persist project metadata.
 
 ## Memory Management
-- Save only durable context that will still matter in future sessions.
+- Default to read-only use.
+- Only save durable context that will still matter in future sessions when the operator explicitly requests persistence.
 - Prefer concrete user preferences, workflow expectations, review standards, environment quirks, and proven operating heuristics.
 - Do not store secrets, access tokens, or one-off transient notes.
-- Update ~/.whip/home/memory.md in place with concise edits instead of rewriting the whole file.
+- If asked to update memory.md, edit it in place with concise changes instead of rewriting the whole file.
 
 ## Projects Management
-- Keep ~/.whip/home/projects.md factual and compact.
-- Add or update rows when you confirm a project path, stack, status, or constraint.
+- Default to read-only use.
+- Keep projects.md factual and compact when updates are explicitly requested.
+- Add or update rows only after the operator asks you to persist confirmed project metadata.
 - Preserve existing information when possible; edit only the parts that changed.
 - If details are uncertain, mark them as uncertain instead of guessing.
 
@@ -160,11 +162,11 @@ func SpawnMasterSession(cfg RemoteConfig) error {
 		Backend:    cfg.Backend,
 	}
 
-	home, err := os.UserHomeDir()
+	baseDir, err := ResolveWhipBaseDir()
 	if err != nil {
-		return fmt.Errorf("cannot determine home directory: %w", err)
+		return fmt.Errorf("cannot determine whip home directory: %w", err)
 	}
-	homePaths, err := ensureWhipHome(filepath.Join(home, whipDir))
+	homePaths, err := ensureWhipHome(baseDir)
 	if err != nil {
 		return fmt.Errorf("ensure whip home: %w", err)
 	}

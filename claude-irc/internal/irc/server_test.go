@@ -768,6 +768,17 @@ func TestAPITasksRejectInvalidID(t *testing.T) {
 	}
 }
 
+func TestWhipTasksDir_UsesWHIPHOMEOverride(t *testing.T) {
+	override := filepath.Join(t.TempDir(), "custom-whip-home")
+	t.Setenv("WHIP_HOME", override)
+
+	got := whipTasksDir()
+	want := filepath.Join(override, "tasks")
+	if got != want {
+		t.Fatalf("whipTasksDir() = %q, want %q", got, want)
+	}
+}
+
 // --- Master ---
 
 func TestAPIMasterKeysRejectsOversizedBody(t *testing.T) {

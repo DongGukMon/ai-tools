@@ -7,14 +7,17 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 )
 
 const (
-	whipDir    = ".whip"
-	configFile = "config.json"
-	tasksDir   = "tasks"
-	taskFile   = "task.json"
-	promptFile = "prompt.txt"
+	whipDir      = ".whip"
+	configFile   = "config.json"
+	configLock   = "config.lock"
+	tasksDir     = "tasks"
+	taskFile     = "task.json"
+	taskLockFile = "task.lock"
+	promptFile   = "prompt.txt"
 )
 
 type Config struct {
@@ -29,15 +32,100 @@ type Store struct {
 }
 
 func NewStore() (*Store, error) {
-	home, err := os.UserHomeDir()
+	baseDir, err := ResolveWhipBaseDir()
 	if err != nil {
 		return nil, fmt.Errorf("cannot determine home directory: %w", err)
 	}
-	baseDir := filepath.Join(home, whipDir)
 	if err := os.MkdirAll(filepath.Join(baseDir, tasksDir), 0755); err != nil {
 		return nil, fmt.Errorf("cannot create whip directory: %w", err)
 	}
 	return &Store{BaseDir: baseDir}, nil
+}
+
+func ResolveWhipBaseDir() (string, error) {
+	if override := strings.TrimSpace(os.Getenv("WHIP_HOME")); override != "" {
+		return override, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, whipDir), nil
+}
+
+func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+
+	tmp, err := os.CreateTemp(dir, filepath.Base(path)+".tmp.*")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	cleanup := func() {
+		tmp.Close()
+		os.Remove(tmpPath)
+	}
+
+	if _, err := tmp.Write(data); err != nil {
+		cleanup()
+		return err
+	}
+	if err := tmp.Chmod(perm); err != nil {
+		cleanup()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		cleanup()
+		return err
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		os.Remove(tmpPath)
+		return err
+	}
+	return nil
+}
+
+func withFileLock(path string, fn func() error) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+		return err
+	}
+	defer syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+	return fn()
+}
+
+func cloneTask(task *Task) (*Task, error) {
+	data, err := json.Marshal(task)
+	if err != nil {
+		return nil, err
+	}
+	var cloned Task
+	if err := json.Unmarshal(data, &cloned); err != nil {
+		return nil, err
+	}
+	return &cloned, nil
+}
+
+func cloneConfig(cfg *Config) (*Config, error) {
+	data, err := json.Marshal(cfg)
+	if err != nil {
+		return nil, err
+	}
+	var cloned Config
+	if err := json.Unmarshal(data, &cloned); err != nil {
+		return nil, err
+	}
+	return &cloned, nil
 }
 
 // Config
@@ -59,17 +147,54 @@ func (s *Store) LoadConfig() (*Config, error) {
 }
 
 func (s *Store) SaveConfig(cfg *Config) error {
-	data, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
+	return s.withConfigLock(func() error {
+		data, err := json.MarshalIndent(cfg, "", "  ")
+		if err != nil {
+			return err
+		}
+		return atomicWriteFile(filepath.Join(s.BaseDir, configFile), data, 0644)
+	})
+}
+
+func (s *Store) UpdateConfig(fn func(*Config) error) (*Config, error) {
+	var updated *Config
+	err := s.withConfigLock(func() error {
+		cfg, err := s.LoadConfig()
+		if err != nil {
+			return err
+		}
+		if err := fn(cfg); err != nil {
+			return err
+		}
+		data, err := json.MarshalIndent(cfg, "", "  ")
+		if err != nil {
+			return err
+		}
+		if err := atomicWriteFile(filepath.Join(s.BaseDir, configFile), data, 0644); err != nil {
+			return err
+		}
+		updated, err = cloneConfig(cfg)
 		return err
-	}
-	return os.WriteFile(filepath.Join(s.BaseDir, configFile), data, 0644)
+	})
+	return updated, err
 }
 
 // Task CRUD
 
 func (s *Store) taskDir(id string) string {
 	return filepath.Join(s.BaseDir, tasksDir, id)
+}
+
+func (s *Store) taskLockPath(id string) string {
+	return filepath.Join(s.taskDir(id), taskLockFile)
+}
+
+func (s *Store) withTaskLock(id string, fn func() error) error {
+	return withFileLock(s.taskLockPath(id), fn)
+}
+
+func (s *Store) withConfigLock(fn func() error) error {
+	return withFileLock(filepath.Join(s.BaseDir, configLock), fn)
 }
 
 func (s *Store) taskPath(id string) string {
@@ -81,6 +206,12 @@ func (s *Store) promptPath(id string) string {
 }
 
 func (s *Store) SaveTask(task *Task) error {
+	return s.withTaskLock(task.ID, func() error {
+		return s.saveTaskUnlocked(task)
+	})
+}
+
+func (s *Store) saveTaskUnlocked(task *Task) error {
 	dir := s.taskDir(task.ID)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
@@ -89,10 +220,14 @@ func (s *Store) SaveTask(task *Task) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(s.taskPath(task.ID), data, 0644)
+	return atomicWriteFile(s.taskPath(task.ID), data, 0644)
 }
 
 func (s *Store) LoadTask(id string) (*Task, error) {
+	return s.loadTaskUnlocked(id)
+}
+
+func (s *Store) loadTaskUnlocked(id string) (*Task, error) {
 	data, err := os.ReadFile(s.taskPath(id))
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -105,6 +240,25 @@ func (s *Store) LoadTask(id string) (*Task, error) {
 		return nil, fmt.Errorf("corrupt task %s: %w", id, err)
 	}
 	return &task, nil
+}
+
+func (s *Store) UpdateTask(id string, fn func(*Task) error) (*Task, error) {
+	var updated *Task
+	err := s.withTaskLock(id, func() error {
+		task, err := s.loadTaskUnlocked(id)
+		if err != nil {
+			return err
+		}
+		if err := fn(task); err != nil {
+			return err
+		}
+		if err := s.saveTaskUnlocked(task); err != nil {
+			return err
+		}
+		updated, err = cloneTask(task)
+		return err
+	})
+	return updated, err
 }
 
 func (s *Store) ListTasks() ([]*Task, error) {
@@ -140,7 +294,9 @@ func (s *Store) DeleteTask(id string) error {
 }
 
 func (s *Store) SavePrompt(id, content string) error {
-	return os.WriteFile(s.promptPath(id), []byte(content), 0644)
+	return s.withTaskLock(id, func() error {
+		return atomicWriteFile(s.promptPath(id), []byte(content), 0644)
+	})
 }
 
 func (s *Store) PromptPath(id string) string {

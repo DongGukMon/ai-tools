@@ -13,6 +13,7 @@ BUILD_TARGET="./cmd/whip"
 
 # Ensure required companion tools (claude-irc, webform) are at expected version.
 post_install_hook() {
+    local auto_upgrade_companions="${WHIP_AUTO_UPGRADE_COMPANIONS:-0}"
     for tool in claude-irc webform; do
         TOOL_PATH=""
         if command -v "$tool" &> /dev/null; then
@@ -24,6 +25,17 @@ post_install_hook() {
         TOOL_VERSION=""
         if [ -n "$TOOL_PATH" ]; then
             TOOL_VERSION=$("$TOOL_PATH" --version 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' || echo "")
+        fi
+
+        if [ "$TOOL_VERSION" = "$VERSION" ]; then
+            continue
+        fi
+
+        # During session-start auto-install, avoid aggressively replacing already-installed
+        # companion tools unless the operator explicitly opts in.
+        if [ -n "$TOOL_PATH" ] && [ "$auto_upgrade_companions" != "1" ]; then
+            echo "Skipping automatic $tool upgrade during session start (found ${TOOL_VERSION:-unknown}, want $VERSION). Set WHIP_AUTO_UPGRADE_COMPANIONS=1 to force it." >&2
+            continue
         fi
 
         if [ "$TOOL_VERSION" != "$VERSION" ]; then

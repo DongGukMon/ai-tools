@@ -21,6 +21,11 @@ const statusConfig: Record<TaskStatus, { icon: string; label: string; className:
     label: 'review',
     className: 'text-pink-500 dark:text-pink-400 font-bold',
   },
+  approved_pending_finalize: {
+    icon: '◉',
+    label: 'approved_pending_finalize',
+    className: 'text-emerald-500 dark:text-emerald-400 font-bold',
+  },
   completed: {
     icon: '✓',
     label: 'completed',

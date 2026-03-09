@@ -242,6 +242,19 @@ func TestConfig(t *testing.T) {
 	}
 }
 
+func TestResolveWhipBaseDir_UsesEnvOverride(t *testing.T) {
+	override := filepath.Join(t.TempDir(), "custom-whip-home")
+	t.Setenv("WHIP_HOME", override)
+
+	got, err := ResolveWhipBaseDir()
+	if err != nil {
+		t.Fatalf("ResolveWhipBaseDir: %v", err)
+	}
+	if got != override {
+		t.Fatalf("ResolveWhipBaseDir = %q, want %q", got, override)
+	}
+}
+
 func TestTaskStatusTransition(t *testing.T) {
 	task := NewTask("Test", "desc", "/tmp")
 
@@ -262,6 +275,14 @@ func TestTaskStatusTransition(t *testing.T) {
 	}
 
 	task.Status = StatusInProgress
+	// in_progress → assigned: fail
+	if err := task.ValidateTransition(StatusAssigned); err == nil {
+		t.Error("in_progress→assigned should fail")
+	}
+	// in_progress → review: OK
+	if err := task.ValidateTransition(StatusReview); err != nil {
+		t.Errorf("in_progress→review: %v", err)
+	}
 	// in_progress → completed: OK
 	if err := task.ValidateTransition(StatusCompleted); err != nil {
 		t.Errorf("in_progress→completed: %v", err)
@@ -269,6 +290,19 @@ func TestTaskStatusTransition(t *testing.T) {
 	// in_progress → failed: OK
 	if err := task.ValidateTransition(StatusFailed); err != nil {
 		t.Errorf("in_progress→failed: %v", err)
+	}
+
+	task.Status = StatusReview
+	if err := task.ValidateTransition(StatusApprovedPendingFinalize); err != nil {
+		t.Errorf("review→approved_pending_finalize: %v", err)
+	}
+	if err := task.ValidateTransition(StatusCompleted); err == nil {
+		t.Error("review→completed should fail")
+	}
+
+	task.Status = StatusApprovedPendingFinalize
+	if err := task.ValidateTransition(StatusCompleted); err != nil {
+		t.Errorf("approved_pending_finalize→completed: %v", err)
 	}
 
 	task.Status = StatusCompleted
@@ -333,6 +367,9 @@ func TestRetryFlow(t *testing.T) {
 	}
 	if retried.CompletedAt != nil {
 		t.Error("CompletedAt should be nil")
+	}
+	if retried.HeartbeatAt != nil {
+		t.Error("HeartbeatAt should be nil")
 	}
 
 	// Backend preserved across retry

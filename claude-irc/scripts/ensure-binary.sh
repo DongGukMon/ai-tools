@@ -14,6 +14,11 @@ BUILD_TARGET="./cmd/claude-irc"
 # Stop running claude-irc daemons before replacing the binary.
 # Daemons will be restarted naturally by the next `claude-irc join`.
 pre_upgrade_hook() {
+    if [ "${CLAUDE_IRC_RESTART_DAEMONS_ON_UPGRADE:-0}" != "1" ]; then
+        echo "Skipping automatic claude-irc daemon restart during auto-upgrade. Set CLAUDE_IRC_RESTART_DAEMONS_ON_UPGRADE=1 to force cleanup." >&2
+        return 0
+    fi
+
     local daemon_pids
     daemon_pids=$(pgrep -f 'claude-irc __daemon' 2>/dev/null || true)
     if [ -n "$daemon_pids" ]; then

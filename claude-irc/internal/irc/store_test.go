@@ -94,6 +94,19 @@ func TestDetectSession(t *testing.T) {
 	}
 }
 
+func TestResolveStoreBaseDir_UsesEnvOverride(t *testing.T) {
+	override := filepath.Join(t.TempDir(), "custom-claude-irc-home")
+	t.Setenv("CLAUDE_IRC_HOME", override)
+
+	got, err := ResolveStoreBaseDir()
+	if err != nil {
+		t.Fatalf("ResolveStoreBaseDir: %v", err)
+	}
+	if got != override {
+		t.Fatalf("ResolveStoreBaseDir = %q, want %q", got, override)
+	}
+}
+
 func TestDetectSession_LegacyFormat(t *testing.T) {
 	tmpHome := t.TempDir()
 	t.Setenv("HOME", tmpHome)
@@ -175,16 +188,16 @@ func TestDetectSession_MultiPeerSameSession(t *testing.T) {
 
 func TestParseSessionMarker(t *testing.T) {
 	tests := []struct {
-		input          string
-		expectedName   string
+		input           string
+		expectedName    string
 		expectedSessPID int
 	}{
 		{"peer-a\n12345", "peer-a", 12345},
 		{"peer-b\n99999", "peer-b", 99999},
-		{"legacy-peer", "legacy-peer", 0},           // legacy format
-		{"peer-c\n", "peer-c", 0},                   // newline but no PID
-		{"peer-d\ninvalid", "peer-d", 0},             // non-numeric PID
-		{" peer-e \n 42 ", "peer-e", 42},             // whitespace tolerance
+		{"legacy-peer", "legacy-peer", 0}, // legacy format
+		{"peer-c\n", "peer-c", 0},         // newline but no PID
+		{"peer-d\ninvalid", "peer-d", 0},  // non-numeric PID
+		{" peer-e \n 42 ", "peer-e", 42},  // whitespace tolerance
 	}
 	for _, tt := range tests {
 		name, sessionPID := parseSessionMarker([]byte(tt.input))
@@ -202,4 +215,3 @@ func containsPath(full, suffix string) bool {
 		len(full) > len(suffix) &&
 		full[len(full)-len(suffix):] == suffix
 }
-

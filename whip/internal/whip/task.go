@@ -10,17 +10,18 @@ import (
 type TaskStatus string
 
 const (
-	StatusCreated    TaskStatus = "created"
-	StatusAssigned   TaskStatus = "assigned"
-	StatusInProgress TaskStatus = "in_progress"
-	StatusReview     TaskStatus = "review"
-	StatusCompleted  TaskStatus = "completed"
-	StatusFailed     TaskStatus = "failed"
+	StatusCreated                 TaskStatus = "created"
+	StatusAssigned                TaskStatus = "assigned"
+	StatusInProgress              TaskStatus = "in_progress"
+	StatusReview                  TaskStatus = "review"
+	StatusApprovedPendingFinalize TaskStatus = "approved_pending_finalize"
+	StatusCompleted               TaskStatus = "completed"
+	StatusFailed                  TaskStatus = "failed"
 )
 
 func (s TaskStatus) IsValid() bool {
 	switch s {
-	case StatusCreated, StatusAssigned, StatusInProgress, StatusReview, StatusCompleted, StatusFailed:
+	case StatusCreated, StatusAssigned, StatusInProgress, StatusReview, StatusApprovedPendingFinalize, StatusCompleted, StatusFailed:
 		return true
 	}
 	return false
@@ -31,7 +32,7 @@ func (s TaskStatus) IsTerminal() bool {
 }
 
 func (s TaskStatus) IsActive() bool {
-	return s == StatusAssigned || s == StatusInProgress
+	return s == StatusAssigned || s == StatusInProgress || s == StatusApprovedPendingFinalize
 }
 
 type Note struct {
@@ -40,27 +41,39 @@ type Note struct {
 	Content   string    `json:"content"`
 }
 
+type TaskEvent struct {
+	Timestamp  time.Time `json:"timestamp"`
+	Actor      string    `json:"actor"`
+	Command    string    `json:"command"`
+	Action     string    `json:"action"`
+	FromStatus string    `json:"from_status,omitempty"`
+	ToStatus   string    `json:"to_status,omitempty"`
+	Detail     string    `json:"detail,omitempty"`
+}
+
 type Task struct {
-	ID            string     `json:"id"`
-	Title         string     `json:"title"`
-	Description   string     `json:"description"`
-	CWD           string     `json:"cwd"`
-	Status        TaskStatus `json:"status"`
-	Backend       string     `json:"backend,omitempty"`
-	Runner        string     `json:"runner,omitempty"`
-	IRCName       string     `json:"irc_name"`
-	MasterIRCName string     `json:"master_irc_name"`
-	SessionID     string     `json:"session_id,omitempty"`
-	ShellPID      int        `json:"shell_pid"`
-	Note          string     `json:"note"`
-	Notes         []Note     `json:"notes,omitempty"`
-	Difficulty    string     `json:"difficulty,omitempty"`
-	Review        bool       `json:"review,omitempty"`
-	DependsOn     []string   `json:"depends_on"`
-	CreatedAt     time.Time  `json:"created_at"`
-	UpdatedAt     time.Time  `json:"updated_at"`
-	AssignedAt    *time.Time `json:"assigned_at"`
-	CompletedAt   *time.Time `json:"completed_at"`
+	ID            string      `json:"id"`
+	Title         string      `json:"title"`
+	Description   string      `json:"description"`
+	CWD           string      `json:"cwd"`
+	Status        TaskStatus  `json:"status"`
+	Backend       string      `json:"backend,omitempty"`
+	Runner        string      `json:"runner,omitempty"`
+	IRCName       string      `json:"irc_name"`
+	MasterIRCName string      `json:"master_irc_name"`
+	SessionID     string      `json:"session_id,omitempty"`
+	ShellPID      int         `json:"shell_pid"`
+	Note          string      `json:"note"`
+	Notes         []Note      `json:"notes,omitempty"`
+	Difficulty    string      `json:"difficulty,omitempty"`
+	Review        bool        `json:"review,omitempty"`
+	DependsOn     []string    `json:"depends_on"`
+	CreatedAt     time.Time   `json:"created_at"`
+	UpdatedAt     time.Time   `json:"updated_at"`
+	AssignedAt    *time.Time  `json:"assigned_at"`
+	HeartbeatAt   *time.Time  `json:"heartbeat_at,omitempty"`
+	CompletedAt   *time.Time  `json:"completed_at"`
+	Events        []TaskEvent `json:"events,omitempty"`
 }
 
 func NewTask(title, description, cwd string) *Task {
@@ -84,11 +97,12 @@ func (t *Task) ValidateTransition(newStatus TaskStatus) error {
 	}
 
 	allowed := map[TaskStatus][]TaskStatus{
-		StatusCreated:    {StatusAssigned},
-		StatusAssigned:   {StatusInProgress, StatusCreated}, // back to created on unassign
-		StatusInProgress: {StatusCompleted, StatusReview, StatusFailed, StatusAssigned},
-		StatusReview:     {StatusCompleted, StatusFailed},
-		StatusFailed:     {StatusCreated}, // retry: failed → created
+		StatusCreated:                 {StatusAssigned},
+		StatusAssigned:                {StatusInProgress, StatusCreated}, // back to created on unassign
+		StatusInProgress:              {StatusCompleted, StatusReview, StatusFailed},
+		StatusReview:                  {StatusApprovedPendingFinalize, StatusFailed},
+		StatusApprovedPendingFinalize: {StatusCompleted, StatusFailed},
+		StatusFailed:                  {StatusCreated}, // retry: failed → created
 	}
 
 	targets, ok := allowed[t.Status]
@@ -114,6 +128,18 @@ func (t *Task) AddNote(content string) {
 	t.Note = content // keep legacy field in sync
 }
 
+func (t *Task) RecordEvent(actor, command, action string, fromStatus, toStatus TaskStatus, detail string) {
+	t.Events = append(t.Events, TaskEvent{
+		Timestamp:  time.Now(),
+		Actor:      actor,
+		Command:    command,
+		Action:     action,
+		FromStatus: string(fromStatus),
+		ToStatus:   string(toStatus),
+		Detail:     detail,
+	})
+}
+
 // Retry resets a failed task back to created so it can be re-assigned.
 func (t *Task) Retry() error {
 	if t.Status != StatusFailed {
@@ -125,6 +151,7 @@ func (t *Task) Retry() error {
 	t.MasterIRCName = ""
 	t.ShellPID = 0
 	t.AssignedAt = nil
+	t.HeartbeatAt = nil
 	t.CompletedAt = nil
 	t.UpdatedAt = time.Now()
 	return nil

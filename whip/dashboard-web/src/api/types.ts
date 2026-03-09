@@ -18,7 +18,7 @@ export interface Topic {
   timestamp: string
 }
 
-export type TaskStatus = 'created' | 'assigned' | 'in_progress' | 'review' | 'completed' | 'failed'
+export type TaskStatus = 'created' | 'assigned' | 'in_progress' | 'review' | 'approved_pending_finalize' | 'completed' | 'failed'
 
 export interface Task {
   id: string

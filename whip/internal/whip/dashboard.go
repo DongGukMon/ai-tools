@@ -31,13 +31,15 @@ var (
 	colorSubtle    = lipgloss.Color("#6B7280") // gray-500
 	colorDim       = lipgloss.Color("#374151") // gray-700
 
-	colorReview = lipgloss.Color("#F472B6") // pink
+	colorReview   = lipgloss.Color("#F472B6") // pink
+	colorApproved = lipgloss.Color("#22C55E")
 
 	// ── Status styles ──────────────────────────────────────────────
 	statusCreated    = lipgloss.NewStyle().Foreground(colorSubtle)
 	statusAssigned   = lipgloss.NewStyle().Foreground(colorWarning)
 	statusInProgress = lipgloss.NewStyle().Foreground(colorSecondary).Bold(true)
 	statusReview     = lipgloss.NewStyle().Foreground(colorReview).Bold(true)
+	statusApproved   = lipgloss.NewStyle().Foreground(colorApproved).Bold(true)
 	statusCompleted  = lipgloss.NewStyle().Foreground(colorSuccess)
 	statusFailed     = lipgloss.NewStyle().Foreground(colorDanger)
 
@@ -53,7 +55,6 @@ var (
 type tickMsg time.Time
 type cleanedMsg int
 type retryResultMsg struct{ err error }
-type approveResultMsg struct{ err error }
 
 type peerInfo struct {
 	Name   string
@@ -248,12 +249,6 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.loadTasks()
 
-	case approveResultMsg:
-		if msg.err != nil {
-			m.err = msg.err
-		}
-		return m, m.loadTasks()
-
 	case resumeResultMsg:
 		if msg.err != nil {
 			m.err = msg.err
@@ -405,10 +400,6 @@ func (m DashboardModel) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.tmuxContent = content
 			}
 		}
-	case "A":
-		if m.selectedTask != nil && m.selectedTask.Status == StatusReview {
-			return m, m.approveTask(m.selectedTask.ID)
-		}
 	case "r":
 		if m.selectedTask != nil && m.selectedTask.Status == StatusFailed {
 			return m, m.retryTask(m.selectedTask.ID)
@@ -425,72 +416,80 @@ func (m DashboardModel) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m DashboardModel) retryTask(taskID string) tea.Cmd {
 	return func() tea.Msg {
-		task, err := m.store.LoadTask(taskID)
-		if err != nil {
-			return retryResultMsg{err: err}
-		}
-
-		if err := task.Retry(); err != nil {
-			return retryResultMsg{err: err}
-		}
-
 		cfg, err := m.store.LoadConfig()
 		if err != nil {
 			return retryResultMsg{err: err}
 		}
-		if cfg.MasterIRCName == "" {
-			cfg.MasterIRCName = "whip-master"
+		masterIRC := cfg.MasterIRCName
+		if masterIRC == "" {
+			masterIRC = MasterSessionName
 		}
 
-		task.IRCName = "whip-" + task.ID
-		task.MasterIRCName = cfg.MasterIRCName
+		task, err := m.store.UpdateTask(taskID, func(task *Task) error {
+			from := task.Status
+			if err := task.Retry(); err != nil {
+				return err
+			}
 
-		// Normalize legacy empty-backend tasks on retry
-		if task.Backend == "" {
-			task.Backend = DefaultBackendName
+			task.IRCName = "whip-" + task.ID
+			task.MasterIRCName = masterIRC
+			if task.Backend == "" {
+				task.Backend = DefaultBackendName
+			}
+			task.Status = StatusAssigned
+			now := time.Now()
+			task.AssignedAt = &now
+			task.UpdatedAt = now
+			task.RecordEvent("dashboard", "retry", "assigned", from, task.Status, fmt.Sprintf("irc=%s master=%s", task.IRCName, task.MasterIRCName))
+			return nil
+		})
+		if err != nil {
+			return retryResultMsg{err: err}
 		}
 
 		prompt := GeneratePrompt(task)
 		if err := m.store.SavePrompt(task.ID, prompt); err != nil {
+			_, _ = m.store.UpdateTask(task.ID, func(task *Task) error {
+				from := task.Status
+				task.Status = StatusFailed
+				now := time.Now()
+				task.CompletedAt = &now
+				task.UpdatedAt = now
+				task.AddNote("retry aborted before spawn: failed to save prompt")
+				task.RecordEvent("dashboard", "retry", "spawn_failed", from, task.Status, "failed to save prompt")
+				return nil
+			})
 			return retryResultMsg{err: err}
 		}
 
 		runner, err := Spawn(task, m.store.PromptPath(task.ID))
 		if err != nil {
+			_, _ = m.store.UpdateTask(task.ID, func(task *Task) error {
+				from := task.Status
+				task.Status = StatusFailed
+				now := time.Now()
+				task.CompletedAt = &now
+				task.UpdatedAt = now
+				task.AddNote(fmt.Sprintf("retry spawn failed: %v", err))
+				task.RecordEvent("dashboard", "retry", "spawn_failed", from, task.Status, err.Error())
+				return nil
+			})
 			return retryResultMsg{err: fmt.Errorf("failed to spawn session: %w", err)}
 		}
-		task.Runner = runner
 
-		task.Status = StatusAssigned
-		now := time.Now()
-		task.AssignedAt = &now
-		task.UpdatedAt = now
-		if err := m.store.SaveTask(task); err != nil {
+		if _, err := m.store.UpdateTask(task.ID, func(current *Task) error {
+			current.Runner = runner
+			if task.SessionID != "" {
+				current.SessionID = task.SessionID
+			}
+			current.UpdatedAt = time.Now()
+			current.RecordEvent("dashboard", "retry", "spawned", current.Status, current.Status, fmt.Sprintf("runner=%s session_id=%s", runner, current.SessionID))
+			return nil
+		}); err != nil {
 			return retryResultMsg{err: err}
 		}
 
 		return retryResultMsg{}
-	}
-}
-
-func (m DashboardModel) approveTask(taskID string) tea.Cmd {
-	return func() tea.Msg {
-		task, err := m.store.LoadTask(taskID)
-		if err != nil {
-			return approveResultMsg{err: err}
-		}
-
-		if task.Status != StatusReview {
-			return approveResultMsg{err: fmt.Errorf("task %s is %s, must be review to approve", taskID, task.Status)}
-		}
-
-		// Notify agent via IRC to commit and complete (don't transition status)
-		if task.IRCName != "" {
-			msg := fmt.Sprintf("Task %s approved. Please commit your changes and run `whip status %s completed --note \"...\"` to finalize.", taskID, taskID)
-			exec.Command("claude-irc", "msg", task.IRCName, msg).Run()
-		}
-
-		return approveResultMsg{}
 	}
 }
 
@@ -691,11 +690,11 @@ func (m DashboardModel) updateRemoteConfig(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 			Port:       port,
 			CWD:        m.cwd,
 		}
-		// Save to config for next time
-		storeCfg, _ := m.store.LoadConfig()
-		storeCfg.Tunnel = cfg.Tunnel
-		storeCfg.RemotePort = cfg.Port
-		m.store.SaveConfig(storeCfg)
+		_, _ = m.store.UpdateConfig(func(storeCfg *Config) error {
+			storeCfg.Tunnel = cfg.Tunnel
+			storeCfg.RemotePort = cfg.Port
+			return nil
+		})
 		m.remoteStarting = true
 		m.remoteErr = nil
 		return m, m.startRemote(cfg)
@@ -727,8 +726,10 @@ func (m DashboardModel) startRemote(cfg RemoteConfig) tea.Cmd {
 
 		// Save token from connect URL
 		if t := connectURLToken(result.ConnectURL); t != "" {
-			storeCfg.ServeToken = t
-			m.store.SaveConfig(storeCfg)
+			_, _ = m.store.UpdateConfig(func(storeCfg *Config) error {
+				storeCfg.ServeToken = t
+				return nil
+			})
 		}
 
 		return remoteStartedMsg{cmd: cmd, url: result.ConnectURL, shortURL: result.ShortURL}
@@ -781,9 +782,10 @@ func (m DashboardModel) updateRemoteStatus(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 		}
 	case "t":
 		// Reset token
-		storeCfg, _ := m.store.LoadConfig()
-		storeCfg.ServeToken = ""
-		m.store.SaveConfig(storeCfg)
+		_, _ = m.store.UpdateConfig(func(storeCfg *Config) error {
+			storeCfg.ServeToken = ""
+			return nil
+		})
 	case "T":
 		if IsMasterSessionAlive() {
 			m.pendingAttach = MasterSessionName
@@ -1485,6 +1487,9 @@ func (m DashboardModel) renderSummary() string {
 	if n := counts[StatusReview]; n > 0 {
 		parts = append(parts, statusReview.Render(fmt.Sprintf("◎ %d review", n)))
 	}
+	if n := counts[StatusApprovedPendingFinalize]; n > 0 {
+		parts = append(parts, statusApproved.Render(fmt.Sprintf("◉ %d approved_pending_finalize", n)))
+	}
 	if n := counts[StatusCompleted]; n > 0 {
 		parts = append(parts, statusCompleted.Render(fmt.Sprintf("✓ %d completed", n)))
 	}
@@ -1601,9 +1606,6 @@ func (m DashboardModel) renderDetailFooter() string {
 	if m.selectedTask != nil && m.selectedTask.Runner == "tmux" && IsTmuxSession(m.selectedTask.ID) {
 		line += dot + footerKey("a", "attach tmux")
 	}
-	if m.selectedTask != nil && m.selectedTask.Status == StatusReview {
-		line += dot + footerKey("A", "approve")
-	}
 	if m.selectedTask != nil && m.selectedTask.Status == StatusFailed {
 		line += dot + footerKey("r", "retry")
 	}
@@ -1636,6 +1638,8 @@ func renderStatus(s TaskStatus) string {
 		return statusInProgress.Render("▶ in_progress")
 	case StatusReview:
 		return statusReview.Render("◎ review")
+	case StatusApprovedPendingFinalize:
+		return statusApproved.Render("◉ approved_pending_finalize")
 	case StatusCompleted:
 		return statusCompleted.Render("✓ completed")
 	case StatusFailed:
