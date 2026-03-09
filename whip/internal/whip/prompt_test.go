@@ -1,0 +1,80 @@
+package whip
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestCodexBackend_GeneratePrompt(t *testing.T) {
+	b := &CodexBackend{}
+	task := NewTask("Test Prompt", "Build the auth module", "/tmp")
+	task.IRCName = "whip-abc12"
+	task.MasterIRCName = "whip-master"
+
+	prompt := b.GeneratePrompt(task)
+
+	if !strings.Contains(prompt, "Run claude-irc inbox now") {
+		t.Fatalf("prompt should contain Codex inbox guidance")
+	}
+	if strings.Contains(prompt, "/loop 1m claude-irc inbox") {
+		t.Fatalf("prompt should not contain Claude-only loop command")
+	}
+	if !strings.Contains(prompt, "Home context (READ-ONLY): WHIP_HOME/home/ (default: ~/.whip/home/)") {
+		t.Fatalf("prompt should include whip home guidance")
+	}
+	if !strings.Contains(prompt, "memory.md: User preferences and operational guidelines") {
+		t.Fatalf("prompt should reference memory.md")
+	}
+	if !strings.Contains(prompt, "projects.md: Project registry with paths and tech stacks") {
+		t.Fatalf("prompt should reference projects.md")
+	}
+}
+
+func TestClaudeBackend_GeneratePrompt(t *testing.T) {
+	b := &ClaudeBackend{}
+	task := NewTask("Test Prompt", "Build the auth module", "/tmp")
+	task.IRCName = "whip-abc12"
+	task.MasterIRCName = "whip-master"
+
+	prompt := b.GeneratePrompt(task)
+
+	if !strings.Contains(prompt, "Test Prompt") {
+		t.Error("prompt should contain task title")
+	}
+	if !strings.Contains(prompt, "Build the auth module") {
+		t.Error("prompt should contain task description")
+	}
+	if !strings.Contains(prompt, "whip-abc12") {
+		t.Error("prompt should contain IRC name")
+	}
+	if !strings.Contains(prompt, "whip-master") {
+		t.Error("prompt should contain master IRC name")
+	}
+	if !strings.Contains(prompt, "Home context (READ-ONLY): WHIP_HOME/home/ (default: ~/.whip/home/)") {
+		t.Error("prompt should include whip home guidance")
+	}
+	if !strings.Contains(prompt, "memory.md: User preferences and operational guidelines") {
+		t.Error("prompt should reference memory.md")
+	}
+	if !strings.Contains(prompt, "projects.md: Project registry with paths and tech stacks") {
+		t.Error("prompt should reference projects.md")
+	}
+}
+
+func TestGeneratePrompt_DispatchesByBackend(t *testing.T) {
+	task := NewTask("Dispatch Test", "desc", "/tmp")
+	task.Backend = "claude"
+	task.IRCName = "whip-test"
+	task.MasterIRCName = "whip-master"
+
+	prompt := GeneratePrompt(task)
+	if !strings.Contains(prompt, "Dispatch Test") {
+		t.Error("dispatched prompt should contain task title")
+	}
+
+	task.Backend = ""
+	prompt = GeneratePrompt(task)
+	if !strings.Contains(prompt, "Dispatch Test") {
+		t.Error("default-dispatched prompt should contain task title")
+	}
+}
