@@ -23,6 +23,7 @@ import (
 // ServerConfig holds configuration for the HTTP API server.
 type ServerConfig struct {
 	Port       int
+	BindHost   string
 	Store      *Store
 	MasterTmux string
 	Token      string                // pre-set token; if empty, a new one is generated
@@ -31,12 +32,14 @@ type ServerConfig struct {
 
 // ServerInfo contains details about a running server instance.
 type ServerInfo struct {
-	Token     string `json:"token"`
-	ShortCode string `json:"short_code"`
-	LocalURL  string `json:"local_url"`
+	Token      string `json:"token"`
+	ShortCode  string `json:"short_code"`
+	LocalURL   string `json:"local_url"`
+	ListenAddr string `json:"listen_addr"`
 }
 
 const dashboardOperatorName = "user"
+const defaultServerBindHost = "127.0.0.1"
 
 // RunServer starts the HTTP API server and blocks until the context is cancelled.
 func RunServer(ctx context.Context, cfg ServerConfig) error {
@@ -52,7 +55,8 @@ func RunServer(ctx context.Context, cfg ServerConfig) error {
 
 	mux := buildHandler(cfg.Store, token, shortCode, cfg.MasterTmux)
 
-	listenAddr := fmt.Sprintf(":%d", cfg.Port)
+	bindHost := resolveBindHost(cfg.BindHost)
+	listenAddr := net.JoinHostPort(bindHost, strconv.Itoa(cfg.Port))
 	listener, err := net.Listen("tcp", listenAddr)
 	if err != nil {
 		// Try to kill the process occupying the port and retry once
@@ -67,9 +71,10 @@ func RunServer(ctx context.Context, cfg ServerConfig) error {
 
 	addr := listener.Addr().(*net.TCPAddr)
 	info := ServerInfo{
-		Token:     token,
-		ShortCode: shortCode,
-		LocalURL:  fmt.Sprintf("http://localhost:%d", addr.Port),
+		Token:      token,
+		ShortCode:  shortCode,
+		LocalURL:   fmt.Sprintf("http://localhost:%d", addr.Port),
+		ListenAddr: listener.Addr().String(),
 	}
 
 	if cfg.OnReady != nil {
@@ -87,6 +92,14 @@ func RunServer(ctx context.Context, cfg ServerConfig) error {
 		return err
 	}
 	return nil
+}
+
+func resolveBindHost(bindHost string) string {
+	bindHost = strings.TrimSpace(bindHost)
+	if bindHost == "" {
+		return defaultServerBindHost
+	}
+	return bindHost
 }
 
 func shortCodeFromToken(token string) string {
