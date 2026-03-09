@@ -14,12 +14,10 @@ func DefaultMasterIRCName(cfg *Config) string {
 	if cfg != nil && strings.TrimSpace(cfg.MasterIRCName) != "" {
 		return strings.TrimSpace(cfg.MasterIRCName)
 	}
-	return MasterSessionName
+	return DefaultGlobalMasterIRCName
 }
 
 func AssignCreatedTask(store *Store, id string, source LaunchSource, masterIRC string) (*Task, error) {
-	resolvedMasterIRC := defaultLaunchMasterIRC(masterIRC)
-
 	task, err := store.UpdateTask(id, func(task *Task) error {
 		if task.Status != StatusCreated {
 			return fmt.Errorf("task %s is %s, must be 'created' to assign", id, task.Status)
@@ -34,6 +32,7 @@ func AssignCreatedTask(store *Store, id string, source LaunchSource, masterIRC s
 		}
 
 		from := task.Status
+		resolvedMasterIRC := resolveTaskMasterIRC(task, masterIRC)
 		prepareAssignedTask(task, resolvedMasterIRC)
 		task.RecordEvent(source.Actor, source.Command, "assigned", from, task.Status, fmt.Sprintf("irc=%s master=%s", task.IRCName, task.MasterIRCName))
 		return nil
@@ -64,14 +63,13 @@ func AssignCreatedTask(store *Store, id string, source LaunchSource, masterIRC s
 }
 
 func RetryTaskRun(store *Store, id string, source LaunchSource, masterIRC string) (*Task, error) {
-	resolvedMasterIRC := defaultLaunchMasterIRC(masterIRC)
-
 	task, err := store.UpdateTask(id, func(task *Task) error {
 		from := task.Status
 		if err := task.Retry(); err != nil {
 			return err
 		}
 
+		resolvedMasterIRC := resolveTaskMasterIRC(task, masterIRC)
 		prepareAssignedTask(task, resolvedMasterIRC)
 		task.RecordEvent(source.Actor, source.Command, "assigned", from, task.Status, fmt.Sprintf("irc=%s master=%s", task.IRCName, task.MasterIRCName))
 		return nil
@@ -99,10 +97,10 @@ func RetryTaskRun(store *Store, id string, source LaunchSource, masterIRC string
 	})
 }
 
-func defaultLaunchMasterIRC(masterIRC string) string {
+func resolveTaskMasterIRC(task *Task, masterIRC string) string {
 	masterIRC = strings.TrimSpace(masterIRC)
 	if masterIRC == "" {
-		return MasterSessionName
+		return WorkspaceMasterIRCName(task.WorkspaceName())
 	}
 	return masterIRC
 }

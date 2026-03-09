@@ -90,18 +90,20 @@ type DashboardModel struct {
 	ircLastSendErr error
 	ircLastSendAt  time.Time
 
-	serveProcess   *exec.Cmd
-	serveURL       string
-	shortURL       string
-	webURL         string
-	masterAlive    bool
-	remoteStarting bool
-	remoteErr      error
+	serveProcess    *exec.Cmd
+	serveURL        string
+	shortURL        string
+	webURL          string
+	masterAlive     bool
+	remoteStarting  bool
+	remoteErr       error
+	remoteWorkspace string
 
-	tunnelInput  string
-	portInput    string
-	configCursor int
-	cwd          string
+	tunnelInput    string
+	portInput      string
+	workspaceInput string
+	configCursor   int
+	cwd            string
 }
 
 func (m DashboardModel) PendingAttach() string {
@@ -126,10 +128,11 @@ func (m DashboardModel) Cleanup() {
 func NewDashboardModel(store *Store, version string) DashboardModel {
 	cwd, _ := os.Getwd()
 	return DashboardModel{
-		store:   store,
-		version: version,
-		width:   120,
-		cwd:     cwd,
+		store:           store,
+		version:         version,
+		width:           120,
+		cwd:             cwd,
+		remoteWorkspace: GlobalWorkspaceName,
 	}
 }
 
@@ -233,7 +236,7 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else if msg.url != "" {
 			m.webURL = fmt.Sprintf("https://whip.bang9.dev#%s", msg.url)
 		}
-		m.masterAlive = IsMasterSessionAlive()
+		m.masterAlive = IsMasterSessionAlive(m.remoteWorkspace)
 		m.view = viewRemoteStatus
 		return m, m.loadTasks()
 
@@ -256,7 +259,7 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		if m.serveProcess != nil {
-			m.masterAlive = IsMasterSessionAlive()
+			m.masterAlive = IsMasterSessionAlive(m.remoteWorkspace)
 			if m.serveProcess.ProcessState != nil {
 				m.serveProcess = nil
 				m.serveURL = ""

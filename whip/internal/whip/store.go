@@ -36,6 +36,9 @@ func NewStore() (*Store, error) {
 	if err := os.MkdirAll(filepath.Join(baseDir, tasksDir), 0755); err != nil {
 		return nil, fmt.Errorf("cannot create whip directory: %w", err)
 	}
+	if err := os.MkdirAll(filepath.Join(baseDir, workspacesDir), 0755); err != nil {
+		return nil, fmt.Errorf("cannot create workspaces directory: %w", err)
+	}
 	return &Store{BaseDir: baseDir}, nil
 }
 

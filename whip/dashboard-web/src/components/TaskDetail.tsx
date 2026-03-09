@@ -94,6 +94,7 @@ export function TaskDetail({ task, onClose }: TaskDetailProps) {
               <span className="text-amber-500 dark:text-amber-400">{task.id}</span>
             </Field>
             <Field label="Title">{task.title}</Field>
+            <Field label="Workspace">{task.workspace || 'global'}</Field>
             <Field label="Status"><StatusBadge status={task.status} /></Field>
             <Field label="Backend"><BackendValue backend={task.backend} /></Field>
             <Field label="Difficulty">

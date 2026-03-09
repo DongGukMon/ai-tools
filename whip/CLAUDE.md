@@ -11,23 +11,33 @@ Use `whip` when one Claude session should act as a lead and dispatch work to oth
 
 For ad hoc execution, use the CLI directly. For guided planning and dispatch, prefer `/whip-plan` and `/whip-start`. To capture a completed run as a reusable case study, use `/whip-lesson-learn`.
 
+## Workspace Model
+
+- `global` is for single-task work.
+- `workspace` is for stacked work.
+- A named workspace should be planned as a stacked lane of related tasks, not as an arbitrary flat bag of concurrent tasks.
+- `~/.whip/home/` remains shared reference context. Task state is namespaced by workspace.
+- `claude-irc` remains a shared bus. Master identity is scoped by workspace:
+  - `global` → `whip-master`
+  - `<workspace>` → `whip-master-<workspace>`
+
 ## Typical Workflow
 
 ```bash
-# 1. Join IRC as the lead
+# Single-task work in global
 claude-irc join whip-master
-
-# 2. Create tasks
 whip create "Auth module" --difficulty medium --desc "Implement JWT auth"
-whip create "Deploy" --difficulty easy --desc "Deploy after auth"
+whip assign <auth-id>
+```
 
-# 3. Wire dependencies
+```bash
+# Stacked work in a named workspace
+claude-irc join whip-master-issue-sweep
+
+whip create "Auth module" --workspace issue-sweep --difficulty medium --desc "Implement JWT auth"
+whip create "Deploy" --workspace issue-sweep --difficulty easy --desc "Deploy after auth"
 whip dep <deploy-id> --after <auth-id>
-
-# 4. Assign root tasks
-whip assign <auth-id> --master-irc whip-master
-
-# 5. Monitor progress
+whip assign <auth-id>
 whip list
 whip dashboard
 claude-irc inbox
@@ -41,13 +51,17 @@ claude-irc inbox
 # Basic usage (requires tmux)
 whip remote
 
+# Workspace-specific remote master
+whip remote --workspace issue-sweep
+
 # With options
-whip remote --backend codex --difficulty medium --port 8585 --tunnel irc.bang9.dev
+whip remote --workspace issue-sweep --backend codex --difficulty medium --port 8585 --tunnel irc.bang9.dev
 ```
 
 **Flags:**
 - `--backend` — AI backend: `claude` (default) or `codex`
 - `--difficulty` — Model effort level: `easy`, `medium`, `hard` (default)
+- `--workspace` — named workspace for stacked work (default: `global`)
 - `--port` — Serve port (default 8585)
 - `--tunnel` — Cloudflare tunnel hostname for remote access
 
@@ -84,6 +98,7 @@ Run `whip --help` for the full command list. For guided usage, see `/whip-plan`,
 ## Notes
 
 - `assign` only works for tasks in `created` status whose dependencies are already complete.
+- `whip create --workspace <name>` stores tasks under a named workspace while keeping `global` on the legacy default path.
 - Dependent tasks auto-assign when prerequisites become `completed`.
 - `tmux` is the preferred runner because it allows dashboard capture and attach.
 - `whip remote` requires `tmux` to be installed (`brew install tmux` on macOS).

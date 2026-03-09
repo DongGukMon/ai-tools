@@ -12,14 +12,23 @@ You are the lead. Dispatch work to agent sessions via whip.
 - Treat the plan file as the source of truth for task titles, descriptions, difficulty, dependencies, and execution order.
 - If the plan file includes an `## Execution` section with `/whip-start <path>`, that is an instruction to use this skill with the same file path, not content to send to `whip`.
 
+## Workspace model
+
+- `global` is for single-task work.
+- `workspace` is for stacked work.
+- When executing grouped work, keep all related tasks in the same named workspace.
+- Use the workspace master identity:
+  - `global` → `whip-master`
+  - `<workspace>` → `whip-master-<workspace>`
+
 ## Step 0: Health check (always run first)
 
 Every invocation starts here. Check live state before doing anything:
 
 ```bash
 # 1. Ensure IRC is connected
-claude-irc join whip-master 2>/dev/null
-# If this fails: claude-irc quit 2>/dev/null && claude-irc join whip-master
+claude-irc join <workspace-master> 2>/dev/null
+# If this fails: claude-irc quit 2>/dev/null && claude-irc join <workspace-master>
 
 # 2. Live status
 whip list
@@ -31,7 +40,7 @@ Review the output before proceeding:
 - Are there unread messages? Read and respond first.
 - Are there completed agents with deliverables to review?
 - If `claude-irc inbox` truncates a message, read the full entry before acting.
-- Do not assume the user can see `whip-master` IRC traffic. Relay important agent messages back into the main chat yourself.
+- Do not assume the user can see master IRC traffic. Relay important agent messages back into the main chat yourself.
 
 In Claude Code, prefer near-real-time inbox monitoring with:
 
@@ -84,7 +93,7 @@ whip create "<title>" --backend <chosen-backend> --difficulty <level> --desc "##
 
 ## Context
 <any additional context the agent needs>"
-whip assign <task-id> --master-irc whip-master
+whip assign <task-id>
 ```
 
 Monitor the agent: review its initial plan when it arrives, respond to questions, and check progress via `whip list`. Do not run `claude-irc quit`; stay connected for future dispatches.
@@ -112,7 +121,7 @@ Parallelization guardrails:
 Create all tasks, set dependencies if needed, then assign independent tasks. Tasks with dependencies will auto-assign when their prerequisites complete.
 
 ```bash
-whip create "<agent role/title>" --backend <chosen-backend> --difficulty <level> --desc "## Objective
+whip create "<agent role/title>" --workspace <workspace-name> --backend <chosen-backend> --difficulty <level> --desc "## Objective
 <what needs to be done>
 
 ## Scope
@@ -126,7 +135,7 @@ whip create "<agent role/title>" --backend <chosen-backend> --difficulty <level>
 ## Context
 <any additional context the agent needs>"
 whip dep <task-id> --after <dependency-id>  # only if needed
-whip assign <task-id> --master-irc whip-master  # only assign tasks without unmet deps
+whip assign <task-id>  # only assign tasks without unmet deps
 ```
 
 ### Step 3: Coordinate
@@ -195,7 +204,6 @@ For tasks where you want to review changes before the agent commits, use `--revi
 3. Review: inspect the agent's changes
 4. Approve: `whip approve <id>` notifies the agent to commit and finish the task
    - Approval does not directly mark the task `completed`; the agent still needs to commit and run `whip status <id> completed --note "..."`
-   - In the dashboard, press `A` on a task in `review` status to approve it
 
 ### When to use review
 

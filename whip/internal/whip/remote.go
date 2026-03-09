@@ -1,6 +1,6 @@
 package whip
 
-const MasterSessionName = "whip-master"
+const MasterSessionName = DefaultGlobalMasterIRCName
 
 var spawnMasterTmuxSession = SpawnTmuxSession
 
@@ -11,6 +11,7 @@ type RemoteConfig struct {
 	Tunnel     string
 	Port       int
 	CWD        string
+	Workspace  string
 }
 
 // ServeResult holds the parsed output from claude-irc serve.

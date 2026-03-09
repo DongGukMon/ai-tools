@@ -82,16 +82,43 @@ func cloneConfig(cfg *Config) (*Config, error) {
 	return &cloned, nil
 }
 
+func (s *Store) workspaceDir(workspace string) string {
+	workspace = NormalizeWorkspaceName(workspace)
+	if workspace == GlobalWorkspaceName {
+		return s.BaseDir
+	}
+	return filepath.Join(s.BaseDir, workspacesDir, workspace)
+}
+
+func (s *Store) workspaceTasksDir(workspace string) string {
+	return filepath.Join(s.workspaceDir(workspace), tasksDir)
+}
+
+func (s *Store) taskDirInWorkspace(workspace, id string) string {
+	return filepath.Join(s.workspaceTasksDir(workspace), id)
+}
+
 func (s *Store) taskDir(id string) string {
-	return filepath.Join(s.BaseDir, tasksDir, id)
+	if workspace, ok := s.findTaskWorkspace(id); ok {
+		return s.taskDirInWorkspace(workspace, id)
+	}
+	return s.taskDirInWorkspace(GlobalWorkspaceName, id)
 }
 
 func (s *Store) taskLockPath(id string) string {
 	return filepath.Join(s.taskDir(id), taskLockFile)
 }
 
+func (s *Store) taskLockPathInWorkspace(workspace, id string) string {
+	return filepath.Join(s.taskDirInWorkspace(workspace, id), taskLockFile)
+}
+
 func (s *Store) withTaskLock(id string, fn func() error) error {
 	return withFileLock(s.taskLockPath(id), fn)
+}
+
+func (s *Store) withTaskLockInWorkspace(workspace, id string, fn func() error) error {
+	return withFileLock(s.taskLockPathInWorkspace(workspace, id), fn)
 }
 
 func (s *Store) withConfigLock(fn func() error) error {
@@ -104,4 +131,27 @@ func (s *Store) taskPath(id string) string {
 
 func (s *Store) promptPath(id string) string {
 	return filepath.Join(s.taskDir(id), promptFile)
+}
+
+func (s *Store) findTaskWorkspace(id string) (string, bool) {
+	globalTaskPath := filepath.Join(s.taskDirInWorkspace(GlobalWorkspaceName, id), taskFile)
+	if _, err := os.Stat(globalTaskPath); err == nil {
+		return GlobalWorkspaceName, true
+	}
+
+	entries, err := os.ReadDir(filepath.Join(s.BaseDir, workspacesDir))
+	if err != nil {
+		return "", false
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		workspace := NormalizeWorkspaceName(entry.Name())
+		taskPath := filepath.Join(s.taskDirInWorkspace(workspace, id), taskFile)
+		if _, err := os.Stat(taskPath); err == nil {
+			return workspace, true
+		}
+	}
+	return "", false
 }

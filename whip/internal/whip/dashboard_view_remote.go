@@ -27,6 +27,7 @@ func (m DashboardModel) renderRemoteStatusView(w int) string {
 			lipgloss.NewStyle().Foreground(colorDanger).Render("stopped")
 	}
 	b.WriteString("  " + labelStyle.Render("Status") + " " + statusDot + "\n")
+	b.WriteString("  " + labelStyle.Render("Workspace") + " " + valStyle.Render(m.remoteWorkspace) + "\n")
 
 	var masterDot string
 	if m.masterAlive {
@@ -37,6 +38,7 @@ func (m DashboardModel) renderRemoteStatusView(w int) string {
 			lipgloss.NewStyle().Foreground(colorSubtle).Render("dead")
 	}
 	b.WriteString("  " + labelStyle.Render("Master") + " " + masterDot + "\n")
+	b.WriteString("  " + labelStyle.Render("Master IRC") + " " + valStyle.Render(WorkspaceMasterIRCName(m.remoteWorkspace)) + "\n")
 
 	urlLabel := labelStyle.Render("URL")
 	displayURL := m.shortURL
@@ -71,7 +73,7 @@ func (m DashboardModel) renderRemoteStatusView(w int) string {
 		parts = append(parts, footerKey("c", "copy URL"))
 		parts = append(parts, footerKey("o", "open in browser"))
 	}
-	if IsMasterSessionAlive() {
+	if IsMasterSessionAlive(m.remoteWorkspace) {
 		parts = append(parts, footerKey("T", "attach master"))
 	}
 	parts = append(parts, footerKey("t", "reset token"))
@@ -125,6 +127,23 @@ func (m DashboardModel) renderRemoteConfigView(w int) string {
 		pVal += cursor
 	}
 	b.WriteString(pIndicator + pLabel.Render("Port") + " " + pVal + "\n")
+
+	wLabel := labelStyle
+	if m.configCursor == 2 {
+		wLabel = activeLabel
+	}
+	wIndicator := "  "
+	if m.configCursor == 2 {
+		wIndicator = lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render("▸ ")
+	}
+	wVal := inputStyle.Render(m.workspaceInput)
+	if m.configCursor == 2 {
+		wVal += cursor
+	}
+	if strings.TrimSpace(m.workspaceInput) == "" && m.configCursor != 2 {
+		wVal = lipgloss.NewStyle().Foreground(colorSubtle).Italic(true).Render(GlobalWorkspaceName)
+	}
+	b.WriteString(wIndicator + wLabel.Render("Workspace") + " " + wVal + "\n")
 
 	b.WriteString("\n")
 	b.WriteString(lipgloss.NewStyle().Foreground(colorSubtle).Render("  Backend: claude  ·  Difficulty: hard") + "\n")

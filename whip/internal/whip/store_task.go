@@ -10,13 +10,15 @@ import (
 )
 
 func (s *Store) SaveTask(task *Task) error {
-	return s.withTaskLock(task.ID, func() error {
+	task.Workspace = NormalizeWorkspaceName(task.Workspace)
+	return s.withTaskLockInWorkspace(task.Workspace, task.ID, func() error {
 		return s.saveTaskUnlocked(task)
 	})
 }
 
 func (s *Store) saveTaskUnlocked(task *Task) error {
-	dir := s.taskDir(task.ID)
+	task.Workspace = NormalizeWorkspaceName(task.Workspace)
+	dir := s.taskDirInWorkspace(task.Workspace, task.ID)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
 	}
@@ -24,7 +26,7 @@ func (s *Store) saveTaskUnlocked(task *Task) error {
 	if err != nil {
 		return err
 	}
-	return atomicWriteFile(s.taskPath(task.ID), data, 0644)
+	return atomicWriteFile(filepath.Join(dir, taskFile), data, 0644)
 }
 
 func (s *Store) LoadTask(id string) (*Task, error) {
@@ -43,6 +45,7 @@ func (s *Store) loadTaskUnlocked(id string) (*Task, error) {
 	if err := json.Unmarshal(data, &task); err != nil {
 		return nil, fmt.Errorf("corrupt task %s: %w", id, err)
 	}
+	task.Workspace = NormalizeWorkspaceName(task.Workspace)
 	return &task, nil
 }
 
@@ -66,25 +69,26 @@ func (s *Store) UpdateTask(id string, fn func(*Task) error) (*Task, error) {
 }
 
 func (s *Store) ListTasks() ([]*Task, error) {
-	dir := filepath.Join(s.BaseDir, tasksDir)
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, err
-	}
-
 	var tasks []*Task
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		task, err := s.LoadTask(e.Name())
+	for _, workspace := range s.listWorkspaceNames() {
+		dir := s.workspaceTasksDir(workspace)
+		entries, err := os.ReadDir(dir)
 		if err != nil {
-			continue
+			if os.IsNotExist(err) {
+				continue
+			}
+			return nil, err
 		}
-		tasks = append(tasks, task)
+		for _, e := range entries {
+			if !e.IsDir() {
+				continue
+			}
+			task, err := s.LoadTask(e.Name())
+			if err != nil {
+				continue
+			}
+			tasks = append(tasks, task)
+		}
 	}
 
 	sort.Slice(tasks, func(i, j int) bool {
@@ -109,23 +113,32 @@ func (s *Store) PromptPath(id string) string {
 
 // ResolveID finds a task by exact or prefix match.
 func (s *Store) ResolveID(idPrefix string) (string, error) {
-	dir := filepath.Join(s.BaseDir, tasksDir)
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return "", fmt.Errorf("no tasks found")
-	}
-
 	var matches []string
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
+	foundAny := false
+	for _, workspace := range s.listWorkspaceNames() {
+		dir := s.workspaceTasksDir(workspace)
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return "", err
 		}
-		if e.Name() == idPrefix {
-			return idPrefix, nil
+		foundAny = true
+		for _, e := range entries {
+			if !e.IsDir() {
+				continue
+			}
+			if e.Name() == idPrefix {
+				return idPrefix, nil
+			}
+			if strings.HasPrefix(e.Name(), idPrefix) {
+				matches = append(matches, e.Name())
+			}
 		}
-		if strings.HasPrefix(e.Name(), idPrefix) {
-			matches = append(matches, e.Name())
-		}
+	}
+	if !foundAny {
+		return "", fmt.Errorf("no tasks found")
 	}
 
 	switch len(matches) {
@@ -136,6 +149,21 @@ func (s *Store) ResolveID(idPrefix string) (string, error) {
 	default:
 		return "", fmt.Errorf("ambiguous id prefix %s: matches %s", idPrefix, strings.Join(matches, ", "))
 	}
+}
+
+func (s *Store) listWorkspaceNames() []string {
+	workspaces := []string{GlobalWorkspaceName}
+	entries, err := os.ReadDir(filepath.Join(s.BaseDir, workspacesDir))
+	if err != nil {
+		return workspaces
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		workspaces = append(workspaces, NormalizeWorkspaceName(entry.Name()))
+	}
+	return workspaces
 }
 
 // GetDependents returns tasks that depend on the given task ID.

@@ -136,7 +136,7 @@ func min(a, b int) int {
 }
 
 func tableContentWidth() int {
-	cols := []int{5, 24, 13, 7, 6, 8, 10, 12, 16, 8}
+	cols := []int{5, 12, 24, 13, 7, 6, 8, 10, 12, 16, 8}
 	total := 2
 	for i, c := range cols {
 		total += c

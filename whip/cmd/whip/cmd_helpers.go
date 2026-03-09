@@ -11,9 +11,12 @@ import (
 	"github.com/bang9/ai-tools/whip/internal/whip"
 )
 
-func resolveMasterIRCName(cfg *whip.Config, override string) string {
+func resolveMasterIRCName(cfg *whip.Config, workspace string, override string) string {
 	if strings.TrimSpace(override) != "" {
 		return strings.TrimSpace(override)
+	}
+	if whip.NormalizeWorkspaceName(workspace) != whip.GlobalWorkspaceName {
+		return whip.WorkspaceMasterIRCName(workspace)
 	}
 	return whip.DefaultMasterIRCName(cfg)
 }

@@ -20,6 +20,13 @@ Plan mode allows read-only exploration (Read, Glob, Grep, Explore agents, Bash f
 
 Read the user's request carefully. If it's vague, ask clarifying questions before proceeding. You need enough context to make architectural decisions.
 
+Before decomposing work, classify the session:
+- `global` is for single-task work
+- `workspace` is for stacked work
+
+If the user wants one self-contained task, keep it in `global`.
+If the user wants a grouped session, stacked PR lane, issue sweep, or anything likely to overlap in the same repo, pick a named workspace and plan the work as a stack.
+
 ## Step 3: Explore the codebase
 
 Use the Explore agent, Glob, Grep, Read, and Bash (for `whip list`, build checks, etc.) to understand:
@@ -40,6 +47,7 @@ Decompose the work into tasks following these principles:
 - **Interface-first**: Tasks that define interfaces/APIs come before tasks that consume them.
 - **Minimal dependencies**: Flatten the graph — prefer wide parallelism over deep chains.
 - **Target 2-3 rounds max**: More rounds = less parallelism benefit.
+- In a named workspace, default to a stacked lane. Only parallelize clearly disjoint foundation tasks.
 
 ### Dependency graph design
 - **Round 1**: Foundation tasks with no dependencies (scaffolds, core APIs, shared types)
@@ -95,6 +103,8 @@ Present a clear, structured plan to the user:
 
 ### Task Graph
 
+Workspace: `global` | `<workspace-name>`
+
 Round 1 (parallel):
 - [easy][claude] Task A: <title> — <1-line scope>
 - [medium][codex] Task B: <title> — <1-line scope>
@@ -146,6 +156,7 @@ The plan file takes the high-level graph from plan mode and fleshes it out into 
 ### Task 1: <title>
 - **Backend**: claude | codex
 - **Difficulty**: easy | medium | hard
+- **Workspace**: global | <workspace-name>
 - **Depends on**: (none) | Task 2, Task 3
 - **Scope**:
   - In: <files to create/modify>

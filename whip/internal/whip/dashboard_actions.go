@@ -57,7 +57,15 @@ func (m DashboardModel) retryTask(taskID string) tea.Cmd {
 		if err != nil {
 			return retryResultMsg{err: err}
 		}
-		if _, err := RetryTaskRun(m.store, taskID, LaunchSource{Actor: "dashboard", Command: "retry"}, DefaultMasterIRCName(cfg)); err != nil {
+		task, err := m.store.LoadTask(taskID)
+		if err != nil {
+			return retryResultMsg{err: err}
+		}
+		masterIRC := WorkspaceMasterIRCName(task.WorkspaceName())
+		if task.WorkspaceName() == GlobalWorkspaceName {
+			masterIRC = DefaultMasterIRCName(cfg)
+		}
+		if _, err := RetryTaskRun(m.store, taskID, LaunchSource{Actor: "dashboard", Command: "retry"}, masterIRC); err != nil {
 			return retryResultMsg{err: err}
 		}
 		return retryResultMsg{}
@@ -115,7 +123,7 @@ type remoteStoppedMsg struct{}
 
 func (m DashboardModel) startRemote(cfg RemoteConfig) tea.Cmd {
 	return func() tea.Msg {
-		if !IsMasterSessionAlive() {
+		if !IsMasterSessionAlive(cfg.Workspace) {
 			if err := SpawnMasterSession(cfg); err != nil {
 				return remoteStartedMsg{err: fmt.Errorf("spawn master: %w", err)}
 			}
@@ -153,7 +161,7 @@ func (m DashboardModel) stopRemote() tea.Cmd {
 				<-done
 			}
 		}
-		StopMasterSession()
+		StopMasterSession(m.remoteWorkspace)
 		return remoteStoppedMsg{}
 	}
 }

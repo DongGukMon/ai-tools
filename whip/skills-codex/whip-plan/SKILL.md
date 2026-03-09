@@ -19,6 +19,13 @@ Plan mode should be used for read-only exploration, architecture decisions, and 
 
 Read the user's request carefully. If it is vague, ask clarifying questions before proceeding. You need enough context to make architectural decisions.
 
+Before decomposing work, classify the session:
+- `global` is for single-task work
+- `workspace` is for stacked work
+
+If the user wants one self-contained task, keep it in `global`.
+If the user wants a grouped session, stacked PR lane, issue sweep, or anything likely to overlap in the same repo, pick a named workspace and plan the work as a stack.
+
 ## Step 3: Explore the codebase
 
 Use the available read and inspection tools to understand:
@@ -40,6 +47,7 @@ Decompose the work into tasks following these principles.
 - Interface-first: tasks that define interfaces or APIs come before tasks that consume them
 - Minimal dependencies: prefer wide parallelism over deep chains
 - Target 2-3 rounds max
+- In a named workspace, default to a stacked lane. Only parallelize clearly disjoint foundation tasks.
 
 ### Dependency graph design
 
@@ -95,6 +103,8 @@ Present a clear, structured plan to the user:
 ```text
 ## Plan: <project title>
 
+Workspace: `global` | `<workspace-name>`
+
 ### Task Graph
 
 Round 1 (parallel):
@@ -142,6 +152,7 @@ The plan file should flesh out the high-level graph into concrete, agent-ready t
 ### Task 1: <title>
 - **Backend**: claude | codex
 - **Difficulty**: easy | medium | hard
+- **Workspace**: global | <workspace-name>
 - **Depends on**: (none) | Task 2, Task 3
 - **Scope**:
   - In: <files to create/modify>

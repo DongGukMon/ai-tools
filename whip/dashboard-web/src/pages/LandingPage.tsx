@@ -7,7 +7,7 @@ import { TuiDashboard } from './landing/TuiDashboard'
 const features = [
   {
     label: 'Parallel Dispatch',
-    desc: 'Split work across multiple Claude sessions. Each runs in its own tmux pane with full context.',
+    desc: 'Use the default global lane for one-off tasks, or switch to a named workspace when the work should move as a stacked lane.',
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M16 3h5v5" /><path d="M8 3H3v5" /><path d="M21 3l-7 7" /><path d="M3 3l7 7" />
@@ -17,7 +17,7 @@ const features = [
   },
   {
     label: 'IRC Coordination',
-    desc: 'Agents communicate through claude-irc. Publish topics, share contracts, sync on blockers.',
+    desc: 'Agents communicate through claude-irc. The bus stays shared, while each workspace gets its own master identity.',
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
@@ -36,7 +36,7 @@ const features = [
   },
   {
     label: 'Web Dashboard',
-    desc: 'Monitor tasks, chat with agents, view progress — all from a single browser tab.',
+    desc: 'Monitor tasks, workspaces, chat, and master terminal state from a single browser tab.',
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" />
@@ -48,7 +48,7 @@ const features = [
 
 const quickStartSteps = [
   { step: '01', title: 'Install', code: 'curl -fsSL https://raw.githubusercontent.com/bang9/ai-tools/main/whip/install.sh | bash' },
-  { step: '02', title: 'Start remote', code: 'whip remote --tunnel your-domain.com' },
+  { step: '02', title: 'Start remote', code: 'whip remote --workspace issue-sweep --tunnel your-domain.com' },
   { step: '03', title: 'Connect', code: 'Open the generated dashboard URL' },
 ]
 
@@ -82,7 +82,7 @@ export function LandingPage() {
               Ship faster.
             </h1>
             <p className="text-base sm:text-lg text-gray-500 dark:text-gray-400 leading-relaxed max-w-lg mb-8">
-              Split complex tasks across parallel Claude sessions. Wire dependencies. Watch them converge.
+              Use global for quick single-task work, or open a named workspace when the job should advance as a stacked lane.
             </p>
             <div className="flex items-center gap-4">
               <Link

@@ -13,14 +13,18 @@ func (m DashboardModel) updateRemoteConfig(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 	case tea.KeyRunes:
 		if m.configCursor == 0 {
 			m.tunnelInput += string(msg.Runes)
-		} else {
+		} else if m.configCursor == 1 {
 			m.portInput += string(msg.Runes)
+		} else {
+			m.workspaceInput += string(msg.Runes)
 		}
 	case tea.KeySpace:
 		if m.configCursor == 0 {
 			m.tunnelInput += " "
-		} else {
+		} else if m.configCursor == 1 {
 			m.portInput += " "
+		} else {
+			m.workspaceInput += " "
 		}
 	case tea.KeyBackspace:
 		if m.configCursor == 0 {
@@ -28,16 +32,26 @@ func (m DashboardModel) updateRemoteConfig(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 			if len(runes) > 0 {
 				m.tunnelInput = string(runes[:len(runes)-1])
 			}
-		} else {
+		} else if m.configCursor == 1 {
 			runes := []rune(m.portInput)
 			if len(runes) > 0 {
 				m.portInput = string(runes[:len(runes)-1])
 			}
+		} else {
+			runes := []rune(m.workspaceInput)
+			if len(runes) > 0 {
+				m.workspaceInput = string(runes[:len(runes)-1])
+			}
 		}
 	case tea.KeyTab, tea.KeyUp, tea.KeyDown:
-		m.configCursor = (m.configCursor + 1) % 2
+		m.configCursor = (m.configCursor + 1) % 3
 	case tea.KeyEnter:
 		if m.remoteStarting {
+			return m, nil
+		}
+		workspace := NormalizeWorkspaceName(m.workspaceInput)
+		if err := ValidateWorkspaceName(workspace); err != nil {
+			m.remoteErr = err
 			return m, nil
 		}
 		port, _ := strconv.Atoi(strings.TrimSpace(m.portInput))
@@ -50,12 +64,14 @@ func (m DashboardModel) updateRemoteConfig(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 			Tunnel:     strings.TrimSpace(m.tunnelInput),
 			Port:       port,
 			CWD:        m.cwd,
+			Workspace:  workspace,
 		}
 		_, _ = m.store.UpdateConfig(func(storeCfg *Config) error {
 			storeCfg.Tunnel = cfg.Tunnel
 			storeCfg.RemotePort = cfg.Port
 			return nil
 		})
+		m.remoteWorkspace = workspace
 		m.remoteStarting = true
 		m.remoteErr = nil
 		return m, m.startRemote(cfg)
@@ -96,8 +112,8 @@ func (m DashboardModel) updateRemoteStatus(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 			return nil
 		})
 	case "T":
-		if IsMasterSessionAlive() {
-			m.pendingAttach = MasterSessionName
+		if IsMasterSessionAlive(m.remoteWorkspace) {
+			m.pendingAttach = WorkspaceMasterSessionName(m.remoteWorkspace)
 			return m, tea.Quit
 		}
 	case "esc", "left", "backspace":

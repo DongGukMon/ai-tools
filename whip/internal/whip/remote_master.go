@@ -17,6 +17,7 @@ func SpawnMasterSession(cfg RemoteConfig) error {
 		Difficulty: cfg.Difficulty,
 		CWD:        cfg.CWD,
 		Backend:    cfg.Backend,
+		Workspace:  NormalizeWorkspaceName(cfg.Workspace),
 	}
 
 	baseDir, err := ResolveWhipBaseDir()
@@ -36,20 +37,21 @@ func SpawnMasterSession(cfg RemoteConfig) error {
 	}
 
 	shellCmd := fmt.Sprintf(
-		`cd %s && %s ; exit`,
+		`cd %s && WHIP_MASTER_IRC=%s %s ; exit`,
 		shellEscape(cwd),
+		shellEscape(WorkspaceMasterIRCName(task.WorkspaceName())),
 		launchCmd,
 	)
 
-	return spawnMasterTmuxSession(MasterSessionName, shellCmd)
+	return spawnMasterTmuxSession(WorkspaceMasterSessionName(task.WorkspaceName()), shellCmd)
 }
 
 // IsMasterSessionAlive checks if the whip-master tmux session exists.
-func IsMasterSessionAlive() bool {
-	return IsTmuxSessionName(MasterSessionName)
+func IsMasterSessionAlive(workspace string) bool {
+	return IsTmuxSessionName(WorkspaceMasterSessionName(workspace))
 }
 
 // StopMasterSession kills the whip-master tmux session.
-func StopMasterSession() error {
-	return KillTmuxSessionName(MasterSessionName)
+func StopMasterSession(workspace string) error {
+	return KillTmuxSessionName(WorkspaceMasterSessionName(workspace))
 }

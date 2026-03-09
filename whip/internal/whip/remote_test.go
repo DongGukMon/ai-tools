@@ -140,3 +140,38 @@ func TestSpawnMasterSession_UsesWHIPHOMEOverride(t *testing.T) {
 		t.Fatalf("shell command should reference %q: %s", wantPromptPath, gotShellCmd)
 	}
 }
+
+func TestSpawnMasterSession_UsesWorkspaceSpecificMasterIdentity(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+
+	var gotSessionName string
+	var gotShellCmd string
+
+	origSpawn := spawnMasterTmuxSession
+	spawnMasterTmuxSession = func(sessionName string, shellCmd string) error {
+		gotSessionName = sessionName
+		gotShellCmd = shellCmd
+		return nil
+	}
+	defer func() {
+		spawnMasterTmuxSession = origSpawn
+	}()
+
+	cfg := RemoteConfig{
+		Backend:    "claude",
+		Difficulty: "medium",
+		CWD:        t.TempDir(),
+		Workspace:  "issue-sweep",
+	}
+	if err := SpawnMasterSession(cfg); err != nil {
+		t.Fatalf("SpawnMasterSession: %v", err)
+	}
+
+	if gotSessionName != WorkspaceMasterSessionName("issue-sweep") {
+		t.Fatalf("session name = %q, want %q", gotSessionName, WorkspaceMasterSessionName("issue-sweep"))
+	}
+	if !strings.Contains(gotShellCmd, "WHIP_MASTER_IRC="+shellEscape(WorkspaceMasterIRCName("issue-sweep"))) {
+		t.Fatalf("shell command should export workspace master IRC: %s", gotShellCmd)
+	}
+}

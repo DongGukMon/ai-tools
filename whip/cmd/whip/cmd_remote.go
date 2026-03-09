@@ -15,7 +15,7 @@ import (
 )
 
 func remoteCmd() *cobra.Command {
-	var backend, difficulty, tunnel string
+	var backend, difficulty, tunnel, workspace string
 	var port int
 
 	cmd := &cobra.Command{
@@ -43,6 +43,9 @@ func remoteCmd() *cobra.Command {
 			if !cmd.Flags().Changed("port") && cfg.RemotePort > 0 {
 				port = cfg.RemotePort
 			}
+			if err := whip.ValidateWorkspaceName(workspace); err != nil {
+				return err
+			}
 
 			cwd, err := os.Getwd()
 			if err != nil {
@@ -55,17 +58,19 @@ func remoteCmd() *cobra.Command {
 				Tunnel:     tunnel,
 				Port:       port,
 				CWD:        cwd,
+				Workspace:  whip.NormalizeWorkspaceName(workspace),
 			}
+			masterSession := whip.WorkspaceMasterSessionName(remoteCfg.Workspace)
 
-			if whip.IsMasterSessionAlive() {
-				fmt.Fprintln(os.Stderr, "Master session already running (whip-master)")
-				fmt.Fprintln(os.Stderr, "Attach with: tmux attach -t whip-master")
+			if whip.IsMasterSessionAlive(remoteCfg.Workspace) {
+				fmt.Fprintf(os.Stderr, "Master session already running (%s)\n", masterSession)
+				fmt.Fprintf(os.Stderr, "Attach with: tmux attach -t %s\n", masterSession)
 			} else {
 				fmt.Fprintln(os.Stderr, "Spawning master session...")
 				if err := whip.SpawnMasterSession(remoteCfg); err != nil {
 					return fmt.Errorf("failed to spawn master session: %w", err)
 				}
-				fmt.Fprintln(os.Stderr, "Master session started (whip-master)")
+				fmt.Fprintf(os.Stderr, "Master session started (%s)\n", masterSession)
 			}
 
 			ctx, cancel := context.WithCancel(context.Background())
@@ -91,7 +96,8 @@ func remoteCmd() *cobra.Command {
 			} else if connectURL != "" {
 				fmt.Fprintf(os.Stderr, "  URL: %s\n", connectURL)
 			}
-			fmt.Fprintf(os.Stderr, "  Master tmux:   tmux attach -t whip-master\n")
+			fmt.Fprintf(os.Stderr, "  Workspace:     %s\n", remoteCfg.Workspace)
+			fmt.Fprintf(os.Stderr, "  Master tmux:   tmux attach -t %s\n", masterSession)
 			fmt.Fprintln(os.Stderr, "")
 			fmt.Fprintln(os.Stderr, "  Shortcuts: [o] open in browser  [c] copy URL  [q] quit")
 
@@ -129,7 +135,7 @@ func remoteCmd() *cobra.Command {
 				_ = serveCmd.Wait()
 			}
 
-			fmt.Fprintln(os.Stderr, "Serve stopped. Master session persists — reattach with: tmux attach -t whip-master")
+			fmt.Fprintf(os.Stderr, "Serve stopped. Master session persists — reattach with: tmux attach -t %s\n", masterSession)
 			return nil
 		},
 	}
@@ -138,6 +144,7 @@ func remoteCmd() *cobra.Command {
 	cmd.Flags().StringVar(&difficulty, "difficulty", "hard", "Task difficulty (hard, medium, easy)")
 	cmd.Flags().StringVar(&tunnel, "tunnel", "", "Cloudflare tunnel hostname")
 	cmd.Flags().IntVar(&port, "port", 8585, "Serve port")
+	cmd.Flags().StringVar(&workspace, "workspace", "", "Workspace name (default: global)")
 	cmd.Flags().Bool("new-token", false, "Generate a new auth token (discard saved token)")
 
 	return cmd

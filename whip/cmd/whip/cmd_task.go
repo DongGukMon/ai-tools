@@ -12,7 +12,7 @@ import (
 )
 
 func createCmd() *cobra.Command {
-	var desc, file, cwd, difficulty, backend string
+	var desc, file, cwd, difficulty, backend, workspace string
 	var review bool
 
 	cmd := &cobra.Command{
@@ -33,6 +33,9 @@ func createCmd() *cobra.Command {
 					return err
 				}
 			}
+			if err := whip.ValidateWorkspaceName(workspace); err != nil {
+				return err
+			}
 
 			description, err := resolveDescription(desc, file)
 			if err != nil {
@@ -52,6 +55,7 @@ func createCmd() *cobra.Command {
 			}
 
 			task := whip.NewTask(title, description, cwd)
+			task.Workspace = whip.NormalizeWorkspaceName(workspace)
 			task.Difficulty = difficulty
 			task.Review = review
 			task.Backend = backend
@@ -69,6 +73,7 @@ func createCmd() *cobra.Command {
 	cmd.Flags().StringVar(&desc, "desc", "", "Task description")
 	cmd.Flags().StringVar(&file, "file", "", "Read description from file")
 	cmd.Flags().StringVar(&cwd, "cwd", "", "Working directory (default: current)")
+	cmd.Flags().StringVar(&workspace, "workspace", "", "Workspace name (default: global)")
 	cmd.Flags().StringVar(&difficulty, "difficulty", "", "Task difficulty (hard, medium, easy)")
 	cmd.Flags().Lookup("difficulty").Shorthand = "d"
 	cmd.Flags().BoolVar(&review, "review", false, "Require review before completion (medium/hard only)")
@@ -99,11 +104,12 @@ func listCmd() *cobra.Command {
 			}
 
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-			fmt.Fprintln(w, "ID\tTITLE\tSTATUS\tIRC\tPID\tUPDATED")
+			fmt.Fprintln(w, "ID\tWORKSPACE\tTITLE\tSTATUS\tIRC\tPID\tUPDATED")
 			for _, t := range tasks {
 				pid := formatShellPID(t)
-				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
+				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
 					t.ID,
+					t.WorkspaceName(),
 					truncate(t.Title, 30),
 					t.Status,
 					t.IRCName,
@@ -139,6 +145,7 @@ func showCmd() *cobra.Command {
 			}
 
 			fmt.Printf("ID:          %s\n", task.ID)
+			fmt.Printf("Workspace:   %s\n", task.WorkspaceName())
 			fmt.Printf("Title:       %s\n", task.Title)
 			fmt.Printf("Status:      %s\n", task.Status)
 			diff := task.Difficulty

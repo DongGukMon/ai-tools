@@ -1,6 +1,6 @@
 # whip
 
-Task orchestrator for Claude Code — spawn parallel agent sessions, track dependencies, and monitor everything from a TUI or web dashboard.
+Task orchestrator for Claude Code — run single-task work in `global`, run stacked work in a named `workspace`, and monitor everything from a TUI or web dashboard.
 
 ## Install
 
@@ -18,9 +18,12 @@ Or via Claude Code Plugin:
 ## Quick Start
 
 ```bash
+# Single-task work in global
 whip create "Auth module" --desc "Implement JWT authentication"
-whip create "API endpoints" --desc "Build REST API for users"
-whip assign <auth-id> --master-irc whip-master
+whip assign <auth-id>
+
+# Stacked work in a named workspace
+whip create "API endpoints" --workspace issue-sweep --desc "Build REST API for users"
 whip dashboard
 ```
 
@@ -28,7 +31,7 @@ whip dashboard
 
 | Command | Description |
 |---------|-------------|
-| `create <title> [--desc/--file/stdin]` | Create a new task |
+| `create <title> [--desc/--file/stdin] [--workspace <name>]` | Create a new task in `global` or a named workspace |
 | `list` | List all tasks with status |
 | `show <id>` | Show task details |
 | `assign <id> [--master-irc <name>]` | Spawn agent session |
@@ -51,10 +54,11 @@ created → assigned → in_progress → completed
                                  → failed
 ```
 
-- Tasks are stored in `~/.whip/tasks/<id>/task.json`
+- `global` tasks stay on the legacy path: `~/.whip/tasks/<id>/task.json`
+- Named workspace tasks are stored under `~/.whip/workspaces/<name>/tasks/<id>/task.json`
 - `assign` spawns a tmux session (or Terminal.app tab) with Claude Code
 - Dependent tasks auto-assign when prerequisites complete
-- Sessions communicate via `claude-irc`
+- Sessions communicate via shared `claude-irc`, while master identity is scoped by workspace
 
 ## Dashboard
 
@@ -67,14 +71,16 @@ created → assigned → in_progress → completed
 ```bash
 # Requires tmux and cloudflared
 whip remote
-whip remote --tunnel your-tunnel.example.com
-whip remote --backend codex --difficulty medium --port 8585
+whip remote --workspace issue-sweep
+whip remote --workspace issue-sweep --tunnel your-tunnel.example.com
+whip remote --workspace issue-sweep --backend codex --difficulty medium --port 8585
 ```
 
 | Flag | Description |
 |------|-------------|
 | `--backend` | `claude` (default) or `codex` |
 | `--difficulty` | `easy`, `medium`, `hard` (default) |
+| `--workspace` | named workspace for stacked work (default: `global`) |
 | `--port` | Serve port (default 8585) |
 | `--tunnel` | Cloudflare tunnel hostname |
 
@@ -90,16 +96,16 @@ Settings are saved to `~/.whip/config.json` for reuse. With a tunnel, a **short 
 
 | Skill | Description |
 |-------|-------------|
-| `/whip-plan` | Decompose work into tasks with dependency graph |
-| `/whip-start` | Dispatch agents with parallel execution |
+| `/whip-plan` | Decompose work into a `global` task or a stacked workspace plan |
+| `/whip-start` | Dispatch agents in `global` or a named workspace |
 | `/whip-lesson-learn` | Write a real-world whip case-study under `.whip/lesson-learn/` |
 
 ## How It Works
 
-1. Master session creates tasks and assigns them
+1. Master session creates tasks in `global` or a named workspace
 2. Each task spawns a tmux session running Claude Code with a prompt file
-3. Sessions coordinate via `claude-irc`
-4. On completion, dependent tasks auto-assign and master is notified
+3. Sessions coordinate via shared `claude-irc`, using workspace-scoped master identities
+4. On completion, dependent tasks auto-assign and the workspace master is notified
 
 See [Workflow Guide (EN)](docs/workflow-en.md) | [워크플로우 가이드 (KO)](docs/workflow-ko.md)
 

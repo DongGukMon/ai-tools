@@ -25,6 +25,7 @@ export interface Task {
   title: string
   description: string
   cwd: string
+  workspace: string
   status: TaskStatus
   backend: string
   runner: string

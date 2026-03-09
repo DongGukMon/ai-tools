@@ -29,6 +29,7 @@ interface MasterTerminalProps {
 export function MasterTerminal({ client, fullscreen, onToggleFullscreen }: MasterTerminalProps) {
   const [alive, setAlive] = useState(false)
   const [available, setAvailable] = useState(true)
+  const [sessionName, setSessionName] = useState('whip-master')
   const termRef = useRef<HTMLDivElement>(null)
   const xtermRef = useRef<Terminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
@@ -202,8 +203,11 @@ export function MasterTerminal({ client, fullscreen, onToggleFullscreen }: Maste
     let active = true
     const poll = async () => {
       try {
-        const { alive: a } = await client.getMasterStatus()
-        if (active) setAlive(a)
+        const { alive: a, session } = await client.getMasterStatus()
+        if (active) {
+          setAlive(a)
+          setSessionName(session || 'whip-master')
+        }
       } catch {
         if (active) setAlive(false)
       }
@@ -251,7 +255,13 @@ export function MasterTerminal({ client, fullscreen, onToggleFullscreen }: Maste
             Run <code
               className="px-2 py-1 rounded font-mono text-xs mx-1"
               style={{ backgroundColor: T.headerBg, color: T.bold, border: `1px solid ${T.border}` }}
-            >whip remote</code> to start
+            >whip remote</code> for <code
+              className="px-2 py-1 rounded font-mono text-xs mx-1"
+              style={{ backgroundColor: T.headerBg, color: T.bold, border: `1px solid ${T.border}` }}
+            >global</code> or <code
+              className="px-2 py-1 rounded font-mono text-xs mx-1"
+              style={{ backgroundColor: T.headerBg, color: T.bold, border: `1px solid ${T.border}` }}
+            >whip remote --workspace issue-sweep</code> for stacked work
           </div>
         </div>
       </div>
@@ -279,7 +289,7 @@ export function MasterTerminal({ client, fullscreen, onToggleFullscreen }: Maste
           }}
         />
         <span className="font-mono text-xs sm:text-sm truncate" style={{ color: T.fg }}>
-          whip-master
+          {sessionName}
         </span>
         <span className="font-mono text-[10px] hidden sm:inline" style={{ color: T.dim }}>
           {alive ? 'online' : 'offline'}

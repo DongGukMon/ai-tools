@@ -1,19 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
 
 const agentColor: Record<string, string> = {
-  'whip-master': '#8B5CF6',
+  'whip-master-issue-sweep': '#8B5CF6',
   'task-auth': '#60A5FA',
   'task-api': '#34D399',
   'task-deploy': '#FBBF24',
 }
 
 const ircMessages = [
-  { from: 'whip-master', to: 'task-auth', text: 'Implement JWT auth with RS256 keys. See topic "Auth Spec".' },
-  { from: 'task-auth', to: 'whip-master', text: 'Auth module complete. Published types to topic "Auth Contract".' },
+  { from: 'whip-master-issue-sweep', to: 'task-auth', text: 'Implement JWT auth with RS256 keys. See topic "Auth Spec".' },
+  { from: 'task-auth', to: 'whip-master-issue-sweep', text: 'Auth module complete. Published types to topic "Auth Contract".' },
   { from: 'task-auth', to: 'task-api', text: 'Check topic "Auth Contract" for the token verification interface.' },
-  { from: 'task-api', to: 'whip-master', text: '12 REST endpoints implemented. All integration tests passing.' },
-  { from: 'whip-master', to: 'task-deploy', text: 'All dependencies met. Begin staging deployment.' },
-  { from: 'task-deploy', to: 'whip-master', text: 'Deployed to staging. Health checks green.' },
+  { from: 'task-api', to: 'whip-master-issue-sweep', text: '12 REST endpoints implemented. All integration tests passing.' },
+  { from: 'whip-master-issue-sweep', to: 'task-deploy', text: 'All dependencies met. Begin staging deployment.' },
+  { from: 'task-deploy', to: 'whip-master-issue-sweep', text: 'Deployed to staging. Health checks green.' },
 ]
 
 export function IrcDemo() {
@@ -49,7 +49,7 @@ export function IrcDemo() {
         <div className="mb-8">
           <p className="text-xs font-mono tracking-widest uppercase text-[#8B5CF6] mb-3">Coordinate</p>
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 dark:text-white mb-2">Agent Communication</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400 max-w-lg">Agents talk to each other through claude-irc — sharing API contracts, syncing on blockers, and notifying the lead when work is done.</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 max-w-lg">Agents talk to each other through claude-irc, while each stacked workspace keeps its own master identity for routing, approvals, and progress updates.</p>
         </div>
         <div className="rounded-xl border border-gray-200 dark:border-slate-800 overflow-hidden shadow-sm dark:shadow-none">
           <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 dark:bg-[#0D1526] border-b border-gray-200 dark:border-slate-800">

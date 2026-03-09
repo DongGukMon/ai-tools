@@ -56,6 +56,7 @@ const H = 'hidden md:table-cell'
 
 const columns = [
   { key: 'id', label: 'ID', width: 'w-[4.5rem]', hide: '' },
+  { key: 'workspace', label: 'WORKSPACE', width: 'w-[8rem]', hide: H },
   { key: 'title', label: 'TITLE', width: 'min-w-[10rem] flex-1', hide: '' },
   { key: 'status', label: 'STATUS', width: 'w-[8.5rem]', hide: '' },
   { key: 'backend', label: 'BACKEND', width: 'w-[5.5rem]', hide: H },
@@ -105,6 +106,11 @@ export function TaskTable({ tasks, selectedId, onSelect }: TaskTableProps) {
                 </td>
                 <td className="py-1.5 px-1.5 text-amber-500 dark:text-amber-400">
                   {task.id.slice(0, 7)}
+                </td>
+                <td className={`py-1.5 px-1.5 ${H}`}>
+                  <span className="text-gray-700 dark:text-gray-300">
+                    {truncate(task.workspace || 'global', 14)}
+                  </span>
                 </td>
                 <td className="py-1.5 px-1.5 text-gray-900 dark:text-gray-100 truncate max-w-[10rem]">
                   {truncate(task.title, 24)}

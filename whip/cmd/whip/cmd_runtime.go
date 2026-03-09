@@ -30,7 +30,11 @@ func retryCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			task, err := whip.RetryTaskRun(store, id, whip.LaunchSource{Actor: "cli", Command: "retry"}, resolveMasterIRCName(cfg, ""))
+			existing, err := store.LoadTask(id)
+			if err != nil {
+				return err
+			}
+			task, err := whip.RetryTaskRun(store, id, whip.LaunchSource{Actor: "cli", Command: "retry"}, resolveMasterIRCName(cfg, existing.WorkspaceName(), ""))
 			if err != nil {
 				return err
 			}

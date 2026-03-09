@@ -50,17 +50,20 @@ func AutoAssignDependents(store *Store, completedID string) ([]string, error) {
 			continue
 		}
 
-		dep, err = AssignCreatedTask(store, dep.ID, LaunchSource{Actor: "auto", Command: "auto-assign"}, DefaultMasterIRCName(cfg))
+		masterIRC := WorkspaceMasterIRCName(dep.WorkspaceName())
+		if dep.WorkspaceName() == GlobalWorkspaceName {
+			masterIRC = DefaultMasterIRCName(cfg)
+		}
+
+		dep, err = AssignCreatedTask(store, dep.ID, LaunchSource{Actor: "auto", Command: "auto-assign"}, masterIRC)
 		if err != nil {
 			continue
 		}
 
 		assigned = append(assigned, dep.ID)
 
-		if cfg.MasterIRCName != "" {
-			msg := fmt.Sprintf("Auto-assigned task %s (%s) — dependencies met", dep.ID, dep.Title)
-			exec.Command("claude-irc", "msg", cfg.MasterIRCName, msg).Run()
-		}
+		msg := fmt.Sprintf("Auto-assigned task %s (%s) — dependencies met", dep.ID, dep.Title)
+		exec.Command("claude-irc", "msg", dep.MasterIRCName, msg).Run()
 	}
 
 	return assigned, nil

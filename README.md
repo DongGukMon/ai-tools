@@ -82,7 +82,7 @@ curl -fsSL https://raw.githubusercontent.com/bang9/ai-tools/main/webform/install
 
 ### [whip](./whip)
 
-Task orchestrator for Claude Code. Spawn and manage multiple Claude Code sessions via tmux, with inter-session communication via claude-irc. Includes a TUI dashboard, web dashboard with real-time terminal view, and remote mode for headless operation.
+Task orchestrator for Claude Code. Run single-task work in `global`, run stacked work in a named `workspace`, and manage multiple Claude Code sessions via tmux with inter-session communication through `claude-irc`. Includes a TUI dashboard, web dashboard with real-time terminal view, and remote mode for headless operation.
 
 #### Installation
 

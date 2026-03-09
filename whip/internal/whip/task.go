@@ -23,6 +23,7 @@ type Task struct {
 	Title         string      `json:"title"`
 	Description   string      `json:"description"`
 	CWD           string      `json:"cwd"`
+	Workspace     string      `json:"workspace,omitempty"`
 	Status        TaskStatus  `json:"status"`
 	Backend       string      `json:"backend,omitempty"`
 	Runner        string      `json:"runner,omitempty"`
@@ -50,9 +51,14 @@ func NewTask(title, description, cwd string) *Task {
 		Title:       title,
 		Description: description,
 		CWD:         cwd,
+		Workspace:   GlobalWorkspaceName,
 		Status:      StatusCreated,
 		DependsOn:   []string{},
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
+}
+
+func (t *Task) WorkspaceName() string {
+	return NormalizeWorkspaceName(t.Workspace)
 }

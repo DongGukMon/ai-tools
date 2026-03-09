@@ -28,12 +28,20 @@ func assignCmd() *cobra.Command {
 				return err
 			}
 
+			task, err := store.LoadTask(id)
+			if err != nil {
+				return err
+			}
+
 			cfg, err := store.LoadConfig()
 			if err != nil {
 				return err
 			}
-			resolvedMasterIRC := resolveMasterIRCName(cfg, masterIRC)
+			resolvedMasterIRC := resolveMasterIRCName(cfg, task.WorkspaceName(), masterIRC)
 			if masterIRC != "" && saveMasterIRC {
+				if task.WorkspaceName() != whip.GlobalWorkspaceName {
+					return fmt.Errorf("--save-master-irc is only supported for the global workspace")
+				}
 				if _, err := store.UpdateConfig(func(cfg *whip.Config) error {
 					cfg.MasterIRCName = resolvedMasterIRC
 					return nil
@@ -42,7 +50,7 @@ func assignCmd() *cobra.Command {
 				}
 			}
 
-			task, err := whip.AssignCreatedTask(store, id, whip.LaunchSource{Actor: "cli", Command: "assign"}, resolvedMasterIRC)
+			task, err = whip.AssignCreatedTask(store, id, whip.LaunchSource{Actor: "cli", Command: "assign"}, resolvedMasterIRC)
 			if err != nil {
 				return err
 			}

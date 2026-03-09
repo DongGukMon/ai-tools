@@ -9,17 +9,15 @@ interface PeerListProps {
 
 export function sortPeers(peers: Peer[]): Peer[] {
   const filtered = peers.filter(p => p.name !== 'user')
-  let master: Peer | null = null
-  const rest: Peer[] = []
-  for (const p of filtered) {
-    if (p.name === 'whip-master') {
-      master = p
-    } else {
-      rest.push(p)
-    }
-  }
+  const masters = filtered.filter(p => p.name.startsWith('whip-master'))
+  const rest = filtered.filter(p => !p.name.startsWith('whip-master'))
+  masters.sort((a, b) => {
+    if (a.name === 'whip-master') return -1
+    if (b.name === 'whip-master') return 1
+    return a.name.localeCompare(b.name)
+  })
   rest.sort((a, b) => a.name.localeCompare(b.name))
-  return master ? [master, ...rest] : rest
+  return [...masters, ...rest]
 }
 
 export function PeerList({ peers, selectedPeer, unreadCounts, onSelectPeer }: PeerListProps) {

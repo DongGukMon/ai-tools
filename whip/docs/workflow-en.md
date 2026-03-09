@@ -20,25 +20,25 @@ sequenceDiagram
     participant Agent as Agent Session(s)
 
     User->>Master: Describe work to be done
-    Master->>IRC: join whip-master
+    Master->>IRC: join workspace master IRC
     Master->>Whip: create task(s) with structured descriptions
     Master->>Whip: assign task → spawns Terminal tab
     Whip->>Agent: New Terminal tab with prompt.txt
 
     Agent->>Whip: heartbeat (register PID)
     Agent->>IRC: join whip-<task-id>
-    Agent->>IRC: msg whip-master "Acknowledged. Starting..."
-    Agent->>IRC: msg whip-master "Plan: ..."
+    Agent->>IRC: msg workspace-master "Acknowledged. Starting..."
+    Agent->>IRC: msg workspace-master "Plan: ..."
 
     loop Work cycle
         Agent->>Agent: Work on task autonomously
-        Agent->>IRC: msg whip-master "Progress update..."
+        Agent->>IRC: msg workspace-master "Progress update..."
         IRC-->>Master: [claude-irc] whip-<id>: Progress update...
         Master->>IRC: msg whip-<id> "Feedback / answers"
-        IRC-->>Agent: [claude-irc] whip-master: Feedback
+        IRC-->>Agent: [claude-irc] workspace-master: Feedback
     end
 
-    Agent->>IRC: msg whip-master "Task complete. Summary..."
+    Agent->>IRC: msg workspace-master "Task complete. Summary..."
     Agent->>IRC: quit
     Agent->>Whip: status <id> completed --note "summary"
     Whip-->>Master: Dependent tasks auto-assigned
@@ -53,7 +53,7 @@ created --> assigned --> in_progress --> completed
                                     --> failed
 ```
 
-- **created**: Task stored in `~/.whip/tasks/<id>/task.json`
+- **created**: Task stored in `global` (`~/.whip/tasks/<id>/task.json`) or a named workspace (`~/.whip/workspaces/<name>/tasks/<id>/task.json`)
 - **assigned**: `whip assign` spawns a new Terminal tab with Claude Code and a prompt file
 - **in_progress**: Agent calls `whip heartbeat`, registering its PID
 - **completed**: Agent finishes work; dependent tasks auto-assign
@@ -67,6 +67,15 @@ created --> assigned --> in_progress --> completed
 - **Presence**: Real-time online/offline detection via Unix sockets (`claude-irc who`)
 - **Monitoring**: Periodic inbox checks via `/loop 1m claude-irc inbox`
 
+### Global vs Workspace
+
+- `global` is for single-task work.
+- `workspace` is for stacked work.
+- A named workspace should be treated as a stacked lane of related tasks.
+- `claude-irc` stays shared, but master identity is scoped by workspace:
+  - `global` → `whip-master`
+  - `<workspace>` → `whip-master-<workspace>`
+
 ---
 
 ## Step-by-Step Workflow
@@ -74,8 +83,11 @@ created --> assigned --> in_progress --> completed
 ### 1. Initialize the Master Session
 
 ```bash
-# Join IRC as master
+# Single-task work in global
 claude-irc join whip-master
+
+# Stacked work in a named workspace
+claude-irc join whip-master-issue-sweep
 
 # Enable periodic message monitoring
 /loop 1m claude-irc inbox
@@ -88,7 +100,7 @@ The master stays connected throughout the entire session. Never run `claude-irc 
 Each task needs a structured description with clear scope and acceptance criteria:
 
 ```bash
-whip create "Auth module" --desc "## Objective
+whip create "Auth module" --workspace issue-sweep --desc "## Objective
 Implement JWT authentication with refresh tokens.
 
 ## Scope
@@ -119,12 +131,13 @@ Tasks with unmet dependencies cannot be assigned. When a dependency completes, `
 ### 4. Assign Tasks
 
 ```bash
-whip assign <task-id> --master-irc whip-master
+whip assign <task-id>
 ```
 
 This:
 - Opens a new Terminal tab
 - Starts `claude --dangerously-skip-permissions` with a generated prompt file
+- Uses the task's workspace to derive the correct master identity
 - The prompt file contains: task details, IRC setup instructions, reporting protocol, and completion steps
 
 ### 5. Agent Communication
@@ -135,11 +148,11 @@ Once spawned, the agent follows a defined protocol:
 # Agent initialization (automatic from prompt.txt)
 whip heartbeat <task-id>                    # Register PID
 claude-irc join whip-<task-id>              # Join IRC
-claude-irc msg whip-master "Acknowledged."  # Announce start
+claude-irc msg <workspace-master> "Acknowledged."  # Announce start
 /loop 1m claude-irc inbox                   # Enable monitoring
 
 # Agent shares plan before diving in
-claude-irc msg whip-master "Plan: <2-3 sentence approach>"
+claude-irc msg <workspace-master> "Plan: <2-3 sentence approach>"
 ```
 
 The master monitors incoming messages via the `/loop` cron and responds as needed:
@@ -217,16 +230,16 @@ claude-irc quit   # Leave IRC (only when fully done)
 
 ---
 
-## Solo Flow vs Team Flow
+## Global Flow vs Workspace Flow
 
-### Solo Flow
+### Global Flow
 
 For a single, self-contained piece of work:
 
 ```bash
 # Create and assign one task
 whip create "Fix login bug" --desc "## Objective ..."
-whip assign <id> --master-irc whip-master
+whip assign <id>
 
 # Monitor, respond to questions, review when done
 ```
@@ -235,24 +248,24 @@ whip assign <id> --master-irc whip-master
 - Direct communication between master and agent
 - Simple lifecycle: create -> assign -> monitor -> complete
 
-### Team Flow
+### Workspace Flow
 
-For work that decomposes into 2+ independent parallel tasks:
+For stacked work inside one named workspace:
 
 ```bash
 # Step 1: Create all tasks
-whip create "Auth module" --desc "..."       # → id: a1b2c
-whip create "API endpoints" --desc "..."     # → id: d3e4f
-whip create "Frontend pages" --desc "..."    # → id: g5h6i
-whip create "Deploy" --desc "..."            # → id: j7k8l
+whip create "Auth module" --workspace issue-sweep --desc "..."       # → id: a1b2c
+whip create "API endpoints" --workspace issue-sweep --desc "..."     # → id: d3e4f
+whip create "Frontend pages" --workspace issue-sweep --desc "..."    # → id: g5h6i
+whip create "Deploy" --workspace issue-sweep --desc "..."            # → id: j7k8l
 
 # Step 2: Set dependencies
 whip dep j7k8l --after a1b2c --after d3e4f --after g5h6i
 
-# Step 3: Assign independent tasks (deploy waits)
-whip assign a1b2c --master-irc whip-master
-whip assign d3e4f --master-irc whip-master
-whip assign g5h6i --master-irc whip-master
+# Step 3: Assign root tasks inside the same workspace
+whip assign a1b2c
+whip assign d3e4f
+whip assign g5h6i
 
 # Step 4: Coordinate — respond to messages, relay info between agents
 # Step 5: Deploy auto-assigns when auth + API + frontend all complete

@@ -59,6 +59,7 @@ func (m DashboardModel) renderDetailView(w int) string {
 
 	fields := []struct{ label, value string }{
 		{"ID", idStyle.Render(t.ID)},
+		{"Workspace", valStyle.Render(t.WorkspaceName())},
 		{"Title", valStyle.Render(t.Title)},
 		{"Status", renderStatus(t.Status)},
 		{"Backend", renderBackend(t.Backend)},
@@ -147,6 +148,7 @@ func (m DashboardModel) renderTable() string {
 	colID := 5
 	colTitle := 24
 	colStatus := 13
+	colWorkspace := 12
 	colBackend := 7
 	colRunner := 6
 	colPID := 8
@@ -159,6 +161,7 @@ func (m DashboardModel) renderTable() string {
 	hdrStyle := lipgloss.NewStyle().Bold(true).Foreground(colorMuted)
 	hdrCells := []string{
 		padRight(hdrStyle.Render("ID"), colID),
+		padRight(hdrStyle.Render("WORKSPACE"), colWorkspace),
 		padRight(hdrStyle.Render("TITLE"), colTitle),
 		padRight(hdrStyle.Render("STATUS"), colStatus),
 		padRight(hdrStyle.Render("BACKEND"), colBackend),
@@ -205,7 +208,8 @@ func (m DashboardModel) renderTable() string {
 		note := padRight(noteStr, colNote)
 		updated := padRight(lipgloss.NewStyle().Foreground(colorSubtle).Render(timeAgo(t.UpdatedAt)), colUpdated)
 
-		row := indicator + strings.Join([]string{id, title, status, backend, runner, pid, irc, deps, note, updated}, sep)
+		workspace := padRight(truncate(t.WorkspaceName(), colWorkspace), colWorkspace)
+		row := indicator + strings.Join([]string{id, workspace, title, status, backend, runner, pid, irc, deps, note, updated}, sep)
 		if selected {
 			row = lipgloss.NewStyle().Background(lipgloss.Color("#1E1B4B")).Render(row)
 		}

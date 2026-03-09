@@ -2,6 +2,7 @@ package whip
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -179,5 +180,47 @@ func TestSavePrompt(t *testing.T) {
 	}
 	if string(data) != content {
 		t.Errorf("prompt = %q, want %q", string(data), content)
+	}
+}
+
+func TestSaveTask_UsesLegacyGlobalPathByDefault(t *testing.T) {
+	s := tempStore(t)
+	task := NewTask("Global Task", "desc", "/tmp")
+
+	if err := s.SaveTask(task); err != nil {
+		t.Fatalf("SaveTask: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(s.BaseDir, tasksDir, task.ID, taskFile)); err != nil {
+		t.Fatalf("expected legacy global path: %v", err)
+	}
+}
+
+func TestSaveTask_UsesWorkspaceNamespace(t *testing.T) {
+	s := tempStore(t)
+	task := NewTask("Workspace Task", "desc", "/tmp")
+	task.Workspace = "issue-sweep"
+
+	if err := s.SaveTask(task); err != nil {
+		t.Fatalf("SaveTask: %v", err)
+	}
+
+	taskPath := filepath.Join(s.BaseDir, workspacesDir, "issue-sweep", tasksDir, task.ID, taskFile)
+	if _, err := os.Stat(taskPath); err != nil {
+		t.Fatalf("expected workspace task path: %v", err)
+	}
+
+	promptContent := "workspace prompt"
+	if err := s.SavePrompt(task.ID, promptContent); err != nil {
+		t.Fatalf("SavePrompt: %v", err)
+	}
+
+	promptPath := filepath.Join(s.BaseDir, workspacesDir, "issue-sweep", tasksDir, task.ID, promptFile)
+	data, err := os.ReadFile(promptPath)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if string(data) != promptContent {
+		t.Fatalf("prompt = %q, want %q", string(data), promptContent)
 	}
 }

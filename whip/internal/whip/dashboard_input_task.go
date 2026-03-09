@@ -50,6 +50,10 @@ func (m DashboardModel) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			} else {
 				m.portInput = "8585"
 			}
+			if m.remoteWorkspace == "" {
+				m.remoteWorkspace = GlobalWorkspaceName
+			}
+			m.workspaceInput = m.remoteWorkspace
 			m.configCursor = 0
 			m.view = viewRemoteConfig
 		}
@@ -114,7 +118,7 @@ func (m DashboardModel) detailMaxScroll() int {
 		return 0
 	}
 
-	fieldCount := 9
+	fieldCount := 10
 	if t.IRCName != "" {
 		fieldCount++
 	}

@@ -15,7 +15,7 @@ import (
 // process handle, the parsed URLs, and any error.
 // When silent is true, stdout/stderr are suppressed and stdin is detached (for TUI embedding).
 func StartServe(ctx context.Context, cfg RemoteConfig, token string, silent bool) (*exec.Cmd, ServeResult, error) {
-	args := []string{"serve", "--port", strconv.Itoa(cfg.Port), "--master-tmux", MasterSessionName}
+	args := []string{"serve", "--port", strconv.Itoa(cfg.Port), "--master-tmux", WorkspaceMasterSessionName(cfg.Workspace)}
 	if cfg.Tunnel != "" {
 		args = append(args, "--tunnel", cfg.Tunnel)
 	}

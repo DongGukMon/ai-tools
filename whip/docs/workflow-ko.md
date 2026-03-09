@@ -20,25 +20,25 @@ sequenceDiagram
     participant Agent as 에이전트 세션
 
     User->>Master: 작업 내용 설명
-    Master->>IRC: join whip-master
+    Master->>IRC: join workspace master IRC
     Master->>Whip: 구조화된 설명으로 태스크 생성
     Master->>Whip: 태스크 배정 → 터미널 탭 스폰
     Whip->>Agent: 새 터미널 탭 + prompt.txt
 
     Agent->>Whip: heartbeat (PID 등록)
     Agent->>IRC: join whip-<task-id>
-    Agent->>IRC: msg whip-master "인수했습니다. 시작합니다..."
-    Agent->>IRC: msg whip-master "계획: ..."
+    Agent->>IRC: msg workspace-master "인수했습니다. 시작합니다..."
+    Agent->>IRC: msg workspace-master "계획: ..."
 
     loop 작업 사이클
         Agent->>Agent: 태스크 자율 수행
-        Agent->>IRC: msg whip-master "진행 상황 보고..."
+        Agent->>IRC: msg workspace-master "진행 상황 보고..."
         IRC-->>Master: [claude-irc] whip-<id>: 진행 상황 보고...
         Master->>IRC: msg whip-<id> "피드백 / 답변"
-        IRC-->>Agent: [claude-irc] whip-master: 피드백
+        IRC-->>Agent: [claude-irc] workspace-master: 피드백
     end
 
-    Agent->>IRC: msg whip-master "태스크 완료. 요약..."
+    Agent->>IRC: msg workspace-master "태스크 완료. 요약..."
     Agent->>IRC: quit
     Agent->>Whip: status <id> completed --note "요약"
     Whip-->>Master: 의존 태스크 자동 배정
@@ -53,7 +53,7 @@ created --> assigned --> in_progress --> completed
                                     --> failed
 ```
 
-- **created**: `~/.whip/tasks/<id>/task.json`에 태스크 저장
+- **created**: `global` (`~/.whip/tasks/<id>/task.json`) 또는 named workspace (`~/.whip/workspaces/<name>/tasks/<id>/task.json`)에 태스크 저장
 - **assigned**: `whip assign`이 새 터미널 탭에 Claude Code와 프롬프트 파일을 스폰
 - **in_progress**: 에이전트가 `whip heartbeat`를 호출하여 PID 등록
 - **completed**: 에이전트 작업 완료; 의존 태스크 자동 배정
@@ -67,6 +67,15 @@ created --> assigned --> in_progress --> completed
 - **프레즌스**: Unix 소켓 기반 온라인/오프라인 감지 (`claude-irc who`)
 - **모니터링**: `/loop 1m claude-irc inbox`로 주기적 메시지 확인
 
+### Global vs Workspace
+
+- `global`은 single-task work용입니다.
+- `workspace`는 stacked work용입니다.
+- named workspace는 관련 태스크들의 stacked lane으로 다뤄야 합니다.
+- `claude-irc`는 공유되지만, master identity는 workspace별로 나뉩니다.
+  - `global` → `whip-master`
+  - `<workspace>` → `whip-master-<workspace>`
+
 ---
 
 ## 단계별 워크플로우
@@ -74,8 +83,11 @@ created --> assigned --> in_progress --> completed
 ### 1. 마스터 세션 초기화
 
 ```bash
-# IRC에 마스터로 참여
+# single-task work는 global에서 시작
 claude-irc join whip-master
+
+# stacked work는 named workspace master로 시작
+claude-irc join whip-master-issue-sweep
 
 # 주기적 메시지 모니터링 활성화
 /loop 1m claude-irc inbox
@@ -88,7 +100,7 @@ claude-irc join whip-master
 각 태스크에는 명확한 스코프와 수락 기준이 포함된 구조화된 설명이 필요합니다:
 
 ```bash
-whip create "Auth 모듈" --desc "## Objective
+whip create "Auth 모듈" --workspace issue-sweep --desc "## Objective
 리프레시 토큰을 포함한 JWT 인증 구현.
 
 ## Scope
@@ -119,12 +131,13 @@ whip dep <deploy-id> --after <auth-id> --after <api-id>
 ### 4. 태스크 배정
 
 ```bash
-whip assign <task-id> --master-irc whip-master
+whip assign <task-id>
 ```
 
 이 명령은:
 - 새 터미널 탭을 열고
 - 생성된 프롬프트 파일과 함께 `claude --dangerously-skip-permissions`를 시작
+- 태스크의 workspace에 맞는 master identity를 사용
 - 프롬프트 파일에는 태스크 상세, IRC 설정 지침, 보고 프로토콜, 완료 단계가 포함
 
 ### 5. 에이전트 커뮤니케이션
@@ -135,11 +148,11 @@ whip assign <task-id> --master-irc whip-master
 # 에이전트 초기화 (prompt.txt에서 자동 실행)
 whip heartbeat <task-id>                    # PID 등록
 claude-irc join whip-<task-id>              # IRC 참여
-claude-irc msg whip-master "인수했습니다."    # 시작 알림
+claude-irc msg <workspace-master> "인수했습니다."    # 시작 알림
 /loop 1m claude-irc inbox                   # 모니터링 활성화
 
 # 에이전트가 작업 전 계획을 공유
-claude-irc msg whip-master "계획: <2-3문장 접근 방식>"
+claude-irc msg <workspace-master> "계획: <2-3문장 접근 방식>"
 ```
 
 마스터는 `/loop` 크론을 통해 수신 메시지를 모니터링하고 필요에 따라 응답합니다:
@@ -217,16 +230,16 @@ claude-irc quit   # IRC 퇴장 (모든 작업이 완전히 끝났을 때만)
 
 ---
 
-## Solo Flow vs Team Flow
+## Global Flow vs Workspace Flow
 
-### Solo Flow
+### Global Flow
 
 하나의 독립적인 작업을 처리할 때:
 
 ```bash
 # 태스크 하나 생성하고 배정
 whip create "로그인 버그 수정" --desc "## Objective ..."
-whip assign <id> --master-irc whip-master
+whip assign <id>
 
 # 모니터링, 질문에 답변, 완료 시 리뷰
 ```
@@ -235,24 +248,24 @@ whip assign <id> --master-irc whip-master
 - 마스터와 에이전트 간 직접 통신
 - 단순한 라이프사이클: 생성 -> 배정 -> 모니터링 -> 완료
 
-### Team Flow
+### Workspace Flow
 
-2개 이상의 독립적인 병렬 태스크로 분해 가능한 작업:
+하나의 named workspace 안에서 stacked하게 진행할 작업:
 
 ```bash
 # Step 1: 모든 태스크 생성
-whip create "Auth 모듈" --desc "..."           # → id: a1b2c
-whip create "API 엔드포인트" --desc "..."       # → id: d3e4f
-whip create "프론트엔드 페이지" --desc "..."     # → id: g5h6i
-whip create "배포" --desc "..."                 # → id: j7k8l
+whip create "Auth 모듈" --workspace issue-sweep --desc "..."           # → id: a1b2c
+whip create "API 엔드포인트" --workspace issue-sweep --desc "..."       # → id: d3e4f
+whip create "프론트엔드 페이지" --workspace issue-sweep --desc "..."     # → id: g5h6i
+whip create "배포" --workspace issue-sweep --desc "..."                 # → id: j7k8l
 
 # Step 2: 의존성 설정
 whip dep j7k8l --after a1b2c --after d3e4f --after g5h6i
 
-# Step 3: 독립 태스크 배정 (배포는 대기)
-whip assign a1b2c --master-irc whip-master
-whip assign d3e4f --master-irc whip-master
-whip assign g5h6i --master-irc whip-master
+# Step 3: 같은 workspace 안의 root task 배정
+whip assign a1b2c
+whip assign d3e4f
+whip assign g5h6i
 
 # Step 4: 조율 — 메시지에 응답, 에이전트 간 정보 전달
 # Step 5: Auth + API + 프론트엔드가 모두 완료되면 배포가 자동 배정
