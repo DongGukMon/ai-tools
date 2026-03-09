@@ -105,8 +105,8 @@ func joinCmd() *cobra.Command {
 			// Update daemon PID in registry
 			store.SetDaemonPID(name, daemonPID)
 
-			// Write session marker for hook detection
-			if err := store.WriteSessionMarker(name, sessionPID); err != nil {
+			// Write session marker for hook detection (keyed by daemonPID for uniqueness)
+			if err := store.WriteSessionMarker(name, daemonPID, sessionPID); err != nil {
 				store.KillDaemon(name)
 				store.Unregister(name)
 				return fmt.Errorf("failed to write session marker: %w", err)
@@ -591,7 +591,10 @@ func cleanSessionMarkers(store *irc.Store, name string) {
 		if err != nil {
 			continue
 		}
-		if strings.TrimSpace(string(data)) == name {
+		// Extract peer name from marker (first line; new format has "name\nsessionPID")
+		content := strings.TrimSpace(string(data))
+		peerName := strings.SplitN(content, "\n", 2)[0]
+		if strings.TrimSpace(peerName) == name {
 			os.Remove(path)
 		}
 	}

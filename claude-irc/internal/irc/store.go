@@ -53,31 +53,45 @@ func (s *Store) InboxDir(name string) string   { return filepath.Join(s.BaseDir,
 func (s *Store) TopicsDir(name string) string  { return filepath.Join(s.BaseDir, "topics", name) }
 
 // Session marker: allows check command to detect current session without running git.
+// Markers are keyed by daemonPID (unique per peer) and store "name\nsessionPID".
 
-func (s *Store) SessionMarkerPath(ppid int) string {
-	return filepath.Join(s.BaseDir, fmt.Sprintf(".session_%d", ppid))
+func (s *Store) SessionMarkerPath(daemonPID int) string {
+	return filepath.Join(s.BaseDir, fmt.Sprintf(".session_%d", daemonPID))
 }
 
-func (s *Store) WriteSessionMarker(name string, ppid int) error {
-	return os.WriteFile(s.SessionMarkerPath(ppid), []byte(name), 0644)
+func (s *Store) WriteSessionMarker(name string, daemonPID int, sessionPID int) error {
+	content := fmt.Sprintf("%s\n%d", name, sessionPID)
+	return os.WriteFile(s.SessionMarkerPath(daemonPID), []byte(content), 0644)
 }
 
-func (s *Store) ReadSessionMarker(ppid int) (string, error) {
-	data, err := os.ReadFile(s.SessionMarkerPath(ppid))
-	if err != nil {
-		return "", err
+func (s *Store) RemoveSessionMarker(daemonPID int) error {
+	return os.Remove(s.SessionMarkerPath(daemonPID))
+}
+
+// parseSessionMarker parses marker content returning (name, sessionPID).
+// Handles both new format "name\nsessionPID" and legacy format "name" (sessionPID=0).
+func parseSessionMarker(data []byte) (name string, sessionPID int) {
+	content := strings.TrimSpace(string(data))
+	parts := strings.SplitN(content, "\n", 2)
+	name = strings.TrimSpace(parts[0])
+	if len(parts) >= 2 {
+		sessionPID, _ = strconv.Atoi(strings.TrimSpace(parts[1]))
 	}
-	return strings.TrimSpace(string(data)), nil
+	return
 }
 
-func (s *Store) RemoveSessionMarker(ppid int) error {
-	return os.Remove(s.SessionMarkerPath(ppid))
+// sessionMarkerInfo holds parsed session marker data.
+type sessionMarkerInfo struct {
+	name       string
+	daemonPID  int
+	sessionPID int
 }
 
 // DetectSession finds a session marker matching the given PID or any ancestor PID.
-// This handles the case where claude-irc is invoked from a subshell (e.g., Bash tool)
-// whose PPID differs from the Claude Code session PID that ran "join".
-// Optimized: scans existing markers first to avoid unnecessary ps subprocess calls.
+// Markers are keyed by daemonPID and contain "name\nsessionPID". The function walks
+// up the process tree and matches ancestor PIDs against the sessionPID stored in each
+// marker. For legacy markers (no sessionPID), it falls back to matching the daemonPID
+// (filename PID) against ancestors.
 func DetectSession(pid int) (store *Store, name string, err error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -86,19 +100,19 @@ func DetectSession(pid int) (store *Store, name string, err error) {
 
 	dir := filepath.Join(home, baseDir)
 
-	// Collect all session marker PIDs for fast lookup (avoids ps calls when no markers exist)
+	// Collect all session markers
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, "", fmt.Errorf("no active session for pid %d", pid)
 	}
 
-	markerPIDs := make(map[int]string) // pid → peer name
+	var markers []sessionMarkerInfo
 	for _, e := range entries {
 		if !strings.HasPrefix(e.Name(), ".session_") {
 			continue
 		}
 		pidStr := strings.TrimPrefix(e.Name(), ".session_")
-		markerPID, err := strconv.Atoi(pidStr)
+		daemonPID, err := strconv.Atoi(pidStr)
 		if err != nil {
 			continue
 		}
@@ -106,21 +120,59 @@ func DetectSession(pid int) (store *Store, name string, err error) {
 		if err != nil {
 			continue
 		}
-		peerName := strings.TrimSpace(string(data))
+		peerName, sessionPID := parseSessionMarker(data)
 		if peerName != "" {
-			markerPIDs[markerPID] = peerName
+			markers = append(markers, sessionMarkerInfo{
+				name:       peerName,
+				daemonPID:  daemonPID,
+				sessionPID: sessionPID,
+			})
 		}
 	}
 
-	if len(markerPIDs) == 0 {
+	if len(markers) == 0 {
 		return nil, "", fmt.Errorf("no active session for pid %d", pid)
 	}
 
-	// Walk up the process tree checking against known marker PIDs
+	// Build lookup maps: sessionPID → markers, daemonPID → marker (legacy fallback)
+	sessionPIDMap := make(map[int][]sessionMarkerInfo)
+	daemonPIDMap := make(map[int]sessionMarkerInfo)
+	for _, m := range markers {
+		if m.sessionPID > 0 {
+			sessionPIDMap[m.sessionPID] = append(sessionPIDMap[m.sessionPID], m)
+		}
+		daemonPIDMap[m.daemonPID] = m
+	}
+
+	// Walk up the process tree checking against known session PIDs and daemon PIDs
 	current := pid
 	for i := 0; i < 10; i++ {
-		if peerName, ok := markerPIDs[current]; ok {
-			return &Store{BaseDir: dir, Name: peerName}, peerName, nil
+		// Check new format: match ancestor against sessionPIDs
+		if infos, ok := sessionPIDMap[current]; ok {
+			if len(infos) == 1 {
+				return &Store{BaseDir: dir, Name: infos[0].name}, infos[0].name, nil
+			}
+			// Multiple peers share the same sessionPID; prefer the one with an alive daemon
+			var alive []sessionMarkerInfo
+			for _, info := range infos {
+				if isProcessAlive(info.daemonPID) {
+					alive = append(alive, info)
+				}
+			}
+			if len(alive) == 1 {
+				return &Store{BaseDir: dir, Name: alive[0].name}, alive[0].name, nil
+			}
+			// Can't disambiguate — return first alive (or first overall)
+			pick := infos[0]
+			if len(alive) > 0 {
+				pick = alive[0]
+			}
+			return &Store{BaseDir: dir, Name: pick.name}, pick.name, nil
+		}
+
+		// Check legacy format: match ancestor against daemonPIDs (filename PIDs)
+		if m, ok := daemonPIDMap[current]; ok {
+			return &Store{BaseDir: dir, Name: m.name}, m.name, nil
 		}
 
 		parent := getParentPID(current)
