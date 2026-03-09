@@ -39,19 +39,11 @@ In Claude Code, prefer near-real-time inbox monitoring with:
 /loop 1m claude-irc inbox
 ```
 
-If slash commands are unavailable, fall back to:
-
-```bash
-claude-irc watch --interval 10
-```
-
-or manual polling:
+If slash commands are unavailable, poll manually:
 
 ```bash
 claude-irc inbox
 ```
-
-Even when using `/loop` or `watch`, still poll manually after state-changing commands such as `assign`, `retry`, `approve`, and `resume`.
 
 ## Decide Mode
 

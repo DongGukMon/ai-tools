@@ -64,7 +64,6 @@ created --> assigned --> in_progress --> completed
 `claude-irc`는 머신 내 세션 간 메시징을 제공합니다:
 
 - **메시지**: 피어 간 직접 텍스트 메시지 (`claude-irc msg`)
-- **토픽**: API 계약 등 영속적인 구조화된 컨텍스트 (`claude-irc topic`)
 - **프레즌스**: Unix 소켓 기반 온라인/오프라인 감지 (`claude-irc who`)
 - **모니터링**: `/loop 1m claude-irc inbox`로 주기적 메시지 확인
 
@@ -414,8 +413,5 @@ whip clean
 | `claude-irc inbox <n>` | 인덱스로 전체 메시지 읽기 |
 | `claude-irc inbox --all` | 읽은 메시지 포함 전체 보기 |
 | `claude-irc inbox clear` | 모든 메시지 삭제 |
-| `claude-irc check [--quiet]` | 새 메시지 확인 (hook 친화적) |
-| `claude-irc topic "title"` | 구조화된 컨텍스트 게시 (stdin) |
-| `claude-irc board <peer> [n]` | 피어의 토픽 읽기 |
 | `claude-irc broadcast "msg"` | 모든 피어에 메시지 전송 |
 | `claude-irc quit` | 퇴장 및 정리 |

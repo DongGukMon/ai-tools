@@ -64,7 +64,6 @@ created --> assigned --> in_progress --> completed
 `claude-irc` provides machine-wide inter-session messaging:
 
 - **Messages**: Direct peer-to-peer text messages (`claude-irc msg`)
-- **Topics**: Persistent structured context like API contracts (`claude-irc topic`)
 - **Presence**: Real-time online/offline detection via Unix sockets (`claude-irc who`)
 - **Monitoring**: Periodic inbox checks via `/loop 1m claude-irc inbox`
 
@@ -414,8 +413,5 @@ whip clean
 | `claude-irc inbox <n>` | Read full message by index |
 | `claude-irc inbox --all` | Show all messages |
 | `claude-irc inbox clear` | Delete all messages |
-| `claude-irc check [--quiet]` | Check for new messages (hook-friendly) |
-| `claude-irc topic "title"` | Publish structured context (stdin) |
-| `claude-irc board <peer> [n]` | Read peer's topics |
 | `claude-irc broadcast "msg"` | Message all peers |
 | `claude-irc quit` | Leave and clean up |
