@@ -96,6 +96,10 @@ Each tool should follow this structure:
 4. Include `category` field in `.claude-plugin/plugin.json`
 5. Update root `README.md` with the new tool
 
+## AGENTS.md Symlink Convention
+
+Every `CLAUDE.md` in this repo must have a corresponding `AGENTS.md` symlink (`ln -s CLAUDE.md AGENTS.md`) in the same directory. When creating or moving a `CLAUDE.md`, always create the symlink alongside it.
+
 ## Code Style
 
 - **Language**: Go for performance-critical tools
