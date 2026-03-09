@@ -166,6 +166,9 @@ func TestStaleCleanup(t *testing.T) {
 	// Register the peer
 	store.Register(name, 999999)
 
+	// Write a session marker in new format (name\nsessionPID)
+	store.WriteSessionMarker(name, 888888, 999999)
+
 	// tryCleanStalePeer should clean up
 	store.tryCleanStalePeer(name)
 
@@ -177,10 +180,66 @@ func TestStaleCleanup(t *testing.T) {
 		t.Error("socket file should be removed")
 	}
 
+	// Session marker should be removed
+	if _, err := os.Stat(store.SessionMarkerPath(888888)); !os.IsNotExist(err) {
+		t.Error("session marker should be removed")
+	}
+
 	// Peer should be unregistered
 	peers, _ := store.ListPeers()
 	if _, ok := peers[name]; ok {
 		t.Error("stale peer should be unregistered")
+	}
+}
+
+func TestStaleCleanup_NoPIDFile(t *testing.T) {
+	store := newTestStore(t)
+	name := "ghostpeer"
+
+	os.MkdirAll(store.SocketsDir(), 0755)
+
+	// No PID file, no socket — only registry + marker + inbox
+	store.Register(name, 999999)
+	store.WriteSessionMarker(name, 888888, 999999)
+	inboxDir := store.InboxDir(name)
+	os.MkdirAll(inboxDir, 0755)
+
+	store.tryCleanStalePeer(name)
+
+	// Everything should be cleaned
+	if _, err := os.Stat(store.SessionMarkerPath(888888)); !os.IsNotExist(err) {
+		t.Error("session marker should be removed")
+	}
+	if _, err := os.Stat(inboxDir); !os.IsNotExist(err) {
+		t.Error("inbox directory should be removed")
+	}
+	peers, _ := store.ListPeers()
+	if _, ok := peers[name]; ok {
+		t.Error("ghost peer should be unregistered")
+	}
+}
+
+func TestStaleCleanup_NoPIDFileButSocketExists(t *testing.T) {
+	store := newTestStore(t)
+	name := "sockpeer"
+
+	os.MkdirAll(store.SocketsDir(), 0755)
+
+	// No PID file but socket exists — safety guard, don't clean
+	socketPath := store.SocketPath(name)
+	os.WriteFile(socketPath, []byte{}, 0644)
+	store.Register(name, 999999)
+	store.WriteSessionMarker(name, 888888, 999999)
+
+	store.tryCleanStalePeer(name)
+
+	// Nothing should be cleaned (socket exists, could be active)
+	if _, err := os.Stat(store.SessionMarkerPath(888888)); os.IsNotExist(err) {
+		t.Error("session marker should NOT be removed when socket exists")
+	}
+	peers, _ := store.ListPeers()
+	if _, ok := peers[name]; !ok {
+		t.Error("peer should NOT be unregistered when socket exists")
 	}
 }
 

@@ -52,6 +52,7 @@ func main() {
 		msgCmd(),
 		inboxCmd(),
 		quitCmd(),
+		cleanCmd(),
 		daemonCmd(),
 		upgradeCmd(),
 		serveCmd(),
@@ -314,6 +315,35 @@ func quitCmd() *cobra.Command {
 			store.Unregister(name)
 
 			fmt.Fprintf(os.Stderr, "Left as '%s'. Goodbye!\n", name)
+			return nil
+		},
+	}
+}
+
+func cleanCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "clean",
+		Short: "Remove all offline/stale peers",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			store, err := irc.NewStore()
+			if err != nil {
+				return nil
+			}
+			statuses, err := store.CheckAllPresence()
+			if err != nil {
+				return err
+			}
+			store.CleanOrphanDirs()
+			cleaned := 0
+			for _, s := range statuses {
+				if !s.Online {
+					cleaned++
+				}
+			}
+			if cleaned > 0 {
+				fmt.Fprintf(os.Stderr, "Cleaned %d stale peer(s)\n", cleaned)
+			}
 			return nil
 		},
 	}

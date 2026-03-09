@@ -3,7 +3,6 @@ package irc
 import (
 	"bufio"
 	"encoding/json"
-	"fmt"
 	"net"
 	"os"
 	"path/filepath"
@@ -85,7 +84,11 @@ func (s *Store) tryCleanStalePeer(name string) {
 	pidPath := s.PIDPath(name)
 	data, err := os.ReadFile(pidPath)
 	if err != nil {
-		return // No PID file, nothing to clean
+		// PID file missing: only clean if socket is also missing (daemon fully gone)
+		if _, socketErr := os.Stat(s.SocketPath(name)); os.IsNotExist(socketErr) {
+			s.cleanStalePeerArtifacts(name)
+		}
+		return
 	}
 
 	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
@@ -94,28 +97,27 @@ func (s *Store) tryCleanStalePeer(name string) {
 	}
 
 	if !isProcessAlive(pid) {
-		// Daemon is dead, clean up
 		os.Remove(s.SocketPath(name))
 		os.Remove(pidPath)
+		s.cleanStalePeerArtifacts(name)
+	}
+}
 
-		// Find and remove session markers for this peer
-		entries, _ := os.ReadDir(s.BaseDir)
-		for _, entry := range entries {
-			if strings.HasPrefix(entry.Name(), ".session_") {
-				markerPath := fmt.Sprintf("%s/%s", s.BaseDir, entry.Name())
-				content, _ := os.ReadFile(markerPath)
-				if strings.TrimSpace(string(content)) == name {
-					os.Remove(markerPath)
-				}
+// cleanStalePeerArtifacts removes session markers, inbox, and registry entry for a peer.
+func (s *Store) cleanStalePeerArtifacts(name string) {
+	entries, _ := os.ReadDir(s.BaseDir)
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".session_") {
+			markerPath := filepath.Join(s.BaseDir, entry.Name())
+			content, _ := os.ReadFile(markerPath)
+			peerName, _ := parseSessionMarker(content)
+			if peerName == name {
+				os.Remove(markerPath)
 			}
 		}
-
-		// Clean up orphan inbox directory
-		os.RemoveAll(s.InboxDir(name))
-
-		// Unregister from registry
-		s.Unregister(name)
 	}
+	os.RemoveAll(s.InboxDir(name))
+	s.Unregister(name)
 }
 
 // CleanOrphanDirs removes inbox directories for peers not in the registry.
