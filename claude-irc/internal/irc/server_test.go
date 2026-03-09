@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"testing"
@@ -119,6 +120,30 @@ func listenHost(t *testing.T, listenAddr string) string {
 	host, _, err := net.SplitHostPort(listenAddr)
 	if err != nil {
 		t.Fatalf("SplitHostPort(%q): %v", listenAddr, err)
+	}
+	return host
+}
+
+func localURLHost(t *testing.T, localURL string) string {
+	t.Helper()
+
+	parsed, err := url.Parse(localURL)
+	if err != nil {
+		t.Fatalf("url.Parse(%q): %v", localURL, err)
+	}
+	host, _, err := net.SplitHostPort(parsed.Host)
+	if err != nil {
+		t.Fatalf("SplitHostPort(%q): %v", parsed.Host, err)
+	}
+	return host
+}
+
+func mustNonLoopbackIPv4(t *testing.T) string {
+	t.Helper()
+
+	host, ok := firstNonLoopbackInterfaceAddr(false)
+	if !ok {
+		t.Skip("no non-loopback IPv4 interface available for explicit bind test")
 	}
 	return host
 }
@@ -593,6 +618,9 @@ func TestAPIRunServer(t *testing.T) {
 		t.Error("expected non-empty local URL")
 	}
 	assertListenHost(t, gotInfo.ListenAddr, defaultServerBindHost)
+	if got := localURLHost(t, gotInfo.LocalURL); got != defaultServerAdvertiseHost {
+		t.Fatalf("expected default local URL host %q, got %q", defaultServerAdvertiseHost, got)
+	}
 
 	// Make a request to verify it works
 	req, _ := http.NewRequest("GET", gotInfo.LocalURL+"/api/peers?token="+gotInfo.Token, nil)
@@ -611,12 +639,45 @@ func TestAPIRunServer(t *testing.T) {
 	}
 }
 
-func TestAPIRunServerWithExplicitBind(t *testing.T) {
+func TestAPIRunServerWithExplicitBindAdvertisesConfiguredHost(t *testing.T) {
 	dir := t.TempDir()
 	store, err := NewStoreWithBaseDir(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	bindHost := mustNonLoopbackIPv4(t)
+
+	gotInfo := runServerForTest(t, ServerConfig{
+		Port:     0,
+		BindHost: bindHost,
+		Store:    store,
+	})
+
+	assertListenHost(t, gotInfo.ListenAddr, bindHost)
+	if got := localURLHost(t, gotInfo.LocalURL); got != bindHost {
+		t.Fatalf("expected local URL host %q, got %q", bindHost, got)
+	}
+
+	req, _ := http.NewRequest("GET", gotInfo.LocalURL+"/api/peers?token="+gotInfo.Token, nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request to running server: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+}
+
+func TestAPIRunServerWithWildcardBindAdvertisesReachableHost(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStoreWithBaseDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expectedHost := mustNonLoopbackIPv4(t)
 
 	gotInfo := runServerForTest(t, ServerConfig{
 		Port:     0,
@@ -624,13 +685,12 @@ func TestAPIRunServerWithExplicitBind(t *testing.T) {
 		Store:    store,
 	})
 
-	host := listenHost(t, gotInfo.ListenAddr)
-	ip := net.ParseIP(host)
-	if ip == nil {
-		t.Fatalf("expected listen host to be an IP address, got %q", host)
+	listenIP := net.ParseIP(listenHost(t, gotInfo.ListenAddr))
+	if listenIP == nil || !listenIP.IsUnspecified() {
+		t.Fatalf("expected wildcard bind to listen on an unspecified address, got %q", gotInfo.ListenAddr)
 	}
-	if ip.IsLoopback() {
-		t.Fatalf("expected explicit bind to use a non-loopback address, got %q", host)
+	if got := localURLHost(t, gotInfo.LocalURL); got != expectedHost {
+		t.Fatalf("expected wildcard bind local URL host %q, got %q", expectedHost, got)
 	}
 
 	req, _ := http.NewRequest("GET", gotInfo.LocalURL+"/api/peers?token="+gotInfo.Token, nil)
