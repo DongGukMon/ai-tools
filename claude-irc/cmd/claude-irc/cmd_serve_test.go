@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/bang9/ai-tools/claude-irc/internal/irc"
 )
@@ -124,5 +125,48 @@ func TestServeURLs_PublicURLOverridesLocalURL(t *testing.T) {
 	}
 	if webURL != "https://whip.bang9.dev#https://public.example#token=test-token" {
 		t.Fatalf("unexpected web URL: %q", webURL)
+	}
+}
+
+func TestServeURLs_DeviceModeUsesModeFragment(t *testing.T) {
+	info := irc.ServerInfo{
+		AuthMode:  "device",
+		Workspace: "demo",
+		ShortCode: "abc12345",
+		LocalURL:  "http://localhost:8585",
+	}
+
+	connectURL, shortURL, webURL := serveURLs(info, "https://public.example")
+
+	if connectURL != "https://public.example#mode=device" {
+		t.Fatalf("unexpected connect URL: %q", connectURL)
+	}
+	if shortURL != "https://public.example/s/abc12345" {
+		t.Fatalf("unexpected short URL: %q", shortURL)
+	}
+	if webURL != "https://whip.bang9.dev#https://public.example#mode=device" {
+		t.Fatalf("unexpected web URL: %q", webURL)
+	}
+}
+
+func TestFormatDeviceChallengeLogLine(t *testing.T) {
+	line := formatDeviceChallengeLogLine(irc.DeviceAuthChallengeInfo{
+		Workspace:   "demo",
+		OTP:         "123456",
+		DeviceLabel: "Remote Safari",
+		ExpiresAt:   time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC),
+	})
+
+	if !strings.HasPrefix(line, deviceChallengeLogPrefix) {
+		t.Fatalf("expected prefix %q, got %q", deviceChallengeLogPrefix, line)
+	}
+	if !strings.Contains(line, "123456") {
+		t.Fatalf("expected otp in line, got %q", line)
+	}
+	if !strings.Contains(line, `workspace=demo`) {
+		t.Fatalf("expected workspace in line, got %q", line)
+	}
+	if !strings.Contains(line, `device="Remote Safari"`) {
+		t.Fatalf("expected device label in line, got %q", line)
 	}
 }

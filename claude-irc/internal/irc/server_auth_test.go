@@ -1,6 +1,7 @@
 package irc
 
 import (
+	"encoding/json"
 	"net/http"
 	"testing"
 )
@@ -157,5 +158,206 @@ func TestAPICORSPreflightRejected(t *testing.T) {
 
 	if resp.StatusCode != http.StatusForbidden {
 		t.Errorf("expected 403 for rejected preflight, got %d", resp.StatusCode)
+	}
+}
+
+func TestAPIAuthConfigReportsMode(t *testing.T) {
+	ts, _, _ := setupTestServer(t)
+
+	resp := doRequest(t, ts, "", http.MethodGet, "/api/auth/config", nil)
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var body authConfigResponse
+	decodeJSON(t, resp, &body)
+	if body.Mode != serverAuthModeToken {
+		t.Fatalf("mode = %q, want %q", body.Mode, serverAuthModeToken)
+	}
+	if body.Workspace != defaultRemoteAuthWorkspace {
+		t.Fatalf("workspace = %q, want %q", body.Workspace, defaultRemoteAuthWorkspace)
+	}
+}
+
+func TestAPIDeviceAuthFlowUsesWhipSessionHeader(t *testing.T) {
+	var challengeNotice DeviceAuthChallengeInfo
+	ts, _, authStore := setupDeviceTestServerWithCallback(t, "demo", func(info DeviceAuthChallengeInfo) {
+		challengeNotice = info
+	})
+
+	resp := doRequest(t, ts, "", http.MethodGet, "/api/peers", nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without session, got %d", resp.StatusCode)
+	}
+
+	cfgResp := doRequest(t, ts, "", http.MethodGet, "/api/auth/config", nil)
+	defer cfgResp.Body.Close()
+	if cfgResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 for auth config, got %d", cfgResp.StatusCode)
+	}
+	var cfgBody authConfigResponse
+	decodeJSON(t, cfgResp, &cfgBody)
+	if cfgBody.Mode != serverAuthModeDevice {
+		t.Fatalf("mode = %q, want %q", cfgBody.Mode, serverAuthModeDevice)
+	}
+
+	challengeResp := doRequest(t, ts, "", http.MethodPost, "/api/auth/challenges", map[string]string{
+		"device_label": "Remote Safari",
+	})
+	defer challengeResp.Body.Close()
+	if challengeResp.StatusCode != http.StatusCreated {
+		t.Fatalf("expected 201 from challenge creation, got %d", challengeResp.StatusCode)
+	}
+	var challengeBody authChallengeResponse
+	decodeJSON(t, challengeResp, &challengeBody)
+	if challengeBody.ChallengeID == "" {
+		t.Fatal("expected challenge id")
+	}
+
+	state, err := authStore.LoadState()
+	if err != nil {
+		t.Fatalf("LoadState: %v", err)
+	}
+	if state.PendingChallenge == nil {
+		t.Fatal("expected pending challenge in store")
+	}
+	if state.PendingChallenge.OTPHash == "" {
+		t.Fatal("expected stored otp hash")
+	}
+	if challengeNotice.OTP == "" {
+		t.Fatal("expected local challenge callback to receive otp")
+	}
+	if challengeNotice.ChallengeID != challengeBody.ChallengeID {
+		t.Fatalf("challenge id = %q, want %q", challengeNotice.ChallengeID, challengeBody.ChallengeID)
+	}
+
+	exchangeResp := doRequest(t, ts, "", http.MethodPost, "/api/auth/exchange", map[string]string{
+		"challenge_id": challengeBody.ChallengeID,
+		"otp":          challengeNotice.OTP,
+		"device_label": "Remote Safari",
+	})
+	defer exchangeResp.Body.Close()
+	if exchangeResp.StatusCode != http.StatusCreated {
+		t.Fatalf("expected 201 from challenge exchange, got %d", exchangeResp.StatusCode)
+	}
+	var exchangeBody authExchangeResponse
+	decodeJSON(t, exchangeResp, &exchangeBody)
+	if exchangeBody.SessionID == "" || exchangeBody.SessionSecret == "" {
+		t.Fatalf("expected session credentials, got %+v", exchangeBody)
+	}
+
+	sessionHeader := "WhipSession " + exchangeBody.SessionID + "." + exchangeBody.SessionSecret
+	peersResp := doRequestWithAuthorization(t, ts, sessionHeader, http.MethodGet, "/api/peers", nil)
+	defer peersResp.Body.Close()
+	if peersResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 with device session, got %d", peersResp.StatusCode)
+	}
+
+	sessionResp := doRequestWithAuthorization(t, ts, sessionHeader, http.MethodGet, "/api/auth/session", nil)
+	defer sessionResp.Body.Close()
+	if sessionResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 from auth session endpoint, got %d", sessionResp.StatusCode)
+	}
+	var sessionBody authSessionResponse
+	decodeJSON(t, sessionResp, &sessionBody)
+	if sessionBody.SessionID != exchangeBody.SessionID {
+		t.Fatalf("session id = %q, want %q", sessionBody.SessionID, exchangeBody.SessionID)
+	}
+}
+
+func TestAPIDeviceAuthWrongOTPInvalidatesChallenge(t *testing.T) {
+	var challengeNotice DeviceAuthChallengeInfo
+	ts, _, _ := setupDeviceTestServerWithCallback(t, "demo", func(info DeviceAuthChallengeInfo) {
+		challengeNotice = info
+	})
+
+	challengeResp := doRequest(t, ts, "", http.MethodPost, "/api/auth/challenges", map[string]string{
+		"device_label": "Laptop",
+	})
+	defer challengeResp.Body.Close()
+	if challengeResp.StatusCode != http.StatusCreated {
+		t.Fatalf("expected 201 from challenge creation, got %d", challengeResp.StatusCode)
+	}
+	var challengeBody authChallengeResponse
+	decodeJSON(t, challengeResp, &challengeBody)
+
+	resp := doRequest(t, ts, "", http.MethodPost, "/api/auth/exchange", map[string]string{
+		"challenge_id": challengeBody.ChallengeID,
+		"otp":          "000000",
+		"device_label": "Laptop",
+	})
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for wrong otp, got %d", resp.StatusCode)
+	}
+
+	resp = doRequest(t, ts, "", http.MethodPost, "/api/auth/exchange", map[string]string{
+		"challenge_id": challengeBody.ChallengeID,
+		"otp":          challengeNotice.OTP,
+		"device_label": "Laptop",
+	})
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusGone {
+		t.Fatalf("expected 410 after invalidation, got %d", resp.StatusCode)
+	}
+}
+
+func TestAPIDeviceChallengeInvokesLocalCallback(t *testing.T) {
+	var challengeNotice DeviceAuthChallengeInfo
+	ts, _, _ := setupDeviceTestServerWithCallback(t, "demo", func(info DeviceAuthChallengeInfo) {
+		challengeNotice = info
+	})
+
+	resp := doRequest(t, ts, "", http.MethodPost, "/api/auth/challenges", map[string]string{
+		"device_label": "Remote Safari",
+	})
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", resp.StatusCode)
+	}
+
+	var body authChallengeResponse
+	decodeJSON(t, resp, &body)
+	if challengeNotice.OTP == "" {
+		t.Fatal("expected otp in local callback")
+	}
+	if challengeNotice.ChallengeID != body.ChallengeID {
+		t.Fatalf("challenge id = %q, want %q", challengeNotice.ChallengeID, body.ChallengeID)
+	}
+	if challengeNotice.Workspace != "demo" {
+		t.Fatalf("workspace = %q, want %q", challengeNotice.Workspace, "demo")
+	}
+}
+
+func TestAPIDeviceAuthRejectsLegacyQueryToken(t *testing.T) {
+	ts, _, _ := setupDeviceTestServer(t, "demo")
+
+	resp := doRequest(t, ts, "", http.MethodGet, "/api/peers?token=test-token-abc123", nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for legacy query token in device mode, got %d", resp.StatusCode)
+	}
+}
+
+func TestAPIDeviceChallengeResponseDoesNotExposeOTP(t *testing.T) {
+	ts, _, _ := setupDeviceTestServer(t, "demo")
+
+	resp := doRequest(t, ts, "", http.MethodPost, "/api/auth/challenges", map[string]string{
+		"device_label": "Remote Safari",
+	})
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", resp.StatusCode)
+	}
+
+	var payload map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode JSON: %v", err)
+	}
+	if _, ok := payload["otp"]; ok {
+		t.Fatal("challenge response must not expose raw otp")
 	}
 }

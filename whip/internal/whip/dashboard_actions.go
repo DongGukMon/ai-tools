@@ -132,7 +132,7 @@ func (m DashboardModel) startRemote(cfg RemoteConfig) tea.Cmd {
 		storeCfg, _ := m.store.LoadConfig()
 		token := storeCfg.ServeToken
 
-		cmd, result, err := StartServe(context.Background(), cfg, token, true)
+		cmd, result, err := StartServe(context.Background(), cfg, token, true, nil)
 		if err != nil {
 			return remoteStartedMsg{err: fmt.Errorf("start serve: %w", err)}
 		}

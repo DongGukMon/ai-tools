@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -21,7 +22,11 @@ func setupTestServer(t *testing.T) (*httptest.Server, *Store, string) {
 	}
 
 	token := "test-token-abc123"
-	handler := buildHandler(store, token, shortCodeFromToken(token), "")
+	handler := buildHandler(store, serverAuthConfig{
+		Mode:      serverAuthModeToken,
+		Token:     token,
+		Workspace: defaultRemoteAuthWorkspace,
+	}, shortCodeFromToken(token), "")
 	ts := httptest.NewServer(handler)
 	t.Cleanup(ts.Close)
 
@@ -37,14 +42,62 @@ func setupTestServerWithMaster(t *testing.T, masterTmux string) (*httptest.Serve
 	}
 
 	token := "test-token-abc123"
-	handler := buildHandler(store, token, shortCodeFromToken(token), masterTmux)
+	handler := buildHandler(store, serverAuthConfig{
+		Mode:      serverAuthModeToken,
+		Token:     token,
+		Workspace: defaultRemoteAuthWorkspace,
+	}, shortCodeFromToken(token), masterTmux)
 	ts := httptest.NewServer(handler)
 	t.Cleanup(ts.Close)
 
 	return ts, store, token
 }
 
+func setupDeviceTestServer(t *testing.T, workspace string) (*httptest.Server, *Store, *RemoteAuthStore) {
+	t.Helper()
+	return setupDeviceTestServerWithCallback(t, workspace, nil)
+}
+
+func setupDeviceTestServerWithCallback(t *testing.T, workspace string, onDeviceChallenge func(DeviceAuthChallengeInfo)) (*httptest.Server, *Store, *RemoteAuthStore) {
+	t.Helper()
+
+	tmpHome := t.TempDir()
+	t.Setenv("HOME", tmpHome)
+	t.Setenv("WHIP_HOME", filepath.Join(tmpHome, whipBaseDirName))
+
+	dir := t.TempDir()
+	store, err := NewStoreWithBaseDir(dir)
+	if err != nil {
+		t.Fatalf("NewStoreWithBaseDir: %v", err)
+	}
+
+	authStore, err := NewRemoteAuthStore(workspace)
+	if err != nil {
+		t.Fatalf("NewRemoteAuthStore: %v", err)
+	}
+
+	handler := buildHandler(store, serverAuthConfig{
+		Mode:              serverAuthModeDevice,
+		Workspace:         authStore.Workspace,
+		RemoteAuth:        authStore,
+		OnDeviceChallenge: onDeviceChallenge,
+	}, "devicecode", "")
+	ts := httptest.NewServer(handler)
+	t.Cleanup(ts.Close)
+
+	return ts, store, authStore
+}
+
 func doRequest(t *testing.T, ts *httptest.Server, token, method, path string, body interface{}) *http.Response {
+	t.Helper()
+	authHeader := ""
+	if token != "" {
+		authHeader = "Bearer " + token
+	}
+	return doRequestWithAuthorization(t, ts, authHeader, method, path, body)
+}
+
+func doRequestWithAuthorization(t *testing.T, ts *httptest.Server, authHeader, method, path string, body interface{}) *http.Response {
 	t.Helper()
 	var reqBody *bytes.Buffer
 	if body != nil {
@@ -58,8 +111,8 @@ func doRequest(t *testing.T, ts *httptest.Server, token, method, path string, bo
 	if err != nil {
 		t.Fatalf("NewRequest: %v", err)
 	}
-	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
+	if authHeader != "" {
+		req.Header.Set("Authorization", authHeader)
 	}
 	req.Header.Set("Content-Type", "application/json")
 

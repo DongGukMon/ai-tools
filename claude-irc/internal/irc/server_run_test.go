@@ -3,6 +3,7 @@ package irc
 import (
 	"net"
 	"net/http"
+	"path/filepath"
 	"testing"
 )
 
@@ -56,6 +57,9 @@ func TestAPIRunServer(t *testing.T) {
 	if len(gotInfo.Token) != 32 {
 		t.Errorf("expected 32-char token, got %d chars", len(gotInfo.Token))
 	}
+	if gotInfo.AuthMode != serverAuthModeToken {
+		t.Fatalf("expected auth mode %q, got %q", serverAuthModeToken, gotInfo.AuthMode)
+	}
 }
 
 func TestAPIShortURLRedirectUsesFragmentConnectURL(t *testing.T) {
@@ -83,6 +87,36 @@ func TestAPIShortURLRedirectUsesFragmentConnectURL(t *testing.T) {
 	}
 
 	wantLocation := DashboardURL(ConnectURL(ts.URL, token))
+	if got := resp.Header.Get("Location"); got != wantLocation {
+		t.Fatalf("expected redirect to %q, got %q", wantLocation, got)
+	}
+}
+
+func TestAPIShortURLRedirectUsesDeviceConnectURL(t *testing.T) {
+	ts, _, _ := setupDeviceTestServer(t, "demo")
+
+	req, err := http.NewRequest(http.MethodGet, ts.URL+"/s/devicecode", nil)
+	if err != nil {
+		t.Fatalf("NewRequest: %v", err)
+	}
+
+	client := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusFound {
+		t.Fatalf("expected 302, got %d", resp.StatusCode)
+	}
+
+	wantLocation := DashboardURL(DeviceConnectURL(ts.URL))
 	if got := resp.Header.Get("Location"); got != wantLocation {
 		t.Fatalf("expected redirect to %q, got %q", wantLocation, got)
 	}
@@ -150,5 +184,31 @@ func TestAPIRunServerWithWildcardBindAdvertisesReachableHost(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+}
+
+func TestAPIRunServerDeviceModeOmitsToken(t *testing.T) {
+	tmpHome := t.TempDir()
+	t.Setenv("HOME", tmpHome)
+	t.Setenv("WHIP_HOME", filepath.Join(tmpHome, whipBaseDirName))
+
+	dir := t.TempDir()
+	store, err := NewStoreWithBaseDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	gotInfo := runServerForTest(t, ServerConfig{
+		Port:      0,
+		Store:     store,
+		AuthMode:  serverAuthModeDevice,
+		Workspace: "demo",
+	})
+
+	if gotInfo.AuthMode != serverAuthModeDevice {
+		t.Fatalf("expected auth mode %q, got %q", serverAuthModeDevice, gotInfo.AuthMode)
+	}
+	if gotInfo.Token != "" {
+		t.Fatalf("expected empty token in device mode, got %q", gotInfo.Token)
 	}
 }

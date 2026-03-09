@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/bang9/ai-tools/claude-irc/internal/irc"
 	"github.com/spf13/cobra"
@@ -22,6 +23,8 @@ func serveCmd() *cobra.Command {
 	var tunnel string
 	var masterTmux string
 	var token string
+	var authMode string
+	var workspace string
 
 	cmd := &cobra.Command{
 		Use:   "serve",
@@ -58,6 +61,11 @@ func serveCmd() *cobra.Command {
 				Store:      store,
 				MasterTmux: masterTmux,
 				Token:      token,
+				AuthMode:   authMode,
+				Workspace:  workspace,
+				OnDeviceChallenge: func(info irc.DeviceAuthChallengeInfo) {
+					fmt.Fprintln(os.Stderr, formatDeviceChallengeLogLine(info))
+				},
 				OnReady: func(info irc.ServerInfo) {
 					connectURL, shortURL, webURL := serveURLs(info, publicURL)
 					fmt.Fprintf(os.Stderr, "claude-irc serve started.\n")
@@ -76,19 +84,38 @@ func serveCmd() *cobra.Command {
 	cmd.Flags().StringVar(&bindHost, "bind", "", "Host/address to bind the HTTP server to (default 127.0.0.1; set explicitly for non-local access)")
 	cmd.Flags().StringVar(&tunnel, "tunnel", "", "Cloudflare Tunnel hostname (empty for quick tunnel, or domain like irc.bang9.dev)")
 	cmd.Flags().StringVar(&masterTmux, "master-tmux", "", "Master tmux session name for capture/input endpoints")
+	cmd.Flags().StringVar(&authMode, "auth-mode", "token", "Remote auth mode (token or device)")
+	cmd.Flags().StringVar(&workspace, "workspace", "global", "Workspace name for device auth/session storage")
 	cmd.Flags().StringVar(&token, "token", "", "Pre-set auth token (reuse across restarts); if empty, a new one is generated")
 	return cmd
 }
+
+const deviceChallengeLogPrefix = "Device challenge OTP:"
 
 func serveURLs(info irc.ServerInfo, publicURL string) (connectURL string, shortURL string, webURL string) {
 	baseURL := info.LocalURL
 	if publicURL != "" {
 		baseURL = publicURL
 	}
-	connectURL = irc.ConnectURL(baseURL, info.Token)
+	if info.AuthMode == "device" {
+		connectURL = irc.DeviceConnectURL(baseURL)
+	} else {
+		connectURL = irc.ConnectURL(baseURL, info.Token)
+	}
 	shortURL = fmt.Sprintf("%s/s/%s", strings.TrimRight(baseURL, "/"), info.ShortCode)
 	webURL = irc.DashboardURL(connectURL)
 	return connectURL, shortURL, webURL
+}
+
+func formatDeviceChallengeLogLine(info irc.DeviceAuthChallengeInfo) string {
+	parts := []string{
+		fmt.Sprintf("workspace=%s", info.Workspace),
+		fmt.Sprintf("expires_at=%s", info.ExpiresAt.Format(time.RFC3339)),
+	}
+	if info.DeviceLabel != "" {
+		parts = append(parts, fmt.Sprintf("device=%q", info.DeviceLabel))
+	}
+	return fmt.Sprintf("%s %s (%s)", deviceChallengeLogPrefix, info.OTP, strings.Join(parts, ", "))
 }
 
 type keyboardLoopDeps struct {
