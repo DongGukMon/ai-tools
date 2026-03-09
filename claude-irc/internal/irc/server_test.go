@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -60,6 +61,66 @@ func decodeJSON(t *testing.T, resp *http.Response, v interface{}) {
 	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
 		t.Fatalf("decode JSON: %v", err)
 	}
+}
+
+func runServerForTest(t *testing.T, cfg ServerConfig) ServerInfo {
+	t.Helper()
+
+	var gotInfo ServerInfo
+	ready := make(chan struct{})
+	cfg.OnReady = func(info ServerInfo) {
+		gotInfo = info
+		close(ready)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- RunServer(ctx, cfg)
+	}()
+
+	select {
+	case <-ready:
+	case <-time.After(3 * time.Second):
+		cancel()
+		t.Fatal("server did not become ready in time")
+	}
+
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case err := <-errCh:
+			if err != nil {
+				t.Errorf("RunServer returned error: %v", err)
+			}
+		case <-time.After(3 * time.Second):
+			t.Error("server did not shut down in time")
+		}
+	})
+
+	return gotInfo
+}
+
+func assertListenHost(t *testing.T, listenAddr, wantHost string) {
+	t.Helper()
+
+	gotHost, _, err := net.SplitHostPort(listenAddr)
+	if err != nil {
+		t.Fatalf("SplitHostPort(%q): %v", listenAddr, err)
+	}
+	if gotHost != wantHost {
+		t.Fatalf("expected listen host %q, got %q", wantHost, gotHost)
+	}
+}
+
+func listenHost(t *testing.T, listenAddr string) string {
+	t.Helper()
+
+	host, _, err := net.SplitHostPort(listenAddr)
+	if err != nil {
+		t.Fatalf("SplitHostPort(%q): %v", listenAddr, err)
+	}
+	return host
 }
 
 // --- Auth tests ---
@@ -519,31 +580,11 @@ func TestAPIRunServer(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var gotInfo ServerInfo
-	ready := make(chan struct{})
-
 	cfg := ServerConfig{
 		Port:  0, // random port
 		Store: store,
-		OnReady: func(info ServerInfo) {
-			gotInfo = info
-			close(ready)
-		},
 	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- RunServer(ctx, cfg)
-	}()
-
-	select {
-	case <-ready:
-	case <-time.After(3 * time.Second):
-		t.Fatal("server did not become ready in time")
-	}
+	gotInfo := runServerForTest(t, cfg)
 
 	if gotInfo.Token == "" {
 		t.Error("expected non-empty token")
@@ -551,6 +592,7 @@ func TestAPIRunServer(t *testing.T) {
 	if gotInfo.LocalURL == "" {
 		t.Error("expected non-empty local URL")
 	}
+	assertListenHost(t, gotInfo.ListenAddr, defaultServerBindHost)
 
 	// Make a request to verify it works
 	req, _ := http.NewRequest("GET", gotInfo.LocalURL+"/api/peers?token="+gotInfo.Token, nil)
@@ -567,15 +609,37 @@ func TestAPIRunServer(t *testing.T) {
 	if len(gotInfo.Token) != 32 {
 		t.Errorf("expected 32-char token, got %d chars", len(gotInfo.Token))
 	}
+}
 
-	cancel()
+func TestAPIRunServerWithExplicitBind(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStoreWithBaseDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	select {
-	case err := <-errCh:
-		if err != nil {
-			t.Errorf("RunServer returned error: %v", err)
-		}
-	case <-time.After(3 * time.Second):
-		t.Error("server did not shut down in time")
+	gotInfo := runServerForTest(t, ServerConfig{
+		Port:     0,
+		BindHost: "0.0.0.0",
+		Store:    store,
+	})
+
+	host := listenHost(t, gotInfo.ListenAddr)
+	ip := net.ParseIP(host)
+	if ip == nil {
+		t.Fatalf("expected listen host to be an IP address, got %q", host)
+	}
+	if ip.IsLoopback() {
+		t.Fatalf("expected explicit bind to use a non-loopback address, got %q", host)
+	}
+
+	req, _ := http.NewRequest("GET", gotInfo.LocalURL+"/api/peers?token="+gotInfo.Token, nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request to running server: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
 	}
 }
