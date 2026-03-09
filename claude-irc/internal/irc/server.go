@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -40,6 +41,7 @@ type ServerInfo struct {
 
 const dashboardOperatorName = "user"
 const defaultServerBindHost = "127.0.0.1"
+const defaultServerAdvertiseHost = "localhost"
 
 // RunServer starts the HTTP API server and blocks until the context is cancelled.
 func RunServer(ctx context.Context, cfg ServerConfig) error {
@@ -73,7 +75,7 @@ func RunServer(ctx context.Context, cfg ServerConfig) error {
 	info := ServerInfo{
 		Token:      token,
 		ShortCode:  shortCode,
-		LocalURL:   fmt.Sprintf("http://localhost:%d", addr.Port),
+		LocalURL:   localURLForHost(advertiseServerHost(bindHost), addr.Port),
 		ListenAddr: listener.Addr().String(),
 	}
 
@@ -95,11 +97,99 @@ func RunServer(ctx context.Context, cfg ServerConfig) error {
 }
 
 func resolveBindHost(bindHost string) string {
-	bindHost = strings.TrimSpace(bindHost)
+	bindHost = normalizeHost(bindHost)
 	if bindHost == "" {
 		return defaultServerBindHost
 	}
 	return bindHost
+}
+
+func advertiseServerHost(bindHost string) string {
+	bindHost = normalizeHost(bindHost)
+	if bindHost == "" {
+		return defaultServerAdvertiseHost
+	}
+	if ip := net.ParseIP(bindHost); ip != nil {
+		switch {
+		case ip.IsLoopback():
+			return defaultServerAdvertiseHost
+		case ip.IsUnspecified():
+			if host, ok := firstNonLoopbackInterfaceAddr(ip.To4() == nil); ok {
+				return host
+			}
+		default:
+			if ipv4 := ip.To4(); ipv4 != nil {
+				return ipv4.String()
+			}
+			return ip.String()
+		}
+	}
+	if strings.EqualFold(bindHost, defaultServerAdvertiseHost) {
+		return defaultServerAdvertiseHost
+	}
+	return bindHost
+}
+
+func normalizeHost(host string) string {
+	host = strings.TrimSpace(host)
+	if strings.HasPrefix(host, "[") && strings.HasSuffix(host, "]") && len(host) >= 2 {
+		return host[1 : len(host)-1]
+	}
+	return host
+}
+
+func firstNonLoopbackInterfaceAddr(wantIPv6 bool) (string, bool) {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return "", false
+	}
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, addr := range addrs {
+			ip := interfaceAddrIP(addr)
+			if ip == nil || ip.IsLoopback() || ip.IsUnspecified() || ip.IsLinkLocalUnicast() {
+				continue
+			}
+			if wantIPv6 {
+				if ip.To4() != nil {
+					continue
+				}
+			} else {
+				ipv4 := ip.To4()
+				if ipv4 == nil {
+					continue
+				}
+				ip = ipv4
+			}
+			return ip.String(), true
+		}
+	}
+	return "", false
+}
+
+func interfaceAddrIP(addr net.Addr) net.IP {
+	switch v := addr.(type) {
+	case *net.IPNet:
+		return v.IP
+	case *net.IPAddr:
+		return v.IP
+	default:
+		return nil
+	}
+}
+
+func localURLForHost(host string, port int) string {
+	return (&url.URL{
+		Scheme: "http",
+		Host:   net.JoinHostPort(host, strconv.Itoa(port)),
+	}).String()
 }
 
 func shortCodeFromToken(token string) string {
