@@ -76,6 +76,9 @@ Before diving in, share your approach with the lead:
 	fmt.Fprintf(&b, "- Coordinate with the lead session (%s) via claude-irc\n", task.MasterIRCName)
 	b.WriteString("  when you need alignment on cross-cutting decisions.\n")
 	b.WriteString("- Check what peers are working on: claude-irc board <peer>\n")
+	b.WriteString("- Home context (READ-ONLY): ~/.whip/home/\n")
+	b.WriteString("  - memory.md: User preferences and operational guidelines\n")
+	b.WriteString("  - projects.md: Project registry with paths and tech stacks\n")
 	b.WriteString("- If you need user input, escalate to the lead first. If urgent and the lead is unresponsive, use webform to collect it directly.\n")
 	b.WriteString(`
 ## When to ask the lead

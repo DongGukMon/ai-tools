@@ -61,6 +61,16 @@ Press `R` in the task list view to configure and start/stop remote mode. The das
 
 The web dashboard at the configured URL includes a **Terminal** tab that renders the master session's tmux output with full ANSI color support (via xterm.js) and allows sending keyboard input directly.
 
+## Whip Home
+
+`whip remote` seeds and reuses `~/.whip/home/` as persistent context for the master session.
+
+- `prompt.md` is the master system prompt used by remote mode. It is only seeded when missing, so local edits persist across sessions.
+- `memory.md` stores durable user preferences, operational patterns, and judgment criteria that the master can update as it learns.
+- `projects.md` stores a lightweight project registry with paths, stacks, status, and short notes that the master can keep current.
+
+Sub-agents may reference `~/.whip/home/memory.md` and `~/.whip/home/projects.md` as read-only context.
+
 ## Help
 
 Run `whip --help` for the full command list. For guided usage, see `/whip-plan` and `/whip-start`.

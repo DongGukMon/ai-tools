@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,6 +15,15 @@ import (
 
 const MasterSessionName = "whip-master"
 
+const (
+	whipHomeDirName      = "home"
+	whipHomePromptFile   = "prompt.md"
+	whipHomeMemoryFile   = "memory.md"
+	whipHomeProjectsFile = "projects.md"
+)
+
+var spawnMasterTmuxSession = SpawnTmuxSession
+
 // RemoteConfig holds settings for the whip remote command.
 type RemoteConfig struct {
 	Backend    string // "claude" or "codex"
@@ -23,8 +33,60 @@ type RemoteConfig struct {
 	CWD        string // working directory for master session
 }
 
-// GenerateMasterPrompt returns the prompt content for the master session.
-func GenerateMasterPrompt(cfg RemoteConfig) string {
+type whipHomePaths struct {
+	Dir      string
+	Prompt   string
+	Memory   string
+	Projects string
+}
+
+func whipHomePathsFor(baseDir string) whipHomePaths {
+	dir := filepath.Join(baseDir, whipHomeDirName)
+	return whipHomePaths{
+		Dir:      dir,
+		Prompt:   filepath.Join(dir, whipHomePromptFile),
+		Memory:   filepath.Join(dir, whipHomeMemoryFile),
+		Projects: filepath.Join(dir, whipHomeProjectsFile),
+	}
+}
+
+func ensureWhipHome(baseDir string) (whipHomePaths, error) {
+	paths := whipHomePathsFor(baseDir)
+	if err := os.MkdirAll(paths.Dir, 0755); err != nil {
+		return whipHomePaths{}, fmt.Errorf("create whip home directory: %w", err)
+	}
+
+	seeds := map[string]string{
+		paths.Prompt:   defaultMasterPrompt(),
+		paths.Memory:   defaultWhipMemoryTemplate(),
+		paths.Projects: defaultWhipProjectsTemplate(),
+	}
+	for path, content := range seeds {
+		if err := seedFileIfMissing(path, content); err != nil {
+			return whipHomePaths{}, err
+		}
+	}
+
+	return paths, nil
+}
+
+func seedFileIfMissing(path string, content string) error {
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
+	if err != nil {
+		if os.IsExist(err) {
+			return nil
+		}
+		return fmt.Errorf("seed %s: %w", path, err)
+	}
+	defer file.Close()
+
+	if _, err := io.WriteString(file, content); err != nil {
+		return fmt.Errorf("seed %s: %w", path, err)
+	}
+	return nil
+}
+
+func defaultMasterPrompt() string {
 	return `You are the whip master session managing task agents.
 
 ## Getting Started
@@ -36,10 +98,50 @@ Run these commands to initialize your session:
 2. Enable periodic message check:
    /loop 1m claude-irc inbox
 
-Then wait for instructions from the dashboard operator.
+3. Read the persistent home files before assigning work or replying:
+   - ~/.whip/home/memory.md
+   - ~/.whip/home/projects.md
+
+4. Keep the home files in mind while coordinating agents, then wait for instructions from the dashboard operator.
+
+## Home Directory
+~/.whip/home/ persists across master sessions.
+
+- prompt.md: This system prompt. Treat it as the source of truth for master-session behavior.
+- memory.md: Durable user preferences, operational patterns, and judgment criteria. Update it when you learn stable guidance that future sessions should remember.
+- projects.md: Project registry with paths, tech stacks, status, and notes. Update it when you confirm project metadata that will help future routing and planning.
+
+## Memory Management
+- Save only durable context that will still matter in future sessions.
+- Prefer concrete user preferences, workflow expectations, review standards, environment quirks, and proven operating heuristics.
+- Do not store secrets, access tokens, or one-off transient notes.
+- Update ~/.whip/home/memory.md in place with concise edits instead of rewriting the whole file.
+
+## Projects Management
+- Keep ~/.whip/home/projects.md factual and compact.
+- Add or update rows when you confirm a project path, stack, status, or constraint.
+- Preserve existing information when possible; edit only the parts that changed.
+- If details are uncertain, mark them as uncertain instead of guessing.
 
 ## Restrictions
 NEVER use interactive or user-facing tools such as AskUserQuestion, webform, or any tool that requires user input via the terminal or browser. You are a background agent — all communication must go through claude-irc.
+`
+}
+
+func defaultWhipMemoryTemplate() string {
+	return `# Memory
+## User Preferences
+
+## Operational Patterns
+
+## Judgment Criteria
+`
+}
+
+func defaultWhipProjectsTemplate() string {
+	return `# Projects
+| Project | Path | Stack | Status | Notes |
+|---------|------|-------|--------|-------|
 `
 }
 
@@ -54,20 +156,19 @@ func SpawnMasterSession(cfg RemoteConfig) error {
 	// Create a temporary Task object for BuildLaunchCmd
 	task := &Task{
 		Difficulty: cfg.Difficulty,
-		CWD:       cfg.CWD,
-		Backend:   cfg.Backend,
+		CWD:        cfg.CWD,
+		Backend:    cfg.Backend,
 	}
 
-	// Write prompt to ~/.whip/master-prompt.txt
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("cannot determine home directory: %w", err)
 	}
-	promptPath := filepath.Join(home, whipDir, "master-prompt.txt")
-	prompt := GenerateMasterPrompt(cfg)
-	if err := os.WriteFile(promptPath, []byte(prompt), 0644); err != nil {
-		return fmt.Errorf("write master prompt: %w", err)
+	homePaths, err := ensureWhipHome(filepath.Join(home, whipDir))
+	if err != nil {
+		return fmt.Errorf("ensure whip home: %w", err)
 	}
+	promptPath := homePaths.Prompt
 
 	launchCmd := backend.BuildLaunchCmd(task, promptPath)
 
@@ -82,7 +183,7 @@ func SpawnMasterSession(cfg RemoteConfig) error {
 		launchCmd,
 	)
 
-	return SpawnTmuxSession(MasterSessionName, shellCmd)
+	return spawnMasterTmuxSession(MasterSessionName, shellCmd)
 }
 
 // IsMasterSessionAlive checks if the whip-master tmux session exists.
