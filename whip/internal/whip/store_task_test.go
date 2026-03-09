@@ -100,8 +100,8 @@ func TestCleanTerminal(t *testing.T) {
 	t2.Status = StatusCompleted
 	s.SaveTask(t2)
 
-	t3 := NewTask("Failed", "desc", "/tmp")
-	t3.Status = StatusFailed
+	t3 := NewTask("Canceled", "desc", "/tmp")
+	t3.Status = StatusCanceled
 	s.SaveTask(t3)
 
 	count, err := s.CleanTerminal()

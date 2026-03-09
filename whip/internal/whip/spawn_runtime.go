@@ -55,7 +55,7 @@ func AutoAssignDependents(store *Store, completedID string) ([]string, error) {
 			masterIRC = DefaultMasterIRCName(cfg)
 		}
 
-		dep, err = AssignCreatedTask(store, dep.ID, LaunchSource{Actor: "auto", Command: "auto-assign"}, masterIRC)
+		dep, err = AssignTask(store, dep.ID, LaunchSource{Actor: "auto", Command: "auto-assign"}, masterIRC)
 		if err != nil {
 			continue
 		}

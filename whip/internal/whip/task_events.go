@@ -27,23 +27,6 @@ func (t *Task) RecordEvent(actor, command, action string, fromStatus, toStatus T
 	})
 }
 
-func (t *Task) Retry() error {
-	if err := t.ValidateTransition(StatusCreated); err != nil {
-		return err
-	}
-	t.Status = StatusCreated
-	t.Runner = ""
-	t.IRCName = ""
-	t.MasterIRCName = ""
-	t.ShellPID = 0
-	t.HeartbeatAt = nil
-	t.AssignedAt = nil
-	t.CompletedAt = nil
-	t.Note = ""
-	t.UpdatedAt = time.Now()
-	return nil
-}
-
 func generateID() string {
 	b := make([]byte, 4)
 	rand.Read(b)

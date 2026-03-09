@@ -16,9 +16,10 @@ func createCmd() *cobra.Command {
 	var review bool
 
 	cmd := &cobra.Command{
-		Use:   "create <title>",
-		Short: "Create a new task",
-		Args:  cobra.ExactArgs(1),
+		Use:     "create <title>",
+		Short:   "Create a new task",
+		GroupID: "operations",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			title := args[0]
 
@@ -96,6 +97,7 @@ func listCmd() *cobra.Command {
 		Use:     "list",
 		Short:   "List all tasks",
 		Aliases: []string{"ls"},
+		GroupID: "operations",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store, err := whip.NewStore()
@@ -132,11 +134,12 @@ func listCmd() *cobra.Command {
 	}
 }
 
-func showCmd() *cobra.Command {
+func viewCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "show <id>",
-		Short: "Show task details",
-		Args:  cobra.ExactArgs(1),
+		Use:     "view <id>",
+		Short:   "View task details",
+		GroupID: "operations",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store, err := whip.NewStore()
 			if err != nil {
@@ -194,7 +197,11 @@ func showCmd() *cobra.Command {
 				fmt.Printf("Heartbeat:   %s\n", task.HeartbeatAt.Format(time.RFC3339))
 			}
 			if task.CompletedAt != nil {
-				fmt.Printf("Completed:   %s\n", task.CompletedAt.Format(time.RFC3339))
+				label := "Completed"
+				if task.Status == whip.StatusCanceled {
+					label = "Canceled"
+				}
+				fmt.Printf("%-12s %s\n", label+":", task.CompletedAt.Format(time.RFC3339))
 			}
 
 			if len(task.Notes) > 0 {
@@ -232,9 +239,10 @@ func depCmd() *cobra.Command {
 	var after []string
 
 	cmd := &cobra.Command{
-		Use:   "dep <id>",
-		Short: "Set stack prerequisites (dependency edges)",
-		Args:  cobra.ExactArgs(1),
+		Use:     "dep <id>",
+		Short:   "Set stack prerequisites (dependency edges)",
+		GroupID: "operations",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(after) == 0 {
 				return fmt.Errorf("at least one --after flag required")

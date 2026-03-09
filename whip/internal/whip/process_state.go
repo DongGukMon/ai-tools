@@ -10,7 +10,7 @@ const (
 )
 
 // TaskProcessState classifies the shell PID state in task context.
-// A completed task with a dead PID is treated as "exited", not "dead".
+// A terminal task with a dead PID is treated as "exited", not "dead".
 func TaskProcessState(t *Task) ProcessState {
 	if t == nil || t.ShellPID <= 0 {
 		return ProcessStateNone
@@ -18,7 +18,7 @@ func TaskProcessState(t *Task) ProcessState {
 	if IsProcessAlive(t.ShellPID) {
 		return ProcessStateAlive
 	}
-	if t.Status == StatusCompleted {
+	if t.Status.IsTerminal() {
 		return ProcessStateExited
 	}
 	return ProcessStateDead

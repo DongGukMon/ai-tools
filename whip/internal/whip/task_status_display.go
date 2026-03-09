@@ -22,12 +22,14 @@ func statusDisplay(s TaskStatus) taskStatusDisplay {
 		return taskStatusDisplay{icon: "▶", label: "active", style: statusInProgress}
 	case StatusReview:
 		return taskStatusDisplay{icon: "◎", label: "review", style: statusReview}
-	case StatusApprovedPendingFinalize:
+	case StatusApproved:
 		return taskStatusDisplay{icon: "◉", label: "approved", style: statusApproved}
 	case StatusCompleted:
 		return taskStatusDisplay{icon: "✓", label: "done", style: statusCompleted}
 	case StatusFailed:
 		return taskStatusDisplay{icon: "✗", label: "failed", style: statusFailed}
+	case StatusCanceled:
+		return taskStatusDisplay{icon: "⊘", label: "canceled", style: statusCanceled}
 	default:
 		return taskStatusDisplay{icon: "?", label: string(s), style: lipgloss.NewStyle().Foreground(colorDim)}
 	}

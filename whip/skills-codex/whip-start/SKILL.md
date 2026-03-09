@@ -25,11 +25,11 @@ You are the lead. Dispatch work to agent sessions via whip.
 
 - `git-worktree`: the first `whip task create --workspace <workspace-name>` runs inside git, so whip ensures `WHIP_HOME/workspaces/<workspace-name>/worktree` and stores task `cwd` inside it.
 - `direct-cwd`: the first `whip task create --workspace <workspace-name>` runs outside git, so tasks keep using the provided `cwd` and `worktree_path` may be empty.
-- `whip workspace show <workspace-name>` reports the current execution model.
+- `whip workspace view <workspace-name>` reports the current execution model.
 
 ## Workspace preparation
 
-- If you are continuing an existing named workspace, inspect it first with `whip workspace show <workspace-name>`.
+- If you are continuing an existing named workspace, inspect it first with `whip workspace view <workspace-name>`.
 - If that workspace reports a stored `worktree_path`, use that path as the working-directory context for subsequent repo inspection, git, test, and review commands.
 - If the named workspace does not exist yet, `whip task create --workspace <workspace-name>` is the authoritative ensure step.
 - In `git-worktree`, the first `whip task create --workspace <workspace-name>` ensures `WHIP_HOME/workspaces/<workspace-name>/worktree` and resolves task `cwd` inside that worktree.
@@ -50,7 +50,7 @@ whip task list
 claude-irc inbox
 
 # 3. If continuing a named workspace, inspect its stored metadata
-whip workspace show <workspace-name>
+whip workspace view <workspace-name>
 ```
 
 Review the output before proceeding:
@@ -60,7 +60,7 @@ Review the output before proceeding:
 - If `claude-irc inbox` truncates a message, read the full entry before acting.
 - Do not assume the user can see master IRC traffic. Relay important agent messages back into the main chat yourself.
 
-Poll for messages by running `claude-irc inbox` manually, especially after state-changing commands such as `assign`, `retry`, `approve`, and `resume`.
+Poll for messages by running `claude-irc inbox` manually, especially after state-changing commands such as `assign`, `review`, `approve`, `complete`, `fail`, and `cancel`.
 
 ## Decide Mode
 
@@ -79,7 +79,7 @@ Pick the backend before creating tasks, and make it explicit on each task with `
 - Valid values are `claude` and `codex`.
 - Do not mix backends across tightly coupled tasks unless there is a clear reason.
 
-Whip owns the backend-specific prompt, model, effort, and resume behavior. Do not describe raw backend flags in the task description unless the user explicitly asked for that level of detail.
+Whip owns the backend-specific prompt, model, effort, and session-forking behavior. Do not describe raw backend flags in the task description unless the user explicitly asked for that level of detail.
 
 ---
 
@@ -128,7 +128,7 @@ Parallelization guardrails:
 
 Create all tasks, encode stack order if needed, then assign independent tasks. Downstream stack tasks auto-assign when their prerequisites complete.
 
-If you are continuing a named workspace, inspect it first with `whip workspace show <workspace-name>`. If it already has a `worktree_path`, use that path as the working-directory context for your own repo commands. If it does not exist yet, the first `whip task create --workspace <workspace-name>` below will ensure it.
+If you are continuing a named workspace, inspect it first with `whip workspace view <workspace-name>`. If it already has a `worktree_path`, use that path as the working-directory context for your own repo commands. If it does not exist yet, the first `whip task create --workspace <workspace-name>` below will ensure it.
 
 ```bash
 whip task create "<agent role/title>" --workspace <workspace-name> --backend <chosen-backend> --difficulty <level> --desc "## Objective
@@ -154,7 +154,7 @@ As team lead:
 - Respond to agent messages promptly — agents escalate user-facing questions to you
 - When an agent needs user input, relay the question to the user and pass the answer back
 - Use `whip task list` to monitor overall progress
-- Use `whip task broadcast "message"` for team-wide announcements
+- Use `whip workspace broadcast <workspace-name> "message"` for team-wide announcements
 - Use `claude-irc msg <irc-name> "message"` for direct communication with specific agents
 - Relay information between agents when they need context from each other
 - Mirror important decisions, blockers, and review requests into the main user chat. IRC is for agents; the user does not automatically see it.
@@ -164,9 +164,9 @@ As team lead:
 As agents complete:
 - Review their deliverables
 - Dependent agents auto-deploy when prerequisites are met
-- If a shell died but the task still has a valid session: use `whip task resume <id>` or dashboard resume before creating a new session.
-- If an agent failed and you want to preserve context/notes/session history: use `whip task retry <id>`.
-- Use `whip task unassign <id>` when you need to kill/reset a live or stuck task before retrying from scratch.
+- If an agent failed and you want to preserve context/notes/session history: use `whip task assign <id>` to re-dispatch the failed task.
+- If work must stop permanently: use `whip task cancel <id> --note "..."`
+- Run `whip task lifecycle` or `whip task <action> --help` whenever you need the exact state transition rules.
 
 ### Step 5: Wrap up
 
@@ -210,10 +210,10 @@ For tasks where you want to review changes before the agent commits, use the `--
 ### How it works
 
 1. **Create with review**: `whip task create "title" --backend <chosen-backend> --difficulty medium --review --desc "..."`
-2. **Agent works**: The agent's prompt instructs it to NOT commit and to report via `whip task status <id> review` when done.
+2. **Agent works**: The agent's prompt instructs it to NOT commit and to report via `whip task review <id>` when done.
 3. **Review**: Check the agent's changes in the task `cwd` or the workspace worktree when one exists.
 4. **Approve**: `whip task approve <id>` notifies the agent via IRC to commit and finish the task.
-   - Approval does not directly mark the task `completed`; the agent still needs to commit and run `whip task status <id> completed --note "..."`
+   - Approval does not directly mark the task `completed`; the agent still needs to commit and run `whip task complete <id> --note "..."`
 
 ### When to use review
 

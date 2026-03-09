@@ -82,14 +82,6 @@ func (m DashboardModel) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.tmuxContent = content
 			}
 		}
-	case "r":
-		if m.selectedTask != nil && m.selectedTask.Status == StatusFailed {
-			return m, m.retryTask(m.selectedTask.ID)
-		}
-	case "s":
-		if m.selectedTask != nil && m.selectedTask.Status != StatusCompleted && m.selectedTask.SessionID != "" && m.selectedTask.ShellPID > 0 && !IsProcessAlive(m.selectedTask.ShellPID) {
-			return m, m.resumeTask(m.selectedTask)
-		}
 	case "ctrl+c":
 		return m, tea.Quit
 	}

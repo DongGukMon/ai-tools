@@ -19,7 +19,8 @@ func workspaceCmd() *cobra.Command {
 
 	cmd.AddCommand(
 		workspaceListCmd(),
-		workspaceShowCmd(),
+		workspaceViewCmd(),
+		workspaceBroadcastCmd(),
 		workspaceDropCmd(),
 	)
 	return cmd
@@ -73,10 +74,10 @@ func workspaceListCmd() *cobra.Command {
 	}
 }
 
-func workspaceShowCmd() *cobra.Command {
+func workspaceViewCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "show <name>",
-		Short: "Show workspace details",
+		Use:   "view <name>",
+		Short: "View workspace details",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := whip.NormalizeWorkspaceName(args[0])
@@ -198,4 +199,42 @@ func workspaceDropCmd() *cobra.Command {
 	}
 	cmd.Flags().BoolVarP(&force, "force", "f", false, "Kill active sessions before dropping the workspace")
 	return cmd
+}
+
+func workspaceBroadcastCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "broadcast <name> <message>",
+		Short: "Send a message to all active tasks in a workspace",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			workspaceName := whip.NormalizeWorkspaceName(args[0])
+			if err := whip.ValidateWorkspaceName(workspaceName); err != nil {
+				return err
+			}
+
+			store, err := whip.NewStore()
+			if err != nil {
+				return err
+			}
+
+			tasks, err := store.ListTasks()
+			if err != nil {
+				return err
+			}
+
+			filtered := make([]*whip.Task, 0, len(tasks))
+			for _, task := range tasks {
+				if task.WorkspaceName() == workspaceName {
+					filtered = append(filtered, task)
+				}
+			}
+
+			sent, err := whip.BroadcastMessage(filtered, args[1])
+			fmt.Fprintf(os.Stderr, "Broadcast sent to %d session(s) in workspace %s\n", sent, workspaceName)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+			}
+			return nil
+		},
+	}
 }

@@ -27,7 +27,7 @@ export const taskStatusDisplay: Record<TaskStatus, TaskStatusDisplay> = {
     label: 'review',
     className: 'text-pink-500 dark:text-pink-400 font-bold',
   },
-  approved_pending_finalize: {
+  approved: {
     icon: '◉',
     label: 'approved',
     className: 'text-emerald-500 dark:text-emerald-400 font-bold',
@@ -41,6 +41,11 @@ export const taskStatusDisplay: Record<TaskStatus, TaskStatusDisplay> = {
     icon: '✗',
     label: 'failed',
     className: 'text-red-500 dark:text-red-400',
+  },
+  canceled: {
+    icon: '⊘',
+    label: 'canceled',
+    className: 'text-slate-500 dark:text-slate-400',
   },
 }
 

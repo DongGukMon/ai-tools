@@ -6,9 +6,10 @@ const statusDisplay: TaskStatus[] = [
   'assigned',
   'in_progress',
   'review',
-  'approved_pending_finalize',
-  'completed',
+  'approved',
   'failed',
+  'completed',
+  'canceled',
 ]
 
 export function SummaryStats({ tasks }: { tasks: Task[] }) {

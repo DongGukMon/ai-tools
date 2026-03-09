@@ -25,6 +25,7 @@ var (
 
 	colorReview   = lipgloss.Color("#F472B6")
 	colorApproved = lipgloss.Color("#22C55E")
+	colorCanceled = lipgloss.Color("#94A3B8")
 
 	statusCreated    = lipgloss.NewStyle().Foreground(colorSubtle)
 	statusAssigned   = lipgloss.NewStyle().Foreground(colorWarning)
@@ -33,6 +34,7 @@ var (
 	statusApproved   = lipgloss.NewStyle().Foreground(colorApproved).Bold(true)
 	statusCompleted  = lipgloss.NewStyle().Foreground(colorSuccess)
 	statusFailed     = lipgloss.NewStyle().Foreground(colorDanger)
+	statusCanceled   = lipgloss.NewStyle().Foreground(colorCanceled)
 
 	idStyle        = lipgloss.NewStyle().Foreground(colorWarning)
 	pidAliveStyle  = lipgloss.NewStyle().Foreground(colorSuccess)
@@ -44,7 +46,6 @@ var (
 
 type tickMsg time.Time
 type cleanedMsg int
-type retryResultMsg struct{ err error }
 
 type peerInfo struct {
 	Name   string
@@ -191,23 +192,6 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case peersMsg:
 		m.peers = []peerInfo(msg)
-
-	case retryResultMsg:
-		if msg.err != nil {
-			m.err = msg.err
-		}
-		return m, m.loadTasks()
-
-	case resumeResultMsg:
-		if msg.err != nil {
-			m.err = msg.err
-			return m, nil
-		}
-		if msg.sessionName != "" {
-			m.pendingAttach = msg.sessionName
-			return m, tea.Quit
-		}
-		return m, nil
 
 	case ircSendResultMsg:
 		m.ircLastSendErr = msg.err

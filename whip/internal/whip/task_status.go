@@ -5,49 +5,63 @@ import "fmt"
 type TaskStatus string
 
 const (
-	StatusCreated                 TaskStatus = "created"
-	StatusAssigned                TaskStatus = "assigned"
-	StatusInProgress              TaskStatus = "in_progress"
-	StatusReview                  TaskStatus = "review"
-	StatusApprovedPendingFinalize TaskStatus = "approved_pending_finalize"
-	StatusCompleted               TaskStatus = "completed"
-	StatusFailed                  TaskStatus = "failed"
+	StatusCreated    TaskStatus = "created"
+	StatusAssigned   TaskStatus = "assigned"
+	StatusInProgress TaskStatus = "in_progress"
+	StatusReview     TaskStatus = "review"
+	StatusApproved   TaskStatus = "approved"
+	StatusFailed     TaskStatus = "failed"
+	StatusCompleted  TaskStatus = "completed"
+	StatusCanceled   TaskStatus = "canceled"
 )
 
 func (s TaskStatus) IsValid() bool {
-	switch s {
-	case StatusCreated, StatusAssigned, StatusInProgress, StatusReview, StatusApprovedPendingFinalize, StatusCompleted, StatusFailed:
+	switch NormalizeTaskStatus(s) {
+	case StatusCreated, StatusAssigned, StatusInProgress, StatusReview, StatusApproved, StatusFailed, StatusCompleted, StatusCanceled:
 		return true
 	}
 	return false
 }
 
 func (s TaskStatus) IsTerminal() bool {
-	return s == StatusCompleted || s == StatusFailed
+	s = NormalizeTaskStatus(s)
+	return s == StatusCompleted || s == StatusCanceled
 }
 
 func (s TaskStatus) IsActive() bool {
-	return s == StatusAssigned || s == StatusInProgress || s == StatusApprovedPendingFinalize
+	s = NormalizeTaskStatus(s)
+	return s == StatusAssigned || s == StatusInProgress || s == StatusReview || s == StatusApproved
+}
+
+func NormalizeTaskStatus(s TaskStatus) TaskStatus {
+	switch s {
+	case "approved_pending_finalize":
+		return StatusApproved
+	default:
+		return s
+	}
 }
 
 // ValidateTransition checks if a status transition is allowed.
 func (t *Task) ValidateTransition(newStatus TaskStatus) error {
+	current := NormalizeTaskStatus(t.Status)
+	newStatus = NormalizeTaskStatus(newStatus)
 	if !newStatus.IsValid() {
 		return fmt.Errorf("invalid status: %s", newStatus)
 	}
 
 	allowed := map[TaskStatus][]TaskStatus{
-		StatusCreated:                 {StatusAssigned},
-		StatusAssigned:                {StatusInProgress, StatusCreated},
-		StatusInProgress:              {StatusCompleted, StatusReview, StatusFailed},
-		StatusReview:                  {StatusApprovedPendingFinalize, StatusFailed},
-		StatusApprovedPendingFinalize: {StatusCompleted, StatusFailed},
-		StatusFailed:                  {StatusCreated},
+		StatusCreated:    {StatusAssigned, StatusCanceled},
+		StatusAssigned:   {StatusInProgress, StatusFailed, StatusCanceled},
+		StatusInProgress: {StatusReview, StatusCompleted, StatusFailed, StatusCanceled},
+		StatusReview:     {StatusApproved, StatusFailed, StatusCanceled},
+		StatusApproved:   {StatusCompleted, StatusFailed, StatusCanceled},
+		StatusFailed:     {StatusAssigned, StatusCanceled},
 	}
 
-	targets, ok := allowed[t.Status]
+	targets, ok := allowed[current]
 	if !ok {
-		return fmt.Errorf("cannot transition from terminal status %s", t.Status)
+		return fmt.Errorf("cannot transition from terminal status %s", current)
 	}
 
 	for _, s := range targets {
@@ -55,5 +69,5 @@ func (t *Task) ValidateTransition(newStatus TaskStatus) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("cannot transition from %s to %s", t.Status, newStatus)
+	return fmt.Errorf("cannot transition from %s to %s", current, newStatus)
 }

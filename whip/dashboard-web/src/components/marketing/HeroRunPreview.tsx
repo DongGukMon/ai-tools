@@ -84,7 +84,7 @@ const steps: PreviewStep[] = [
     id: 'review',
     label: 'Review',
     summary: 'The companion agent escalates only the decisions that need a human.',
-    command: 'whip task approve contract-lane && whip task status export-lane review',
+    command: 'whip task approve contract-lane && whip task review export-lane',
     dialogue: [
       {
         label: 'Companion',
@@ -110,7 +110,7 @@ const steps: PreviewStep[] = [
     id: 'complete',
     label: 'Complete',
     summary: 'All lanes converge. The companion agent closes the run cleanly.',
-    command: 'whip task status replay-run completed --note "stack merged cleanly"',
+    command: 'whip task complete replay-run --note "stack merged cleanly"',
     dialogue: [
       {
         label: 'Companion',

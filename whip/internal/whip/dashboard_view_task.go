@@ -61,7 +61,7 @@ func (m DashboardModel) renderDetailView(w int) string {
 		{"ID", idStyle.Render(t.ID)},
 		{"Workspace", valStyle.Render(t.WorkspaceName())},
 		{"Title", valStyle.Render(t.Title)},
-		{"Status", renderStatus(t.Status)},
+		{"Status", valStyle.Render(string(t.Status))},
 		{"Backend", renderBackend(t.Backend)},
 		{"Difficulty", valStyle.Render(diffDisplay)},
 		{"Review", valStyle.Render(fmt.Sprintf("%v", t.Review))},
@@ -93,7 +93,11 @@ func (m DashboardModel) renderDetailView(w int) string {
 		fields = append(fields, struct{ label, value string }{"Assigned", lipgloss.NewStyle().Foreground(colorSubtle).Render(t.AssignedAt.Format(time.RFC3339))})
 	}
 	if t.CompletedAt != nil {
-		fields = append(fields, struct{ label, value string }{"Completed", lipgloss.NewStyle().Foreground(colorSubtle).Render(t.CompletedAt.Format(time.RFC3339))})
+		label := "Completed"
+		if t.Status == StatusCanceled {
+			label = "Canceled"
+		}
+		fields = append(fields, struct{ label, value string }{label, lipgloss.NewStyle().Foreground(colorSubtle).Render(t.CompletedAt.Format(time.RFC3339))})
 	}
 
 	for _, f := range fields {
@@ -242,14 +246,17 @@ func (m DashboardModel) renderSummary() string {
 	if n := counts[StatusReview]; n > 0 {
 		parts = append(parts, renderStatusCount(StatusReview, n))
 	}
-	if n := counts[StatusApprovedPendingFinalize]; n > 0 {
-		parts = append(parts, renderStatusCount(StatusApprovedPendingFinalize, n))
+	if n := counts[StatusApproved]; n > 0 {
+		parts = append(parts, renderStatusCount(StatusApproved, n))
 	}
 	if n := counts[StatusCompleted]; n > 0 {
 		parts = append(parts, renderStatusCount(StatusCompleted, n))
 	}
 	if n := counts[StatusFailed]; n > 0 {
 		parts = append(parts, renderStatusCount(StatusFailed, n))
+	}
+	if n := counts[StatusCanceled]; n > 0 {
+		parts = append(parts, renderStatusCount(StatusCanceled, n))
 	}
 
 	content := strings.Join(parts, dot)
@@ -283,12 +290,6 @@ func (m DashboardModel) renderDetailFooter() string {
 
 	if m.selectedTask != nil && m.selectedTask.Runner == "tmux" && IsTmuxSession(m.selectedTask.ID) {
 		line += dot + footerKey("a", "attach tmux")
-	}
-	if m.selectedTask != nil && m.selectedTask.Status == StatusFailed {
-		line += dot + footerKey("r", "retry")
-	}
-	if m.selectedTask != nil && m.selectedTask.Status != StatusCompleted && m.selectedTask.SessionID != "" && m.selectedTask.ShellPID > 0 && !IsProcessAlive(m.selectedTask.ShellPID) {
-		line += dot + footerKey("s", "resume")
 	}
 
 	return lipgloss.NewStyle().MarginTop(1).Render(line)

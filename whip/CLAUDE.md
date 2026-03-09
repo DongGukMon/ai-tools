@@ -1,130 +1,101 @@
-# whip - Claude Usage Guide
+# whip - Claude Guide
 
-## When to Use
+Use `whip` when one Claude session should lead and dispatch work to agent sessions.
 
-Use `whip` when one Claude session should act as a lead and dispatch work to other Claude sessions.
+## Read This First
 
-- Split a larger task into parallel sub-tasks
-- Track ownership, status, and stack order between tasks
-- Resume or retry agent sessions with preserved context
-- Coordinate a team through `claude-irc`
+Prefer the CLI as the source of truth:
 
-For ad hoc execution, use the CLI directly. For guided planning and dispatch, prefer `/whip-plan` and `/whip-start`. To capture a completed run as a reusable case study, use `/whip-lesson-learn`.
+- `whip --help`
+- `whip task --help`
+- `whip workspace --help`
+- `whip task lifecycle`
+- `whip task <action> --help`
 
-## Workspace Model
+Do not memorize stale command lists from old docs. Use help output when in doubt.
 
-- `global` is for single-task work.
-- `workspace` is for stacked work.
-- A named workspace should be planned as a stacked lane of related tasks, not as an arbitrary flat bag of concurrent tasks.
-- `whip task create --workspace <name>` ensures the named workspace on first use.
-- Workspace execution model:
-  - `git-worktree` when the current cwd is inside git; the workspace keeps its isolated checkout at `WHIP_HOME/workspaces/<name>/worktree`
-  - `direct-cwd` when the current cwd is not inside git; tasks keep using that cwd and may not have a worktree path
-- `whip workspace show <name>` reports the workspace execution model together with repo/worktree metadata.
-- When continuing a named workspace, prefer the stored workspace worktree as the working-directory context for repo commands.
-- `~/.whip/home/` remains shared reference context. Task state is namespaced by workspace.
-- `claude-irc` remains a shared bus. Master identity is scoped by workspace:
-  - `global` → `whip-master`
-  - `<workspace>` → `whip-master-<workspace>`
+## Core Model
 
-## Typical Workflow
+- `global` is for one self-contained task.
+- `workspace` is for a stacked lane of related tasks.
+- For an existing named workspace, run `whip workspace view <name>` first.
+- If `workspace view` shows a `worktree_path`, use that path for later repo inspection, tests, and review commands.
+
+Workspace execution model:
+
+- `git-worktree`: first `whip task create --workspace <name>` ran inside git, so whip maintains `WHIP_HOME/workspaces/<name>/worktree`.
+- `direct-cwd`: first `whip task create --workspace <name>` ran outside git, so tasks keep using the provided cwd.
+
+## Task Lifecycle
+
+Statuses:
+
+- `created`
+- `assigned`
+- `in_progress`
+- `review`
+- `approved`
+- `failed`
+- `completed`
+- `canceled`
+
+Terminal statuses:
+
+- `completed`
+- `canceled`
+
+Rules:
+
+- Only lifecycle commands change status: `assign`, `start`, `review`, `approve`, `complete`, `fail`, `cancel`
+- Operational commands do not change status: `create`, `list`, `view`, `lifecycle`, `note`, `dep`, `clean`, `delete`
+- `failed` is non-terminal; re-dispatch with `whip task assign <id>`
+- Review tasks use `assign -> start -> review -> approve -> complete`
+- Non-review tasks can use `assign -> start -> complete`
+
+## Typical Flow
 
 ```bash
-# Single-task work in global
+# single-task work
 claude-irc join whip-master
 whip task create "Auth module" --difficulty medium --desc "Implement JWT auth"
-whip task assign <auth-id>
+whip task assign <task-id>
+whip task list
 ```
 
 ```bash
-# Stacked work in a named workspace
+# named workspace
 claude-irc join whip-master-issue-sweep
-
+whip workspace view issue-sweep
 whip task create "Auth module" --workspace issue-sweep --difficulty medium --desc "Implement JWT auth"
-whip task create "Deploy" --workspace issue-sweep --difficulty easy --desc "Deploy after auth"
-whip task dep <deploy-id> --after <auth-id>   # lower-level command that encodes stack order
+whip task dep <deploy-id> --after <auth-id>
 whip task assign <auth-id>
-whip task list
-whip workspace show issue-sweep
 whip dashboard
 claude-irc inbox
 ```
 
+Useful operational commands:
+
+- `whip task note <id> "..."` for progress without state change
+- `whip workspace broadcast <workspace> "..."` for workspace-wide announcements
+- `whip task clean` to remove terminal tasks
+- `whip workspace drop <name>` to remove a named workspace
+
 ## Remote Mode
 
-`whip remote` spawns a master Claude Code session in tmux and starts `claude-irc serve` for HTTP API access. This enables the web dashboard to display the master session's terminal output in real-time with direct keyboard input.
+- `whip remote` starts a master session plus HTTP access for the web dashboard.
+- `tmux` is required.
+- Use `whip remote --help` and the printed URL/OTP flow instead of relying on stale prose.
 
-```bash
-# Basic usage (requires tmux)
-whip remote
+`~/.whip/home/` is persistent master context:
 
-# Workspace-specific remote master
-whip remote --workspace issue-sweep
+- `prompt.md`
+- `memory.md`
+- `projects.md`
 
-# With options
-whip remote --workspace issue-sweep --backend codex --difficulty medium --port 8585 --tunnel irc.bang9.dev
-whip remote --auth-mode token
-```
-
-**Flags:**
-- `--backend` — AI backend: `claude` (default) or `codex`
-- `--difficulty` — Model effort level: `easy`, `medium`, `hard` (default)
-- `--workspace` — named workspace for stacked work (default: `global`)
-- `--port` — Serve port (default 8585)
-- `--tunnel` — Cloudflare tunnel hostname for remote access
-- `--auth-mode` — `device` (default) or legacy `token`
-
-Tunnel, port, and auth mode settings are saved to `~/.whip/config.json` for reuse. Ctrl+C stops the serve process; the master tmux session persists for reattach.
-
-Default remote auth is **device mode**:
-
-- Open the printed **Short URL**
-- The web dashboard redirects into the login flow
-- `whip remote` prints a one-time OTP with a 2 minute lifetime
-- Enter that OTP in the browser to register the session
-
-Use `--auth-mode token` only if you explicitly need the older long-lived bearer token flow.
-
-Keyboard shortcuts while remote mode is active:
-
-- `o` — open the short URL in the browser
-- `c` — copy the raw connect URL
-- `q` — stop serve and return to the shell
-
-### TUI Dashboard
-
-Press `R` in the task list view to configure and start/stop remote mode. The dashboard footer shows serve status, URL, and master session health when active.
-
-### Web Dashboard
-
-The web dashboard at the configured URL includes a **Terminal** tab that renders the master session's tmux output with full ANSI color support (via xterm.js) and allows sending keyboard input directly.
-
-## Whip Home
-
-`whip remote` seeds and reuses `~/.whip/home/` as persistent context for the master session.
-
-- `prompt.md` is the master system prompt used by remote mode. It is only seeded when missing, so local edits persist across sessions.
-- `memory.md` stores durable user preferences, operational patterns, and judgment criteria that the master can update as it learns.
-- `projects.md` stores a lightweight project registry with paths, stacks, status, and short notes that the master can keep current.
-
-Sub-agents may reference `~/.whip/home/memory.md` and `~/.whip/home/projects.md` as read-only context.
+Treat these as reference context, not task-local state.
 
 ## Code Conventions
 
-- Prefer splitting large files by responsibility using stable prefixes such as `backend_*`, `prompt_*`, `dashboard_*`, `store_*`, `task_*`, and `spawn_*`.
-- Keep package boundaries small and avoid premature subpackage splits; prefer same-package file splits first, then extract a package only when the shared API is clear.
-- Split tests by subsystem as the production code grows. Avoid returning to single catch-all files like `backend_test.go` or `server_test.go`.
-
-## Help
-
-Run `whip task --help`, `whip workspace --help`, and `whip --help` for the full command list. For guided usage, see `/whip-plan`, `/whip-start`, and `/whip-lesson-learn`.
-
-## Notes
-
-- `whip task assign` only works for tasks in `created` status whose stack prerequisites are already complete.
-- `whip task create --workspace <name>` stores tasks under a named workspace and ensures its workspace metadata. In `git-worktree`, it also ensures the workspace worktree before saving the task `cwd`.
-- `whip task dep` is still the compatibility command for wiring `stacked` order. Treat it as a low-level mechanism, not the primary user-facing concept.
-- Downstream stack tasks auto-assign when their prerequisites become `completed`.
-- `whip workspace drop <name>` is the cleanup entry point for named workspace tasks, metadata, and worktree state.
-- `tmux` is the preferred runner because it allows dashboard capture and attach.
-- `whip remote` requires `tmux` to be installed (`brew install tmux` on macOS).
+- Prefer same-package file splits with stable prefixes such as `backend_*`, `prompt_*`, `dashboard_*`, `store_*`, `task_*`, `spawn_*`.
+- Keep package boundaries small; extract a new package only when the shared API is clear.
+- Keep tests split by subsystem instead of collapsing back into one catch-all file.

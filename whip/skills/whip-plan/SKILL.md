@@ -31,7 +31,7 @@ When you pick a named workspace, remember that execution later resolves to one o
 If the user wants one self-contained task, keep it in `global`.
 If the user wants a grouped session, stacked PR lane, issue sweep, or anything likely to overlap in the same repo, pick a named workspace and plan the work as a stack.
 
-If you are planning follow-up work for an existing named workspace, inspect it with `whip workspace show <workspace-name>` and prefer its stored `worktree_path` as the working-directory context for read-only exploration. If no named workspace exists yet, plan from the current repo and let `/whip-start` or `whip task create --workspace <name>` materialize the workspace later.
+If you are planning follow-up work for an existing named workspace, inspect it with `whip workspace view <workspace-name>` and prefer its stored `worktree_path` as the working-directory context for read-only exploration. If no named workspace exists yet, plan from the current repo and let `/whip-start` or `whip task create --workspace <name>` materialize the workspace later.
 
 ## Step 3: Explore the codebase
 
@@ -203,6 +203,7 @@ Run `/whip-start <bound-file-path>` to execute this plan.
 
 Replace `<bound-file-path>` with the actual bound file path (e.g., `~/.claude/plans/serialized-strolling-lightning.md`).
 Prefer explicit `Backend` fields in the task specs so the plan behaves the same whether `/whip-start` runs in Claude or Codex.
+If execution needs lifecycle details, tell the operator to use `whip task lifecycle` for the canonical state machine and `whip task <action> --help` for the exact transition.
 
 ## Step 8: Exit plan mode
 

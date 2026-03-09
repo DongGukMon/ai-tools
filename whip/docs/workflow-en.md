@@ -25,7 +25,7 @@ sequenceDiagram
     Master->>Whip: task assign → spawns Terminal tab
     Whip->>Agent: New Terminal tab with prompt.txt
 
-    Agent->>Whip: task heartbeat (register PID)
+    Agent->>Whip: task start <id> (register PID, enter in_progress)
     Agent->>IRC: join whip-<task-id>
     Agent->>IRC: msg workspace-master "Acknowledged. Starting..."
     Agent->>IRC: msg workspace-master "Plan: ..."
@@ -40,7 +40,7 @@ sequenceDiagram
 
     Agent->>IRC: msg workspace-master "Task complete. Summary..."
     Agent->>IRC: quit
-    Agent->>Whip: task status <id> completed --note "summary"
+    Agent->>Whip: task complete <id> --note "summary"
     Whip-->>Master: Dependent tasks auto-assigned
 ```
 
@@ -50,14 +50,35 @@ sequenceDiagram
 
 ```
 created --> assigned --> in_progress --> completed
-                                    --> failed
+                               review --> approved --> completed
+
+assigned --> failed
+in_progress --> failed
+review --> failed
+approved --> failed
+
+created --> canceled
+assigned --> canceled
+in_progress --> canceled
+review --> canceled
+approved --> canceled
+failed --> assigned
+failed --> canceled
 ```
 
 - **created**: Task stored in `global` (`WHIP_HOME/tasks/<id>/task.json`, default `~/.whip/tasks/<id>/task.json`) or a named workspace (`WHIP_HOME/workspaces/<name>/tasks/<id>/task.json`)
-- **assigned**: `whip task assign` spawns a new Terminal tab with Claude Code and a prompt file
-- **in_progress**: Agent calls `whip task heartbeat`, registering its PID
-- **completed**: Agent finishes work; downstream stack tasks auto-assign
-- **failed**: Agent couldn't complete; handoff note preserved for retry
+- **assigned**: `whip task assign` spawns a new Terminal tab with Claude Code and a prompt file. It is also the re-dispatch path from `failed`.
+- **in_progress**: Agent calls `whip task start`, which registers its PID and explicitly enters active execution
+- **review**: Agent finished the implementation and is waiting for master review
+- **approved**: Master approved a review task; the agent can finalize and complete it
+- **failed**: Current attempt stopped, but the task is still recoverable and can be reassigned
+- **completed**: Terminal success state; downstream stack tasks auto-assign
+- **canceled**: Terminal stop state when the task should no longer continue
+- Terminal statuses are `completed` and `canceled`
+- Only lifecycle commands change task status: `assign`, `start`, `review`, `approve`, `complete`, `fail`, `cancel`
+- Operational commands such as `create`, `list`, `view`, `lifecycle`, `note`, `dep`, `clean`, and `delete` do not change status
+- Run `whip task lifecycle` to print the canonical state machine
+- Run `whip task <action> --help` to inspect the exact transition handled by that lifecycle command
 
 ### Communication Layer
 
@@ -135,7 +156,7 @@ Tasks with unmet prerequisites cannot be assigned. `whip task dep` is the low-le
 ### 4. Assign Tasks
 
 ```bash
-whip task assign <task-id>
+whip task assign <task-id>   # created|failed -> assigned
 ```
 
 This:
@@ -151,13 +172,16 @@ Once spawned, the agent follows a defined protocol:
 
 ```bash
 # Agent initialization (automatic from prompt.txt)
-whip task heartbeat <task-id>                    # Register PID
+whip task start <task-id>                   # assigned -> in_progress, register PID
 claude-irc join whip-<task-id>              # Join IRC
 claude-irc msg <workspace-master> "Acknowledged."  # Announce start
 /loop 1m claude-irc inbox                   # Enable monitoring
 
 # Agent shares plan before diving in
 claude-irc msg <workspace-master> "Plan: <2-3 sentence approach>"
+
+# Optional progress note without changing status
+whip task note <task-id> "Started implementation and verified the local setup."
 ```
 
 The master monitors incoming messages via the `/loop` cron and responds as needed:
@@ -167,7 +191,7 @@ The master monitors incoming messages via the `/loop` cron and responds as neede
 claude-irc msg whip-<task-id> "Use the existing UserService, don't create a new one."
 
 # Master broadcasts to all agents
-whip task broadcast "API contract updated. Check the latest notes."
+whip workspace broadcast issue-sweep "API contract updated. Check the latest notes."
 ```
 
 When the whip TUI sends a message to an agent, it arrives under the identity `user`. Agents can reply directly:
@@ -189,24 +213,39 @@ whip task list
 whip dashboard
 
 # Check specific task details
-whip task show <task-id>
+whip task view <task-id>
 ```
 
 The dashboard shows task status, PID liveness, blocked-by relationships, and progress notes.
 
 ### 7. Task Completion
 
-When an agent finishes:
+When an agent finishes without a review hold:
 
 ```bash
 # Agent side
 claude-irc msg whip-master "Task <id> complete. Implemented JWT auth with refresh tokens."
 claude-irc quit
-whip task status <id> completed --note "JWT + refresh token auth. Files: src/auth/, src/middleware/auth.ts"
+whip task complete <id> --note "JWT + refresh token auth. Files: src/auth/, src/middleware/auth.ts"
 # Session auto-terminates
 ```
 
 When a task completes, `whip` checks if any downstream stack tasks are now unblocked and auto-assigns them.
+
+If the task was created with a review gate, the lifecycle is explicit:
+
+```bash
+# Agent side
+whip task review <id> --note "Ready for review. Main files: src/auth/, src/middleware/auth.ts"
+
+# Master side
+whip task approve <id>
+
+# Agent side after approval
+whip task complete <id> --note "Committed and finalized after review."
+```
+
+Approval does not mark the task `completed`; it moves the task to `approved`, then the agent finishes with `whip task complete`.
 
 ### 8. Handling Failures
 
@@ -216,20 +255,25 @@ If an agent cannot complete its task:
 # Agent writes detailed handoff note
 claude-irc msg whip-master "Task <id> failed: <reason>. Handoff note written."
 claude-irc quit
-whip task status <id> failed --note "Accomplished X. Failed at Y because Z. Next agent should start at..."
+whip task fail <id> --note "Accomplished X. Failed at Y because Z. Next agent should start at..."
 ```
 
-The master can then retry:
+The master can then re-dispatch the same task directly:
 
 ```bash
-whip task unassign <id>    # Reset to created
-whip task assign <id>      # Spawn fresh agent (handoff note included in prompt)
+whip task assign <id>      # failed -> assigned; handoff note stays in context
+```
+
+If the work should stop permanently, cancel it explicitly:
+
+```bash
+whip task cancel <id> --note "Scope changed; this task is no longer needed."
 ```
 
 ### 9. Clean Up
 
 ```bash
-whip task clean                 # Remove completed/failed tasks
+whip task clean                 # Remove completed/canceled tasks
 whip workspace drop issue-sweep # Drop a named workspace's tasks, metadata, and worktree
 claude-irc quit   # Leave IRC (only when fully done)
 ```
@@ -252,7 +296,7 @@ whip task assign <id>
 
 - One agent, one task
 - Direct communication between master and agent
-- Simple lifecycle: create -> assign -> monitor -> complete
+- Simple lifecycle: create -> assign -> start -> complete
 
 ### Workspace Flow
 
@@ -264,7 +308,7 @@ whip task create "Auth module" --workspace issue-sweep --desc "..."       # → 
 whip task create "API endpoints" --workspace issue-sweep --desc "..."     # → id: d3e4f
 whip task create "Frontend pages" --workspace issue-sweep --desc "..."    # → id: g5h6i
 whip task create "Deploy" --workspace issue-sweep --desc "..."            # → id: j7k8l
-whip workspace show issue-sweep                                            # inspect repo/worktree metadata if needed
+whip workspace view issue-sweep                                            # inspect repo/worktree metadata if needed
 
 # Step 2: Encode stack order
 whip task dep j7k8l --after a1b2c --after d3e4f --after g5h6i
@@ -411,29 +455,40 @@ whip task clean
 
 ## Command Reference
 
-### whip commands
+### whip task lifecycle commands
+
+| Command | Description |
+|---------|-------------|
+| `whip task assign <id> [--master-irc <name>]` | `created|failed -> assigned`; spawn an agent session |
+| `whip task start <id>` | `assigned -> in_progress`; register PID for the current run |
+| `whip task review <id>` | `in_progress -> review` |
+| `whip task approve <id>` | `review -> approved` |
+| `whip task complete <id>` | `in_progress|approved -> completed` |
+| `whip task fail <id>` | `assigned|in_progress|review|approved -> failed` |
+| `whip task cancel <id>` | `created|assigned|in_progress|review|approved|failed -> canceled` |
+
+### whip task operational commands
 
 | Command | Description |
 |---------|-------------|
 | `whip task create <title> [--desc/--file/stdin] [--workspace <name>]` | Create a new task |
 | `whip task list` | List all tasks with status |
-| `whip task show <id>` | Show task details |
-| `whip task assign <id> [--master-irc <name>]` | Spawn agent in new Terminal tab |
-| `whip task unassign <id>` | Kill session, reset to created |
-| `whip task status <id> [status] [--note]` | Get/set status with notes |
-| `whip task broadcast "message"` | Message all active sessions |
-| `whip task heartbeat [id]` | Register PID (called by agents) |
-| `whip task kill <id>` | Force kill a session |
-| `whip task clean` | Remove completed/failed tasks |
+| `whip task view <id>` | View task details |
+| `whip task lifecycle [id] [--format json]` | Show the full state machine or valid next actions |
+| `whip task note <id> "<message>"` | Add progress information without changing status |
 | `whip task dep <id> --after <id>` | Encode stack prerequisites |
+| `whip task clean` | Remove completed/canceled tasks |
 | `whip task delete <id>` | Delete a task |
+
+Removed task commands: `status`, `retry`, `resume`, `attach`, `unassign`, `kill`
 
 ### whip workspace commands
 
 | Command | Description |
 |---------|-------------|
 | `whip workspace list` | List named workspaces |
-| `whip workspace show <name>` | Show workspace metadata and tasks |
+| `whip workspace view <name>` | View workspace metadata and tasks |
+| `whip workspace broadcast <workspace> <message>` | Message all active sessions in that workspace |
 | `whip workspace drop <name>` | Remove workspace tasks, metadata, and worktree |
 
 ### other whip commands

@@ -113,7 +113,7 @@ function createMockTasks(): Task[] {
       description: 'Prepare runbook, smoke checks, and rollback checklist for the lane.',
       cwd: '/workspace/search-platform',
       workspace: 'incident-replay',
-      status: 'approved_pending_finalize',
+      status: 'approved',
       backend: 'claude',
       runner: 'tmux',
       irc_name: 'whip-d44ef',

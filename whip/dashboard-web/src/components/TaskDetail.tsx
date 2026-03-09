@@ -1,5 +1,4 @@
 import type { Task } from '../api/types'
-import { StatusBadge } from './StatusBadge'
 
 interface TaskDetailProps {
   task: Task
@@ -42,7 +41,7 @@ function RunnerValue({ runner }: { runner: string }) {
 function PidValue({ pid, alive, status }: { pid: number; alive: boolean; status: Task['status'] }) {
   if (pid <= 0) return <span className="text-gray-400 dark:text-gray-600">&mdash;</span>
   if (alive) return <span className="text-emerald-500 dark:text-emerald-400">● {pid}</span>
-  if (status === 'completed') return <span className="text-amber-500 dark:text-amber-400">- {pid}</span>
+  if (status === 'completed' || status === 'canceled') return <span className="text-amber-500 dark:text-amber-400">- {pid}</span>
   return <span className="text-red-500 dark:text-red-400">✗ {pid}</span>
 }
 
@@ -95,7 +94,9 @@ export function TaskDetail({ task, onClose }: TaskDetailProps) {
             </Field>
             <Field label="Title">{task.title}</Field>
             <Field label="Workspace">{task.workspace || 'global'}</Field>
-            <Field label="Status"><StatusBadge status={task.status} /></Field>
+            <Field label="Status">
+              <span className="text-gray-900 dark:text-gray-100">{task.status}</span>
+            </Field>
             <Field label="Backend"><BackendValue backend={task.backend} /></Field>
             <Field label="Difficulty">
               {task.difficulty || 'default'}
@@ -140,7 +141,7 @@ export function TaskDetail({ task, onClose }: TaskDetailProps) {
               </Field>
             )}
             {task.completed_at && (
-              <Field label="Completed">
+              <Field label={task.status === 'canceled' ? 'Canceled' : 'Completed'}>
                 <span className="text-gray-500 dark:text-gray-500">{formatTime(task.completed_at)}</span>
               </Field>
             )}

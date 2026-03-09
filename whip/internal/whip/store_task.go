@@ -11,6 +11,7 @@ import (
 
 func (s *Store) SaveTask(task *Task) error {
 	task.Workspace = NormalizeWorkspaceName(task.Workspace)
+	task.Status = NormalizeTaskStatus(task.Status)
 	return s.withTaskLockInWorkspace(task.Workspace, task.ID, func() error {
 		return s.saveTaskUnlocked(task)
 	})
@@ -18,6 +19,7 @@ func (s *Store) SaveTask(task *Task) error {
 
 func (s *Store) saveTaskUnlocked(task *Task) error {
 	task.Workspace = NormalizeWorkspaceName(task.Workspace)
+	task.Status = NormalizeTaskStatus(task.Status)
 	dir := s.taskDirInWorkspace(task.Workspace, task.ID)
 	if err := ensurePrivateDir(dir); err != nil {
 		return err
@@ -46,6 +48,7 @@ func (s *Store) loadTaskUnlocked(id string) (*Task, error) {
 		return nil, fmt.Errorf("corrupt task %s: %w", id, err)
 	}
 	task.Workspace = NormalizeWorkspaceName(task.Workspace)
+	task.Status = NormalizeTaskStatus(task.Status)
 	return &task, nil
 }
 
@@ -199,7 +202,7 @@ func (s *Store) AreDependenciesMet(task *Task) (bool, []string, error) {
 	return len(unmet) == 0, unmet, nil
 }
 
-// CleanTerminal removes all completed/failed tasks.
+// CleanTerminal removes all completed/canceled tasks.
 func (s *Store) CleanTerminal() (int, error) {
 	tasks, err := s.ListTasks()
 	if err != nil {

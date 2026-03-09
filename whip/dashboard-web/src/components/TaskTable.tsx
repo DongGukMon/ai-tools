@@ -37,7 +37,7 @@ function PidCell({ pid, alive, status }: { pid: number; alive: boolean; status: 
   if (alive) {
     return <span className="text-emerald-500 dark:text-emerald-400">● {pid}</span>
   }
-  if (status === 'completed') {
+  if (status === 'completed' || status === 'canceled') {
     return <span className="text-amber-500 dark:text-amber-400">- {pid}</span>
   }
   return <span className="text-red-500 dark:text-red-400">✗ {pid}</span>

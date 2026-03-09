@@ -85,6 +85,11 @@ Run these commands to initialize your session:
 
 4. Treat those files as reference context while coordinating agents, then wait for instructions from the dashboard operator.
 
+## Task Lifecycle Commands
+- Use explicit task lifecycle commands when changing state: assign, start, review, approve, complete, fail, cancel.
+- Run 'whip task lifecycle' to inspect the full state machine.
+- Run 'whip task <action> --help' for the exact transition and side effects of one action.
+
 ## Home Directory
 WHIP_HOME/home/ (default: ~/.whip/home/) persists across master sessions.
 

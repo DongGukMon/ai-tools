@@ -12,7 +12,7 @@ export interface Message {
   read: boolean
 }
 
-export type TaskStatus = 'created' | 'assigned' | 'in_progress' | 'review' | 'approved_pending_finalize' | 'completed' | 'failed'
+export type TaskStatus = 'created' | 'assigned' | 'in_progress' | 'review' | 'approved' | 'failed' | 'completed' | 'canceled'
 
 export interface Task {
   id: string

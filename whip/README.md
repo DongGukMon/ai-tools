@@ -1,6 +1,6 @@
 # whip
 
-Task orchestrator for Claude Code. Use `whip task ...` for task lifecycle, `whip workspace ...` for workspace lifecycle, and the dashboard or remote mode for monitoring.
+Task orchestrator for Claude Code. Use `whip task ...` for task lifecycle, `whip workspace ...` for named workspaces, and the dashboard or remote mode for monitoring.
 
 ## Install
 
@@ -18,127 +18,123 @@ Or via Claude Code Plugin:
 ## Quick Start
 
 ```bash
-# Single-task work in global
+# single-task work in global
 whip task create "Auth module" --desc "Implement JWT authentication"
-whip task assign <auth-id>
+whip task assign <task-id>
+```
 
-# Stacked work in a named workspace
+```bash
+# stacked work in a named workspace
 whip task create "API endpoints" --workspace issue-sweep --desc "Build REST API for users"
-whip workspace show issue-sweep
+whip workspace view issue-sweep
 whip dashboard
 ```
 
-## Task Commands
+## Task Lifecycle
+
+```text
+created -> assigned -> in_progress -> completed
+                           review -> approved -> completed
+
+assigned|in_progress|review|approved -> failed
+created|assigned|in_progress|review|approved|failed -> canceled
+failed -> assigned
+```
+
+- Statuses: `created`, `assigned`, `in_progress`, `review`, `approved`, `failed`, `completed`, `canceled`
+- Terminal statuses: `completed`, `canceled`
+- `failed` is non-terminal and can be re-dispatched with `whip task assign`
+- Review tasks use `assign -> start -> review -> approve -> complete`
+- Non-review tasks can use `assign -> start -> complete`
+
+## Command Overview
+
+For the exact CLI surface, use:
+
+- `whip --help`
+- `whip task --help`
+- `whip workspace --help`
+- `whip task lifecycle`
+- `whip task <action> --help`
+
+### Task Lifecycle Commands
+
+| Command | Description |
+|---------|-------------|
+| `task assign <id> [--master-irc <name>]` | `created|failed -> assigned`; spawn agent session |
+| `task start <id>` | `assigned -> in_progress`; register PID for the live run |
+| `task review <id>` | `in_progress -> review`; mark work ready for review |
+| `task approve <id>` | `review -> approved`; notify the agent to finalize |
+| `task complete <id>` | `in_progress|approved -> completed`; finish successfully |
+| `task fail <id>` | `assigned|in_progress|review|approved -> failed`; preserve handoff context |
+| `task cancel <id>` | `created|assigned|in_progress|review|approved|failed -> canceled` |
+
+### Task Operations
 
 | Command | Description |
 |---------|-------------|
 | `task create <title> [--desc/--file/stdin] [--workspace <name>]` | Create a task in `global` or a named workspace |
 | `task list` | List all tasks with status |
-| `task show <id>` | Show task details |
-| `task assign <id> [--master-irc <name>]` | Spawn agent session |
-| `task unassign <id>` | Kill session, reset to created |
-| `task status <id> [new-status] [--note]` | Get/set status with notes |
+| `task view <id>` | View task details |
+| `task lifecycle [id] [--format json]` | Show the full state machine or valid next actions for one task |
+| `task note <id> "<message>"` | Add progress info without changing status |
 | `task dep <id> --after <id>` | Wire stack prerequisites |
-| `task broadcast "message"` | Message all active sessions |
-| `task retry <id>` | Retry failed task |
-| `task resume <id>` | Resume task session interactively |
-| `task kill <id>` | Force kill a task session |
-| `task clean` | Remove completed/failed tasks |
+| `task clean` | Remove terminal tasks (`completed`, `canceled`) |
 | `task delete <id>` | Delete a task |
 
-## Workspace Commands
+### Workspace Commands
 
 | Command | Description |
 |---------|-------------|
 | `workspace list` | List named workspaces |
-| `workspace show <name>` | Show workspace metadata, execution model, and tasks |
+| `workspace view <name>` | View workspace metadata, execution model, and tasks |
+| `workspace broadcast <workspace> <message>` | Message all active task sessions in that workspace |
 | `workspace drop <name>` | Drop workspace tasks, metadata, and worktree |
-
-## Other Commands
-
-| Command | Description |
-|---------|-------------|
-| `dashboard` | Live TUI dashboard |
-| `remote` | Start remote mode with web dashboard |
-| `upgrade` | Upgrade whip to the latest version |
-| `version` | Print version |
-## Task Lifecycle
-
-```
-created → assigned → in_progress → completed
-                                 → failed
-```
-
-- `global` tasks stay on the legacy path: `WHIP_HOME/tasks/<id>/task.json` (default `~/.whip/tasks/<id>/task.json`)
-- Named workspace tasks are stored under `WHIP_HOME/workspaces/<name>/tasks/<id>/task.json`
-- `whip task assign` spawns a tmux session (or Terminal.app tab) with Claude Code
-- `whip task dep` remains the compatibility command for encoding stack order inside a workspace
-- Downstream stack tasks auto-assign when prerequisites complete
-- Sessions communicate via shared `claude-irc`, while master identity is scoped by workspace
 
 ## Workspace Model
 
-- Workspace model:
-  - `global` for single-task work
-  - `workspace` for stacked named lanes
-- Workspace execution model:
-  - `git-worktree` when the first `whip task create --workspace <name>` runs inside a git repository
-  - `direct-cwd` when the first `whip task create --workspace <name>` runs outside git
+- `global` is for one self-contained task.
+- `workspace` is for a stacked lane of related tasks.
 - `whip task create --workspace <name>` is the authoritative ensure step for a named workspace.
-- In `git-worktree`, whip ensures `WHIP_HOME/workspaces/<name>/worktree` and resolves each task `cwd` inside that worktree.
-- In `direct-cwd`, workspace tasks keep using the provided `cwd` and `worktree_path` may be empty.
-- `whip workspace show <name>` reports the workspace execution model together with repo/worktree metadata.
-- Once a workspace has a resolved worktree, continue repo inspection, testing, and review commands against that stored workspace path rather than the original checkout.
-- `whip workspace drop <name>` removes the workspace's tasks, metadata, and worktree together.
+
+Workspace execution model:
+
+- `git-worktree`
+  - The first `whip task create --workspace <name>` ran inside git.
+  - Whip ensures `WHIP_HOME/workspaces/<name>/worktree` and resolves task `cwd` inside it.
+- `direct-cwd`
+  - The first `whip task create --workspace <name>` ran outside git.
+  - Tasks keep using the provided `cwd` and `worktree_path` may be empty.
+
+When continuing a named workspace, start with `whip workspace view <name>` and prefer its stored `worktree_path` for later repo inspection, tests, and review commands.
 
 ## Dashboard
 
-`whip dashboard` — live TUI with task list, status indicators, blocked-by tracking, and auto-refresh.
+`whip dashboard` opens the live TUI for:
+
+- task list and status badges
+- task detail view
+- blocked-by tracking
+- live refresh
+- remote mode control
 
 ## Remote Mode
 
-`whip remote` starts a master agent session + HTTP API server for remote access.
+`whip remote` starts a master agent session plus HTTP access for the web dashboard.
 
 ```bash
-# Requires tmux
+# requires tmux
 whip remote
 whip remote --workspace issue-sweep
-whip remote --workspace issue-sweep --tunnel your-tunnel.example.com
 whip remote --workspace issue-sweep --backend codex --difficulty medium --port 8585
-whip remote --auth-mode token   # legacy long-lived token mode
 ```
 
-| Flag | Description |
-|------|-------------|
-| `--backend` | `claude` (default) or `codex` |
-| `--difficulty` | `easy`, `medium`, `hard` (default) |
-| `--workspace` | named workspace for stacked work (default: `global`) |
-| `--port` | Serve port (default 8585) |
-| `--tunnel` | Cloudflare tunnel hostname |
-| `--auth-mode` | `device` (default) or legacy `token` |
+Highlights:
 
-Settings are saved to `~/.whip/config.json` for reuse.
-
-By default, remote mode uses **device auth**:
-
-1. Open the printed **Short URL**
-2. The dashboard asks for an OTP
-3. `whip remote` prints `Device challenge OTP: <code>  expires in 2m`
-4. Enter the OTP to register the browser session
-
-Use `--auth-mode token` only when you explicitly want the older long-lived token flow.
-
-`whip remote` always prints a **Short URL**. Keyboard shortcuts:
-
-- `o` opens the short URL in the browser
-- `c` copies the raw connect URL
-- `q` stops the serve process while keeping the master tmux session alive
-
-### Web Dashboard
-
-- **Tasks** — real-time task list with status and detail view
-- **Chat** — IRC messaging with agent peers
-- **Terminal** — live master session output with keyboard input, fullscreen mode, mobile touch scroll
+- `tmux` is required
+- device auth is the default flow
+- `whip remote` prints the URL and OTP flow at runtime
+- the web dashboard provides task views, IRC chat, and master terminal access
 
 ## Skills
 
@@ -148,12 +144,7 @@ Use `--auth-mode token` only when you explicitly want the older long-lived token
 | `/whip-start` | Dispatch agents in `global` or a named workspace |
 | `/whip-lesson-learn` | Write a real-world whip case-study under `.whip/lesson-learn/` |
 
-## How It Works
-
-1. Master session creates tasks via `whip task create` in `global` or a named workspace
-2. Each task spawns a tmux session running Claude Code with a prompt file
-3. Sessions coordinate via shared `claude-irc`, using workspace-scoped master identities
-4. On completion, downstream stack tasks auto-assign and the workspace master is notified
+## More Docs
 
 See [Workflow Guide (EN)](docs/workflow-en.md) | [워크플로우 가이드 (KO)](docs/workflow-ko.md)
 

@@ -102,3 +102,15 @@ func connectURLToken(raw string) string {
 	}
 	return fragment.Get("token")
 }
+
+func lifecycleSpec(name string) whip.TaskLifecycleActionSpec {
+	spec, ok := whip.FindTaskLifecycleActionSpec(name)
+	if !ok {
+		panic("unknown lifecycle action: " + name)
+	}
+	return spec
+}
+
+func lifecycleHelp(name string) string {
+	return whip.FormatTaskLifecycleHelp(lifecycleSpec(name))
+}

@@ -25,7 +25,7 @@ sequenceDiagram
     Master->>Whip: task assign → 터미널 탭 스폰
     Whip->>Agent: 새 터미널 탭 + prompt.txt
 
-    Agent->>Whip: task heartbeat (PID 등록)
+    Agent->>Whip: task start <id> (PID 등록, in_progress 진입)
     Agent->>IRC: join whip-<task-id>
     Agent->>IRC: msg workspace-master "인수했습니다. 시작합니다..."
     Agent->>IRC: msg workspace-master "계획: ..."
@@ -40,7 +40,7 @@ sequenceDiagram
 
     Agent->>IRC: msg workspace-master "태스크 완료. 요약..."
     Agent->>IRC: quit
-    Agent->>Whip: task status <id> completed --note "요약"
+    Agent->>Whip: task complete <id> --note "요약"
     Whip-->>Master: downstream 태스크 자동 배정
 ```
 
@@ -50,14 +50,35 @@ sequenceDiagram
 
 ```
 created --> assigned --> in_progress --> completed
-                                    --> failed
+                               review --> approved --> completed
+
+assigned --> failed
+in_progress --> failed
+review --> failed
+approved --> failed
+
+created --> canceled
+assigned --> canceled
+in_progress --> canceled
+review --> canceled
+approved --> canceled
+failed --> assigned
+failed --> canceled
 ```
 
 - **created**: `global` (`WHIP_HOME/tasks/<id>/task.json`, 기본값 `~/.whip/tasks/<id>/task.json`) 또는 named workspace (`WHIP_HOME/workspaces/<name>/tasks/<id>/task.json`)에 태스크 저장
-- **assigned**: `whip task assign`이 새 터미널 탭에 Claude Code와 프롬프트 파일을 스폰
-- **in_progress**: 에이전트가 `whip task heartbeat`를 호출하여 PID 등록
-- **completed**: 에이전트 작업 완료; downstream stack 태스크 자동 배정
-- **failed**: 에이전트가 완료하지 못함; 인수인계 노트가 retry를 위해 보존
+- **assigned**: `whip task assign`이 새 터미널 탭에 Claude Code와 프롬프트 파일을 스폰합니다. `failed`에서 다시 배정할 때도 같은 명령을 사용합니다.
+- **in_progress**: 에이전트가 `whip task start`를 호출하여 PID를 등록하고 실제 작업을 시작합니다.
+- **review**: 에이전트 구현이 끝났고 마스터 리뷰를 기다리는 상태입니다.
+- **approved**: 마스터가 리뷰를 승인했고, 에이전트가 마무리 커밋과 완료 처리를 할 수 있는 상태입니다.
+- **failed**: 현재 시도는 중단되었지만 태스크 자체는 살아 있으며, 인수인계 노트를 유지한 채 다시 `assign`할 수 있습니다.
+- **completed**: 최종 성공 종료 상태입니다. downstream stack 태스크는 자동 배정될 수 있습니다.
+- **canceled**: 더 이상 진행하지 않기로 한 최종 중단 상태입니다.
+- terminal status는 `completed`, `canceled`입니다.
+- status를 바꾸는 명령은 lifecycle command뿐입니다: `assign`, `start`, `review`, `approve`, `complete`, `fail`, `cancel`
+- `create`, `list`, `view`, `lifecycle`, `note`, `dep`, `clean`, `delete`는 operation command이며 status를 바꾸지 않습니다.
+- 전체 상태 머신은 `whip task lifecycle`로 확인합니다.
+- 각 lifecycle command의 정확한 전이와 부수효과는 `whip task <action> --help`로 확인합니다.
 
 ### 통신 레이어
 
@@ -151,7 +172,7 @@ whip task assign <task-id>
 
 ```bash
 # 에이전트 초기화 (prompt.txt에서 자동 실행)
-whip task heartbeat <task-id>                    # PID 등록
+whip task start <task-id>                        # assigned -> in_progress, PID 등록
 claude-irc join whip-<task-id>              # IRC 참여
 claude-irc msg <workspace-master> "인수했습니다."    # 시작 알림
 /loop 1m claude-irc inbox                   # 모니터링 활성화
@@ -166,8 +187,8 @@ claude-irc msg <workspace-master> "계획: <2-3문장 접근 방식>"
 # 마스터가 에이전트 질문에 응답
 claude-irc msg whip-<task-id> "기존 UserService를 사용해. 새로 만들지 마."
 
-# 마스터가 전체 에이전트에 브로드캐스트
-whip task broadcast "API 계약이 업데이트되었습니다. 토픽 보드를 확인하세요."
+# 마스터가 workspace 전체 에이전트에 브로드캐스트
+whip workspace broadcast issue-sweep "API 계약이 업데이트되었습니다. 토픽 보드를 확인하세요."
 ```
 
 whip TUI가 에이전트에게 메시지를 보내면 `user` 신원으로 전달됩니다. 에이전트는 직접 답장할 수 있습니다:
@@ -189,7 +210,7 @@ whip task list
 whip dashboard
 
 # 특정 태스크 상세 확인
-whip task show <task-id>
+whip task view <task-id>
 ```
 
 대시보드는 태스크 상태, PID 활성 여부, blocked-by 관계, 진행 노트를 보여줍니다.
@@ -202,11 +223,26 @@ whip task show <task-id>
 # 에이전트 측
 claude-irc msg whip-master "태스크 <id> 완료. JWT 인증과 리프레시 토큰 구현 완료."
 claude-irc quit
-whip task status <id> completed --note "JWT + 리프레시 토큰 인증. 파일: src/auth/, src/middleware/auth.ts"
+whip task complete <id> --note "JWT + 리프레시 토큰 인증. 파일: src/auth/, src/middleware/auth.ts"
 # 세션 자동 종료
 ```
 
 태스크가 완료되면 `whip`이 차단 해제된 downstream stack 태스크가 있는지 확인하고 자동으로 배정합니다.
+
+리뷰 게이트가 있는 태스크라면 라이프사이클이 명시적으로 나뉩니다:
+
+```bash
+# 에이전트 측
+whip task review <id> --note "리뷰 준비 완료. 주요 파일: src/auth/, src/middleware/auth.ts"
+
+# 마스터 측
+whip task approve <id>
+
+# 승인 후 에이전트 측
+whip task complete <id> --note "리뷰 승인 후 커밋 및 마무리 완료"
+```
+
+승인은 곧바로 `completed`로 끝내지 않고, `approved`로 옮긴 뒤 에이전트가 `complete`로 최종 종료합니다.
 
 ### 8. 실패 처리
 
@@ -216,20 +252,25 @@ whip task status <id> completed --note "JWT + 리프레시 토큰 인증. 파일
 # 에이전트가 상세한 인수인계 노트 작성
 claude-irc msg whip-master "태스크 <id> 실패: <이유>. 인수인계 노트 작성 완료."
 claude-irc quit
-whip task status <id> failed --note "X를 완료함. Y에서 Z 때문에 실패. 다음 에이전트는 ...부터 시작해야 함"
+whip task fail <id> --note "X를 완료함. Y에서 Z 때문에 실패. 다음 에이전트는 ...부터 시작해야 함"
 ```
 
 마스터가 재시도할 수 있습니다:
 
 ```bash
-whip task unassign <id>    # created로 리셋
-whip task assign <id>      # 새 에이전트 스폰 (인수인계 노트가 프롬프트에 포함)
+whip task assign <id>      # failed -> assigned; 인수인계 노트가 프롬프트에 포함
+```
+
+작업을 영구 중단해야 하면 명시적으로 취소합니다:
+
+```bash
+whip task cancel <id> --note "범위가 바뀌어 더 이상 필요하지 않음"
 ```
 
 ### 9. 정리
 
 ```bash
-whip task clean                 # 완료/실패 태스크 제거
+whip task clean                 # 완료/취소 태스크 제거
 whip workspace drop issue-sweep # named workspace의 태스크, metadata, worktree 정리
 claude-irc quit   # IRC 퇴장 (모든 작업이 완전히 끝났을 때만)
 ```
@@ -264,7 +305,7 @@ whip task create "Auth 모듈" --workspace issue-sweep --desc "..."           # 
 whip task create "API 엔드포인트" --workspace issue-sweep --desc "..."       # → id: d3e4f
 whip task create "프론트엔드 페이지" --workspace issue-sweep --desc "..."     # → id: g5h6i
 whip task create "배포" --workspace issue-sweep --desc "..."                 # → id: j7k8l
-whip workspace show issue-sweep                                              # 필요하면 repo/worktree metadata 확인
+whip workspace view issue-sweep                                              # 필요하면 repo/worktree metadata 확인
 
 # Step 2: 스택 순서 인코딩
 whip task dep j7k8l --after a1b2c --after d3e4f --after g5h6i
@@ -415,17 +456,20 @@ whip task clean
 
 | 커맨드 | 설명 |
 |--------|------|
+| `whip task assign <id> [--master-irc <name>]` | `created|failed -> assigned`; 에이전트 세션 스폰 |
+| `whip task start <id>` | `assigned -> in_progress`; 현재 실행의 PID 등록 |
+| `whip task review <id>` | `in_progress -> review` |
+| `whip task approve <id>` | `review -> approved` |
+| `whip task complete <id>` | `in_progress|approved -> completed` |
+| `whip task fail <id>` | `assigned|in_progress|review|approved -> failed` |
+| `whip task cancel <id>` | `created|assigned|in_progress|review|approved|failed -> canceled` |
 | `whip task create <title> [--desc/--file/stdin] [--workspace <name>]` | 새 태스크 생성 |
 | `whip task list` | 모든 태스크 상태 확인 |
-| `whip task show <id>` | 태스크 상세 보기 |
-| `whip task assign <id> [--master-irc <name>]` | 새 터미널 탭에 에이전트 스폰 |
-| `whip task unassign <id>` | 세션 종료, created로 리셋 |
-| `whip task status <id> [status] [--note]` | 상태 조회/설정 (노트 포함) |
-| `whip task broadcast "message"` | 모든 활성 세션에 메시지 전송 |
-| `whip task heartbeat [id]` | PID 등록 (에이전트가 호출) |
-| `whip task kill <id>` | 세션 강제 종료 |
-| `whip task clean` | 완료/실패 태스크 제거 |
+| `whip task view <id>` | 태스크 상세 보기 |
+| `whip task lifecycle [id] [--format json]` | 전체 상태 머신 또는 특정 태스크의 다음 액션 확인 |
+| `whip task note <id> "<message>"` | status 변경 없이 진행 노트 추가 |
 | `whip task dep <id> --after <id>` | 스택 선행 조건 인코딩 |
+| `whip task clean` | 완료/취소 태스크 제거 |
 | `whip task delete <id>` | 태스크 삭제 |
 
 ### whip workspace 커맨드
@@ -433,7 +477,8 @@ whip task clean
 | 커맨드 | 설명 |
 |--------|------|
 | `whip workspace list` | named workspace 목록 |
-| `whip workspace show <name>` | workspace metadata와 태스크 확인 |
+| `whip workspace view <name>` | workspace metadata와 태스크 확인 |
+| `whip workspace broadcast <workspace> <message>` | 해당 workspace의 모든 활성 세션에 메시지 전송 |
 | `whip workspace drop <name>` | workspace 태스크, metadata, worktree 정리 |
 
 ### 기타 whip 커맨드

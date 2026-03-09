@@ -8,20 +8,24 @@ func taskCmd() *cobra.Command {
 		Short: "Manage tasks",
 	}
 
+	cmd.AddGroup(
+		&cobra.Group{ID: "lifecycle", Title: "Lifecycle Commands"},
+		&cobra.Group{ID: "operations", Title: "Operations"},
+	)
+
 	cmd.AddCommand(
 		createCmd(),
 		listCmd(),
-		showCmd(),
+		viewCmd(),
+		lifecycleCmd(),
 		assignCmd(),
-		attachCmd(),
-		unassignCmd(),
-		statusCmd(),
+		startCmd(),
+		reviewCmd(),
 		approveCmd(),
-		retryCmd(),
-		resumeCmd(),
-		broadcastCmd(),
-		heartbeatCmd(),
-		killCmd(),
+		completeCmd(),
+		failCmd(),
+		cancelCmd(),
+		noteCmd(),
 		deleteCmd(),
 		cleanCmd(),
 		depCmd(),
