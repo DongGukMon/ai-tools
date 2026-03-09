@@ -1,0 +1,4 @@
+interface:
+  display_name: "Whip Lesson Learn"
+  short_description: "Write a real-world whip case-study markdown file"
+  default_prompt: "Use $whip-lesson-learn to create a real-world whip case-study under .whip/lesson-learn/<file-name>.md."
