@@ -79,7 +79,8 @@ Each tool should follow this structure:
 │   └── plugin.json       # Plugin manifest
 ├── install.sh            # One-liner install script (curl | bash)
 ├── Makefile              # Build workflow (build, cross, test, clean)
-├── skills/               # Skills for guided workflows
+├── skills/               # Claude Code skills
+├── skills-codex/         # OpenAI Codex skills
 ├── scripts/
 │   └── ensure-binary.sh  # Auto-download script
 ├── cmd/
@@ -95,6 +96,15 @@ Each tool should follow this structure:
 3. Add the tool to `.github/workflows/release.yml` orchestrator
 4. Include `category` field in `.claude-plugin/plugin.json`
 5. Update root `README.md` with the new tool
+
+## Skills
+
+Claude Code skills go in `skills/` under each tool directory. Codex-specific skills go in `skills-codex/`. The two may share the same skill names but differ in prompt content:
+
+- `skills/` — Claude Code skills. Use `/skill-name` invocation syntax and Claude Code features (e.g., `EnterPlanMode` tool, `/loop`).
+- `skills-codex/` — OpenAI Codex skills. Use `$skill-name` invocation syntax. Prompts must avoid Claude Code-specific features and default backend to `codex`.
+
+When adding or updating a skill, check if it exists in both directories and keep them in sync where the logic is shared.
 
 ## AGENTS.md Symlink Convention
 
