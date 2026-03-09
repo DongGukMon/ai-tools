@@ -46,10 +46,10 @@ Terminal statuses:
 
 Rules:
 
-- Only lifecycle commands change status: `assign`, `start`, `review`, `approve`, `complete`, `fail`, `cancel`
+- Only lifecycle commands change status: `assign`, `start`, `review`, `request-changes`, `approve`, `complete`, `fail`, `cancel`
 - Operational commands do not change status: `create`, `list`, `view`, `lifecycle`, `note`, `dep`, `clean`, `delete`
 - `failed` is non-terminal; re-dispatch with `whip task assign <id>`
-- Review tasks use `assign -> start -> review -> approve -> complete`
+- Review tasks use `assign -> start -> review -> request-changes -> review -> approve -> complete`
 - Non-review tasks can use `assign -> start -> complete`
 
 ## Typical Flow

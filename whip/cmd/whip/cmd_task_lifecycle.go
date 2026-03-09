@@ -44,6 +44,48 @@ func reviewCmd() *cobra.Command {
 	return cmd
 }
 
+func requestChangesCmd() *cobra.Command {
+	var note string
+
+	cmd := &cobra.Command{
+		Use:     "request-changes <id>",
+		Short:   "Return a reviewed task to active work",
+		Long:    lifecycleHelp("request-changes"),
+		GroupID: "lifecycle",
+		Args:    cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			store, err := whip.NewStore()
+			if err != nil {
+				return err
+			}
+
+			id, err := store.ResolveID(args[0])
+			if err != nil {
+				return err
+			}
+
+			task, err := whip.RequestChangesTask(store, id, whip.LaunchSource{Actor: "cli", Command: "request-changes"}, note)
+			if err != nil {
+				return err
+			}
+
+			msg := fmt.Sprintf("Task %s needs changes. Status is now in_progress. Continue working, record a progress note for the rework, and resubmit with `whip task review %s --note \"...\"` when ready.", id, id)
+			if note != "" {
+				msg = fmt.Sprintf("Task %s needs changes. Status is now in_progress. Review feedback: %s. Continue working, record a progress note for the rework, and resubmit with `whip task review %s --note \"...\"` when ready.", id, note, id)
+			}
+			warn := "Warning: request-changes recorded, but IRC notification failed: %v\n"
+			missing := fmt.Sprintf("Warning: task %s has no IRC target; request-changes recorded without agent notification\n", id)
+			notifyAssignee(task, msg, warn, missing)
+
+			fmt.Fprintf(os.Stderr, "Task %s -> %s\n", task.ID, task.Status)
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&note, "note", "", "Attach review feedback for the rework")
+	return cmd
+}
+
 func approveCmd() *cobra.Command {
 	var note string
 
@@ -69,14 +111,10 @@ func approveCmd() *cobra.Command {
 				return err
 			}
 
-			if task.IRCName != "" {
-				msg := fmt.Sprintf("Task %s approved. Status is now approved. Commit your changes and run `whip task complete %s --note \"...\"` to finalize.", id, id)
-				if err := exec.Command("claude-irc", "msg", task.IRCName, msg).Run(); err != nil {
-					fmt.Fprintf(os.Stderr, "Warning: approval recorded, but IRC notification failed: %v\n", err)
-				}
-			} else {
-				fmt.Fprintf(os.Stderr, "Warning: task %s has no IRC target; approval recorded without agent notification\n", id)
-			}
+			msg := fmt.Sprintf("Task %s approved. Status is now approved. Commit your changes and run `whip task complete %s --note \"...\"` to finalize.", id, id)
+			warn := "Warning: approval recorded, but IRC notification failed: %v\n"
+			missing := fmt.Sprintf("Warning: task %s has no IRC target; approval recorded without agent notification\n", id)
+			notifyAssignee(task, msg, warn, missing)
 
 			fmt.Fprintf(os.Stderr, "Task %s -> %s\n", task.ID, task.Status)
 			return nil
@@ -233,6 +271,16 @@ func noteCmd() *cobra.Command {
 	return cmd
 }
 
+func notifyAssignee(task *whip.Task, message string, warnFormat string, missingMessage string) {
+	if task.IRCName != "" {
+		if err := exec.Command("claude-irc", "msg", task.IRCName, message).Run(); err != nil {
+			fmt.Fprintf(os.Stderr, warnFormat, err)
+		}
+		return
+	}
+	fmt.Fprint(os.Stderr, missingMessage)
+}
+
 func lifecycleCmd() *cobra.Command {
 	var format string
 
@@ -367,9 +415,9 @@ func renderLifecycleJSON(specs []whip.TaskLifecycleActionSpec, task *whip.Task) 
 			}
 		}
 		payload.Task = struct {
-			ID               string       `json:"id"`
+			ID               string          `json:"id"`
 			Status           whip.TaskStatus `json:"status"`
-			AvailableActions []actionInfo `json:"available_actions"`
+			AvailableActions []actionInfo    `json:"available_actions"`
 		}{
 			ID:               task.ID,
 			Status:           task.Status,

@@ -51,6 +51,7 @@ sequenceDiagram
 ```
 created --> assigned --> in_progress --> completed
                                review --> approved --> completed
+                               review -- request-changes --> in_progress
 
 assigned --> failed
 in_progress --> failed
@@ -69,13 +70,13 @@ failed --> canceled
 - **created**: Task stored in `global` (`WHIP_HOME/tasks/<id>/task.json`, default `~/.whip/tasks/<id>/task.json`) or a named workspace (`WHIP_HOME/workspaces/<name>/tasks/<id>/task.json`)
 - **assigned**: `whip task assign` spawns a new Terminal tab with Claude Code and a prompt file. It is also the re-dispatch path from `failed`.
 - **in_progress**: Agent calls `whip task start`, which registers its PID and explicitly enters active execution
-- **review**: Agent finished the implementation and is waiting for master review
+- **review**: Agent finished the implementation and is waiting for master review. If the master requests changes, `whip task request-changes` returns the task to `in_progress` for rework.
 - **approved**: Master approved a review task; the agent can finalize and complete it
 - **failed**: Current attempt stopped, but the task is still recoverable and can be reassigned
 - **completed**: Terminal success state; downstream stack tasks auto-assign
 - **canceled**: Terminal stop state when the task should no longer continue
 - Terminal statuses are `completed` and `canceled`
-- Only lifecycle commands change task status: `assign`, `start`, `review`, `approve`, `complete`, `fail`, `cancel`
+- Only lifecycle commands change task status: `assign`, `start`, `review`, `request-changes`, `approve`, `complete`, `fail`, `cancel`
 - Operational commands such as `create`, `list`, `view`, `lifecycle`, `note`, `dep`, `clean`, and `delete` do not change status
 - Run `whip task lifecycle` to print the canonical state machine
 - Run `whip task <action> --help` to inspect the exact transition handled by that lifecycle command
@@ -238,14 +239,21 @@ If the task was created with a review gate, the lifecycle is explicit:
 # Agent side
 whip task review <id> --note "Ready for review. Main files: src/auth/, src/middleware/auth.ts"
 
-# Master side
+# Master side if rework is needed
+whip task request-changes <id> --note "Address the edge cases in auth middleware before approval."
+
+# Agent side after request-changes
+whip task note <id> "Reworking auth middleware edge cases"
+whip task review <id> --note "Ready for re-review. Updated auth middleware edge cases."
+
+# Master side when approved
 whip task approve <id>
 
 # Agent side after approval
 whip task complete <id> --note "Committed and finalized after review."
 ```
 
-Approval does not mark the task `completed`; it moves the task to `approved`, then the agent finishes with `whip task complete`.
+`whip task request-changes` does not spawn a new session; it returns the existing task from `review` to `in_progress` so the same agent can continue rework. Approval does not mark the task `completed`; it moves the task to `approved`, then the agent finishes with `whip task complete`.
 
 ### 8. Handling Failures
 
@@ -462,6 +470,7 @@ whip task clean
 | `whip task assign <id> [--master-irc <name>]` | `created|failed -> assigned`; spawn an agent session |
 | `whip task start <id>` | `assigned -> in_progress`; register PID for the current run |
 | `whip task review <id>` | `in_progress -> review` |
+| `whip task request-changes <id>` | `review -> in_progress` |
 | `whip task approve <id>` | `review -> approved` |
 | `whip task complete <id>` | `in_progress|approved -> completed` |
 | `whip task fail <id>` | `assigned|in_progress|review|approved -> failed` |

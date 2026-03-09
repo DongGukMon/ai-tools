@@ -61,7 +61,7 @@ Before diving in, share your approach with the lead:
 
 ## Task Lifecycle
 - Normal flow: assign -> start -> complete
-- Review flow: assign -> start -> review -> approve -> complete
+- Review flow: assign -> start -> review -> request-changes -> review -> approve -> complete
 - If the attempt cannot finish cleanly, use fail with a detailed handoff note.
 - For the full state machine, run: whip task lifecycle
 - For command-specific transition details, run: whip task <action> --help
@@ -125,8 +125,13 @@ Before marking complete, verify your work (run tests, build checks, or whatever 
 		fmt.Fprintf(&b, "1. claude-irc msg %s \"Task %s ready for review. Delivered: <summary>. Files: <files>. Verification: <checks>. Suggested commit: <message>. Risks/follow-ups: <items>. Takeover note: <what the lead should do next>.\"\n",
 			task.MasterIRCName, task.ID)
 		fmt.Fprintf(&b, "2. whip task review %s --note \"Delivered: <summary>. Files: <files>. Verification: <checks>. Suggested commit: <message>. Risks/follow-ups: <items>. Takeover note: <what the lead should do next>.\"\n", task.ID)
-		b.WriteString("3. Wait for the lead to approve. You will receive an IRC message when approved.\n")
-		b.WriteString("4. After receiving approval: commit your changes, then run:\n")
+		b.WriteString("3. Keep checking claude-irc inbox while you wait for review feedback.\n")
+		b.WriteString("4. If the lead requests changes, they will run `whip task request-changes <id> --note \"...\"`, which moves the task back to `in_progress`.\n")
+		b.WriteString("   After that:\n")
+		b.WriteString("   - stay in the same session and continue working; do NOT run `whip task start` again\n")
+		fmt.Fprintf(&b, "   - record a rework progress note: `whip task note %s \"<what you are fixing>\"`\n", task.ID)
+		b.WriteString("   - when the fixes are ready, send another full review handoff with the same quality bar and run `whip task review` again\n")
+		b.WriteString("5. After receiving approval: commit your changes, then run:\n")
 		b.WriteString("   When committing:\n")
 		b.WriteString("   - Only stage files you actually modified: `git add <file1> <file2> ...`\n")
 		b.WriteString("   - Do NOT use `git add .`, `git add -A`, or `git add --all`\n")

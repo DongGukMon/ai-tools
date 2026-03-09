@@ -110,6 +110,10 @@ func ReviewTask(store *Store, id string, source LaunchSource, note string) (*Tas
 	return transitionTaskStatus(store, id, source, "reviewed", StatusReview, note, StatusInProgress)
 }
 
+func RequestChangesTask(store *Store, id string, source LaunchSource, note string) (*Task, error) {
+	return transitionTaskStatus(store, id, source, "requested_changes", StatusInProgress, note, StatusReview)
+}
+
 func ApproveTask(store *Store, id string, source LaunchSource, note string) (*Task, error) {
 	return transitionTaskStatus(store, id, source, "approved", StatusApproved, note, StatusReview)
 }

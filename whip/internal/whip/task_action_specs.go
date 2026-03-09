@@ -40,6 +40,16 @@ var taskLifecycleActionSpecs = []TaskLifecycleActionSpec{
 		To:      StatusReview,
 	},
 	{
+		Name:    "request-changes",
+		Summary: "Return reviewed work to active rework",
+		From:    []TaskStatus{StatusReview},
+		To:      StatusInProgress,
+		SideEffects: []string{
+			"records review feedback as a note when provided",
+			"notifies the assignee over IRC when possible",
+		},
+	},
+	{
 		Name:    "approve",
 		Summary: "Approve reviewed work for finalization",
 		From:    []TaskStatus{StatusReview},

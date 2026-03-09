@@ -145,6 +145,15 @@ func TestWhipStartReviewFlowRegression(t *testing.T) {
 	}
 
 	runWhipCLI(t, "task", "review", reviewID, "--note", "Ready for review")
+	reviewSnapshot := readLifecycleSnapshot(t, reviewID)
+	assertActionSet(t, reviewSnapshot.Task.AvailableActions, "request-changes", "approve", "fail", "cancel")
+
+	runWhipCLI(t, "task", "request-changes", reviewID, "--note", "Address review feedback before approval")
+	reworkSnapshot := readLifecycleSnapshot(t, reviewID)
+	assertActionSet(t, reworkSnapshot.Task.AvailableActions, "review", "fail", "cancel")
+
+	runWhipCLI(t, "task", "note", reviewID, "Rework in progress after review feedback")
+	runWhipCLI(t, "task", "review", reviewID, "--note", "Ready for re-review")
 	runWhipCLI(t, "task", "approve", reviewID, "--note", "Approved by integration test")
 	runWhipCLI(t, "task", "complete", reviewID, "--note", "Completed after approval")
 
@@ -155,11 +164,14 @@ func TestWhipStartReviewFlowRegression(t *testing.T) {
 	if reviewTask.Status != whiplib.StatusCompleted {
 		t.Fatalf("review status = %s, want %s", reviewTask.Status, whiplib.StatusCompleted)
 	}
-	if len(reviewTask.Notes) != 4 {
-		t.Fatalf("review notes count = %d, want 4", len(reviewTask.Notes))
+	if len(reviewTask.Notes) != 7 {
+		t.Fatalf("review notes count = %d, want 7", len(reviewTask.Notes))
 	}
 
 	ircLog := readIRCLog(t, h.fake.ircLogPath)
+	if !strings.Contains(ircLog, "msg target=whip-"+reviewID+" text=Task "+reviewID+" needs changes.") {
+		t.Fatalf("request-changes log missing review notification:\n%s", ircLog)
+	}
 	if !strings.Contains(ircLog, "msg target=whip-"+reviewID+" text=Task "+reviewID+" approved.") {
 		t.Fatalf("approval log missing review notification:\n%s", ircLog)
 	}
@@ -178,6 +190,7 @@ func TestWhipPlanCommandSurfaceRegression(t *testing.T) {
 		"assign",
 		"start",
 		"review",
+		"request-changes",
 		"approve",
 		"complete",
 		"fail",
@@ -218,6 +231,17 @@ func TestWhipPlanCommandSurfaceRegression(t *testing.T) {
 	}
 	if !strings.Contains(approveHelp, "notifies the assignee over IRC when possible") {
 		t.Fatalf("approve help missing side effect:\n%s", approveHelp)
+	}
+
+	requestChangesHelp, _, err := execWhipCLICapture(t, "task", "request-changes", "--help")
+	if err != nil {
+		t.Fatalf("task request-changes --help: %v", err)
+	}
+	if !strings.Contains(requestChangesHelp, "review -> in_progress") {
+		t.Fatalf("request-changes help missing transition:\n%s", requestChangesHelp)
+	}
+	if !strings.Contains(requestChangesHelp, "notifies the assignee over IRC when possible") {
+		t.Fatalf("request-changes help missing side effect:\n%s", requestChangesHelp)
 	}
 }
 

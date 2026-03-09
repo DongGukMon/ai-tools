@@ -21,6 +21,7 @@ func generateCodexPrompt(task *Task) string {
 ## Codex Review Handoff
 Because this backend may not stay attached through approval/finalization, treat the review report as a real handoff.
 - Do not leave the lead guessing what to commit, what to verify, or what remains risky.
+- If the lead requests changes, keep the same session, continue from the task's returned in_progress state, and send a fresh review handoff after the rework.
 - If approval arrives later, great — finish it yourself.
 - If the lead takes over, your review message and review note should already contain everything needed to finalize safely.
 `

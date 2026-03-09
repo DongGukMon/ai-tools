@@ -21,6 +21,7 @@ func taskCmd() *cobra.Command {
 		assignCmd(),
 		startCmd(),
 		reviewCmd(),
+		requestChangesCmd(),
 		approveCmd(),
 		completeCmd(),
 		failCmd(),

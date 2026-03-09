@@ -196,6 +196,7 @@ Run `$whip-start <bound-plan-file>` to execute this plan.
 
 Prefer explicit `Backend` fields so the plan behaves the same regardless of where it is executed.
 If execution needs lifecycle details, tell the operator to use `whip task lifecycle` for the canonical state machine and `whip task <action> --help` for the exact transition.
+For review-gated tasks that need rework after `whip task review`, tell the operator to use `whip task request-changes <id> --note "..."` to return the task from `review` to `in_progress` before re-submission.
 
 ## Step 8: Exit Plan Mode
 

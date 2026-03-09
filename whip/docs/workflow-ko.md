@@ -51,6 +51,7 @@ sequenceDiagram
 ```
 created --> assigned --> in_progress --> completed
                                review --> approved --> completed
+                               review -- request-changes --> in_progress
 
 assigned --> failed
 in_progress --> failed
@@ -69,13 +70,13 @@ failed --> canceled
 - **created**: `global` (`WHIP_HOME/tasks/<id>/task.json`, 기본값 `~/.whip/tasks/<id>/task.json`) 또는 named workspace (`WHIP_HOME/workspaces/<name>/tasks/<id>/task.json`)에 태스크 저장
 - **assigned**: `whip task assign`이 새 터미널 탭에 Claude Code와 프롬프트 파일을 스폰합니다. `failed`에서 다시 배정할 때도 같은 명령을 사용합니다.
 - **in_progress**: 에이전트가 `whip task start`를 호출하여 PID를 등록하고 실제 작업을 시작합니다.
-- **review**: 에이전트 구현이 끝났고 마스터 리뷰를 기다리는 상태입니다.
+- **review**: 에이전트 구현이 끝났고 마스터 리뷰를 기다리는 상태입니다. 마스터가 `whip task request-changes`를 실행하면 태스크는 `in_progress`로 돌아가 재작업을 이어갑니다.
 - **approved**: 마스터가 리뷰를 승인했고, 에이전트가 마무리 커밋과 완료 처리를 할 수 있는 상태입니다.
 - **failed**: 현재 시도는 중단되었지만 태스크 자체는 살아 있으며, 인수인계 노트를 유지한 채 다시 `assign`할 수 있습니다.
 - **completed**: 최종 성공 종료 상태입니다. downstream stack 태스크는 자동 배정될 수 있습니다.
 - **canceled**: 더 이상 진행하지 않기로 한 최종 중단 상태입니다.
 - terminal status는 `completed`, `canceled`입니다.
-- status를 바꾸는 명령은 lifecycle command뿐입니다: `assign`, `start`, `review`, `approve`, `complete`, `fail`, `cancel`
+- status를 바꾸는 명령은 lifecycle command뿐입니다: `assign`, `start`, `review`, `request-changes`, `approve`, `complete`, `fail`, `cancel`
 - `create`, `list`, `view`, `lifecycle`, `note`, `dep`, `clean`, `delete`는 operation command이며 status를 바꾸지 않습니다.
 - 전체 상태 머신은 `whip task lifecycle`로 확인합니다.
 - 각 lifecycle command의 정확한 전이와 부수효과는 `whip task <action> --help`로 확인합니다.
@@ -235,14 +236,21 @@ whip task complete <id> --note "JWT + 리프레시 토큰 인증. 파일: src/au
 # 에이전트 측
 whip task review <id> --note "리뷰 준비 완료. 주요 파일: src/auth/, src/middleware/auth.ts"
 
-# 마스터 측
+# 재작업이 필요할 때 마스터 측
+whip task request-changes <id> --note "승인 전에 auth middleware edge case를 보완해 주세요."
+
+# request-changes 후 에이전트 측
+whip task note <id> "auth middleware edge case 재작업 중"
+whip task review <id> --note "재리뷰 준비 완료. auth middleware edge case 보완"
+
+# 승인 시 마스터 측
 whip task approve <id>
 
 # 승인 후 에이전트 측
 whip task complete <id> --note "리뷰 승인 후 커밋 및 마무리 완료"
 ```
 
-승인은 곧바로 `completed`로 끝내지 않고, `approved`로 옮긴 뒤 에이전트가 `complete`로 최종 종료합니다.
+`whip task request-changes`는 새 세션을 띄우지 않고 기존 태스크를 `review`에서 `in_progress`로 되돌려 같은 에이전트가 재작업을 이어가게 합니다. 승인은 곧바로 `completed`로 끝내지 않고, `approved`로 옮긴 뒤 에이전트가 `complete`로 최종 종료합니다.
 
 ### 8. 실패 처리
 
@@ -459,6 +467,7 @@ whip task clean
 | `whip task assign <id> [--master-irc <name>]` | `created|failed -> assigned`; 에이전트 세션 스폰 |
 | `whip task start <id>` | `assigned -> in_progress`; 현재 실행의 PID 등록 |
 | `whip task review <id>` | `in_progress -> review` |
+| `whip task request-changes <id>` | `review -> in_progress` |
 | `whip task approve <id>` | `review -> approved` |
 | `whip task complete <id>` | `in_progress|approved -> completed` |
 | `whip task fail <id>` | `assigned|in_progress|review|approved -> failed` |

@@ -78,3 +78,26 @@ func TestGeneratePrompt_DispatchesByBackend(t *testing.T) {
 		t.Error("default-dispatched prompt should contain task title")
 	}
 }
+
+func TestReviewPrompt_IncludesRequestChangesFlow(t *testing.T) {
+	task := NewTask("Review Prompt", "Build the auth module", "/tmp")
+	task.Review = true
+	task.IRCName = "whip-abc12"
+	task.MasterIRCName = "whip-master"
+
+	claudePrompt := (&ClaudeBackend{}).GeneratePrompt(task)
+	if !strings.Contains(claudePrompt, "review -> request-changes -> review -> approve -> complete") {
+		t.Fatalf("Claude review prompt should describe the request-changes loop")
+	}
+	if !strings.Contains(claudePrompt, "whip task request-changes <id>") {
+		t.Fatalf("Claude review prompt should mention the request-changes command")
+	}
+	if !strings.Contains(claudePrompt, "do NOT run `whip task start` again") {
+		t.Fatalf("Claude review prompt should explain how rework resumes")
+	}
+
+	codexPrompt := (&CodexBackend{}).GeneratePrompt(task)
+	if !strings.Contains(codexPrompt, "continue from the task's returned in_progress state") {
+		t.Fatalf("Codex review prompt should mention resuming after request-changes")
+	}
+}

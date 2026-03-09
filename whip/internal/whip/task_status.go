@@ -42,7 +42,7 @@ func (t *Task) ValidateTransition(newStatus TaskStatus) error {
 		StatusCreated:    {StatusAssigned, StatusCanceled},
 		StatusAssigned:   {StatusInProgress, StatusFailed, StatusCanceled},
 		StatusInProgress: {StatusReview, StatusCompleted, StatusFailed, StatusCanceled},
-		StatusReview:     {StatusApproved, StatusFailed, StatusCanceled},
+		StatusReview:     {StatusInProgress, StatusApproved, StatusFailed, StatusCanceled},
 		StatusApproved:   {StatusCompleted, StatusFailed, StatusCanceled},
 		StatusFailed:     {StatusAssigned, StatusCanceled},
 	}

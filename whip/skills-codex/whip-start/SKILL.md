@@ -60,7 +60,7 @@ Review the output before proceeding:
 - If `claude-irc inbox` truncates a message, read the full entry before acting.
 - Do not assume the user can see master IRC traffic. Relay important agent messages back into the main chat yourself.
 
-Poll for messages by running `claude-irc inbox` manually, especially after state-changing commands such as `assign`, `review`, `approve`, `complete`, `fail`, and `cancel`.
+Poll for messages by running `claude-irc inbox` manually, especially after state-changing commands such as `assign`, `review`, `request-changes`, `approve`, `complete`, `fail`, and `cancel`.
 
 ## Decide Mode
 
@@ -212,7 +212,8 @@ For tasks where you want to review changes before the agent commits, use the `--
 1. **Create with review**: `whip task create "title" --backend <chosen-backend> --difficulty medium --review --desc "..."`
 2. **Agent works**: The agent's prompt instructs it to NOT commit and to report via `whip task review <id>` when done.
 3. **Review**: Check the agent's changes in the task `cwd` or the workspace worktree when one exists.
-4. **Approve**: `whip task approve <id>` notifies the agent via IRC to commit and finish the task.
+4. **Request changes when needed**: `whip task request-changes <id> --note "..."` returns the task to `in_progress` so the same agent can continue rework and resubmit with `whip task review <id>`.
+5. **Approve**: `whip task approve <id>` notifies the agent via IRC to commit and finish the task.
    - Approval does not directly mark the task `completed`; the agent still needs to commit and run `whip task complete <id> --note "..."`
 
 ### When to use review

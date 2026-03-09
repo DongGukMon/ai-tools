@@ -32,6 +32,9 @@ func TestTaskStatusTransition(t *testing.T) {
 	}
 
 	task.Status = StatusReview
+	if err := task.ValidateTransition(StatusInProgress); err != nil {
+		t.Errorf("review→in_progress: %v", err)
+	}
 	if err := task.ValidateTransition(StatusApproved); err != nil {
 		t.Errorf("review→approved: %v", err)
 	}

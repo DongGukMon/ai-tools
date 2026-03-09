@@ -222,7 +222,8 @@ For tasks where you want to review changes before the agent commits, use `--revi
 1. Create with review: `whip task create "title" --backend <chosen-backend> --difficulty medium --review --desc "..."`
 2. Agent works: the prompt instructs it to avoid committing and to report via `whip task review <id>` when done
 3. Review: inspect the agent's changes in the task `cwd` or the workspace worktree when one exists
-4. Approve: `whip task approve <id>` notifies the agent to commit and finish the task
+4. Request changes when needed: `whip task request-changes <id> --note "..."` returns the task to `in_progress` so the same agent can continue rework and resubmit with `whip task review <id>`
+5. Approve: `whip task approve <id>` notifies the agent to commit and finish the task
    - Approval does not directly mark the task `completed`; the agent still needs to commit and run `whip task complete <id> --note "..."`
 
 ### When to use review

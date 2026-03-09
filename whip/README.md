@@ -35,6 +35,7 @@ whip dashboard
 ```text
 created -> assigned -> in_progress -> completed
                            review -> approved -> completed
+                           review -(request-changes)-> in_progress
 
 assigned|in_progress|review|approved -> failed
 created|assigned|in_progress|review|approved|failed -> canceled
@@ -44,7 +45,7 @@ failed -> assigned
 - Statuses: `created`, `assigned`, `in_progress`, `review`, `approved`, `failed`, `completed`, `canceled`
 - Terminal statuses: `completed`, `canceled`
 - `failed` is non-terminal and can be re-dispatched with `whip task assign`
-- Review tasks use `assign -> start -> review -> approve -> complete`
+- Review tasks use `assign -> start -> review -> request-changes -> review -> approve -> complete`
 - Non-review tasks can use `assign -> start -> complete`
 
 ## Command Overview
@@ -64,6 +65,7 @@ For the exact CLI surface, use:
 | `task assign <id> [--master-irc <name>]` | `created|failed -> assigned`; spawn agent session |
 | `task start <id>` | `assigned -> in_progress`; register PID for the live run |
 | `task review <id>` | `in_progress -> review`; mark work ready for review |
+| `task request-changes <id>` | `review -> in_progress`; send review feedback and resume active work |
 | `task approve <id>` | `review -> approved`; notify the agent to finalize |
 | `task complete <id>` | `in_progress|approved -> completed`; finish successfully |
 | `task fail <id>` | `assigned|in_progress|review|approved -> failed`; preserve handoff context |
