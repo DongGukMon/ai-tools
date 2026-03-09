@@ -100,11 +100,12 @@ created → assigned → in_progress → completed
 `whip remote` starts a master agent session + HTTP API server for remote access.
 
 ```bash
-# Requires tmux and cloudflared
+# Requires tmux
 whip remote
 whip remote --workspace issue-sweep
 whip remote --workspace issue-sweep --tunnel your-tunnel.example.com
 whip remote --workspace issue-sweep --backend codex --difficulty medium --port 8585
+whip remote --auth-mode token   # legacy long-lived token mode
 ```
 
 | Flag | Description |
@@ -114,8 +115,24 @@ whip remote --workspace issue-sweep --backend codex --difficulty medium --port 8
 | `--workspace` | named workspace for stacked work (default: `global`) |
 | `--port` | Serve port (default 8585) |
 | `--tunnel` | Cloudflare tunnel hostname |
+| `--auth-mode` | `device` (default) or legacy `token` |
 
-Settings are saved to `~/.whip/config.json` for reuse. With a tunnel, a **short URL** and **QR code** are generated for quick mobile access.
+Settings are saved to `~/.whip/config.json` for reuse.
+
+By default, remote mode uses **device auth**:
+
+1. Open the printed **Short URL**
+2. The dashboard asks for an OTP
+3. `whip remote` prints `Device challenge OTP: <code>  expires in 2m`
+4. Enter the OTP to register the browser session
+
+Use `--auth-mode token` only when you explicitly want the older long-lived token flow.
+
+`whip remote` always prints a **Short URL**. Keyboard shortcuts:
+
+- `o` opens the short URL in the browser
+- `c` copies the raw connect URL
+- `q` stops the serve process while keeping the master tmux session alive
 
 ### Web Dashboard
 

@@ -38,7 +38,19 @@ claude-irc serve --port 8585
 
 # With master tmux session endpoints
 claude-irc serve --port 8585 --master-tmux whip-master
+
+# Legacy token mode
+claude-irc serve --port 8585 --auth-mode token
 ```
+
+Default auth mode is `device`. In device mode:
+
+- the connect URL uses `#mode=device`
+- the browser creates a pairing request
+- `claude-irc serve` prints a one-time OTP that expires in 2 minutes
+- successful pairing issues a session credential for later revisits
+
+Use `--auth-mode token` only when you explicitly need the older long-lived bearer token flow.
 
 When `--master-tmux` is set, three additional endpoints are available:
 
@@ -46,7 +58,10 @@ When `--master-tmux` is set, three additional endpoints are available:
 - `POST /api/master/keys` — sends keystrokes to the tmux session (`{"keys": "text\n"}`)
 - `GET /api/master/status` — checks if the tmux session is alive
 
-All endpoints require Bearer token authentication.
+Authenticated endpoints accept either:
+
+- `Authorization: Bearer <token>` in token mode
+- `Authorization: WhipSession <session_id>.<session_secret>` in device mode
 
 ## Code Conventions
 

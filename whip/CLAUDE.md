@@ -63,6 +63,7 @@ whip remote --workspace issue-sweep
 
 # With options
 whip remote --workspace issue-sweep --backend codex --difficulty medium --port 8585 --tunnel irc.bang9.dev
+whip remote --auth-mode token
 ```
 
 **Flags:**
@@ -71,8 +72,24 @@ whip remote --workspace issue-sweep --backend codex --difficulty medium --port 8
 - `--workspace` — named workspace for stacked work (default: `global`)
 - `--port` — Serve port (default 8585)
 - `--tunnel` — Cloudflare tunnel hostname for remote access
+- `--auth-mode` — `device` (default) or legacy `token`
 
-Tunnel and port settings are saved to `~/.whip/config.json` for reuse. Ctrl+C stops the serve process; the master tmux session persists for reattach.
+Tunnel, port, and auth mode settings are saved to `~/.whip/config.json` for reuse. Ctrl+C stops the serve process; the master tmux session persists for reattach.
+
+Default remote auth is **device mode**:
+
+- Open the printed **Short URL**
+- The web dashboard redirects into the login flow
+- `whip remote` prints a one-time OTP with a 2 minute lifetime
+- Enter that OTP in the browser to register the session
+
+Use `--auth-mode token` only if you explicitly need the older long-lived bearer token flow.
+
+Keyboard shortcuts while remote mode is active:
+
+- `o` — open the short URL in the browser
+- `c` — copy the raw connect URL
+- `q` — stop serve and return to the shell
 
 ### TUI Dashboard
 

@@ -49,6 +49,25 @@ claude-irc msg server "Got it. Need avatarUrl in UserResponse"
 - **Hook integration**: `PreToolUse` hook auto-surfaces new messages to Claude
 - **Stale cleanup**: Dead sessions are automatically detected and cleaned up
 
+## Serve Mode
+
+`claude-irc serve` starts the HTTP API used by the whip web dashboard.
+
+```bash
+# Default device auth
+claude-irc serve --port 8585 --master-tmux whip-master
+
+# Legacy token auth
+claude-irc serve --port 8585 --master-tmux whip-master --auth-mode token
+```
+
+Default auth mode is `device`. In that mode, the browser opens a `#mode=device` connect URL, requests pairing, and the terminal prints a one-time OTP that expires in 2 minutes.
+
+Authenticated endpoints accept either:
+
+- `Authorization: WhipSession <session_id>.<session_secret>` in device mode
+- `Authorization: Bearer <token>` in legacy token mode
+
 ## Name Resolution
 
 Commands that need identity (`msg`, `inbox`) resolve the peer name via:
