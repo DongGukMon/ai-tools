@@ -29,7 +29,13 @@ func SpawnMasterSession(cfg RemoteConfig) error {
 		return fmt.Errorf("ensure whip home: %w", err)
 	}
 
-	launchCmd := backend.BuildLaunchCmd(task, homePaths.Prompt)
+	task.Backend = backend.Name()
+	promptPath, err := prepareMasterPrompt(homePaths, backend.Name())
+	if err != nil {
+		return fmt.Errorf("prepare master prompt: %w", err)
+	}
+
+	launchCmd := backend.BuildLaunchCmd(task, promptPath)
 
 	cwd := cfg.CWD
 	if cwd == "" {

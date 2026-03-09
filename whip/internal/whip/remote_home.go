@@ -5,29 +5,33 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 const (
 	whipHomeDirName      = "home"
 	whipHomePromptFile   = "prompt.md"
+	whipHomePromptCodex  = "prompt-codex.md"
 	whipHomeMemoryFile   = "memory.md"
 	whipHomeProjectsFile = "projects.md"
 )
 
 type whipHomePaths struct {
-	Dir      string
-	Prompt   string
-	Memory   string
-	Projects string
+	Dir         string
+	Prompt      string
+	PromptCodex string
+	Memory      string
+	Projects    string
 }
 
 func whipHomePathsFor(baseDir string) whipHomePaths {
 	dir := filepath.Join(baseDir, whipHomeDirName)
 	return whipHomePaths{
-		Dir:      dir,
-		Prompt:   filepath.Join(dir, whipHomePromptFile),
-		Memory:   filepath.Join(dir, whipHomeMemoryFile),
-		Projects: filepath.Join(dir, whipHomeProjectsFile),
+		Dir:         dir,
+		Prompt:      filepath.Join(dir, whipHomePromptFile),
+		PromptCodex: filepath.Join(dir, whipHomePromptCodex),
+		Memory:      filepath.Join(dir, whipHomeMemoryFile),
+		Projects:    filepath.Join(dir, whipHomeProjectsFile),
 	}
 }
 
@@ -65,6 +69,97 @@ func seedFileIfMissing(path string, content string) error {
 		return fmt.Errorf("seed %s: %w", path, err)
 	}
 	return nil
+}
+
+func prepareMasterPrompt(paths whipHomePaths, backend string) (string, error) {
+	switch backend {
+	case "codex":
+		return prepareCodexMasterPrompt(paths)
+	default:
+		return paths.Prompt, nil
+	}
+}
+
+func prepareCodexMasterPrompt(paths whipHomePaths) (string, error) {
+	basePrompt, err := os.ReadFile(paths.Prompt)
+	if err != nil {
+		return "", fmt.Errorf("read shared master prompt: %w", err)
+	}
+	derived := renderMasterPromptForBackend(string(basePrompt), "codex")
+	if err := atomicWriteHomeFile(paths.PromptCodex, derived); err != nil {
+		return "", fmt.Errorf("write Codex master prompt: %w", err)
+	}
+	return paths.PromptCodex, nil
+}
+
+func atomicWriteHomeFile(path string, content string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+
+	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp.*")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	cleanup := func() {
+		tmp.Close()
+		os.Remove(tmpPath)
+	}
+
+	if _, err := io.WriteString(tmp, content); err != nil {
+		cleanup()
+		return err
+	}
+	if err := tmp.Chmod(0644); err != nil {
+		cleanup()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		cleanup()
+		return err
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		os.Remove(tmpPath)
+		return err
+	}
+	return nil
+}
+
+func renderMasterPromptForBackend(basePrompt string, backend string) string {
+	switch backend {
+	case "codex":
+		return appendMasterPromptSection(basePrompt, codexMasterPromptAppendix(), codexMasterPromptHeading)
+	default:
+		return basePrompt
+	}
+}
+
+func appendMasterPromptSection(basePrompt, appendix, heading string) string {
+	if strings.Contains(basePrompt, heading) {
+		return basePrompt
+	}
+
+	base := strings.TrimRight(basePrompt, "\n")
+	extra := strings.TrimLeft(appendix, "\n")
+	if base == "" {
+		return extra
+	}
+	return base + "\n\n" + extra
+}
+
+const codexMasterPromptHeading = "## Codex Worker Silent Session Fallback"
+
+func codexMasterPromptAppendix() string {
+	return `## Codex Worker Silent Session Fallback
+Use this only for Codex-backed worker sessions. Claude workers can keep polling IRC with /loop, but Codex workers do not have an equivalent background inbox polling loop in this workflow.
+
+If a Codex worker has been silent for a while and it is running in tmux:
+- Attach to the tmux session or send input to it.
+- Tell the worker to run: claude-irc inbox
+- Press Enter / submit the prompt so the worker actually processes the instruction.
+- Then continue normal IRC coordination after it resumes.
+`
 }
 
 func defaultMasterPrompt() string {

@@ -65,6 +65,45 @@ func TestEnsureWhipHome_PreservesExistingFiles(t *testing.T) {
 	}
 }
 
+func TestPrepareMasterPrompt_CodexAppendsSilentWorkerFallback(t *testing.T) {
+	baseDir := filepath.Join(t.TempDir(), whipDir)
+	paths, err := ensureWhipHome(baseDir)
+	if err != nil {
+		t.Fatalf("ensureWhipHome: %v", err)
+	}
+
+	const customPrompt = "# Custom Prompt\n\nFollow the operator.\n"
+	if err := os.WriteFile(paths.Prompt, []byte(customPrompt), 0o644); err != nil {
+		t.Fatalf("write custom prompt: %v", err)
+	}
+
+	promptPath, err := prepareMasterPrompt(paths, "codex")
+	if err != nil {
+		t.Fatalf("prepareMasterPrompt: %v", err)
+	}
+	if promptPath != paths.PromptCodex {
+		t.Fatalf("prompt path = %q, want %q", promptPath, paths.PromptCodex)
+	}
+
+	data, err := os.ReadFile(promptPath)
+	if err != nil {
+		t.Fatalf("read codex prompt: %v", err)
+	}
+	prompt := string(data)
+	if !strings.Contains(prompt, customPrompt) {
+		t.Fatalf("codex prompt should preserve shared prompt content: %q", prompt)
+	}
+	if !strings.Contains(prompt, codexMasterPromptHeading) {
+		t.Fatalf("codex prompt should contain silent worker fallback guidance")
+	}
+	if !strings.Contains(prompt, "Attach to the tmux session or send input to it.") {
+		t.Fatalf("codex prompt should mention tmux attach or send input guidance")
+	}
+	if !strings.Contains(prompt, "Press Enter / submit the prompt so the worker actually processes the instruction.") {
+		t.Fatalf("codex prompt should mention submitting the prompt")
+	}
+}
+
 func TestSpawnMasterSession_UsesHomePromptPath(t *testing.T) {
 	tempHome := t.TempDir()
 	t.Setenv("HOME", tempHome)
@@ -107,6 +146,44 @@ func TestSpawnMasterSession_UsesHomePromptPath(t *testing.T) {
 		if _, err := os.Stat(path); err != nil {
 			t.Fatalf("expected seeded file %q: %v", path, err)
 		}
+	}
+}
+
+func TestSpawnMasterSession_CodexUsesDerivedPromptPath(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+
+	var gotShellCmd string
+
+	origSpawn := spawnMasterTmuxSession
+	spawnMasterTmuxSession = func(sessionName string, shellCmd string) error {
+		gotShellCmd = shellCmd
+		return nil
+	}
+	defer func() {
+		spawnMasterTmuxSession = origSpawn
+	}()
+
+	cfg := RemoteConfig{
+		Backend:    "codex",
+		Difficulty: "medium",
+		CWD:        t.TempDir(),
+	}
+	if err := SpawnMasterSession(cfg); err != nil {
+		t.Fatalf("SpawnMasterSession: %v", err)
+	}
+
+	wantPromptPath := filepath.Join(tempHome, whipDir, whipHomeDirName, whipHomePromptCodex)
+	if !strings.Contains(gotShellCmd, wantPromptPath) {
+		t.Fatalf("shell command should reference %q: %s", wantPromptPath, gotShellCmd)
+	}
+
+	data, err := os.ReadFile(wantPromptPath)
+	if err != nil {
+		t.Fatalf("read codex prompt: %v", err)
+	}
+	if !strings.Contains(string(data), codexMasterPromptHeading) {
+		t.Fatalf("derived Codex prompt should contain silent worker fallback guidance")
 	}
 }
 
