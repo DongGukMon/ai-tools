@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { WhipAPIClient, buildConnectURL, parseConnectURL, AuthError, ConnectionError } from '../api/client'
+import { buildConnectURL, parseConnectURL, AuthError, ConnectionError, createClient } from '../api/client'
 import { Seo } from '../components/Seo'
 import { saveAuth, clearAuth, getClient, loadAuth } from '../stores/auth'
 
@@ -25,7 +25,7 @@ export function LoginPage({ onLogin }: Props) {
         const parsed = parseConnectURL(urlParam)
         if (parsed) {
           try {
-            const c = new WhipAPIClient(parsed.baseURL, parsed.token)
+            const c = createClient(parsed)
             await c.getPeers()
             saveAuth(parsed)
             onLogin()
@@ -49,7 +49,7 @@ export function LoginPage({ onLogin }: Props) {
           // Server temporarily unreachable — don't clear potentially valid credentials
           const auth = loadAuth()
           if (auth) {
-            setUrl(buildConnectURL(auth.baseURL, auth.token))
+            setUrl(auth.mode === 'dev' ? 'dev' : buildConnectURL(auth.baseURL, auth.token))
           }
           setError('Cannot connect to server')
         } else {
@@ -68,13 +68,13 @@ export function LoginPage({ onLogin }: Props) {
 
     const parsed = parseConnectURL(url.trim())
     if (!parsed) {
-      setError('Invalid URL format. Expected: https://...#token=... (legacy ?token=... also works)')
+      setError('Invalid URL format. Expected: https://...#token=... or dev')
       return
     }
 
     setLoading(true)
     try {
-      const client = new WhipAPIClient(parsed.baseURL, parsed.token)
+      const client = createClient(parsed)
       await client.getPeers()
       saveAuth(parsed)
       onLogin()
@@ -125,7 +125,7 @@ export function LoginPage({ onLogin }: Props) {
               type="text"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://xxx.trycloudflare.com#token=abc123"
+              placeholder="https://xxx.trycloudflare.com#token=abc123 or dev"
               disabled={loading}
               className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 text-sm placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-[#8B5CF6] focus:border-transparent transition-colors disabled:opacity-60"
             />

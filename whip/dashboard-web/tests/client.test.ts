@@ -9,6 +9,7 @@ test('buildConnectURL uses a fragment token', () => {
 
 test('parseConnectURL accepts fragment-style connect URLs', () => {
   assert.deepEqual(parseConnectURL('https://public.example#token=abc123'), {
+    mode: 'remote',
     baseURL: 'https://public.example/',
     token: 'abc123',
   })
@@ -16,6 +17,7 @@ test('parseConnectURL accepts fragment-style connect URLs', () => {
 
 test('parseConnectURL accepts dashboard URLs that carry a fragment-style connect URL', () => {
   assert.deepEqual(parseConnectURL('https://whip.bang9.dev#https://public.example#token=abc123'), {
+    mode: 'remote',
     baseURL: 'https://public.example/',
     token: 'abc123',
   })
@@ -23,7 +25,14 @@ test('parseConnectURL accepts dashboard URLs that carry a fragment-style connect
 
 test('parseConnectURL keeps legacy query-token URLs working', () => {
   assert.deepEqual(parseConnectURL('https://public.example?token=abc123'), {
+    mode: 'remote',
     baseURL: 'https://public.example/',
     token: 'abc123',
+  })
+})
+
+test('parseConnectURL accepts dev mode', () => {
+  assert.deepEqual(parseConnectURL('dev'), {
+    mode: 'dev',
   })
 })

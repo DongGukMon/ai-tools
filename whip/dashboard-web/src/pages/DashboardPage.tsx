@@ -9,7 +9,6 @@ import { TaskDetail } from '../components/TaskDetail'
 import { SummaryStats } from '../components/SummaryStats'
 import { PeerList, sortPeers } from '../components/PeerList'
 import { Chat, type ChatMessage } from '../components/Chat'
-import { TopicBoard } from '../components/TopicBoard'
 import { MasterTerminal } from '../components/MasterTerminal'
 import { Seo } from '../components/Seo'
 
@@ -336,9 +335,6 @@ export function DashboardPage({ onDisconnect }: Props) {
               sending={sending}
               onBack={() => setMobileChatOpen(false)}
             />
-            {selectedPeer && client && (
-              <TopicBoard client={client} peerName={selectedPeer} />
-            )}
           </div>
         </div>
       )}

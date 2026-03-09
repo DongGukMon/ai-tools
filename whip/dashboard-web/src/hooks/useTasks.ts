@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import type { Task } from '../api/types'
-import type { WhipAPIClient } from '../api/client'
+import type { WhipClient } from '../api/client'
 import { AuthError, ConnectionError } from '../api/client'
 
 const DEFAULT_POLL_INTERVAL = 2000
@@ -12,7 +12,7 @@ interface Callbacks {
 }
 
 export function useTasks(
-  client: WhipAPIClient | null,
+  client: WhipClient | null,
   callbacks: Callbacks,
   pollInterval: number = DEFAULT_POLL_INTERVAL,
 ) {

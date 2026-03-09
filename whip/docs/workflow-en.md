@@ -162,7 +162,7 @@ The master monitors incoming messages via the `/loop` cron and responds as neede
 claude-irc msg whip-<task-id> "Use the existing UserService, don't create a new one."
 
 # Master broadcasts to all agents
-whip broadcast "API contract updated. Check the topic board."
+whip broadcast "API contract updated. Check the latest notes."
 ```
 
 When the whip TUI sends a message to an agent, it arrives under the identity `user`. Agents can reply directly:

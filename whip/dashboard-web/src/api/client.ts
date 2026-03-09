@@ -1,4 +1,5 @@
-import type { Message, Peer, Task, Topic } from './types'
+import type { Message, Peer, Task } from './types'
+import { MockWhipClient } from './client.debug.ts'
 
 export class AuthError extends Error {
   constructor() {
@@ -14,7 +15,25 @@ export class ConnectionError extends Error {
   }
 }
 
-export class WhipAPIClient {
+export type RemoteConnectTarget = { mode: 'remote'; baseURL: string; token: string }
+export type DevConnectTarget = { mode: 'dev' }
+export type ConnectTarget = RemoteConnectTarget | DevConnectTarget
+
+export interface WhipClient {
+  getPeers(signal?: AbortSignal): Promise<Peer[]>
+  sendMessage(to: string, content: string): Promise<void>
+  getInbox(name: string, all?: boolean, signal?: AbortSignal): Promise<Message[]>
+  markRead(name: string): Promise<void>
+  clearInbox(name: string): Promise<void>
+  getMasterCapture(): Promise<{ content: string }>
+  sendMasterKeys(keys: string): Promise<void>
+  getMasterStatus(): Promise<{ session: string; alive: boolean }>
+  getTasks(signal?: AbortSignal): Promise<Task[]>
+  getTask(id: string): Promise<Task>
+  ping(): Promise<boolean>
+}
+
+export class WhipAPIClient implements WhipClient {
   private baseURL: string
   private token: string
 
@@ -53,18 +72,12 @@ export class WhipAPIClient {
     return response.json() as Promise<T>
   }
 
-  // IRC
-
   async getPeers(signal?: AbortSignal): Promise<Peer[]> {
     return this.request<Peer[]>('/api/peers', { signal })
   }
 
   async sendMessage(to: string, content: string): Promise<void> {
-    const body = {
-      from: 'user',
-      to,
-      content,
-    }
+    const body = { from: 'user', to, content }
     await this.request<unknown>('/api/messages', {
       method: 'POST',
       body: JSON.stringify(body),
@@ -88,16 +101,6 @@ export class WhipAPIClient {
     })
   }
 
-  async getTopics(name: string): Promise<Topic[]> {
-    return this.request<Topic[]>(`/api/topics/${encodeURIComponent(name)}`)
-  }
-
-  async getTopic(name: string, index: number): Promise<Topic> {
-    return this.request<Topic>(`/api/topics/${encodeURIComponent(name)}/${index}`)
-  }
-
-  // Master session
-
   async getMasterCapture(): Promise<{ content: string }> {
     return this.request<{ content: string }>('/api/master/capture')
   }
@@ -113,8 +116,6 @@ export class WhipAPIClient {
     return this.request<{ session: string; alive: boolean }>('/api/master/status')
   }
 
-  // Tasks
-
   async getTasks(signal?: AbortSignal): Promise<Task[]> {
     return this.request<Task[]>('/api/tasks', { signal })
   }
@@ -122,8 +123,6 @@ export class WhipAPIClient {
   async getTask(id: string): Promise<Task> {
     return this.request<Task>(`/api/tasks/${encodeURIComponent(id)}`)
   }
-
-  // Health check
 
   async ping(): Promise<boolean> {
     try {
@@ -135,14 +134,53 @@ export class WhipAPIClient {
   }
 }
 
+export function createClient(target: ConnectTarget): WhipClient {
+  if (target.mode === 'dev') {
+    return new MockWhipClient()
+  }
+  return new WhipAPIClient(target.baseURL, target.token)
+}
+
 export function buildConnectURL(baseURL: string, token: string): string {
   const normalizedBaseURL = baseURL.replace(/[?#].*$/, '')
   return `${normalizedBaseURL}#token=${encodeURIComponent(token)}`
 }
 
-export function parseConnectURL(input: string): { baseURL: string; token: string } | null {
+export function formatConnectTarget(target: ConnectTarget): string {
+  if (target.mode === 'dev') {
+    return 'dev'
+  }
+  return buildConnectURL(target.baseURL, target.token)
+}
+
+function parseDevMode(raw: string): DevConnectTarget | null {
+  const normalized = raw.trim().toLowerCase()
+  if (normalized === 'dev' || normalized === '#dev' || normalized === 'mock' || normalized === 'demo') {
+    return { mode: 'dev' }
+  }
+
   try {
-    // Handle either a direct connect URL or a dashboard URL whose hash carries one.
+    const url = new URL(raw)
+    const hashParams = new URLSearchParams(url.hash.startsWith('#') ? url.hash.slice(1) : url.hash)
+    const mode = hashParams.get('mode') ?? url.searchParams.get('mode')
+    const devFlag = hashParams.get('dev') ?? url.searchParams.get('dev')
+    if (mode === 'dev' || devFlag === '1' || devFlag === 'true') {
+      return { mode: 'dev' }
+    }
+  } catch {
+    return null
+  }
+
+  return null
+}
+
+export function parseConnectURL(input: string): ConnectTarget | null {
+  const devTarget = parseDevMode(input)
+  if (devTarget) {
+    return devTarget
+  }
+
+  try {
     const url = new URL(input)
     const rawHash = url.hash.slice(1)
     const raw = rawHash.startsWith('http://') || rawHash.startsWith('https://') ? rawHash : input
@@ -152,7 +190,7 @@ export function parseConnectURL(input: string): { baseURL: string; token: string
     if (!token) return null
     connectURL.search = ''
     connectURL.hash = ''
-    return { baseURL: connectURL.toString(), token }
+    return { mode: 'remote', baseURL: connectURL.toString(), token }
   } catch {
     return null
   }

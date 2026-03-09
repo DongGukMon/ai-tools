@@ -90,7 +90,7 @@ Settings are saved to `~/.whip/config.json` for reuse. With a tunnel, a **short 
 ### Web Dashboard
 
 - **Tasks** — real-time task list with status and detail view
-- **Chat** — IRC messaging with agent peers and topic boards
+- **Chat** — IRC messaging with agent peers
 - **Terminal** — live master session output with keyboard input, fullscreen mode, mobile touch scroll
 
 ## Skills

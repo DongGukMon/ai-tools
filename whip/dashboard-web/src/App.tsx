@@ -7,7 +7,7 @@ import { DashboardPage } from './pages/DashboardPage'
 import { ToolsPage } from './pages/ToolsPage'
 import { WorkflowPage } from './pages/WorkflowPage'
 import { getClient, saveAuth } from './stores/auth'
-import { WhipAPIClient, parseConnectURL } from './api/client'
+import { createClient, parseConnectURL } from './api/client'
 
 export default function App() {
   const [authed, setAuthed] = useState(() => getClient() !== null)
@@ -29,7 +29,7 @@ export default function App() {
       return
     }
     window.history.replaceState({}, '', window.location.pathname)
-    const client = new WhipAPIClient(parsed.baseURL, parsed.token)
+    const client = createClient(parsed)
     client.getPeers().then(() => {
       saveAuth(parsed)
       setAuthed(true)
@@ -58,8 +58,6 @@ export default function App() {
         } />
         <Route path="/tools" element={<ToolsPage />} />
         <Route path="/how-it-works" element={<WorkflowPage />} />
-        <Route path="/real-world" element={<Navigate to="/how-it-works" replace />} />
-        <Route path="/real-world/issue-sweep" element={<Navigate to="/how-it-works" replace />} />
         <Route path="/login" element={
           authed
             ? <Navigate to="/dashboard" replace />

@@ -12,12 +12,6 @@ export interface Message {
   read: boolean
 }
 
-export interface Topic {
-  title: string
-  content: string
-  timestamp: string
-}
-
 export type TaskStatus = 'created' | 'assigned' | 'in_progress' | 'review' | 'approved_pending_finalize' | 'completed' | 'failed'
 
 export interface Task {

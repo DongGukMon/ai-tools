@@ -147,7 +147,7 @@ func (m DashboardModel) renderDetailView(w int) string {
 func (m DashboardModel) renderTable() string {
 	colID := 5
 	colTitle := 24
-	colStatus := 13
+	colStatus := 10
 	colWorkspace := 12
 	colBackend := 7
 	colRunner := 6
@@ -231,25 +231,25 @@ func (m DashboardModel) renderSummary() string {
 		lipgloss.NewStyle().Bold(true).Foreground(colorText).Render(fmt.Sprintf("%d total", total)),
 	}
 	if n := counts[StatusCreated]; n > 0 {
-		parts = append(parts, statusCreated.Render(fmt.Sprintf("● %d created", n)))
+		parts = append(parts, renderStatusCount(StatusCreated, n))
 	}
 	if n := counts[StatusAssigned]; n > 0 {
-		parts = append(parts, statusAssigned.Render(fmt.Sprintf("◐ %d assigned", n)))
+		parts = append(parts, renderStatusCount(StatusAssigned, n))
 	}
 	if n := counts[StatusInProgress]; n > 0 {
-		parts = append(parts, statusInProgress.Render(fmt.Sprintf("▶ %d in_progress", n)))
+		parts = append(parts, renderStatusCount(StatusInProgress, n))
 	}
 	if n := counts[StatusReview]; n > 0 {
-		parts = append(parts, statusReview.Render(fmt.Sprintf("◎ %d review", n)))
+		parts = append(parts, renderStatusCount(StatusReview, n))
 	}
 	if n := counts[StatusApprovedPendingFinalize]; n > 0 {
-		parts = append(parts, statusApproved.Render(fmt.Sprintf("◉ %d approved_pending_finalize", n)))
+		parts = append(parts, renderStatusCount(StatusApprovedPendingFinalize, n))
 	}
 	if n := counts[StatusCompleted]; n > 0 {
-		parts = append(parts, statusCompleted.Render(fmt.Sprintf("✓ %d completed", n)))
+		parts = append(parts, renderStatusCount(StatusCompleted, n))
 	}
 	if n := counts[StatusFailed]; n > 0 {
-		parts = append(parts, statusFailed.Render(fmt.Sprintf("✗ %d failed", n)))
+		parts = append(parts, renderStatusCount(StatusFailed, n))
 	}
 
 	content := strings.Join(parts, dot)
@@ -292,27 +292,6 @@ func (m DashboardModel) renderDetailFooter() string {
 	}
 
 	return lipgloss.NewStyle().MarginTop(1).Render(line)
-}
-
-func renderStatus(s TaskStatus) string {
-	switch s {
-	case StatusCreated:
-		return statusCreated.Render("○ created")
-	case StatusAssigned:
-		return statusAssigned.Render("◐ assigned")
-	case StatusInProgress:
-		return statusInProgress.Render("▶ in_progress")
-	case StatusReview:
-		return statusReview.Render("◎ review")
-	case StatusApprovedPendingFinalize:
-		return statusApproved.Render("◉ approved_pending_finalize")
-	case StatusCompleted:
-		return statusCompleted.Render("✓ completed")
-	case StatusFailed:
-		return statusFailed.Render("✗ failed")
-	default:
-		return string(s)
-	}
 }
 
 func renderBackend(backend string) string {

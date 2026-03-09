@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
-import type { WhipAPIClient } from '../api/client'
+import type { WhipClient } from '../api/client'
 import { useVirtualKeys } from '../hooks/useVirtualKeys'
 import { VirtualKeyBar } from './VirtualKeyBar'
 
@@ -21,7 +21,7 @@ const T = {
 } as const
 
 interface MasterTerminalProps {
-  client: WhipAPIClient
+  client: WhipClient
   fullscreen?: boolean
   onToggleFullscreen?: () => void
 }

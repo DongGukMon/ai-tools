@@ -1,11 +1,9 @@
-import { WhipAPIClient } from '../api/client'
+import type { ConnectTarget, WhipClient } from '../api/client'
+import { createClient } from '../api/client'
 
 const AUTH_KEY = 'whip-auth'
 
-interface AuthState {
-  baseURL: string
-  token: string
-}
+type AuthState = ConnectTarget
 
 export function saveAuth(state: AuthState): void {
   localStorage.setItem(AUTH_KEY, JSON.stringify(state))
@@ -25,8 +23,8 @@ export function clearAuth(): void {
   localStorage.removeItem(AUTH_KEY)
 }
 
-export function getClient(): WhipAPIClient | null {
+export function getClient(): WhipClient | null {
   const auth = loadAuth()
   if (!auth) return null
-  return new WhipAPIClient(auth.baseURL, auth.token)
+  return createClient(auth)
 }
