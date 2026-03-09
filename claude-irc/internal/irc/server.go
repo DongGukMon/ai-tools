@@ -25,6 +25,7 @@ type ServerConfig struct {
 	Workspace         string
 	OnReady           func(info ServerInfo)
 	OnDeviceChallenge func(info DeviceAuthChallengeInfo)
+	OnDeviceChallengeResult func(info DeviceAuthChallengeResultInfo)
 }
 
 // ServerInfo contains details about a running server instance.
@@ -44,6 +45,16 @@ type DeviceAuthChallengeInfo struct {
 	DeviceLabel string    `json:"device_label,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
 	ExpiresAt   time.Time `json:"expires_at"`
+}
+
+type DeviceAuthChallengeResultInfo struct {
+	Workspace   string    `json:"workspace"`
+	ChallengeID string    `json:"challenge_id"`
+	SessionID   string    `json:"session_id,omitempty"`
+	DeviceLabel string    `json:"device_label,omitempty"`
+	Result      string    `json:"result"`
+	Error       string    `json:"error,omitempty"`
+	At          time.Time `json:"at"`
 }
 
 const dashboardOperatorName = "user"
@@ -91,11 +102,12 @@ func RunServer(ctx context.Context, cfg ServerConfig) error {
 	}
 
 	authConfig := serverAuthConfig{
-		Mode:              authMode,
-		Token:             token,
-		Workspace:         workspace,
-		RemoteAuth:        remoteAuthStore,
-		OnDeviceChallenge: cfg.OnDeviceChallenge,
+		Mode:                    authMode,
+		Token:                   token,
+		Workspace:               workspace,
+		RemoteAuth:              remoteAuthStore,
+		OnDeviceChallenge:       cfg.OnDeviceChallenge,
+		OnDeviceChallengeResult: cfg.OnDeviceChallengeResult,
 	}
 	mux := buildHandler(cfg.Store, authConfig, shortCode, cfg.MasterTmux)
 

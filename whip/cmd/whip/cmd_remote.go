@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -95,8 +96,9 @@ func remoteCmd() *cobra.Command {
 			}
 
 			fmt.Fprintln(os.Stderr, "Starting claude-irc serve...")
+			noticePrinter := remoteNoticePrinter{w: os.Stderr}
 			serveCmd, serveResult, err := whip.StartServe(ctx, remoteCfg, serveToken, true, func(line string) {
-				fmt.Fprintf(os.Stderr, "\n  %s\n", line)
+				noticePrinter.Print(line)
 			})
 			if err != nil {
 				return fmt.Errorf("failed to start serve: %w", err)
@@ -104,18 +106,17 @@ func remoteCmd() *cobra.Command {
 
 			connectURL := serveResult.ConnectURL
 			shortURL := serveResult.ShortURL
+			openURL := serveOpenURL(shortURL)
 
 			fmt.Fprintln(os.Stderr, "")
 			if shortURL != "" {
-				fmt.Fprintf(os.Stderr, "  URL: %s\n", shortURL)
-			} else if connectURL != "" {
-				fmt.Fprintf(os.Stderr, "  URL: %s\n", connectURL)
+				fmt.Fprintf(os.Stderr, "  Short URL:     %s\n", shortURL)
 			}
 			fmt.Fprintf(os.Stderr, "  Auth mode:     %s\n", authMode)
 			fmt.Fprintf(os.Stderr, "  Workspace:     %s\n", remoteCfg.Workspace)
 			fmt.Fprintf(os.Stderr, "  Master tmux:   tmux attach -t %s\n", masterSession)
 			fmt.Fprintln(os.Stderr, "")
-			fmt.Fprintln(os.Stderr, "  Shortcuts: [o] open in browser  [c] copy URL  [q] quit")
+			fmt.Fprintln(os.Stderr, "  Shortcuts: [o] open short URL  [c] copy connect URL  [q] quit")
 
 			tokenFromURL := connectURLToken(connectURL)
 			if _, err := store.UpdateConfig(func(cfg *whip.Config) error {
@@ -134,11 +135,7 @@ func remoteCmd() *cobra.Command {
 			signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
 			quitCh := make(chan struct{})
-			primaryURL := shortURL
-			if primaryURL == "" {
-				primaryURL = connectURL
-			}
-			go remoteKeyboardLoop(primaryURL, quitCh)
+			go remoteKeyboardLoop(openURL, connectURL, quitCh)
 
 			select {
 			case <-sigCh:
@@ -162,17 +159,17 @@ func remoteCmd() *cobra.Command {
 	cmd.Flags().StringVar(&tunnel, "tunnel", "", "Cloudflare tunnel hostname")
 	cmd.Flags().IntVar(&port, "port", 8585, "Serve port")
 	cmd.Flags().StringVar(&workspace, "workspace", "", "Workspace name (default: global)")
-	cmd.Flags().StringVar(&authMode, "auth-mode", whip.RemoteAuthModeToken, "Remote auth mode (token or device)")
+	cmd.Flags().StringVar(&authMode, "auth-mode", whip.RemoteAuthModeDevice, "Remote auth mode (token or device)")
 	cmd.Flags().Bool("new-token", false, "Generate a new auth token (discard saved token)")
 
 	return cmd
 }
 
-func remoteKeyboardLoop(primaryURL string, quit chan struct{}) {
+func remoteKeyboardLoop(openURL string, connectURL string, quit chan struct{}) {
 	fd := int(os.Stdin.Fd())
 	old, err := term.MakeRaw(fd)
 	if err != nil {
-		select {}
+		return
 	}
 	defer term.Restore(fd, old)
 
@@ -187,16 +184,54 @@ func remoteKeyboardLoop(primaryURL string, quit chan struct{}) {
 			close(quit)
 			return
 		case 'o', 'O':
-			if primaryURL != "" {
-				exec.Command("open", primaryURL).Start()
+			if openURL != "" {
+				exec.Command("open", openURL).Start()
+				fmt.Fprint(os.Stderr, "\rOpened short URL\r\n")
 			}
 		case 'c', 'C':
-			if primaryURL != "" {
+			if connectURL != "" {
 				c := exec.Command("pbcopy")
-				c.Stdin = strings.NewReader(primaryURL)
+				c.Stdin = strings.NewReader(connectURL)
 				c.Run()
-				fmt.Fprintln(os.Stderr, "  URL copied to clipboard")
+				fmt.Fprint(os.Stderr, "\rCopied connect URL\r\n")
 			}
 		}
+	}
+}
+
+func serveOpenURL(shortURL string) string {
+	return shortURL
+}
+
+type remoteNoticePrinter struct {
+	w                  io.Writer
+	hasActiveChallenge bool
+}
+
+func (p *remoteNoticePrinter) Print(line string) {
+	if p == nil {
+		return
+	}
+	w := p.w
+	if w == nil {
+		w = os.Stderr
+	}
+	switch {
+	case strings.HasPrefix(line, "Device challenge OTP:"):
+		if p.hasActiveChallenge {
+			fmt.Fprintf(w, "\033[1A\r\033[2K  %s\r\n", line)
+			return
+		}
+		fmt.Fprintf(w, "\r\n  %s\r\n", line)
+		p.hasActiveChallenge = true
+	case strings.HasPrefix(line, "Device challenge result:"):
+		if p.hasActiveChallenge {
+			fmt.Fprintf(w, "\033[1A\r\033[2K  %s\r\n", line)
+			p.hasActiveChallenge = false
+			return
+		}
+		fmt.Fprintf(w, "\r\n  %s\r\n", line)
+	default:
+		fmt.Fprintf(w, "\r\n  %s\r\n", line)
 	}
 }

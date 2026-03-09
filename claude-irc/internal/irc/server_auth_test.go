@@ -183,9 +183,17 @@ func TestAPIAuthConfigReportsMode(t *testing.T) {
 
 func TestAPIDeviceAuthFlowUsesWhipSessionHeader(t *testing.T) {
 	var challengeNotice DeviceAuthChallengeInfo
-	ts, _, authStore := setupDeviceTestServerWithCallback(t, "demo", func(info DeviceAuthChallengeInfo) {
-		challengeNotice = info
-	})
+	var resultNotice DeviceAuthChallengeResultInfo
+	ts, _, authStore := setupDeviceTestServerWithCallbacks(
+		t,
+		"demo",
+		func(info DeviceAuthChallengeInfo) {
+			challengeNotice = info
+		},
+		func(info DeviceAuthChallengeResultInfo) {
+			resultNotice = info
+		},
+	)
 
 	resp := doRequest(t, ts, "", http.MethodGet, "/api/peers", nil)
 	defer resp.Body.Close()
@@ -248,6 +256,12 @@ func TestAPIDeviceAuthFlowUsesWhipSessionHeader(t *testing.T) {
 	if exchangeBody.SessionID == "" || exchangeBody.SessionSecret == "" {
 		t.Fatalf("expected session credentials, got %+v", exchangeBody)
 	}
+	if resultNotice.Result != "success" {
+		t.Fatalf("result = %q, want success", resultNotice.Result)
+	}
+	if resultNotice.SessionID != exchangeBody.SessionID {
+		t.Fatalf("result session id = %q, want %q", resultNotice.SessionID, exchangeBody.SessionID)
+	}
 
 	sessionHeader := "WhipSession " + exchangeBody.SessionID + "." + exchangeBody.SessionSecret
 	peersResp := doRequestWithAuthorization(t, ts, sessionHeader, http.MethodGet, "/api/peers", nil)
@@ -270,9 +284,17 @@ func TestAPIDeviceAuthFlowUsesWhipSessionHeader(t *testing.T) {
 
 func TestAPIDeviceAuthWrongOTPInvalidatesChallenge(t *testing.T) {
 	var challengeNotice DeviceAuthChallengeInfo
-	ts, _, _ := setupDeviceTestServerWithCallback(t, "demo", func(info DeviceAuthChallengeInfo) {
-		challengeNotice = info
-	})
+	var resultNotice DeviceAuthChallengeResultInfo
+	ts, _, _ := setupDeviceTestServerWithCallbacks(
+		t,
+		"demo",
+		func(info DeviceAuthChallengeInfo) {
+			challengeNotice = info
+		},
+		func(info DeviceAuthChallengeResultInfo) {
+			resultNotice = info
+		},
+	)
 
 	challengeResp := doRequest(t, ts, "", http.MethodPost, "/api/auth/challenges", map[string]string{
 		"device_label": "Laptop",
@@ -292,6 +314,12 @@ func TestAPIDeviceAuthWrongOTPInvalidatesChallenge(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("expected 401 for wrong otp, got %d", resp.StatusCode)
+	}
+	if resultNotice.Result != "error" {
+		t.Fatalf("result = %q, want error", resultNotice.Result)
+	}
+	if resultNotice.Error != ErrRemoteAuthInvalidOTP.Error() {
+		t.Fatalf("error = %q, want %q", resultNotice.Error, ErrRemoteAuthInvalidOTP.Error())
 	}
 
 	resp = doRequest(t, ts, "", http.MethodPost, "/api/auth/exchange", map[string]string{

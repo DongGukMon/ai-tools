@@ -7,7 +7,7 @@ import { DashboardPage } from './pages/DashboardPage'
 import { ToolsPage } from './pages/ToolsPage'
 import { WorkflowPage } from './pages/WorkflowPage'
 import { getClient, saveAuth } from './stores/auth'
-import { createClient, parseConnectURL } from './api/client'
+import { createClient, formatConnectTarget, isStoredConnectTarget, parseConnectURL } from './api/client'
 
 export default function App() {
   const [authed, setAuthed] = useState(() => getClient() !== null)
@@ -28,6 +28,12 @@ export default function App() {
       setHashChecked(true)
       return
     }
+    if (!isStoredConnectTarget(parsed)) {
+      window.history.replaceState({}, '', `/login?url=${encodeURIComponent(formatConnectTarget(parsed))}`)
+      setHashChecked(true)
+      return
+    }
+
     window.history.replaceState({}, '', window.location.pathname)
     const client = createClient(parsed)
     client.getPeers().then(() => {
@@ -35,6 +41,7 @@ export default function App() {
       setAuthed(true)
       setHashChecked(true)
     }).catch(() => {
+      window.history.replaceState({}, '', `/login?url=${encodeURIComponent(formatConnectTarget(parsed))}`)
       setHashChecked(true)
     })
   }, [])

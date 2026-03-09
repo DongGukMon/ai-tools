@@ -36,6 +36,7 @@ func serveCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			noticePrinter := serveNoticePrinter{w: os.Stderr}
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -64,16 +65,19 @@ func serveCmd() *cobra.Command {
 				AuthMode:   authMode,
 				Workspace:  workspace,
 				OnDeviceChallenge: func(info irc.DeviceAuthChallengeInfo) {
-					fmt.Fprintln(os.Stderr, formatDeviceChallengeLogLine(info))
+					noticePrinter.PrintChallenge(formatDeviceChallengeLogLine(info))
+				},
+				OnDeviceChallengeResult: func(info irc.DeviceAuthChallengeResultInfo) {
+					noticePrinter.PrintResult(formatDeviceChallengeResultLogLine(info))
 				},
 				OnReady: func(info irc.ServerInfo) {
-					connectURL, shortURL, webURL := serveURLs(info, publicURL)
+					connectURL, shortURL, _ := serveURLs(info, publicURL)
 					fmt.Fprintf(os.Stderr, "claude-irc serve started.\n")
 					fmt.Fprintf(os.Stderr, "Connect URL: %s\n", connectURL)
 					fmt.Fprintf(os.Stderr, "Short URL: %s\n", shortURL)
 					if keyboardShortcutsAvailable() {
-						fmt.Fprintf(os.Stderr, "\nShortcuts: [o] open in browser  [c] copy URL  [q] quit\n")
-						go serveKeyboardLoop(ctx, webURL, connectURL, cancel)
+						fmt.Fprintf(os.Stderr, "\nShortcuts: [o] open short URL  [c] copy connect URL  [q] quit\n")
+						go serveKeyboardLoop(ctx, shortURL, connectURL, cancel)
 					}
 				},
 			})
@@ -84,13 +88,14 @@ func serveCmd() *cobra.Command {
 	cmd.Flags().StringVar(&bindHost, "bind", "", "Host/address to bind the HTTP server to (default 127.0.0.1; set explicitly for non-local access)")
 	cmd.Flags().StringVar(&tunnel, "tunnel", "", "Cloudflare Tunnel hostname (empty for quick tunnel, or domain like irc.bang9.dev)")
 	cmd.Flags().StringVar(&masterTmux, "master-tmux", "", "Master tmux session name for capture/input endpoints")
-	cmd.Flags().StringVar(&authMode, "auth-mode", "token", "Remote auth mode (token or device)")
+	cmd.Flags().StringVar(&authMode, "auth-mode", "device", "Remote auth mode (token or device)")
 	cmd.Flags().StringVar(&workspace, "workspace", "global", "Workspace name for device auth/session storage")
 	cmd.Flags().StringVar(&token, "token", "", "Pre-set auth token (reuse across restarts); if empty, a new one is generated")
 	return cmd
 }
 
 const deviceChallengeLogPrefix = "Device challenge OTP:"
+const deviceChallengeResultLogPrefix = "Device challenge result:"
 
 func serveURLs(info irc.ServerInfo, publicURL string) (connectURL string, shortURL string, webURL string) {
 	baseURL := info.LocalURL
@@ -108,14 +113,69 @@ func serveURLs(info irc.ServerInfo, publicURL string) (connectURL string, shortU
 }
 
 func formatDeviceChallengeLogLine(info irc.DeviceAuthChallengeInfo) string {
-	parts := []string{
-		fmt.Sprintf("workspace=%s", info.Workspace),
-		fmt.Sprintf("expires_at=%s", info.ExpiresAt.Format(time.RFC3339)),
+	parts := []string{info.OTP}
+	if ttl := formatChallengeTTL(info.CreatedAt, info.ExpiresAt); ttl != "" {
+		parts = append(parts, ttl)
 	}
-	if info.DeviceLabel != "" {
-		parts = append(parts, fmt.Sprintf("device=%q", info.DeviceLabel))
+	return fmt.Sprintf("%s %s", deviceChallengeLogPrefix, strings.Join(parts, "  "))
+}
+
+func formatDeviceChallengeResultLogLine(info irc.DeviceAuthChallengeResultInfo) string {
+	status := info.Result
+	if status == "error" && info.Error != "" {
+		status = fmt.Sprintf("failed (%s)", info.Error)
+	} else if status == "error" {
+		status = "failed"
 	}
-	return fmt.Sprintf("%s %s (%s)", deviceChallengeLogPrefix, info.OTP, strings.Join(parts, ", "))
+	return fmt.Sprintf("%s %s", deviceChallengeResultLogPrefix, status)
+}
+
+func writeServeNotice(w io.Writer, line string) {
+	fmt.Fprintf(w, "\r\n%s\r\n", line)
+}
+
+type serveNoticePrinter struct {
+	w                  io.Writer
+	hasActiveChallenge bool
+}
+
+func (p *serveNoticePrinter) PrintChallenge(line string) {
+	if p == nil {
+		return
+	}
+	if p.hasActiveChallenge {
+		fmt.Fprintf(p.w, "\033[1A\r\033[2K%s\r\n", line)
+		return
+	}
+	writeServeNotice(p.w, line)
+	p.hasActiveChallenge = true
+}
+
+func (p *serveNoticePrinter) PrintResult(line string) {
+	if p == nil {
+		return
+	}
+	if p.hasActiveChallenge {
+		fmt.Fprintf(p.w, "\033[1A\r\033[2K%s\r\n", line)
+		p.hasActiveChallenge = false
+		return
+	}
+	writeServeNotice(p.w, line)
+}
+
+func formatChallengeTTL(createdAt, expiresAt time.Time) string {
+	if createdAt.IsZero() || expiresAt.IsZero() {
+		return ""
+	}
+	remaining := expiresAt.Sub(createdAt)
+	if remaining <= 0 {
+		return ""
+	}
+	totalSeconds := int(remaining / time.Second)
+	if totalSeconds%60 == 0 {
+		return fmt.Sprintf("expires in %dm", totalSeconds/60)
+	}
+	return fmt.Sprintf("expires in %ds", totalSeconds)
 }
 
 type keyboardLoopDeps struct {
@@ -130,12 +190,12 @@ func keyboardShortcutsAvailable() bool {
 	return term.IsTerminal(int(os.Stdin.Fd()))
 }
 
-func serveKeyboardLoop(ctx context.Context, webURL, connectURL string, cancel context.CancelFunc) {
+func serveKeyboardLoop(ctx context.Context, shortURL, connectURL string, cancel context.CancelFunc) {
 	fd := int(os.Stdin.Fd())
 	if !term.IsTerminal(fd) {
 		return
 	}
-	serveKeyboardLoopWithDeps(ctx, webURL, connectURL, cancel, keyboardLoopDeps{
+	serveKeyboardLoopWithDeps(ctx, shortURL, connectURL, cancel, keyboardLoopDeps{
 		stdin:  os.Stdin,
 		stderr: os.Stderr,
 		makeRaw: func() (func(), error) {
@@ -158,7 +218,7 @@ func serveKeyboardLoop(ctx context.Context, webURL, connectURL string, cancel co
 	})
 }
 
-func serveKeyboardLoopWithDeps(ctx context.Context, webURL, connectURL string, cancel context.CancelFunc, deps keyboardLoopDeps) {
+func serveKeyboardLoopWithDeps(ctx context.Context, shortURL, connectURL string, cancel context.CancelFunc, deps keyboardLoopDeps) {
 	restore, err := deps.makeRaw()
 	if err != nil {
 		fmt.Fprintf(deps.stderr, "\nShortcuts unavailable: %v\n", err)
@@ -186,11 +246,11 @@ func serveKeyboardLoopWithDeps(ctx context.Context, webURL, connectURL string, c
 		}
 		switch buf[0] {
 		case 'o', 'O':
-			if err := deps.openURL(webURL); err != nil {
+			if err := deps.openURL(shortURL); err != nil {
 				fmt.Fprintf(deps.stderr, "\rFailed to open browser: %v\n", err)
 				continue
 			}
-			fmt.Fprintf(deps.stderr, "\rOpened in browser\n")
+			fmt.Fprintf(deps.stderr, "\rOpened short URL\n")
 		case 'c', 'C':
 			if err := deps.copyText(connectURL); err != nil {
 				fmt.Fprintf(deps.stderr, "\rFailed to copy URL: %v\n", err)

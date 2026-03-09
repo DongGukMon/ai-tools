@@ -1,9 +1,9 @@
-import type { ConnectTarget, WhipClient } from '../api/client'
-import { createClient } from '../api/client'
+import type { StoredConnectTarget, WhipClient } from '../api/client.ts'
+import { coerceStoredConnectTarget, createClient } from '../api/client.ts'
 
 const AUTH_KEY = 'whip-auth'
 
-type AuthState = ConnectTarget
+type AuthState = StoredConnectTarget
 
 export function saveAuth(state: AuthState): void {
   localStorage.setItem(AUTH_KEY, JSON.stringify(state))
@@ -13,7 +13,7 @@ export function loadAuth(): AuthState | null {
   try {
     const raw = localStorage.getItem(AUTH_KEY)
     if (!raw) return null
-    return JSON.parse(raw) as AuthState
+    return coerceStoredConnectTarget(JSON.parse(raw))
   } catch {
     return null
   }

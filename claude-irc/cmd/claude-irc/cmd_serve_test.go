@@ -21,7 +21,7 @@ func TestServeKeyboardLoopWithDeps_Shortcuts(t *testing.T) {
 	restoreCalls := 0
 	cancelled := false
 
-	serveKeyboardLoopWithDeps(ctx, "https://web.example", "https://connect.example", func() {
+	serveKeyboardLoopWithDeps(ctx, "https://short.example", "https://connect.example", func() {
 		cancelled = true
 		stop()
 	}, keyboardLoopDeps{
@@ -42,8 +42,8 @@ func TestServeKeyboardLoopWithDeps_Shortcuts(t *testing.T) {
 		},
 	})
 
-	if opened != "https://web.example" {
-		t.Fatalf("expected browser URL to be opened, got %q", opened)
+	if opened != "https://short.example" {
+		t.Fatalf("expected short URL to be opened, got %q", opened)
 	}
 	if copied != "https://connect.example" {
 		t.Fatalf("expected connect URL to be copied, got %q", copied)
@@ -56,8 +56,8 @@ func TestServeKeyboardLoopWithDeps_Shortcuts(t *testing.T) {
 	}
 
 	output := stderr.String()
-	if !strings.Contains(output, "Opened in browser") {
-		t.Fatalf("expected browser confirmation in stderr, got %q", output)
+	if !strings.Contains(output, "Opened short URL") {
+		t.Fatalf("expected short URL confirmation in stderr, got %q", output)
 	}
 	if !strings.Contains(output, "Copied to clipboard") {
 		t.Fatalf("expected clipboard confirmation in stderr, got %q", output)
@@ -67,7 +67,7 @@ func TestServeKeyboardLoopWithDeps_Shortcuts(t *testing.T) {
 func TestServeKeyboardLoopWithDeps_MakeRawError(t *testing.T) {
 	var stderr bytes.Buffer
 
-	serveKeyboardLoopWithDeps(context.Background(), "https://web.example", "https://connect.example", func() {}, keyboardLoopDeps{
+	serveKeyboardLoopWithDeps(context.Background(), "https://short.example", "https://connect.example", func() {}, keyboardLoopDeps{
 		stdin:  bytes.NewBufferString("o"),
 		stderr: &stderr,
 		makeRaw: func() (func(), error) {
@@ -151,9 +151,8 @@ func TestServeURLs_DeviceModeUsesModeFragment(t *testing.T) {
 
 func TestFormatDeviceChallengeLogLine(t *testing.T) {
 	line := formatDeviceChallengeLogLine(irc.DeviceAuthChallengeInfo{
-		Workspace:   "demo",
 		OTP:         "123456",
-		DeviceLabel: "Remote Safari",
+		CreatedAt:   time.Date(2026, 3, 10, 11, 58, 0, 0, time.UTC),
 		ExpiresAt:   time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC),
 	})
 
@@ -163,10 +162,29 @@ func TestFormatDeviceChallengeLogLine(t *testing.T) {
 	if !strings.Contains(line, "123456") {
 		t.Fatalf("expected otp in line, got %q", line)
 	}
-	if !strings.Contains(line, `workspace=demo`) {
-		t.Fatalf("expected workspace in line, got %q", line)
+	if !strings.Contains(line, "expires in 2m") {
+		t.Fatalf("expected ttl in line, got %q", line)
 	}
-	if !strings.Contains(line, `device="Remote Safari"`) {
-		t.Fatalf("expected device label in line, got %q", line)
+	if strings.Contains(line, "workspace=") {
+		t.Fatalf("did not expect workspace metadata in line, got %q", line)
+	}
+}
+
+func TestFormatDeviceChallengeResultLogLine(t *testing.T) {
+	line := formatDeviceChallengeResultLogLine(irc.DeviceAuthChallengeResultInfo{
+		ChallengeID: "challenge-123",
+		SessionID:   "session-456",
+		Result:      "error",
+		Error:       "invalid otp",
+	})
+
+	if !strings.HasPrefix(line, deviceChallengeResultLogPrefix) {
+		t.Fatalf("expected prefix %q, got %q", deviceChallengeResultLogPrefix, line)
+	}
+	if !strings.Contains(line, "failed (invalid otp)") {
+		t.Fatalf("expected result in line, got %q", line)
+	}
+	if strings.Contains(line, "challenge_id=") || strings.Contains(line, "session_id=") {
+		t.Fatalf("did not expect verbose metadata in line, got %q", line)
 	}
 }

@@ -21,7 +21,7 @@ func NormalizeRemoteAuthMode(raw string) string {
 	case RemoteAuthModeToken:
 		return RemoteAuthModeToken
 	default:
-		return RemoteAuthModeToken
+		return RemoteAuthModeDevice
 	}
 }
 

@@ -55,10 +55,20 @@ func setupTestServerWithMaster(t *testing.T, masterTmux string) (*httptest.Serve
 
 func setupDeviceTestServer(t *testing.T, workspace string) (*httptest.Server, *Store, *RemoteAuthStore) {
 	t.Helper()
-	return setupDeviceTestServerWithCallback(t, workspace, nil)
+	return setupDeviceTestServerWithCallbacks(t, workspace, nil, nil)
 }
 
 func setupDeviceTestServerWithCallback(t *testing.T, workspace string, onDeviceChallenge func(DeviceAuthChallengeInfo)) (*httptest.Server, *Store, *RemoteAuthStore) {
+	t.Helper()
+	return setupDeviceTestServerWithCallbacks(t, workspace, onDeviceChallenge, nil)
+}
+
+func setupDeviceTestServerWithCallbacks(
+	t *testing.T,
+	workspace string,
+	onDeviceChallenge func(DeviceAuthChallengeInfo),
+	onDeviceChallengeResult func(DeviceAuthChallengeResultInfo),
+) (*httptest.Server, *Store, *RemoteAuthStore) {
 	t.Helper()
 
 	tmpHome := t.TempDir()
@@ -77,10 +87,11 @@ func setupDeviceTestServerWithCallback(t *testing.T, workspace string, onDeviceC
 	}
 
 	handler := buildHandler(store, serverAuthConfig{
-		Mode:              serverAuthModeDevice,
-		Workspace:         authStore.Workspace,
-		RemoteAuth:        authStore,
-		OnDeviceChallenge: onDeviceChallenge,
+		Mode:                    serverAuthModeDevice,
+		Workspace:               authStore.Workspace,
+		RemoteAuth:              authStore,
+		OnDeviceChallenge:       onDeviceChallenge,
+		OnDeviceChallengeResult: onDeviceChallengeResult,
 	}, "devicecode", "")
 	ts := httptest.NewServer(handler)
 	t.Cleanup(ts.Close)

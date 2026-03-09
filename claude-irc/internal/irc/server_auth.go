@@ -18,11 +18,12 @@ const (
 var localhostPattern = regexp.MustCompile(`^http://localhost(:\d+)?$`)
 
 type serverAuthConfig struct {
-	Mode              string
-	Token             string
-	Workspace         string
-	RemoteAuth        *RemoteAuthStore
-	OnDeviceChallenge func(info DeviceAuthChallengeInfo)
+	Mode                    string
+	Token                   string
+	Workspace               string
+	RemoteAuth              *RemoteAuthStore
+	OnDeviceChallenge       func(info DeviceAuthChallengeInfo)
+	OnDeviceChallengeResult func(info DeviceAuthChallengeResultInfo)
 }
 
 type authConfigResponse struct {
@@ -274,8 +275,28 @@ func handleExchangeAuthChallenge(w http.ResponseWriter, r *http.Request, cfg ser
 		default:
 			status = http.StatusInternalServerError
 		}
+		if cfg.OnDeviceChallengeResult != nil {
+			cfg.OnDeviceChallengeResult(DeviceAuthChallengeResultInfo{
+				Workspace:   cfg.Workspace,
+				ChallengeID: strings.TrimSpace(req.ChallengeID),
+				DeviceLabel: strings.TrimSpace(req.DeviceLabel),
+				Result:      "error",
+				Error:       err.Error(),
+				At:          now,
+			})
+		}
 		writeJSON(w, status, map[string]string{"error": err.Error()})
 		return
+	}
+	if cfg.OnDeviceChallengeResult != nil {
+		cfg.OnDeviceChallengeResult(DeviceAuthChallengeResultInfo{
+			Workspace:   cfg.Workspace,
+			ChallengeID: strings.TrimSpace(req.ChallengeID),
+			SessionID:   session.SessionID,
+			DeviceLabel: session.DeviceLabel,
+			Result:      "success",
+			At:          now,
+		})
 	}
 
 	writeJSON(w, http.StatusCreated, authExchangeResponse{
