@@ -73,6 +73,79 @@ func TestAPITasks(t *testing.T) {
 	}
 }
 
+func TestAPITasks_IncludesWorkspaceNamespaces(t *testing.T) {
+	origHome := os.Getenv("HOME")
+	tmpHome := t.TempDir()
+	os.Setenv("HOME", tmpHome)
+	t.Cleanup(func() { os.Setenv("HOME", origHome) })
+
+	globalDir := filepath.Join(tmpHome, ".whip", "tasks", "glob1")
+	workspaceDir := filepath.Join(tmpHome, ".whip", "workspaces", "issue-sweep", "tasks", "work1")
+
+	globalTask := map[string]interface{}{
+		"id":         "glob1",
+		"title":      "Global task",
+		"status":     "in_progress",
+		"shell_pid":  0,
+		"depends_on": []string{},
+		"created_at": time.Now().Add(-2 * time.Hour).Format(time.RFC3339Nano),
+		"updated_at": time.Now().Format(time.RFC3339Nano),
+	}
+	workspaceTask := map[string]interface{}{
+		"id":         "work1",
+		"title":      "Workspace task",
+		"workspace":  "issue-sweep",
+		"status":     "review",
+		"shell_pid":  0,
+		"depends_on": []string{"glob1"},
+		"created_at": time.Now().Add(-1 * time.Hour).Format(time.RFC3339Nano),
+		"updated_at": time.Now().Format(time.RFC3339Nano),
+	}
+
+	if err := os.MkdirAll(globalDir, 0755); err != nil {
+		t.Fatalf("mkdir global dir: %v", err)
+	}
+	if err := os.MkdirAll(workspaceDir, 0755); err != nil {
+		t.Fatalf("mkdir workspace dir: %v", err)
+	}
+
+	data, _ := json.MarshalIndent(globalTask, "", "  ")
+	if err := os.WriteFile(filepath.Join(globalDir, "task.json"), data, 0644); err != nil {
+		t.Fatalf("write global task: %v", err)
+	}
+	data, _ = json.MarshalIndent(workspaceTask, "", "  ")
+	if err := os.WriteFile(filepath.Join(workspaceDir, "task.json"), data, 0644); err != nil {
+		t.Fatalf("write workspace task: %v", err)
+	}
+
+	ts, _, token := setupTestServer(t)
+
+	resp := doRequest(t, ts, token, "GET", "/api/tasks", nil)
+	var tasks []whipTask
+	decodeJSON(t, resp, &tasks)
+	if len(tasks) != 2 {
+		t.Fatalf("expected 2 tasks, got %d", len(tasks))
+	}
+
+	workspaces := map[string]string{}
+	for _, task := range tasks {
+		workspaces[task.ID] = task.Workspace
+	}
+	if workspaces["glob1"] != "global" {
+		t.Fatalf("global task workspace = %q, want %q", workspaces["glob1"], "global")
+	}
+	if workspaces["work1"] != "issue-sweep" {
+		t.Fatalf("workspace task workspace = %q, want %q", workspaces["work1"], "issue-sweep")
+	}
+
+	resp = doRequest(t, ts, token, "GET", "/api/tasks/work1", nil)
+	var task whipTask
+	decodeJSON(t, resp, &task)
+	if task.Workspace != "issue-sweep" {
+		t.Fatalf("task.Workspace = %q, want %q", task.Workspace, "issue-sweep")
+	}
+}
+
 func TestAPITaskPIDAlive(t *testing.T) {
 	origHome := os.Getenv("HOME")
 	tmpHome := t.TempDir()
