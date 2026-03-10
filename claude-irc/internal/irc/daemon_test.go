@@ -171,8 +171,8 @@ func TestStaleCleanup(t *testing.T) {
 	// Write a session marker in new format (name\nsessionPID)
 	store.WriteSessionMarker(name, 888888, 999999)
 
-	// tryCleanStalePeer should clean up
-	store.tryCleanStalePeer(name)
+	// tryCleanStalePeer should clean up (registryDaemonPID=0: no live daemon)
+	store.tryCleanStalePeer(name, 0)
 
 	// Verify cleanup
 	if _, err := os.Stat(pidPath); !os.IsNotExist(err) {
@@ -206,7 +206,7 @@ func TestStaleCleanup_NoPIDFile(t *testing.T) {
 	inboxDir := store.InboxDir(name)
 	os.MkdirAll(inboxDir, 0755)
 
-	store.tryCleanStalePeer(name)
+	store.tryCleanStalePeer(name, 0)
 
 	// Everything should be cleaned
 	if _, err := os.Stat(store.SessionMarkerPath(888888)); !os.IsNotExist(err) {
@@ -233,7 +233,7 @@ func TestStaleCleanup_NoPIDFileButSocketExists(t *testing.T) {
 	store.Register(name, 999999)
 	store.WriteSessionMarker(name, 888888, 999999)
 
-	store.tryCleanStalePeer(name)
+	store.tryCleanStalePeer(name, 0)
 
 	// Nothing should be cleaned (socket exists, could be active)
 	if _, err := os.Stat(store.SessionMarkerPath(888888)); os.IsNotExist(err) {
@@ -264,6 +264,87 @@ func TestKillDaemonNoFile(t *testing.T) {
 	// Should not error when no PID file exists
 	if err := store.KillDaemon("nonexistent"); err != nil {
 		t.Errorf("KillDaemon should not error for missing PID: %v", err)
+	}
+}
+
+func TestTryCleanStalePeer_SkipsWhenRegistryDaemonAlive(t *testing.T) {
+	store := newTestStore(t)
+	name := "livepeer"
+
+	os.MkdirAll(store.SocketsDir(), 0755)
+
+	// Register with a dead session PID but record our own PID as daemon PID
+	store.Register(name, 999999)
+	store.SetDaemonPID(name, os.Getpid())
+	store.WriteSessionMarker(name, os.Getpid(), 999999)
+
+	// No PID file, no socket — without the guard this would trigger cleanup
+	store.tryCleanStalePeer(name, os.Getpid())
+
+	// Peer should NOT be cleaned because the registry daemon PID is alive
+	peers, _ := store.ListPeers()
+	if _, ok := peers[name]; !ok {
+		t.Error("peer with alive registry daemon PID should NOT be unregistered")
+	}
+	if _, err := os.Stat(store.SessionMarkerPath(os.Getpid())); os.IsNotExist(err) {
+		t.Error("session marker should NOT be removed when registry daemon is alive")
+	}
+}
+
+func TestMultiPeerPresenceStability(t *testing.T) {
+	store := newSocketTestStore(t)
+
+	os.MkdirAll(store.SocketsDir(), 0755)
+
+	peers := []string{"wp-master", "wp-master-lead-docs", "wp-worker-a"}
+
+	// Register all peers and start daemons
+	for _, name := range peers {
+		if err := store.Register(name, os.Getpid()); err != nil {
+			t.Fatalf("Register %s: %v", name, err)
+		}
+
+		daemonErr := make(chan error, 1)
+		go func() {
+			daemonErr <- store.RunDaemon(name, 0)
+		}()
+
+		// Wait for socket
+		socketPath := store.SocketPath(name)
+		ready := false
+		for i := 0; i < 40; i++ {
+			conn, err := net.DialTimeout("unix", socketPath, 100*time.Millisecond)
+			if err == nil {
+				conn.Close()
+				ready = true
+				break
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+		if !ready {
+			t.Fatalf("daemon for %s never became ready", name)
+		}
+		t.Cleanup(func() { os.Remove(socketPath) })
+	}
+
+	// Run CheckAllPresence multiple times — all peers must appear every time
+	for attempt := 0; attempt < 5; attempt++ {
+		statuses, err := store.CheckAllPresence()
+		if err != nil {
+			t.Fatalf("attempt %d: CheckAllPresence: %v", attempt, err)
+		}
+		if len(statuses) != len(peers) {
+			t.Fatalf("attempt %d: expected %d peers, got %d", attempt, len(peers), len(statuses))
+		}
+		for i, s := range statuses {
+			if !s.Online {
+				t.Errorf("attempt %d: peer %s should be online", attempt, s.Name)
+			}
+			// Verify sorted order
+			if i > 0 && statuses[i-1].Name >= s.Name {
+				t.Errorf("attempt %d: statuses not sorted: %s >= %s", attempt, statuses[i-1].Name, s.Name)
+			}
+		}
 	}
 }
 
