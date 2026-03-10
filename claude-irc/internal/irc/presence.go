@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -65,7 +66,7 @@ func (s *Store) CheckAllPresence() ([]PeerStatus, error) {
 
 		// If offline, check if daemon PID is dead and clean up
 		if !online {
-			s.tryCleanStalePeer(name)
+			s.tryCleanStalePeer(name, info.DaemonPID)
 		}
 
 		statuses = append(statuses, PeerStatus{
@@ -76,11 +77,24 @@ func (s *Store) CheckAllPresence() ([]PeerStatus, error) {
 		})
 	}
 
+	sort.Slice(statuses, func(i, j int) bool {
+		return statuses[i].Name < statuses[j].Name
+	})
+
 	return statuses, nil
 }
 
 // tryCleanStalePeer removes a peer's artifacts if its daemon process is dead.
-func (s *Store) tryCleanStalePeer(name string) {
+// registryDaemonPID is the DaemonPID from the registry entry; if that process
+// is still alive, cleanup is skipped entirely to prevent false-offline removals
+// caused by transient socket-ping timeouts.
+func (s *Store) tryCleanStalePeer(name string, registryDaemonPID int) {
+	// Strong guard: if the daemon PID recorded in the registry is alive,
+	// the peer is not stale — skip cleanup even if the socket ping failed.
+	if registryDaemonPID > 0 && isProcessAlive(registryDaemonPID) {
+		return
+	}
+
 	pidPath := s.PIDPath(name)
 	data, err := os.ReadFile(pidPath)
 	if err != nil {
