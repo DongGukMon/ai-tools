@@ -57,19 +57,21 @@ func (m DashboardModel) renderDetailView(w int) string {
 		diffDisplay = "default"
 	}
 
+	roleDisplay := t.Role
+	if roleDisplay == "" {
+		roleDisplay = "worker"
+	}
+
 	fields := []struct{ label, value string }{
 		{"ID", idStyle.Render(t.ID)},
 		{"Workspace", valStyle.Render(t.WorkspaceName())},
 		{"Title", valStyle.Render(t.Title)},
 		{"Status", valStyle.Render(string(t.Status))},
 		{"Backend", renderBackend(t.Backend)},
+		{"Role", valStyle.Render(roleDisplay)},
 		{"Difficulty", valStyle.Render(diffDisplay)},
 		{"Review", valStyle.Render(fmt.Sprintf("%v", t.Review))},
 		{"Runner", renderRunner(t.Runner)},
-	}
-
-	if t.Role != "" {
-		fields = append(fields, struct{ label, value string }{"Role", valStyle.Render(t.Role)})
 	}
 
 	if t.IRCName != "" {
@@ -153,14 +155,15 @@ func (m DashboardModel) renderDetailView(w int) string {
 }
 
 func (m DashboardModel) renderTable() string {
-	colID := 5
+	colID := 8
 	colTitle := 24
 	colStatus := 10
 	colWorkspace := 12
+	colRole := 6
 	colBackend := 7
 	colIRC := 10
-	colDeps := 12
-	colNote := 16
+	colDeps := 14
+	colNote := 14
 	colUpdated := 8
 
 	sep := styledSep()
@@ -171,6 +174,7 @@ func (m DashboardModel) renderTable() string {
 		padRight(hdrStyle.Render("TITLE"), colTitle),
 		padRight(hdrStyle.Render("STATUS"), colStatus),
 		padRight(hdrStyle.Render("BACKEND"), colBackend),
+		padRight(hdrStyle.Render("ROLE"), colRole),
 		padRight(hdrStyle.Render("IRC"), colIRC),
 		padRight(hdrStyle.Render("BLOCKED BY"), colDeps),
 		padRight(hdrStyle.Render("NOTE"), colNote),
@@ -190,13 +194,17 @@ func (m DashboardModel) renderTable() string {
 		}
 
 		id := padRight(idStyle.Render(truncate(t.ID, colID)), colID)
-		titleStr := truncate(t.Title, colTitle)
-		if t.IsLead() {
-			titleStr = lipgloss.NewStyle().Foreground(colorPrimary).Render("● ") + truncate(t.Title, colTitle-2)
-		}
-		title := padRight(titleStr, colTitle)
+		title := padRight(truncate(t.Title, colTitle), colTitle)
 		status := padRight(renderStatus(t.Status), colStatus)
 		backend := padRight(renderBackend(t.Backend), colBackend)
+
+		roleStr := t.Role
+		if roleStr == "" {
+			roleStr = lipgloss.NewStyle().Foreground(colorDim).Render("worker")
+		} else {
+			roleStr = lipgloss.NewStyle().Foreground(colorPrimary).Render(roleStr)
+		}
+		role := padRight(roleStr, colRole)
 
 		ircName := truncate(t.IRCName, colIRC)
 		if ircName == "" {
@@ -204,7 +212,7 @@ func (m DashboardModel) renderTable() string {
 		}
 		irc := padRight(ircName, colIRC)
 
-		deps := padRight(renderDeps(t.DependsOn), colDeps)
+		deps := padRight(renderDeps(t.DependsOn, colDeps), colDeps)
 		noteStr := truncate(t.Note, colNote)
 		if noteStr == "" {
 			noteStr = lipgloss.NewStyle().Foreground(colorDim).Render("—")
@@ -215,7 +223,7 @@ func (m DashboardModel) renderTable() string {
 		updated := padRight(lipgloss.NewStyle().Foreground(colorSubtle).Render(timeAgo(t.UpdatedAt)), colUpdated)
 
 		workspace := padRight(truncate(t.WorkspaceName(), colWorkspace), colWorkspace)
-		row := indicator + strings.Join([]string{id, workspace, title, status, backend, irc, deps, note, updated}, sep)
+		row := indicator + strings.Join([]string{id, workspace, title, status, backend, role, irc, deps, note, updated}, sep)
 		if selected {
 			row = lipgloss.NewStyle().Background(lipgloss.Color("#1E1B4B")).Render(row)
 		}
@@ -333,17 +341,43 @@ func renderPID(t *Task) string {
 	}
 }
 
-func renderDeps(deps []string) string {
+func renderDeps(deps []string, maxWidth int) string {
 	if len(deps) == 0 {
 		return lipgloss.NewStyle().Foreground(colorDim).Render("—")
 	}
+	const shortLen = 5
 	short := make([]string, len(deps))
 	for i, d := range deps {
-		if len(d) > 5 {
-			short[i] = d[:5]
+		if len(d) > shortLen {
+			short[i] = d[:shortLen]
 		} else {
 			short[i] = d
 		}
 	}
-	return lipgloss.NewStyle().Foreground(colorWarning).Render(strings.Join(short, ","))
+
+	result := short[0]
+	shown := 1
+	for i := 1; i < len(short); i++ {
+		next := result + "," + short[i]
+		remaining := len(short) - i - 1
+		needed := len(next)
+		if remaining > 0 {
+			needed += len(fmt.Sprintf(" +%d", remaining))
+		}
+		if needed > maxWidth {
+			break
+		}
+		result = next
+		shown = i + 1
+	}
+
+	if shown < len(short) {
+		result += fmt.Sprintf(" +%d", len(short)-shown)
+	}
+
+	if len(result) > maxWidth {
+		result = truncate(result, maxWidth)
+	}
+
+	return lipgloss.NewStyle().Foreground(colorWarning).Render(result)
 }

@@ -9,29 +9,36 @@ import (
 )
 
 func (m DashboardModel) ircPeers() []peerInfo {
-	var master *peerInfo
-	var online, offline []peerInfo
+	var onMasters, onOthers, offMasters, offOthers []peerInfo
 	for _, p := range m.peers {
 		if p.Name == "user" {
 			continue
 		}
-		if strings.HasPrefix(p.Name, "wp-master") {
-			cp := p
-			master = &cp
-		} else if p.Online {
-			online = append(online, p)
+		isMaster := strings.HasPrefix(p.Name, MasterIRCPrefix)
+		if p.Online {
+			if isMaster {
+				onMasters = append(onMasters, p)
+			} else {
+				onOthers = append(onOthers, p)
+			}
 		} else {
-			offline = append(offline, p)
+			if isMaster {
+				offMasters = append(offMasters, p)
+			} else {
+				offOthers = append(offOthers, p)
+			}
 		}
 	}
-	sort.Slice(online, func(i, j int) bool { return online[i].Name < online[j].Name })
-	sort.Slice(offline, func(i, j int) bool { return offline[i].Name < offline[j].Name })
+	abc := func(s []peerInfo) { sort.Slice(s, func(i, j int) bool { return s[i].Name < s[j].Name }) }
+	abc(onMasters)
+	abc(onOthers)
+	abc(offMasters)
+	abc(offOthers)
 	var result []peerInfo
-	if master != nil {
-		result = append(result, *master)
-	}
-	result = append(result, online...)
-	result = append(result, offline...)
+	result = append(result, onMasters...)
+	result = append(result, onOthers...)
+	result = append(result, offMasters...)
+	result = append(result, offOthers...)
 	return result
 }
 

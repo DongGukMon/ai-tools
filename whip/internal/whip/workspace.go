@@ -7,10 +7,11 @@ import (
 )
 
 const (
-	GlobalWorkspaceName   = "global"
-	workspacesDir         = "workspaces"
-	workspaceFile         = "workspace.json"
-	DefaultGlobalMasterIRCName = "wp-master"
+	GlobalWorkspaceName        = "global"
+	workspacesDir              = "workspaces"
+	workspaceFile              = "workspace.json"
+	MasterIRCPrefix            = "wp-master"
+	DefaultGlobalMasterIRCName = MasterIRCPrefix
 )
 
 var workspaceNamePattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$`)

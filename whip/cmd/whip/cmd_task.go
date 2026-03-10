@@ -139,17 +139,42 @@ func listCmd() *cobra.Command {
 			}
 
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-			fmt.Fprintln(w, "ID\tWORKSPACE\tROLE\tTITLE\tSTATUS\tIRC\tPID\tUPDATED")
+			fmt.Fprintln(w, "ID\tWORKSPACE\tTITLE\tSTATUS\tBACKEND\tROLE\tIRC\tBLOCKED BY\tNOTE\tUPDATED")
 			for _, t := range tasks {
-				pid := formatShellPID(t)
-				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+				role := t.Role
+				if role == "" {
+					role = "worker"
+				}
+				depsStr := "—"
+				if len(t.DependsOn) > 0 {
+					short := make([]string, len(t.DependsOn))
+					for i, d := range t.DependsOn {
+						if len(d) > 8 {
+							short[i] = d[:8]
+						} else {
+							short[i] = d
+						}
+					}
+					depsStr = strings.Join(short, ",")
+				}
+				note := t.Note
+				if note == "" {
+					note = "—"
+				}
+				backend := t.Backend
+				if backend == "" {
+					backend = "—"
+				}
+				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
 					t.ID,
 					t.WorkspaceName(),
-					t.Role,
 					truncate(t.Title, 30),
 					t.Status,
+					backend,
+					role,
 					t.IRCName,
-					pid,
+					depsStr,
+					truncate(note, 20),
 					timeAgo(t.UpdatedAt),
 				)
 			}

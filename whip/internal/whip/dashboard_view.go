@@ -136,12 +136,13 @@ func min(a, b int) int {
 }
 
 func tableContentWidth() int {
-	cols := []int{5, 12, 24, 13, 7, 6, 8, 10, 12, 16, 8}
-	total := 2
+	// ID, WORKSPACE, TITLE, STATUS, BACKEND, ROLE, IRC, BLOCKED BY, NOTE, UPDATED
+	cols := []int{8, 12, 24, 10, 7, 6, 10, 14, 14, 8}
+	total := 2 // leading indent
 	for i, c := range cols {
 		total += c
 		if i < len(cols)-1 {
-			total += 3
+			total += 3 // " │ " separator
 		}
 	}
 	return total
