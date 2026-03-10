@@ -293,3 +293,154 @@ func TestLoadTask_InvalidStatusFails(t *testing.T) {
 		t.Fatalf("LoadTask error = %v, want invalid legacy status", err)
 	}
 }
+
+func TestCleanTerminal_SkipsReferencedByNonTerminal(t *testing.T) {
+	s := tempStore(t)
+
+	// a: completed, b: in_progress, c: in_progress
+	a := NewTask("A", "dep a", "/tmp")
+	a.Status = StatusCompleted
+	s.SaveTask(a)
+
+	b := NewTask("B", "dep b", "/tmp")
+	b.Status = StatusInProgress
+	s.SaveTask(b)
+
+	c := NewTask("C", "dep c", "/tmp")
+	c.Status = StatusInProgress
+	s.SaveTask(c)
+
+	// x depends on a, b, c — still in_progress
+	x := NewTask("X", "depends on a,b,c", "/tmp")
+	x.DependsOn = []string{a.ID, b.ID, c.ID}
+	x.Status = StatusCreated
+	s.SaveTask(x)
+
+	// Clean should NOT delete a because x (non-terminal) references it.
+	count, err := s.CleanTerminal()
+	if err != nil {
+		t.Fatalf("CleanTerminal: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("count = %d, want 0 (a is still referenced)", count)
+	}
+
+	// a should still exist
+	if _, err := s.LoadTask(a.ID); err != nil {
+		t.Fatalf("a should still exist: %v", err)
+	}
+}
+
+func TestCleanTerminal_DeletesUnreferencedTerminal(t *testing.T) {
+	s := tempStore(t)
+
+	// a: completed, b: completed — both unreferenced
+	a := NewTask("A", "done", "/tmp")
+	a.Status = StatusCompleted
+	s.SaveTask(a)
+
+	b := NewTask("B", "canceled", "/tmp")
+	b.Status = StatusCanceled
+	s.SaveTask(b)
+
+	// x depends on a, b — but x is also completed (terminal)
+	x := NewTask("X", "also done", "/tmp")
+	x.DependsOn = []string{a.ID, b.ID}
+	x.Status = StatusCompleted
+	s.SaveTask(x)
+
+	// All are terminal and only referenced by another terminal task — all should be cleaned.
+	count, err := s.CleanTerminal()
+	if err != nil {
+		t.Fatalf("CleanTerminal: %v", err)
+	}
+	if count != 3 {
+		t.Errorf("count = %d, want 3", count)
+	}
+
+	tasks, _ := s.ListTasks()
+	if len(tasks) != 0 {
+		t.Errorf("remaining = %d, want 0", len(tasks))
+	}
+}
+
+func TestAreDependenciesMet_CleanedDepTreatedAsMet(t *testing.T) {
+	s := tempStore(t)
+
+	// a existed and was cleaned (not in store), b is completed
+	b := NewTask("B", "done", "/tmp")
+	b.Status = StatusCompleted
+	s.SaveTask(b)
+
+	x := NewTask("X", "depends on cleaned a and b", "/tmp")
+	x.DependsOn = []string{"nonexistent-cleaned-id", b.ID}
+	s.SaveTask(x)
+
+	met, unmet, err := s.AreDependenciesMet(x)
+	if err != nil {
+		t.Fatalf("AreDependenciesMet: %v", err)
+	}
+	if !met {
+		t.Errorf("should be met, unmet = %v", unmet)
+	}
+}
+
+func TestCleanThenAssign_RegressionScenario(t *testing.T) {
+	s := tempStore(t)
+
+	// Setup: a(completed), b(in_progress), c(in_progress), x depends on all three
+	a := NewTask("A", "done early", "/tmp")
+	a.Status = StatusCompleted
+	s.SaveTask(a)
+
+	b := NewTask("B", "still working", "/tmp")
+	b.Status = StatusInProgress
+	s.SaveTask(b)
+
+	c := NewTask("C", "still working", "/tmp")
+	c.Status = StatusInProgress
+	s.SaveTask(c)
+
+	x := NewTask("X", "blocked", "/tmp")
+	x.DependsOn = []string{a.ID, b.ID, c.ID}
+	x.Status = StatusCreated
+	s.SaveTask(x)
+
+	// Step 1: clean — a should be protected
+	count, _ := s.CleanTerminal()
+	if count != 0 {
+		t.Fatalf("clean should not delete referenced a, got count=%d", count)
+	}
+
+	// Step 2: b and c complete
+	b.Status = StatusCompleted
+	s.SaveTask(b)
+	c.Status = StatusCompleted
+	s.SaveTask(c)
+
+	// Step 3: x's dependencies should all be met
+	met, unmet, err := s.AreDependenciesMet(x)
+	if err != nil {
+		t.Fatalf("AreDependenciesMet: %v", err)
+	}
+	if !met {
+		t.Errorf("all deps completed, should be met, unmet = %v", unmet)
+	}
+
+	// Step 4: clean again — now a, b, c are all terminal and x is the only non-terminal
+	// a, b, c are all referenced by x (non-terminal) so they should stay
+	count2, _ := s.CleanTerminal()
+	if count2 != 0 {
+		t.Fatalf("clean should still protect a,b,c referenced by x, got count=%d", count2)
+	}
+
+	// Step 5: x becomes completed too
+	x.Status = StatusCompleted
+	s.SaveTask(x)
+
+	// Now all terminal, x references a,b,c but x itself is terminal — all should clean
+	count3, _ := s.CleanTerminal()
+	if count3 != 4 {
+		t.Fatalf("all terminal, count = %d, want 4", count3)
+	}
+}

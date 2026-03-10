@@ -191,12 +191,15 @@ func (s *Store) GetDependents(id string) ([]*Task, error) {
 }
 
 // AreDependenciesMet checks if all dependencies of a task are completed.
+// A dependency that no longer exists (e.g. removed by clean) is treated as met
+// because only terminal (completed/canceled) tasks are ever cleaned.
 func (s *Store) AreDependenciesMet(task *Task) (bool, []string, error) {
 	var unmet []string
 	for _, depID := range task.DependsOn {
 		dep, err := s.LoadTask(depID)
 		if err != nil {
-			return false, nil, fmt.Errorf("dependency %s not found: %w", depID, err)
+			// Task was cleaned — it was terminal, treat as met.
+			continue
 		}
 		if dep.Status != StatusCompleted {
 			unmet = append(unmet, depID)
@@ -205,15 +208,27 @@ func (s *Store) AreDependenciesMet(task *Task) (bool, []string, error) {
 	return len(unmet) == 0, unmet, nil
 }
 
-// CleanTerminal removes all completed/canceled tasks.
+// CleanTerminal removes completed/canceled tasks that are no longer
+// referenced as a dependency by any non-terminal task.
 func (s *Store) CleanTerminal() (int, error) {
 	tasks, err := s.ListTasks()
 	if err != nil {
 		return 0, err
 	}
+
+	// Build set of IDs still depended on by non-terminal tasks.
+	referenced := make(map[string]bool)
+	for _, t := range tasks {
+		if !t.Status.IsTerminal() {
+			for _, depID := range t.DependsOn {
+				referenced[depID] = true
+			}
+		}
+	}
+
 	count := 0
 	for _, t := range tasks {
-		if t.Status.IsTerminal() {
+		if t.Status.IsTerminal() && !referenced[t.ID] {
 			if err := s.DeleteTask(t.ID); err != nil {
 				return count, err
 			}
