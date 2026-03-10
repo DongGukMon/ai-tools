@@ -114,8 +114,11 @@ whip task create "<title>" --backend <chosen-backend> --difficulty <level> --des
 
 ## Context
 <any additional context the agent needs>"
-whip task assign <task-id>
+whip task assign <task-id> --master-irc <your-current-irc-identity>
 ```
+
+Use your current IRC identity (from `claude-irc who`) as `--master-irc` so the worker can reach you.
+If you are not connected to IRC, omit `--master-irc` — it defaults to `wp-master`.
 
 Monitor the agent: review its initial plan when it arrives, respond to questions, and check progress via `whip task list`. Do not run `claude-irc quit`; stay connected for future dispatches.
 
@@ -160,8 +163,11 @@ whip task create "<agent role/title>" [--workspace <workspace-name>] --backend <
 ## Context
 <any additional context the agent needs>"
 whip task dep <task-id> --after <prerequisite-id>  # only if needed; this encodes stack order
-whip task assign <task-id>  # only assign tasks without unmet prerequisites
+whip task assign <task-id> --master-irc <your-current-irc-identity>  # only assign tasks without unmet prerequisites
 ```
+
+Use your current IRC identity (from `claude-irc who`) as `--master-irc` so the worker can reach you.
+If you are not connected to IRC, omit `--master-irc` — it defaults to `wp-master`.
 
 ### Step 3: Coordinate
 
