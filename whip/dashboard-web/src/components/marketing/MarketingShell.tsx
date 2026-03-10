@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 import { siteMeta } from '../../content/site'
 import { ThemeToggle } from '../ThemeToggle'
@@ -17,6 +17,8 @@ const navItems = [
 ]
 
 export function MarketingShell({ children, eyebrow, title, subtitle }: MarketingShellProps) {
+  const [menuOpen, setMenuOpen] = useState(false)
+
   return (
     <div className="noise-overlay min-h-screen overflow-x-hidden bg-[linear-gradient(180deg,#eef4ff_0%,#f5f7fb_36%,#f5f5f7_100%)] text-[#10131a] dark:bg-[linear-gradient(180deg,#060a16_0%,#091122_32%,#0d1323_100%)] dark:text-[#f5f7ff]">
       <div className="fixed inset-x-0 top-0 z-50 border-b border-[#d8e2ff] bg-white/62 backdrop-blur-2xl dark:border-white/8 dark:bg-[#060a16]/55">
@@ -45,6 +47,23 @@ export function MarketingShell({ children, eyebrow, title, subtitle }: Marketing
               ))}
             </nav>
             <ThemeToggle />
+            <button
+              type="button"
+              aria-label="Toggle menu"
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen(o => !o)}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-[#d8e2ff] bg-white/72 text-[#667085] shadow-[0_10px_30px_rgba(91,108,255,0.08)] transition-colors hover:text-[#10131a] dark:border-white/10 dark:bg-white/5 dark:text-white/55 dark:hover:text-white md:hidden"
+            >
+              {menuOpen ? (
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path d="M2 2l12 12M14 2L2 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
+              )}
+            </button>
             <Link
               to="/login"
               className="rounded-full bg-[linear-gradient(135deg,#4f46e5,#8b5cf6)] px-4 py-2 text-sm font-semibold text-white shadow-[0_16px_40px_rgba(91,108,255,0.28)] transition-opacity hover:opacity-92"
@@ -53,6 +72,29 @@ export function MarketingShell({ children, eyebrow, title, subtitle }: Marketing
             </Link>
           </div>
         </div>
+
+        {menuOpen && (
+          <div className="border-t border-[#d8e2ff] bg-white/72 backdrop-blur-2xl dark:border-white/8 dark:bg-[#060a16]/55 md:hidden">
+            <nav className="mx-auto flex max-w-7xl flex-col gap-1 px-6 py-3">
+              {navItems.map(item => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  onClick={() => setMenuOpen(false)}
+                  className={({ isActive }) =>
+                    `rounded-xl px-4 py-2.5 text-sm transition-colors ${
+                      isActive
+                        ? 'bg-[linear-gradient(135deg,#4f46e5,#8b5cf6)] text-white'
+                        : 'text-[#667085] hover:text-[#10131a] dark:text-white/55 dark:hover:text-white'
+                    }`
+                  }
+                >
+                  {item.label}
+                </NavLink>
+              ))}
+            </nav>
+          </div>
+        )}
       </div>
 
       <div className="relative">
