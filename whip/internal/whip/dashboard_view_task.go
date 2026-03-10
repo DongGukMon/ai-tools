@@ -158,8 +158,6 @@ func (m DashboardModel) renderTable() string {
 	colStatus := 10
 	colWorkspace := 12
 	colBackend := 7
-	colRunner := 6
-	colPID := 8
 	colIRC := 10
 	colDeps := 12
 	colNote := 16
@@ -173,8 +171,6 @@ func (m DashboardModel) renderTable() string {
 		padRight(hdrStyle.Render("TITLE"), colTitle),
 		padRight(hdrStyle.Render("STATUS"), colStatus),
 		padRight(hdrStyle.Render("BACKEND"), colBackend),
-		padRight(hdrStyle.Render("RUNNER"), colRunner),
-		padRight(hdrStyle.Render("PID"), colPID),
 		padRight(hdrStyle.Render("IRC"), colIRC),
 		padRight(hdrStyle.Render("BLOCKED BY"), colDeps),
 		padRight(hdrStyle.Render("NOTE"), colNote),
@@ -194,11 +190,13 @@ func (m DashboardModel) renderTable() string {
 		}
 
 		id := padRight(idStyle.Render(truncate(t.ID, colID)), colID)
-		title := padRight(truncate(t.Title, colTitle), colTitle)
+		titleStr := truncate(t.Title, colTitle)
+		if t.IsLead() {
+			titleStr = lipgloss.NewStyle().Foreground(colorPrimary).Render("● ") + truncate(t.Title, colTitle-2)
+		}
+		title := padRight(titleStr, colTitle)
 		status := padRight(renderStatus(t.Status), colStatus)
 		backend := padRight(renderBackend(t.Backend), colBackend)
-		runner := padRight(renderRunner(t.Runner), colRunner)
-		pid := padRight(renderPID(t), colPID)
 
 		ircName := truncate(t.IRCName, colIRC)
 		if ircName == "" {
@@ -217,7 +215,7 @@ func (m DashboardModel) renderTable() string {
 		updated := padRight(lipgloss.NewStyle().Foreground(colorSubtle).Render(timeAgo(t.UpdatedAt)), colUpdated)
 
 		workspace := padRight(truncate(t.WorkspaceName(), colWorkspace), colWorkspace)
-		row := indicator + strings.Join([]string{id, workspace, title, status, backend, runner, pid, irc, deps, note, updated}, sep)
+		row := indicator + strings.Join([]string{id, workspace, title, status, backend, irc, deps, note, updated}, sep)
 		if selected {
 			row = lipgloss.NewStyle().Background(lipgloss.Color("#1E1B4B")).Render(row)
 		}

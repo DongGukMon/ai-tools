@@ -98,6 +98,7 @@ export function TaskDetail({ task, onClose }: TaskDetailProps) {
               <span className="text-gray-900 dark:text-gray-100">{task.status}</span>
             </Field>
             <Field label="Backend"><BackendValue backend={task.backend} /></Field>
+            {task.role && <Field label="Role">{task.role}</Field>}
             <Field label="Difficulty">
               {task.difficulty || 'default'}
             </Field>

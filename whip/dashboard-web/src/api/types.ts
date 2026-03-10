@@ -31,6 +31,7 @@ export interface Task {
   note: string
   difficulty: string
   review: boolean
+  role: string
   depends_on: string[]
   created_at: string
   updated_at: string
