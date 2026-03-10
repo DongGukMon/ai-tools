@@ -56,7 +56,7 @@ Rules:
 
 ```bash
 # single-task work
-claude-irc join whip-master
+claude-irc join wp-master
 whip task create "Auth module" --difficulty medium --desc "Implement JWT auth"
 whip task assign <task-id>
 whip task list
@@ -64,7 +64,7 @@ whip task list
 
 ```bash
 # named workspace
-claude-irc join whip-master-issue-sweep
+claude-irc join wp-master-issue-sweep
 whip workspace view issue-sweep
 whip task create "Auth module" --workspace issue-sweep --difficulty medium --desc "Implement JWT auth"
 whip task dep <deploy-id> --after <auth-id>

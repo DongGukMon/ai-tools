@@ -68,6 +68,10 @@ func (m DashboardModel) renderDetailView(w int) string {
 		{"Runner", renderRunner(t.Runner)},
 	}
 
+	if t.Role != "" {
+		fields = append(fields, struct{ label, value string }{"Role", valStyle.Render(t.Role)})
+	}
+
 	if t.IRCName != "" {
 		fields = append(fields, struct{ label, value string }{"IRC", valStyle.Render(t.IRCName)})
 	}

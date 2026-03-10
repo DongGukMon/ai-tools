@@ -63,6 +63,37 @@ Decompose the work into tasks following these principles.
 - Round 2: tasks that consume Round 1 outputs
 - Round 3: tasks that need Round 2
 
+### Lead role for named workspaces
+
+Every named workspace gets a Workspace Lead. The Lead is an autonomous orchestrator that receives all worker task specs in its description, creates/assigns/monitors workers, and escalates to master.
+
+- The Lead does NOT write code — it only orchestrates worker agents
+- The Lead cannot complete its own task — only the master/user can
+- Worker tasks in the Lead's workspace automatically route their master IRC to the Lead
+- If the Lead fails, it can be replaced — worker routing follows the lead IRC channel, not the lead task ID
+
+When planning a named workspace, output a single Lead task spec containing all worker specs:
+```
+### Workspace Lead: <workspace-name>
+- Role: lead
+- Backend: ...
+- Difficulty: hard
+- Description:
+  ## Workspace Objective
+  ...
+  ## Worker Tasks
+  ### Worker 1: <title>
+  - Backend: ...
+  - Difficulty: ...
+  - Depends on: (none)
+  - Scope:
+    - In: ...
+    - Out: ...
+  - Description: ...
+  ### Worker 2: <title>
+  ...
+```
+
 ### Task sizing
 
 - Each task should be completable by a single agent in one session
@@ -108,10 +139,35 @@ Choose the backend during planning whenever execution quality or portability mat
 
 Present a clear, structured plan to the user:
 
+For named workspaces with a Lead:
 ```text
 ## Plan: <project title>
 
-Workspace: `global` | `<workspace-name>`
+Workspace: <workspace-name>
+Lead: [hard][codex] — <1-line scope>
+  Workers managed by lead:
+  - [easy][claude] Task A — <1-line scope>
+  - [medium][codex] Task B — <1-line scope>
+  - [medium][codex] Task C — <1-line scope> (after: A, B)
+  - [easy][claude] Task D — <1-line scope> (after: A)
+
+### Stack Diagram
+
+A ──┬──→ C
+B ──┘
+A ──→ D
+
+### Key Design Decisions
+- <why you split things this way>
+- <interface contracts between tasks>
+- <potential risks or trade-offs>
+```
+
+For global workspace (no Lead):
+```text
+## Plan: <project title>
+
+Workspace: `global`
 
 ### Task Graph
 
@@ -121,16 +177,11 @@ Round 1 (parallel):
 
 Round 2 (after Round 1):
 - [medium][codex] Task C: <title> — <1-line scope> (depends on: A, B)
-- [easy][claude] Task D: <title> — <1-line scope> (depends on: A)
-
-Round 3 (after Round 2):
-- [medium][claude] Task E: <title> — <1-line scope> (depends on: C)
 
 ### Stack Diagram
 
-A ──┬──→ C ──→ E
+A ──┬──→ C
 B ──┘
-A ──→ D
 
 ### Key Design Decisions
 - <why you split things this way>

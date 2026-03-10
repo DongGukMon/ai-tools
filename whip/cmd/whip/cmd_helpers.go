@@ -15,8 +15,10 @@ func resolveMasterIRCName(cfg *whip.Config, workspace string, override string) s
 	if strings.TrimSpace(override) != "" {
 		return strings.TrimSpace(override)
 	}
+	// For named workspaces, return empty to let runtime resolve
+	// (lead routing or workspace master fallback)
 	if whip.NormalizeWorkspaceName(workspace) != whip.GlobalWorkspaceName {
-		return whip.WorkspaceMasterIRCName(workspace)
+		return ""
 	}
 	return whip.DefaultMasterIRCName(cfg)
 }

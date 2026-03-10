@@ -190,6 +190,24 @@ func (s *Store) GetDependents(id string) ([]*Task, error) {
 	return deps, nil
 }
 
+// FindWorkspaceLead returns the active lead task for a named workspace, or nil.
+func (s *Store) FindWorkspaceLead(workspace string) (*Task, error) {
+	workspace = NormalizeWorkspaceName(workspace)
+	if workspace == GlobalWorkspaceName {
+		return nil, nil
+	}
+	tasks, err := s.ListTasks()
+	if err != nil {
+		return nil, err
+	}
+	for _, t := range tasks {
+		if t.WorkspaceName() == workspace && t.Role == TaskRoleLead && t.Status.IsActive() {
+			return t, nil
+		}
+	}
+	return nil, nil
+}
+
 // AreDependenciesMet checks if all dependencies of a task are completed.
 // A dependency that no longer exists (e.g. removed by clean) is treated as met
 // because only terminal (completed/canceled) tasks are ever cleaned.

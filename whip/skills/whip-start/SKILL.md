@@ -18,8 +18,8 @@ You are the lead. Dispatch work to agent sessions via whip.
 - `workspace` is for stacked work.
 - When executing grouped work, keep all related tasks in the same named workspace.
 - Use the workspace master identity:
-  - `global` → `whip-master`
-  - `<workspace>` → `whip-master-<workspace>`
+  - `global` → `wp-master`
+  - `<workspace>` → `wp-master-<workspace>`
 
 ## Workspace execution model
 
@@ -75,9 +75,12 @@ claude-irc inbox
 ## Decide Mode
 
 Look at the user's request:
-- **Solo agent**: One clear, self-contained piece of work
-- **Agent team**: Work that decomposes into 2 or more independent parallel tasks
+- **Lead-managed workspace** (named workspace, multiple tasks): A Workspace Lead orchestrates all workers autonomously → Lead Flow
+- **Solo agent**: One clear, self-contained piece of work → Solo Flow
+- **Direct team** (global workspace or explicit direct control): You manage workers directly → Team Flow
 - **Ambiguous**: Default to solo. Do not over-decompose.
+
+Lead Flow is the default for named workspaces with multiple tasks. Use Team Flow only for global workspace or when the user explicitly wants direct control.
 
 ## Choose Backend
 
@@ -181,6 +184,72 @@ As agents complete:
 ### Step 5: Wrap up
 
 When all agents are done, summarize what was accomplished across the team. If this named workspace was temporary and the user wants it removed, run `whip workspace drop <workspace-name>` after all deliverables are accepted. Do not run `claude-irc quit`; stay connected for future dispatches.
+
+---
+
+## Lead Flow
+
+For named workspaces with multiple tasks, create a Workspace Lead that autonomously orchestrates all workers.
+
+### Step 1: Create Lead task
+
+The Lead's description contains all worker task specs. The Lead creates, assigns, and coordinates workers on its own.
+
+```bash
+whip task create "<workspace title>" --role lead --workspace <workspace-name> --backend <chosen-backend> --difficulty hard --desc "## Workspace Objective
+<what the workspace delivers>
+
+## Worker Tasks
+
+### Worker 1: <title>
+- Backend: <backend>
+- Difficulty: <level>
+- Review: yes/no
+- Depends on: (none) | Worker 2
+- Scope:
+  - In: <files>
+  - Out: <files NOT to touch>
+- Description: <full worker spec>
+
+### Worker 2: <title>
+..."
+```
+
+### Step 2: Assign Lead
+
+```bash
+whip task assign <lead-id>
+```
+
+The Lead will start, join IRC as `wp-lead-<workspace>`, create workers, and manage them autonomously.
+
+### Step 3: Monitor Lead
+
+- Check IRC inbox for Lead escalations (user input needed, critical blockers)
+- Use `whip task list` to see all workspace tasks
+- Respond to Lead questions — relay user decisions when needed
+
+### Step 4: Handle escalations
+
+The Lead escalates when:
+- User input is needed
+- A critical blocker cannot be resolved
+- The workspace is complete and ready for review
+
+### Step 5: Complete Lead
+
+Only the master/user can complete the lead task. The Lead cannot self-complete.
+
+```bash
+whip task complete <lead-id> --note "Workspace delivered"
+```
+
+After completion, optionally drop the workspace:
+```bash
+whip workspace drop <workspace-name>
+```
+
+Do not run `claude-irc quit`; stay connected for future dispatches.
 
 ---
 

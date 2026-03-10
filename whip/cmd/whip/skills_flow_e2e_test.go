@@ -106,7 +106,7 @@ func TestWhipStartSoloFlowRegression(t *testing.T) {
 	}
 
 	ircLog := readIRCLog(t, h.fake.ircLogPath)
-	if !strings.Contains(ircLog, "msg target=whip-"+normalID+" text=Broadcast to active task") {
+	if !strings.Contains(ircLog, "msg target=wp-"+normalID+" text=Broadcast to active task") {
 		t.Fatalf("broadcast log missing normal task message:\n%s", ircLog)
 	}
 
@@ -169,15 +169,166 @@ func TestWhipStartReviewFlowRegression(t *testing.T) {
 	}
 
 	ircLog := readIRCLog(t, h.fake.ircLogPath)
-	if !strings.Contains(ircLog, "msg target=whip-"+reviewID+" text=Task "+reviewID+" needs changes.") {
+	if !strings.Contains(ircLog, "msg target=wp-"+reviewID+" text=Task "+reviewID+" needs changes.") {
 		t.Fatalf("request-changes log missing review notification:\n%s", ircLog)
 	}
-	if !strings.Contains(ircLog, "msg target=whip-"+reviewID+" text=Task "+reviewID+" approved.") {
+	if !strings.Contains(ircLog, "msg target=wp-"+reviewID+" text=Task "+reviewID+" approved.") {
 		t.Fatalf("approval log missing review notification:\n%s", ircLog)
 	}
 
 	runWhipCLI(t, "task", "clean")
 	assertNoTasksRemain(t, h.store, workspace)
+}
+
+func TestWhipLeadFlowRegression(t *testing.T) {
+	h := newSkillFlowHarness(t)
+	const workspace = "skills-lead"
+
+	// Create lead task
+	leadID := createWhipTask(t,
+		"task", "create", "Workspace Lead",
+		"--role", "lead",
+		"--workspace", workspace,
+		"--cwd", h.workspaceDir,
+		"--backend", "claude",
+		"--difficulty", "hard",
+		"--desc", "## Worker Tasks\n### Worker 1: Auth\n- Backend: claude\n- Difficulty: medium",
+	)
+
+	// Verify lead properties
+	leadTask, err := h.store.LoadTask(leadID)
+	if err != nil {
+		t.Fatalf("LoadTask lead: %v", err)
+	}
+	if leadTask.Role != whiplib.TaskRoleLead {
+		t.Fatalf("lead role = %q, want %q", leadTask.Role, whiplib.TaskRoleLead)
+	}
+	if leadTask.Difficulty != "hard" {
+		t.Fatalf("lead difficulty = %q, want hard", leadTask.Difficulty)
+	}
+
+	// Assign + start lead
+	runWhipCLI(t, "task", "assign", leadID)
+	runWhipCLI(t, "task", "start", leadID, "--note", "Lead started")
+
+	leadTask, err = h.store.LoadTask(leadID)
+	if err != nil {
+		t.Fatalf("LoadTask lead after assign: %v", err)
+	}
+	// Lead IRC name should be deterministic
+	if leadTask.IRCName != "wp-lead-"+workspace {
+		t.Fatalf("lead IRCName = %q, want %q", leadTask.IRCName, "wp-lead-"+workspace)
+	}
+	// Lead reports to workspace master
+	if leadTask.MasterIRCName != "wp-master-"+workspace {
+		t.Fatalf("lead MasterIRCName = %q, want %q", leadTask.MasterIRCName, "wp-master-"+workspace)
+	}
+
+	// Create worker in same workspace
+	workerID := createWhipTask(t,
+		"task", "create", "Worker task",
+		"--workspace", workspace,
+		"--cwd", h.workspaceDir,
+		"--backend", "claude",
+		"--difficulty", "medium",
+		"--desc", "Implement auth module",
+	)
+
+	// Assign worker
+	runWhipCLI(t, "task", "assign", workerID)
+
+	workerTask, err := h.store.LoadTask(workerID)
+	if err != nil {
+		t.Fatalf("LoadTask worker: %v", err)
+	}
+	// Worker should route to lead
+	if workerTask.MasterIRCName != leadTask.IRCName {
+		t.Fatalf("worker MasterIRCName = %q, want %q (lead IRC)", workerTask.MasterIRCName, leadTask.IRCName)
+	}
+	// Worker IRC name should use wp- prefix
+	if workerTask.IRCName != "wp-"+workerID {
+		t.Fatalf("worker IRCName = %q, want %q", workerTask.IRCName, "wp-"+workerID)
+	}
+
+	// Complete worker
+	runWhipCLI(t, "task", "start", workerID, "--note", "Worker started")
+	runWhipCLI(t, "task", "complete", workerID, "--note", "Worker done")
+
+	// Complete lead
+	runWhipCLI(t, "task", "complete", leadID, "--note", "All workers done")
+
+	leadTask, err = h.store.LoadTask(leadID)
+	if err != nil {
+		t.Fatalf("LoadTask lead final: %v", err)
+	}
+	if leadTask.Status != whiplib.StatusCompleted {
+		t.Fatalf("lead status = %s, want completed", leadTask.Status)
+	}
+
+	// Clean up
+	runWhipCLI(t, "task", "clean")
+	assertNoTasksRemain(t, h.store, workspace)
+}
+
+func TestWhipLeadCreateValidation(t *testing.T) {
+	_ = newSkillFlowHarness(t)
+
+	// Lead without workspace → error
+	_, _, err := execWhipCLICapture(t,
+		"task", "create", "Bad Lead",
+		"--role", "lead",
+		"--desc", "No workspace",
+	)
+	if err == nil || !strings.Contains(err.Error(), "--role lead requires a named workspace") {
+		t.Fatalf("lead without workspace: got %v, want 'requires a named workspace'", err)
+	}
+
+	// Invalid role → error
+	_, _, err = execWhipCLICapture(t,
+		"task", "create", "Bad Role",
+		"--role", "invalid",
+		"--workspace", "test-ws",
+		"--desc", "Invalid role",
+	)
+	if err == nil || !strings.Contains(err.Error(), "invalid role") {
+		t.Fatalf("invalid role: got %v, want 'invalid role'", err)
+	}
+}
+
+func TestWhipLeadDuplicateValidation(t *testing.T) {
+	h := newSkillFlowHarness(t)
+	const workspace = "lead-dup"
+
+	firstLeadID := createWhipTask(t,
+		"task", "create", "First Lead",
+		"--role", "lead",
+		"--workspace", workspace,
+		"--cwd", h.workspaceDir,
+		"--backend", "claude",
+		"--difficulty", "hard",
+		"--desc", "First lead",
+	)
+
+	// Assign first lead to make it active
+	runWhipCLI(t, "task", "assign", firstLeadID)
+
+	// Try creating a second lead → should fail
+	_, _, err := execWhipCLICapture(t,
+		"task", "create", "Second Lead",
+		"--role", "lead",
+		"--workspace", workspace,
+		"--cwd", h.workspaceDir,
+		"--backend", "claude",
+		"--difficulty", "hard",
+		"--desc", "Duplicate lead",
+	)
+	if err == nil || !strings.Contains(err.Error(), "already has an active lead") {
+		t.Fatalf("duplicate lead: got %v, want 'already has an active lead'", err)
+	}
+
+	// Clean up
+	runWhipCLI(t, "task", "cancel", firstLeadID, "--note", "cleanup")
+	runWhipCLI(t, "task", "clean")
 }
 
 func TestWhipPlanCommandSurfaceRegression(t *testing.T) {
