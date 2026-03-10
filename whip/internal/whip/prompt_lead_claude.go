@@ -100,6 +100,10 @@ For workers with ` + "`--review`" + `:
 - If changes are good: ` + "`whip task approve <id>`" + ` — the worker will commit and complete
 - If changes need work: ` + "`whip task request-changes <id> --note \"...\"`" + ` — the worker continues in the same session
 
+When reviewing worker changes, evaluate against these criteria:
+1. **Requirement completeness**: Verify ALL requirements from the task description are implemented — no partial implementations or missing items.
+2. **Holistic consistency**: Review changes in the context of the entire codebase flow, not just the modified lines. Changes must align with existing code patterns, style, and architecture.
+
 ## Escalation to Master
 Escalate to Master via IRC when:
 - User input is needed (decisions, clarifications, approvals)
