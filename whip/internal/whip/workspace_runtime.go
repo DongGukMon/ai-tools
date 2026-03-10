@@ -328,6 +328,65 @@ func ensureGitWorktree(repoRoot string, worktreePath string) error {
 	return nil
 }
 
+// DropWorkspace removes all tasks, worktree, and metadata for the named workspace.
+// It returns the number of tasks deleted. Only terminal tasks are expected; active
+// tasks are force-stopped when force is true.
+func DropWorkspace(store *Store, name string, force bool) (int, error) {
+	name = NormalizeWorkspaceName(name)
+	if name == GlobalWorkspaceName {
+		return 0, fmt.Errorf("global is not a named workspace")
+	}
+
+	tasks, err := store.ListTasks()
+	if err != nil {
+		return 0, err
+	}
+
+	var workspaceTasks []*Task
+	for _, task := range tasks {
+		if task.WorkspaceName() == name {
+			workspaceTasks = append(workspaceTasks, task)
+		}
+	}
+
+	if !force {
+		for _, task := range workspaceTasks {
+			if task.Status.IsActive() {
+				return 0, fmt.Errorf("workspace %s has active task %s (%s); use force to override", name, task.ID, task.Title)
+			}
+		}
+	}
+
+	for _, task := range workspaceTasks {
+		if task.Runner == "tmux" && IsTmuxSession(task.ID) {
+			_ = KillTmuxSession(task.ID)
+		}
+		if task.ShellPID > 0 && IsProcessAlive(task.ShellPID) {
+			_ = KillProcess(task.ShellPID)
+		}
+		if err := store.DeleteTask(task.ID); err != nil {
+			return 0, err
+		}
+	}
+
+	workspace, err := store.LoadWorkspace(name)
+	if err != nil && !strings.Contains(err.Error(), "not found") {
+		return len(workspaceTasks), err
+	}
+	if workspace != nil {
+		if err := RemoveWorkspaceWorktree(workspace); err != nil {
+			return len(workspaceTasks), err
+		}
+	}
+
+	if err := store.DeleteWorkspace(name); err != nil {
+		return len(workspaceTasks), err
+	}
+
+	_ = exec.Command("claude-irc", "clean").Run()
+	return len(workspaceTasks), nil
+}
+
 func RemoveWorkspaceWorktree(workspace *Workspace) error {
 	if workspace == nil || strings.TrimSpace(workspace.WorktreePath) == "" {
 		return nil

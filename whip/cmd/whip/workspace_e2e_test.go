@@ -127,8 +127,8 @@ func TestWorkspaceDropRejectsActiveTaskWithoutForce(t *testing.T) {
 	if err == nil {
 		t.Fatalf("workspace drop should fail when active task exists")
 	}
-	if !strings.Contains(err.Error(), "rerun with --force") {
-		t.Fatalf("workspace drop error = %v, want rerun with --force", err)
+	if !strings.Contains(err.Error(), "use force to override") {
+		t.Fatalf("workspace drop error = %v, want use force to override", err)
 	}
 
 	runWhipCLI(t, "workspace", "drop", "docs-lane", "--force")

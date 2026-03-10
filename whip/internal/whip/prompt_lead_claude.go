@@ -114,14 +114,21 @@ When a worker fails:
 2. Decide: re-assign the failed task (` + "`whip task assign <id>`" + `) or escalate to Master
 3. If re-assigning, the new worker gets the previous notes as context
 
+## Git Workflow
+Workers commit to the workspace worktree branch. Before reporting completion to Master, verify:
+1. All worker changes are committed and pushed to the remote branch
+2. Run ` + "`git log --oneline -10`" + ` and ` + "`git status`" + ` in the worktree to confirm no uncommitted changes
+3. If workers left unpushed commits, push them: ` + "`git push`" + `
+
 ## Workspace Completion
 When all workers are done and deliverables verified:
-1. Summarize what was accomplished across the workspace
+1. Verify git state: all changes committed and pushed (see Git Workflow above)
+2. Summarize what was accomplished across the workspace
 `)
-	fmt.Fprintf(&b, "2. Report to Master: claude-irc msg %s \"Workspace %s complete. Summary: <deliverables>\"\n",
+	fmt.Fprintf(&b, "3. Report to Master: claude-irc msg %s \"Workspace %s complete. All changes committed and pushed. Summary: <deliverables>\"\n",
 		task.MasterIRCName, task.WorkspaceName())
-	b.WriteString(`3. **Do NOT run ` + "`whip task complete`" + ` on your own task — only the master/user can complete the lead task.**
-4. Stay connected and only run ` + "`claude-irc quit`" + ` after master confirms.
+	b.WriteString(`4. **Do NOT run ` + "`whip task complete`" + ` on your own task — only the master/user can complete the lead task.**
+5. Stay connected and only run ` + "`claude-irc quit`" + ` after master confirms.
 
 ## Home Context
 - Home context (READ-ONLY): WHIP_HOME/home/ (default: ~/.whip/home/)

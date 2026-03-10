@@ -166,6 +166,28 @@ func completeCmd() *cobra.Command {
 				}
 			}
 
+			// Auto-drop workspace when lead task completes and all workspace tasks are terminal.
+			if task.IsLead() && task.WorkspaceName() != whip.GlobalWorkspaceName {
+				allTerminal := true
+				tasks, err := store.ListTasks()
+				if err == nil {
+					for _, t := range tasks {
+						if t.WorkspaceName() == task.WorkspaceName() && !t.Status.IsTerminal() {
+							allTerminal = false
+							break
+						}
+					}
+				}
+				if allTerminal {
+					count, dropErr := whip.DropWorkspace(store, task.WorkspaceName(), false)
+					if dropErr != nil {
+						fmt.Fprintf(os.Stderr, "Warning: auto-drop workspace %s: %v\n", task.WorkspaceName(), dropErr)
+					} else {
+						fmt.Fprintf(os.Stderr, "Auto-dropped workspace %s (%d task(s))\n", task.WorkspaceName(), count)
+					}
+				}
+			}
+
 			return nil
 		},
 	}

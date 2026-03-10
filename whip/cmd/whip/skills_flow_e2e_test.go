@@ -254,19 +254,10 @@ func TestWhipLeadFlowRegression(t *testing.T) {
 	runWhipCLI(t, "task", "start", workerID, "--note", "Worker started")
 	runWhipCLI(t, "task", "complete", workerID, "--note", "Worker done")
 
-	// Complete lead
+	// Complete lead — auto-drops workspace since all tasks are terminal
 	runWhipCLI(t, "task", "complete", leadID, "--note", "All workers done")
 
-	leadTask, err = h.store.LoadTask(leadID)
-	if err != nil {
-		t.Fatalf("LoadTask lead final: %v", err)
-	}
-	if leadTask.Status != whiplib.StatusCompleted {
-		t.Fatalf("lead status = %s, want completed", leadTask.Status)
-	}
-
-	// Clean up
-	runWhipCLI(t, "task", "clean")
+	// After auto-drop, workspace tasks are deleted
 	assertNoTasksRemain(t, h.store, workspace)
 }
 
