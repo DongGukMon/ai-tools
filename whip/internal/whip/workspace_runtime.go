@@ -371,16 +371,16 @@ func DropWorkspace(store *Store, name string, force bool) (int, error) {
 
 	workspace, err := store.LoadWorkspace(name)
 	if err != nil && !strings.Contains(err.Error(), "not found") {
-		return len(workspaceTasks), err
+		return 0, err
 	}
 	if workspace != nil {
 		if err := RemoveWorkspaceWorktree(workspace); err != nil {
-			return len(workspaceTasks), err
+			return 0, err
 		}
 	}
 
 	if err := store.DeleteWorkspace(name); err != nil {
-		return len(workspaceTasks), err
+		return 0, err
 	}
 
 	_ = exec.Command("claude-irc", "clean").Run()

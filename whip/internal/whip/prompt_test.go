@@ -28,6 +28,9 @@ func TestCodexBackend_GeneratePrompt(t *testing.T) {
 	if !strings.Contains(prompt, "projects.md: Project registry with paths and tech stacks") {
 		t.Fatalf("prompt should reference projects.md")
 	}
+	if strings.Contains(prompt, "Workspace Lead") {
+		t.Fatalf("worker prompt should not use the lead identity")
+	}
 }
 
 func TestClaudeBackend_GeneratePrompt(t *testing.T) {
@@ -59,6 +62,9 @@ func TestClaudeBackend_GeneratePrompt(t *testing.T) {
 	if !strings.Contains(prompt, "projects.md: Project registry with paths and tech stacks") {
 		t.Error("prompt should reference projects.md")
 	}
+	if strings.Contains(prompt, "Workspace Lead") {
+		t.Error("worker prompt should not use the lead identity")
+	}
 }
 
 func TestGeneratePrompt_DispatchesByBackend(t *testing.T) {
@@ -89,29 +95,44 @@ func TestClaudeBackend_GenerateLeadPrompt(t *testing.T) {
 
 	prompt := b.GeneratePrompt(task)
 
-	if !strings.Contains(prompt, "Workspace Lead") {
-		t.Error("lead prompt should contain 'Workspace Lead'")
+	for _, want := range []string{
+		"Workspace Lead",
+		"whip task create",
+		"whip task assign",
+		"whip task list --workspace my-ws",
+		"whip workspace broadcast my-ws",
+		"whip task approve <id>",
+		"whip task request-changes <id> --note",
+		"Do NOT run `whip task complete` on your own task",
+		"memory.md: User preferences and operational guidelines",
+		"projects.md: Project registry with paths and tech stacks",
+		"/loop 1m claude-irc inbox",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("lead prompt missing %q", want)
+		}
 	}
-	if !strings.Contains(prompt, "whip task create") {
-		t.Error("lead prompt should contain task create instruction")
-	}
-	if !strings.Contains(prompt, "whip task assign") {
-		t.Error("lead prompt should contain task assign instruction")
-	}
-	if !strings.Contains(prompt, "Do NOT run `whip task complete` on your own task") {
-		t.Error("lead prompt should contain cannot self-complete warning")
-	}
-	if !strings.Contains(prompt, "whip task list --workspace my-ws") {
-		t.Error("lead prompt should contain recovery check")
+
+	if !strings.Contains(prompt, "resume management — do NOT re-create them") {
+		t.Fatalf("lead prompt should include the recovery check")
 	}
 	if strings.Contains(prompt, "You are an agent working under a lead session") {
-		t.Error("lead prompt should NOT contain worker intro")
+		t.Fatalf("lead prompt should NOT contain worker intro")
 	}
-	if !strings.Contains(prompt, "/loop 1m claude-irc inbox") {
-		t.Error("Claude lead prompt should contain loop command")
+}
+
+func TestClaudeBackend_GenerateLeadPrompt_FallsBackToWorkspaceIRCNames(t *testing.T) {
+	task := NewTask("Lead Task", "Worker specs here", "/tmp")
+	task.Role = TaskRoleLead
+	task.Workspace = "fallback-ws"
+
+	prompt := (&ClaudeBackend{}).GeneratePrompt(task)
+
+	if !strings.Contains(prompt, "claude-irc join wp-lead-fallback-ws") {
+		t.Fatalf("lead prompt should fall back to workspace lead IRC name")
 	}
-	if !strings.Contains(prompt, "memory.md") {
-		t.Error("lead prompt should reference home context")
+	if !strings.Contains(prompt, "claude-irc msg wp-master-fallback-ws") {
+		t.Fatalf("lead prompt should fall back to workspace master IRC name")
 	}
 }
 
@@ -137,41 +158,62 @@ func TestCodexBackend_GenerateLeadPrompt(t *testing.T) {
 }
 
 func TestWorkerPromptUnchangedWhenLeadExists(t *testing.T) {
-	b := &ClaudeBackend{}
-	task := NewTask("Worker Task", "Do the work", "/tmp")
-	task.IRCName = "wp-abc12"
-	task.MasterIRCName = "wp-lead-my-ws" // routed to Lead
+	worker := NewTask("Worker task", "Implement the feature", "/tmp")
+	worker.IRCName = "wp-abc12345"
+	worker.MasterIRCName = "wp-lead-issue-sweep"
 
-	prompt := b.GeneratePrompt(task)
-
-	if strings.Contains(prompt, "Workspace Lead") {
-		t.Error("worker prompt should NOT contain lead intro even when routed to Lead")
+	claudePrompt := (&ClaudeBackend{}).GeneratePrompt(worker)
+	if strings.Contains(claudePrompt, "Workspace Lead") {
+		t.Fatal("worker prompt should NOT use the lead identity even when MasterIRCName is a lead")
 	}
-	if !strings.Contains(prompt, "You are an agent working under a lead session") {
-		t.Error("worker prompt should contain worker intro")
+	if !strings.Contains(claudePrompt, "You are an agent working under a lead session") {
+		t.Fatal("worker prompt should still contain worker intro")
+	}
+	if !strings.Contains(claudePrompt, "wp-lead-issue-sweep") {
+		t.Fatal("worker prompt should reference the lead as its master IRC")
+	}
+
+	codexPrompt := (&CodexBackend{}).GeneratePrompt(worker)
+	if strings.Contains(codexPrompt, "Workspace Lead") {
+		t.Fatal("Codex worker prompt should NOT use the lead identity")
+	}
+	if !strings.Contains(codexPrompt, "You are an agent working under a lead session") {
+		t.Fatal("Codex worker prompt should still contain worker intro")
 	}
 }
 
 func TestGeneratePrompt_LeadDispatch(t *testing.T) {
-	task := NewTask("Lead Dispatch", "desc", "/tmp")
-	task.Role = TaskRoleLead
-	task.Workspace = "test-ws"
-	task.Backend = "claude"
-	task.IRCName = "wp-lead-test-ws"
-	task.MasterIRCName = "wp-master-test-ws"
+	lead := NewTask("Lead Dispatch", "desc", "/tmp")
+	lead.Role = TaskRoleLead
+	lead.Workspace = "test-ws"
+	lead.IRCName = "wp-lead-test-ws"
+	lead.MasterIRCName = "wp-master-test-ws"
 
-	prompt := GeneratePrompt(task)
+	lead.Backend = "claude"
+	prompt := GeneratePrompt(lead)
 	if !strings.Contains(prompt, "Workspace Lead") {
 		t.Error("dispatched lead prompt should contain lead intro")
 	}
+	if strings.Contains(prompt, "You are an agent working under a lead session") {
+		t.Error("Claude lead dispatch should NOT produce worker prompt")
+	}
 
-	task.Backend = "codex"
-	prompt = GeneratePrompt(task)
+	lead.Backend = "codex"
+	prompt = GeneratePrompt(lead)
 	if !strings.Contains(prompt, "Workspace Lead") {
 		t.Error("codex dispatched lead prompt should contain lead intro")
 	}
 	if strings.Contains(prompt, "/loop 1m") {
 		t.Error("codex dispatched lead prompt should not contain /loop")
+	}
+	if !strings.Contains(prompt, "Run claude-irc inbox now") {
+		t.Error("codex dispatched lead prompt should use manual inbox")
+	}
+
+	lead.Backend = ""
+	prompt = GeneratePrompt(lead)
+	if !strings.Contains(prompt, "Workspace Lead") {
+		t.Error("default backend lead dispatch should produce lead prompt")
 	}
 }
 
@@ -191,21 +233,20 @@ func TestTaskIsLead(t *testing.T) {
 }
 
 func TestWorkspaceLeadIRCName(t *testing.T) {
-	tests := []struct {
-		workspace string
-		want      string
-	}{
-		{"my-ws", "wp-lead-my-ws"},
-		{"global", ""},
-		{"", ""},
-		{"  Global  ", ""},
-		{"issue-sweep", "wp-lead-issue-sweep"},
+	if name := WorkspaceLeadIRCName("issue-sweep"); name != "wp-lead-issue-sweep" {
+		t.Errorf("WorkspaceLeadIRCName(issue-sweep) = %q, want %q", name, "wp-lead-issue-sweep")
 	}
-	for _, tt := range tests {
-		got := WorkspaceLeadIRCName(tt.workspace)
-		if got != tt.want {
-			t.Errorf("WorkspaceLeadIRCName(%q) = %q, want %q", tt.workspace, got, tt.want)
-		}
+	if name := WorkspaceLeadIRCName("issue-sweep"); name != WorkspaceLeadIRCName("issue-sweep") {
+		t.Error("WorkspaceLeadIRCName should be deterministic")
+	}
+	if name := WorkspaceLeadIRCName(GlobalWorkspaceName); name != "" {
+		t.Errorf("WorkspaceLeadIRCName(global) = %q, want empty", name)
+	}
+	if name := WorkspaceLeadIRCName(""); name != "" {
+		t.Errorf("WorkspaceLeadIRCName(\"\") = %q, want empty (normalizes to global)", name)
+	}
+	if name := WorkspaceLeadIRCName("My-Workspace"); name != "wp-lead-my-workspace" {
+		t.Errorf("WorkspaceLeadIRCName(My-Workspace) = %q, want %q", name, "wp-lead-my-workspace")
 	}
 }
 

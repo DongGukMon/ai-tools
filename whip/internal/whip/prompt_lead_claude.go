@@ -9,6 +9,15 @@ import (
 // generateClaudeLeadPrompt produces the Claude Code lead orchestrator prompt.
 func generateClaudeLeadPrompt(task *Task) string {
 	var b strings.Builder
+	workspace := task.WorkspaceName()
+	leadIRC := strings.TrimSpace(task.IRCName)
+	if leadIRC == "" {
+		leadIRC = WorkspaceLeadIRCName(workspace)
+	}
+	masterIRC := strings.TrimSpace(task.MasterIRCName)
+	if masterIRC == "" {
+		masterIRC = WorkspaceMasterIRCName(workspace)
+	}
 
 	b.WriteString(`You are a Workspace Lead — an autonomous orchestrator responsible for delivering all work in your workspace. You do NOT write code yourself. You create, assign, monitor, and coordinate worker agents.
 
@@ -16,7 +25,7 @@ func generateClaudeLeadPrompt(task *Task) string {
 `)
 	fmt.Fprintf(&b, "- ID: %s\n", task.ID)
 	fmt.Fprintf(&b, "- Title: %s\n", task.Title)
-	fmt.Fprintf(&b, "- Workspace: %s\n", task.WorkspaceName())
+	fmt.Fprintf(&b, "- Workspace: %s\n", workspace)
 	b.WriteString("- Description:\n")
 	b.WriteString("<task-context>\n")
 	b.WriteString(task.Description)
@@ -41,13 +50,13 @@ Run these commands to initialize your session:
 	b.WriteString(`
 2. Join the communication channel:
 `)
-	fmt.Fprintf(&b, "   claude-irc join %s\n", task.IRCName)
+	fmt.Fprintf(&b, "   claude-irc join %s\n", leadIRC)
 
 	b.WriteString(`
 3. Announce to Master:
 `)
 	fmt.Fprintf(&b, "   claude-irc msg %s \"Lead for workspace %s online. Taking ownership of task %s.\"\n",
-		task.MasterIRCName, task.WorkspaceName(), task.ID)
+		masterIRC, workspace, task.ID)
 
 	b.WriteString(`
 4. Enable periodic message check:
@@ -55,19 +64,19 @@ Run these commands to initialize your session:
 
 5. Understand the workspace execution model:
 `)
-	fmt.Fprintf(&b, "   whip workspace view %s\n", task.WorkspaceName())
+	fmt.Fprintf(&b, "   whip workspace view %s\n", workspace)
 
 	b.WriteString(`
 ## Recovery Check
 First, check for existing workers from a previous lead:
 `)
-	fmt.Fprintf(&b, "   whip task list --workspace %s\n", task.WorkspaceName())
+	fmt.Fprintf(&b, "   whip task list --workspace %s\n", workspace)
 	b.WriteString(`If workers already exist (e.g., from a previous lead session), resume management — do NOT re-create them. Check their status, read their notes, and continue coordination from where the previous lead left off.
 
 ## Creating Workers
 When you need to create worker tasks, use:
 `)
-	fmt.Fprintf(&b, "   whip task create \"<title>\" --workspace %s --backend <backend> --difficulty <level> --desc \"<description>\"\n", task.WorkspaceName())
+	fmt.Fprintf(&b, "   whip task create \"<title>\" --workspace %s --backend <backend> --difficulty <level> --desc \"<description>\"\n", workspace)
 	b.WriteString(`   whip task dep <task-id> --after <prerequisite-id>  # encode stack order
    whip task assign <task-id>  # only assign tasks without unmet prerequisites
 
@@ -81,7 +90,7 @@ When writing worker descriptions, include:
 - Respond to worker IRC messages promptly
 - Use ` + "`whip task list`" + ` to monitor progress
 `)
-	fmt.Fprintf(&b, "- Use `whip workspace broadcast %s \"message\"` for workspace-wide announcements\n", task.WorkspaceName())
+	fmt.Fprintf(&b, "- Use `whip workspace broadcast %s \"message\"` for workspace-wide announcements\n", workspace)
 	b.WriteString(`- Use ` + "`claude-irc msg <irc-name> \"message\"`" + ` for direct worker communication
 - Relay information between workers when they need context from each other
 
@@ -97,7 +106,7 @@ Escalate to Master via IRC when:
 - Critical blockers that you cannot resolve
 - All workspace work is complete (summary report)
 `)
-	fmt.Fprintf(&b, "   claude-irc msg %s \"<escalation message>\"\n", task.MasterIRCName)
+	fmt.Fprintf(&b, "   claude-irc msg %s \"<escalation message>\"\n", masterIRC)
 
 	b.WriteString(`
 ## Progress Reporting
@@ -126,7 +135,7 @@ When all workers are done and deliverables verified:
 2. Summarize what was accomplished across the workspace
 `)
 	fmt.Fprintf(&b, "3. Report to Master: claude-irc msg %s \"Workspace %s complete. All changes committed and pushed. Summary: <deliverables>\"\n",
-		task.MasterIRCName, task.WorkspaceName())
+		masterIRC, workspace)
 	b.WriteString(`4. **Do NOT run ` + "`whip task complete`" + ` on your own task — only the master/user can complete the lead task.**
 5. Stay connected and only run ` + "`claude-irc quit`" + ` after master confirms.
 
