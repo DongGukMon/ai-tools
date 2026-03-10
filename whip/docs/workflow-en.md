@@ -99,8 +99,8 @@ failed --> canceled
 - If the current working directory is not inside git, the workspace falls back to the current `cwd` and may not have a worktree path.
 - When continuing a named workspace, prefer the stored workspace worktree as the working-directory context for repo inspection, tests, and review commands.
 - `claude-irc` stays shared, but master identity is scoped by workspace:
-  - `global` → `whip-master`
-  - `<workspace>` → `whip-master-<workspace>`
+  - `global` → `wp-master`
+  - `<workspace>` → `wp-master-<workspace>`
 
 ---
 
@@ -110,10 +110,10 @@ failed --> canceled
 
 ```bash
 # Single-task work in global
-claude-irc join whip-master
+claude-irc join wp-master
 
 # Stacked work in a named workspace
-claude-irc join whip-master-issue-sweep
+claude-irc join wp-master-issue-sweep
 
 # Enable periodic message monitoring
 /loop 1m claude-irc inbox
@@ -225,7 +225,7 @@ When an agent finishes without a review hold:
 
 ```bash
 # Agent side
-claude-irc msg whip-master "Task <id> complete. Implemented JWT auth with refresh tokens."
+claude-irc msg wp-master "Task <id> complete. Implemented JWT auth with refresh tokens."
 claude-irc quit
 whip task complete <id> --note "JWT + refresh token auth. Files: src/auth/, src/middleware/auth.ts"
 # Session auto-terminates
@@ -261,7 +261,7 @@ If an agent cannot complete its task:
 
 ```bash
 # Agent writes detailed handoff note
-claude-irc msg whip-master "Task <id> failed: <reason>. Handoff note written."
+claude-irc msg wp-master "Task <id> failed: <reason>. Handoff note written."
 claude-irc quit
 whip task fail <id> --note "Accomplished X. Failed at Y because Z. Next agent should start at..."
 ```
@@ -406,7 +406,7 @@ Here's what a typical multi-task session looks like (based on actual usage):
 
 ```bash
 # Master session starts
-claude-irc join whip-master
+claude-irc join wp-master
 /loop 1m claude-irc inbox
 
 # User asks: "Refactor the auth system and write docs for the workflow"
@@ -437,22 +437,22 @@ Write docs/workflow.md covering whip + claude-irc workflow...
 # → Created task 3aae4
 
 # Assign both tasks (no stack prerequisite between them)
-whip task assign a1b2c --master-irc whip-master
-whip task assign 3aae4 --master-irc whip-master
+whip task assign a1b2c --master-irc wp-master
+whip task assign 3aae4 --master-irc wp-master
 
 # Agents initialize and share plans
-# [claude-irc] whip-a1b2c: Acknowledged. Plan: Extract auth logic into middleware...
+# [claude-irc] wp-a1b2c: Acknowledged. Plan: Extract auth logic into middleware...
 # [claude-irc] whip-3aae4: Acknowledged. Plan: Write workflow doc with Mermaid diagrams...
 
 # Master monitors via dashboard
 whip dashboard
 
 # Agent asks a question
-# [claude-irc] whip-a1b2c: Should I keep backward compat with the old auth helpers?
-claude-irc msg whip-a1b2c "No, clean break. Remove the old helpers entirely."
+# [claude-irc] wp-a1b2c: Should I keep backward compat with the old auth helpers?
+claude-irc msg wp-a1b2c "No, clean break. Remove the old helpers entirely."
 
 # Agents complete
-# [claude-irc] whip-a1b2c: Task complete. Extracted auth middleware, removed old helpers.
+# [claude-irc] wp-a1b2c: Task complete. Extracted auth middleware, removed old helpers.
 # [claude-irc] whip-3aae4: Task complete. docs/workflow.md created with diagrams.
 
 # Clean up

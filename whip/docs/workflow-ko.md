@@ -99,8 +99,8 @@ failed --> canceled
 - 현재 working directory가 git 밖에 있으면, workspace는 현재 `cwd`를 그대로 사용하고 worktree path가 없을 수 있습니다.
 - 기존 named workspace를 이어서 다룰 때는 repo 탐색, 테스트, 리뷰 명령도 원본 checkout이 아니라 저장된 workspace worktree 기준으로 실행하는 편이 맞습니다.
 - `claude-irc`는 공유되지만, master identity는 workspace별로 나뉩니다.
-  - `global` → `whip-master`
-  - `<workspace>` → `whip-master-<workspace>`
+  - `global` → `wp-master`
+  - `<workspace>` → `wp-master-<workspace>`
 
 ---
 
@@ -110,10 +110,10 @@ failed --> canceled
 
 ```bash
 # single-task work는 global에서 시작
-claude-irc join whip-master
+claude-irc join wp-master
 
 # stacked work는 named workspace master로 시작
-claude-irc join whip-master-issue-sweep
+claude-irc join wp-master-issue-sweep
 
 # 주기적 메시지 모니터링 활성화
 /loop 1m claude-irc inbox
@@ -222,7 +222,7 @@ whip task view <task-id>
 
 ```bash
 # 에이전트 측
-claude-irc msg whip-master "태스크 <id> 완료. JWT 인증과 리프레시 토큰 구현 완료."
+claude-irc msg wp-master "태스크 <id> 완료. JWT 인증과 리프레시 토큰 구현 완료."
 claude-irc quit
 whip task complete <id> --note "JWT + 리프레시 토큰 인증. 파일: src/auth/, src/middleware/auth.ts"
 # 세션 자동 종료
@@ -258,7 +258,7 @@ whip task complete <id> --note "리뷰 승인 후 커밋 및 마무리 완료"
 
 ```bash
 # 에이전트가 상세한 인수인계 노트 작성
-claude-irc msg whip-master "태스크 <id> 실패: <이유>. 인수인계 노트 작성 완료."
+claude-irc msg wp-master "태스크 <id> 실패: <이유>. 인수인계 노트 작성 완료."
 claude-irc quit
 whip task fail <id> --note "X를 완료함. Y에서 Z 때문에 실패. 다음 에이전트는 ...부터 시작해야 함"
 ```
@@ -403,7 +403,7 @@ flowchart LR
 
 ```bash
 # 마스터 세션 시작
-claude-irc join whip-master
+claude-irc join wp-master
 /loop 1m claude-irc inbox
 
 # 사용자 요청: "인증 시스템 리팩터링하고 워크플로우 문서 작성해줘"
@@ -434,22 +434,22 @@ whip + claude-irc 워크플로우를 다루는 docs/workflow.md 작성...
 # → Created task 3aae4
 
 # 두 태스크 모두 배정 (스택 선행 조건 없음)
-whip task assign a1b2c --master-irc whip-master
-whip task assign 3aae4 --master-irc whip-master
+whip task assign a1b2c --master-irc wp-master
+whip task assign 3aae4 --master-irc wp-master
 
 # 에이전트들이 초기화하고 계획 공유
-# [claude-irc] whip-a1b2c: 인수했습니다. 계획: 인증 로직을 미들웨어로 추출...
+# [claude-irc] wp-a1b2c: 인수했습니다. 계획: 인증 로직을 미들웨어로 추출...
 # [claude-irc] whip-3aae4: 인수했습니다. 계획: Mermaid 다이어그램 포함 워크플로우 문서 작성...
 
 # 마스터가 대시보드로 모니터링
 whip dashboard
 
 # 에이전트가 질문
-# [claude-irc] whip-a1b2c: 기존 인증 헬퍼와의 하위 호환성을 유지해야 할까요?
-claude-irc msg whip-a1b2c "아니, 완전히 새로 만들어. 기존 헬퍼는 전부 제거해."
+# [claude-irc] wp-a1b2c: 기존 인증 헬퍼와의 하위 호환성을 유지해야 할까요?
+claude-irc msg wp-a1b2c "아니, 완전히 새로 만들어. 기존 헬퍼는 전부 제거해."
 
 # 에이전트들 완료
-# [claude-irc] whip-a1b2c: 태스크 완료. 인증 미들웨어 추출, 기존 헬퍼 제거 완료.
+# [claude-irc] wp-a1b2c: 태스크 완료. 인증 미들웨어 추출, 기존 헬퍼 제거 완료.
 # [claude-irc] whip-3aae4: 태스크 완료. docs/workflow.md 다이어그램 포함하여 생성 완료.
 
 # 정리
