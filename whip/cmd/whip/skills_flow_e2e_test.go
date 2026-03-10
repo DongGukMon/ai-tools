@@ -254,7 +254,9 @@ func TestWhipLeadFlowRegression(t *testing.T) {
 	runWhipCLI(t, "task", "start", workerID, "--note", "Worker started")
 	runWhipCLI(t, "task", "complete", workerID, "--note", "Worker done")
 
-	// Complete lead — auto-drops workspace since all tasks are terminal
+	// Complete lead (review-gated): review → approve → complete — auto-drops workspace since all tasks are terminal
+	runWhipCLI(t, "task", "review", leadID)
+	runWhipCLI(t, "task", "approve", leadID)
 	runWhipCLI(t, "task", "complete", leadID, "--note", "All workers done")
 
 	// After auto-drop, workspace tasks are deleted

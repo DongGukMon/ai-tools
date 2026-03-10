@@ -108,7 +108,13 @@ If you cannot complete the task, do NOT just mark it failed silently. Before giv
 The handoff note is critical — it will be preserved and shown to the next agent assigned to this task.
 
 ## Completing Your Task
-Before marking complete, verify your work (run tests, build checks, or whatever the task requires).
+Before marking complete or submitting for review, you MUST run self-verification:
+
+1. **Run tests**: Execute the project's test suite (e.g. ` + "`go test ./...`" + `, ` + "`npm test`" + `, etc.) in the relevant module directories. ALL existing tests must pass — not just the ones you wrote.
+2. **Run build**: Verify the project compiles/builds without errors.
+3. **Self-review**: Re-read every file you changed. Check that your changes are correct in the context of the full codebase, not just in isolation. Verify that no related tests need updating for your changes.
+
+If tests or build fail, fix the issues before proceeding. Do NOT mark complete or submit for review with failing tests.
 
 `)
 	if task.Review {

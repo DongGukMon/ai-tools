@@ -103,6 +103,7 @@ For workers with ` + "`--review`" + `:
 When reviewing worker changes, evaluate against these criteria:
 1. **Requirement completeness**: Verify ALL requirements from the task description are implemented — no partial implementations or missing items.
 2. **Holistic consistency**: Review changes in the context of the entire codebase flow, not just the modified lines. Changes must align with existing code patterns, style, and architecture.
+3. **Test and build verification**: Run the project's test suite and build in the relevant module directories. ALL existing tests must pass. If the worker's changes break existing tests or introduce build errors, request changes.
 
 ## Escalation to Master
 Escalate to Master via IRC when:
@@ -142,8 +143,9 @@ in_progress ──[you]──▶ review ──[master]──▶ approved ──[
 ` + "```" + `
 
 When all workers are done and deliverables verified:
-1. Verify git state: all changes committed and pushed (see Git Workflow above)
-2. Summarize what was accomplished across the workspace
+1. **Run full test suite and build** across all affected modules in the worktree. Fix or request-changes on any failures before proceeding.
+2. Verify git state: all changes committed and pushed (see Git Workflow above)
+3. Summarize what was accomplished across the workspace
 `)
 	fmt.Fprintf(&b, "3. Report to Master via IRC: claude-irc msg %s \"Workspace %s complete. All changes committed and pushed to branch. Summary: <deliverables>. Ready for review.\"\n",
 		masterIRC, workspace)
