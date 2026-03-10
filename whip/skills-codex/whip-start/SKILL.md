@@ -42,6 +42,10 @@ Every invocation starts here — no exceptions. Check live state before doing an
 
 ```bash
 # 1. Ensure IRC is connected
+# First check if you are already joined to any identity
+claude-irc who 2>/dev/null
+# If you are already connected with any wp-master* identity, reuse it — do NOT join again.
+# Only if you are NOT connected at all, join as the workspace master:
 claude-irc join <workspace-master> 2>/dev/null
 # If this fails: claude-irc quit 2>/dev/null && claude-irc join <workspace-master>
 
