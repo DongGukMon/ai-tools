@@ -179,7 +179,7 @@ func completeCmd() *cobra.Command {
 					}
 				}
 				if allTerminal {
-					count, dropErr := whip.DropWorkspace(store, task.WorkspaceName(), false)
+					count, dropErr := whip.DropWorkspace(store, task.WorkspaceName(), false, false)
 					if dropErr != nil {
 						fmt.Fprintf(os.Stderr, "Warning: auto-drop workspace %s: %v\n", task.WorkspaceName(), dropErr)
 					} else {

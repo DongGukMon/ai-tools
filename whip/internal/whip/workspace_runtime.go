@@ -330,8 +330,9 @@ func ensureGitWorktree(repoRoot string, worktreePath string) error {
 
 // DropWorkspace removes all tasks, worktree, and metadata for the named workspace.
 // It returns the number of tasks deleted. Only terminal tasks are expected; active
-// tasks are force-stopped when force is true.
-func DropWorkspace(store *Store, name string, force bool) (int, error) {
+// tasks are force-stopped when force is true. When archive is true, terminal tasks
+// are archived instead of deleted.
+func DropWorkspace(store *Store, name string, force, archive bool) (int, error) {
 	name = NormalizeWorkspaceName(name)
 	if name == GlobalWorkspaceName {
 		return 0, fmt.Errorf("global is not a named workspace")
@@ -364,8 +365,14 @@ func DropWorkspace(store *Store, name string, force bool) (int, error) {
 		if task.ShellPID > 0 && IsProcessAlive(task.ShellPID) {
 			_ = KillProcess(task.ShellPID)
 		}
-		if err := store.DeleteTask(task.ID); err != nil {
-			return 0, err
+		if archive && task.Status.IsTerminal() {
+			if err := store.ArchiveTask(task.ID); err != nil {
+				return 0, err
+			}
+		} else {
+			if err := store.DeleteTask(task.ID); err != nil {
+				return 0, err
+			}
 		}
 	}
 

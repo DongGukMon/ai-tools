@@ -385,6 +385,149 @@ func TestAreDependenciesMet_CleanedDepTreatedAsMet(t *testing.T) {
 	}
 }
 
+func TestArchiveTask(t *testing.T) {
+	s := tempStore(t)
+	task := NewTask("Archive Me", "desc", "/tmp")
+	task.Status = StatusCompleted
+	s.SaveTask(task)
+
+	if err := s.ArchiveTask(task.ID); err != nil {
+		t.Fatalf("ArchiveTask: %v", err)
+	}
+
+	// Should no longer be found in active tasks
+	_, err := s.LoadTask(task.ID)
+	if err == nil {
+		t.Error("LoadTask should fail after archive")
+	}
+
+	// Should be loadable from archive
+	archived, err := s.LoadArchivedTask(task.ID)
+	if err != nil {
+		t.Fatalf("LoadArchivedTask: %v", err)
+	}
+	if archived.Title != "Archive Me" {
+		t.Errorf("Title = %q, want %q", archived.Title, "Archive Me")
+	}
+}
+
+func TestArchiveTerminal(t *testing.T) {
+	s := tempStore(t)
+
+	t1 := NewTask("Active", "desc", "/tmp")
+	t1.Status = StatusInProgress
+	s.SaveTask(t1)
+
+	t2 := NewTask("Done", "desc", "/tmp")
+	t2.Status = StatusCompleted
+	s.SaveTask(t2)
+
+	t3 := NewTask("Canceled", "desc", "/tmp")
+	t3.Status = StatusCanceled
+	s.SaveTask(t3)
+
+	count, err := s.ArchiveTerminal()
+	if err != nil {
+		t.Fatalf("ArchiveTerminal: %v", err)
+	}
+	if count != 2 {
+		t.Errorf("count = %d, want 2", count)
+	}
+
+	// Active task still in list
+	tasks, _ := s.ListTasks()
+	if len(tasks) != 1 {
+		t.Errorf("remaining tasks = %d, want 1", len(tasks))
+	}
+
+	// Archived tasks should be in archive
+	archived, _ := s.ListArchivedTasks()
+	if len(archived) != 2 {
+		t.Errorf("archived tasks = %d, want 2", len(archived))
+	}
+}
+
+func TestArchiveTerminal_SkipsReferencedByNonTerminal(t *testing.T) {
+	s := tempStore(t)
+
+	a := NewTask("A", "dep a", "/tmp")
+	a.Status = StatusCompleted
+	s.SaveTask(a)
+
+	b := NewTask("B", "dep b", "/tmp")
+	b.Status = StatusInProgress
+	s.SaveTask(b)
+
+	// x depends on a — still non-terminal
+	x := NewTask("X", "depends on a", "/tmp")
+	x.DependsOn = []string{a.ID}
+	x.Status = StatusCreated
+	s.SaveTask(x)
+
+	count, err := s.ArchiveTerminal()
+	if err != nil {
+		t.Fatalf("ArchiveTerminal: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("count = %d, want 0 (a is still referenced)", count)
+	}
+
+	// a should still exist in active store
+	if _, err := s.LoadTask(a.ID); err != nil {
+		t.Fatalf("a should still exist: %v", err)
+	}
+}
+
+func TestListArchivedTasks(t *testing.T) {
+	s := tempStore(t)
+
+	t1 := NewTask("First", "desc", "/tmp")
+	t1.Status = StatusCompleted
+	s.SaveTask(t1)
+
+	t2 := NewTask("Second", "desc", "/tmp")
+	t2.Status = StatusCanceled
+	s.SaveTask(t2)
+
+	s.ArchiveTask(t1.ID)
+	s.ArchiveTask(t2.ID)
+
+	tasks, err := s.ListArchivedTasks()
+	if err != nil {
+		t.Fatalf("ListArchivedTasks: %v", err)
+	}
+	if len(tasks) != 2 {
+		t.Fatalf("len(tasks) = %d, want 2", len(tasks))
+	}
+}
+
+func TestLoadArchivedTask(t *testing.T) {
+	s := tempStore(t)
+
+	task := NewTask("Load Me", "desc", "/tmp")
+	task.Status = StatusCompleted
+	s.SaveTask(task)
+
+	s.ArchiveTask(task.ID)
+
+	loaded, err := s.LoadArchivedTask(task.ID)
+	if err != nil {
+		t.Fatalf("LoadArchivedTask: %v", err)
+	}
+	if loaded.Title != "Load Me" {
+		t.Errorf("Title = %q, want %q", loaded.Title, "Load Me")
+	}
+	if loaded.Status != StatusCompleted {
+		t.Errorf("Status = %q, want %q", loaded.Status, StatusCompleted)
+	}
+
+	// Not found case
+	_, err = s.LoadArchivedTask("nonexistent")
+	if err == nil {
+		t.Error("LoadArchivedTask should fail for nonexistent id")
+	}
+}
+
 func TestCleanThenAssign_RegressionScenario(t *testing.T) {
 	s := tempStore(t)
 

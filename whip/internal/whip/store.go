@@ -21,6 +21,7 @@ const (
 	taskLockFile    = "task.lock"
 	promptFile      = "prompt.txt"
 	storeMetaFile   = ".store-meta.json"
+	archiveDir      = "archive"
 	whipStoreKind   = "whip"
 	privateDirPerm  = 0o700
 	privateFilePerm = 0o600
@@ -56,6 +57,9 @@ func NewStore() (*Store, error) {
 	}
 	if err := ensurePrivateDir(filepath.Join(baseDir, workspacesDir)); err != nil {
 		return nil, fmt.Errorf("cannot create workspaces directory: %w", err)
+	}
+	if err := ensurePrivateDir(filepath.Join(baseDir, archiveDir)); err != nil {
+		return nil, fmt.Errorf("cannot create archive directory: %w", err)
 	}
 	return &Store{BaseDir: baseDir}, nil
 }

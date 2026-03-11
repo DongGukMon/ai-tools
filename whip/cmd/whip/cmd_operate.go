@@ -53,6 +53,29 @@ func deleteCmd() *cobra.Command {
 	}
 }
 
+func archiveCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:     "archive",
+		Short:   "Archive completed and canceled tasks",
+		GroupID: "operations",
+		Args:    cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			store, err := whip.NewStore()
+			if err != nil {
+				return err
+			}
+
+			count, err := store.ArchiveTerminal()
+			if err != nil {
+				return err
+			}
+
+			fmt.Fprintf(os.Stderr, "Archived %d task(s)\n", count)
+			return nil
+		},
+	}
+}
+
 func cleanCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:     "clean",

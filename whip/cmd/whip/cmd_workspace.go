@@ -129,6 +129,7 @@ func workspaceViewCmd() *cobra.Command {
 
 func workspaceDropCmd() *cobra.Command {
 	var force bool
+	var archive bool
 
 	cmd := &cobra.Command{
 		Use:   "drop <name>",
@@ -141,7 +142,7 @@ func workspaceDropCmd() *cobra.Command {
 			}
 
 			name := whip.NormalizeWorkspaceName(args[0])
-			count, err := whip.DropWorkspace(store, name, force)
+			count, err := whip.DropWorkspace(store, name, force, archive)
 			if err != nil {
 				return err
 			}
@@ -151,6 +152,7 @@ func workspaceDropCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVarP(&force, "force", "f", false, "Kill active sessions before dropping the workspace")
+	cmd.Flags().BoolVar(&archive, "archive", false, "Archive terminal tasks instead of deleting them")
 	return cmd
 }
 

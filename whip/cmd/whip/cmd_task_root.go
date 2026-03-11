@@ -29,6 +29,7 @@ func taskCmd() *cobra.Command {
 		noteCmd(),
 		deleteCmd(),
 		cleanCmd(),
+		archiveCmd(),
 		depCmd(),
 	)
 	return cmd

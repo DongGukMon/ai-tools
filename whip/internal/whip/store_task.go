@@ -255,3 +255,125 @@ func (s *Store) CleanTerminal() (int, error) {
 	}
 	return count, nil
 }
+
+func (s *Store) archiveTaskDir(id string) string {
+	return filepath.Join(s.BaseDir, archiveDir, id)
+}
+
+// ArchiveTask moves a single task from its active location to the archive.
+func (s *Store) ArchiveTask(id string) error {
+	src := s.taskDir(id)
+	dst := s.archiveTaskDir(id)
+	return os.Rename(src, dst)
+}
+
+// ArchiveTerminal archives completed/canceled tasks that are no longer
+// referenced as a dependency by any non-terminal task.
+func (s *Store) ArchiveTerminal() (int, error) {
+	tasks, err := s.ListTasks()
+	if err != nil {
+		return 0, err
+	}
+
+	// Build set of IDs still depended on by non-terminal tasks.
+	referenced := make(map[string]bool)
+	for _, t := range tasks {
+		if !t.Status.IsTerminal() {
+			for _, depID := range t.DependsOn {
+				referenced[depID] = true
+			}
+		}
+	}
+
+	count := 0
+	for _, t := range tasks {
+		if t.Status.IsTerminal() && !referenced[t.ID] {
+			if err := s.ArchiveTask(t.ID); err != nil {
+				return count, err
+			}
+			count++
+		}
+	}
+	return count, nil
+}
+
+// ListArchivedTasks returns all tasks in the archive directory.
+func (s *Store) ListArchivedTasks() ([]*Task, error) {
+	dir := filepath.Join(s.BaseDir, archiveDir)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	var tasks []*Task
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		task, err := s.LoadArchivedTask(e.Name())
+		if err != nil {
+			continue
+		}
+		tasks = append(tasks, task)
+	}
+
+	sort.Slice(tasks, func(i, j int) bool {
+		return tasks[i].CreatedAt.Before(tasks[j].CreatedAt)
+	})
+	return tasks, nil
+}
+
+// LoadArchivedTask loads a task from the archive directory.
+func (s *Store) LoadArchivedTask(id string) (*Task, error) {
+	path := filepath.Join(s.archiveTaskDir(id), taskFile)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("archived task %s not found", id)
+		}
+		return nil, err
+	}
+	var task Task
+	if err := json.Unmarshal(data, &task); err != nil {
+		return nil, fmt.Errorf("corrupt archived task %s: %w", id, err)
+	}
+	task.Workspace = NormalizeWorkspaceName(task.Workspace)
+	return &task, nil
+}
+
+// ResolveArchivedID finds an archived task by exact or prefix match.
+func (s *Store) ResolveArchivedID(idPrefix string) (string, error) {
+	dir := filepath.Join(s.BaseDir, archiveDir)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("archived task %s not found", idPrefix)
+		}
+		return "", err
+	}
+
+	var matches []string
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		if e.Name() == idPrefix {
+			return idPrefix, nil
+		}
+		if strings.HasPrefix(e.Name(), idPrefix) {
+			matches = append(matches, e.Name())
+		}
+	}
+
+	switch len(matches) {
+	case 0:
+		return "", fmt.Errorf("archived task %s not found", idPrefix)
+	case 1:
+		return matches[0], nil
+	default:
+		return "", fmt.Errorf("ambiguous archived id prefix %s: matches %s", idPrefix, strings.Join(matches, ", "))
+	}
+}

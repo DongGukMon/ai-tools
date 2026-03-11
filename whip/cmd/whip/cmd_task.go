@@ -117,7 +117,9 @@ func createCmd() *cobra.Command {
 }
 
 func listCmd() *cobra.Command {
-	return &cobra.Command{
+	var showArchive bool
+
+	cmd := &cobra.Command{
 		Use:     "list",
 		Short:   "List all tasks",
 		Aliases: []string{"ls"},
@@ -129,12 +131,21 @@ func listCmd() *cobra.Command {
 				return err
 			}
 
-			tasks, err := store.ListTasks()
+			var tasks []*whip.Task
+			if showArchive {
+				tasks, err = store.ListArchivedTasks()
+			} else {
+				tasks, err = store.ListTasks()
+			}
 			if err != nil {
 				return err
 			}
 			if len(tasks) == 0 {
-				fmt.Println("No tasks.")
+				if showArchive {
+					fmt.Println("No archived tasks.")
+				} else {
+					fmt.Println("No tasks.")
+				}
 				return nil
 			}
 
@@ -182,6 +193,8 @@ func listCmd() *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&showArchive, "archive", false, "List archived tasks instead of active tasks")
+	return cmd
 }
 
 func viewCmd() *cobra.Command {
@@ -196,17 +209,31 @@ func viewCmd() *cobra.Command {
 				return err
 			}
 
+			var task *whip.Task
+			var archived bool
 			id, err := store.ResolveID(args[0])
 			if err != nil {
-				return err
-			}
-
-			task, err := store.LoadTask(id)
-			if err != nil {
-				return err
+				// Fallback to archive
+				id, err = store.ResolveArchivedID(args[0])
+				if err != nil {
+					return err
+				}
+				task, err = store.LoadArchivedTask(id)
+				if err != nil {
+					return err
+				}
+				archived = true
+			} else {
+				task, err = store.LoadTask(id)
+				if err != nil {
+					return err
+				}
 			}
 
 			fmt.Printf("ID:          %s\n", task.ID)
+			if archived {
+				fmt.Printf("             (archived)\n")
+			}
 			fmt.Printf("Workspace:   %s\n", task.WorkspaceName())
 			fmt.Printf("Title:       %s\n", task.Title)
 			fmt.Printf("Status:      %s\n", task.Status)
