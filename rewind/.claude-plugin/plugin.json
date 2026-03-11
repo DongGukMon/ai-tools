@@ -1,0 +1,32 @@
+{
+  "name": "rewind",
+  "version": "v2.3.0",
+  "description": "Session transcript timeline viewer for Claude Code and Codex agent sessions",
+  "category": "development",
+  "author": {
+    "name": "Airen Kang",
+    "url": "https://github.com/bang9"
+  },
+  "repository": "https://github.com/bang9/ai-tools",
+  "license": "MIT",
+  "keywords": [
+    "session",
+    "transcript",
+    "timeline",
+    "viewer",
+    "debug"
+  ],
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/ensure-binary.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

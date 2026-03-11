@@ -12,6 +12,9 @@ webform/webform
 webform/dist/
 whip/whip
 whip/dist/
+rewind/rewind
+rewind/dist/
+rewind/web/node_modules/
 
 # Local files
 blog-post.md
