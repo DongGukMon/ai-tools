@@ -113,6 +113,7 @@ func TestClaudeBackend_GenerateLeadPrompt(t *testing.T) {
 		"memory.md: User preferences and operational guidelines",
 		"projects.md: Project registry with paths and tech stacks",
 		"/loop 1m claude-irc inbox",
+		"CronDelete",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("lead prompt missing %q", want)
@@ -365,6 +366,7 @@ func TestFinalPromptShapes_Matrix(t *testing.T) {
 			mustHave: []string{
 				"You are an agent working under a lead session.",
 				"/loop 1m claude-irc inbox",
+				"CronDelete",
 				"Task worker-123 ready for review.",
 			},
 			mustNot: []string{
@@ -393,6 +395,7 @@ func TestFinalPromptShapes_Matrix(t *testing.T) {
 			mustHave: []string{
 				"You are a Workspace Lead",
 				"/loop 1m claude-irc inbox",
+				"CronDelete",
 				"whip workspace view demo",
 				"claude-irc join wp-lead-demo",
 			},
@@ -422,12 +425,13 @@ func TestFinalPromptShapes_Matrix(t *testing.T) {
 			prompt: defaultMasterPrompt(),
 			mustHave: []string{
 				"You are the whip master session managing task agents.",
-				"/loop 1m claude-irc inbox",
+				"Run claude-irc inbox now",
+				"Stop polling once coordination is done and you are about to quit",
 				"WHIP_HOME/home/ (default: ~/.whip/home/) persists across master sessions.",
 			},
 			mustNot: []string{
 				codexMasterPromptHeading,
-				"Run claude-irc inbox now",
+				"/loop 1m claude-irc inbox",
 			},
 		},
 		{
@@ -435,12 +439,12 @@ func TestFinalPromptShapes_Matrix(t *testing.T) {
 			prompt: renderMasterPromptForBackend(defaultMasterPrompt(), "codex"),
 			mustHave: []string{
 				"You are the whip master session managing task agents.",
-				"/loop 1m claude-irc inbox",
+				"Run claude-irc inbox now",
 				codexMasterPromptHeading,
 				"Tell the worker to run: claude-irc inbox",
 			},
 			mustNot: []string{
-				"Run claude-irc inbox now",
+				"/loop 1m claude-irc inbox",
 			},
 		},
 	}

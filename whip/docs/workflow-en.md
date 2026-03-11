@@ -121,7 +121,7 @@ failed --> canceled
 - **Messages**: Direct peer-to-peer text messages (`claude-irc msg`)
 - **Presence**: Real-time online/offline detection via Unix sockets (`claude-irc who`)
 - **Identity**: Current-session identity lookup via session markers (`claude-irc whoami`)
-- **Monitoring**: Periodic inbox checks via `/loop 1m claude-irc inbox`
+- **Monitoring**: Claude sessions can use `/loop 1m claude-irc inbox` while active and then remove it with `CronDelete`; Codex sessions should poll `claude-irc inbox` manually
 
 ### Global vs Workspace
 
@@ -147,8 +147,11 @@ claude-irc whoami 2>/dev/null
 # Inspect active peers before choosing a master identity
 claude-irc who
 
-# Enable periodic message monitoring
+# Claude only: enable active inbox monitoring
 /loop 1m claude-irc inbox
+
+# Before quitting or terminal actions, remove that loop
+# (use CronList to find the task ID if needed, then CronDelete)
 ```
 
 The master stays connected throughout the entire session. Never run `claude-irc quit` until all work is done.
@@ -220,7 +223,7 @@ Once spawned, the agent follows a defined protocol:
 whip task start <task-id>                   # assigned -> in_progress, register PID
 claude-irc join whip-<task-id>              # Join IRC
 claude-irc msg <workspace-master> "Acknowledged."  # Announce start
-/loop 1m claude-irc inbox                   # Enable monitoring
+/loop 1m claude-irc inbox                   # Claude only: enable monitoring while active
 
 # Agent shares plan before diving in
 claude-irc msg <workspace-master> "Plan: <2-3 sentence approach>"
@@ -229,7 +232,7 @@ claude-irc msg <workspace-master> "Plan: <2-3 sentence approach>"
 whip task note <task-id> "Started implementation and verified the local setup."
 ```
 
-The master monitors incoming messages via the `/loop` cron and responds as needed:
+The master monitors incoming messages and responds as needed. In Claude Code you can keep `/loop 1m claude-irc inbox` running while the task is active, then remove it with `CronDelete` before terminal actions. In Codex, poll `claude-irc inbox` manually:
 
 ```bash
 # Master responds to agent questions
@@ -485,7 +488,7 @@ Here's what a typical multi-task session looks like (based on actual usage):
 # Master session starts
 claude-irc whoami 2>/dev/null
 claude-irc who
-/loop 1m claude-irc inbox
+/loop 1m claude-irc inbox   # Claude only; remove it with CronDelete before terminal actions
 
 # User asks: "Refactor the auth system and write docs for the workflow"
 

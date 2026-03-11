@@ -2,13 +2,15 @@ package whip
 
 var codexPromptBackendSettings = promptBackendSettings{
 	messageCheckStep: promptMessageCheckStep{
-		title: "Check for new messages manually throughout the task:",
+		title: "Check for new messages manually while the task is active:",
 		lines: []string{
 			"- Run claude-irc inbox now",
 			"- Run claude-irc inbox after each meaningful chunk of work",
 			"- Run claude-irc inbox before status changes or when you think the lead replied",
+			"- Stop polling once the task is terminal or you are about to quit",
 		},
 	},
+	monitorCleanup: "",
 	reviewAppendix: `
 ## Codex Review Handoff
 Because this backend may not stay attached through approval/finalization, treat the review report as a real handoff.

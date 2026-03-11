@@ -85,8 +85,14 @@ If you cannot complete the task, do NOT just mark it failed silently. Before giv
 `)
 	fmt.Fprintf(&b, "   claude-irc msg %s \"Task %s failed: <reason>. Handoff note written.\"\n",
 		task.MasterIRCName, task.ID)
-	b.WriteString("3. claude-irc quit\n")
-	fmt.Fprintf(&b, "4. whip task fail %s --note \"<detailed handoff note>\"\n", task.ID)
+	step := 3
+	if backend.monitorCleanup != "" {
+		fmt.Fprintf(&b, "%d. %s\n", step, backend.monitorCleanup)
+		step++
+	}
+	fmt.Fprintf(&b, "%d. claude-irc quit\n", step)
+	step++
+	fmt.Fprintf(&b, "%d. whip task fail %s --note \"<detailed handoff note>\"\n", step, task.ID)
 	b.WriteString(`   (this will auto-terminate the session)
 
 The handoff note is critical — it will be preserved and shown to the next agent assigned to this task.
@@ -128,6 +134,9 @@ If tests or build fail, fix the issues before proceeding. Do NOT mark complete o
 		b.WriteString("   - Use conventional commit format: `type(scope): description`\n")
 		b.WriteString("     Examples: `feat(auth): add JWT refresh token`, `fix(api): handle null response`\n")
 		b.WriteString("   - Write a concise commit message that describes what changed and why\n")
+		if backend.monitorCleanup != "" {
+			b.WriteString("   - " + backend.monitorCleanup + "\n")
+		}
 		b.WriteString("   claude-irc quit\n")
 		fmt.Fprintf(&b, "   whip task complete %s --note \"final summary\"\n", task.ID)
 		b.WriteString("   (this will auto-terminate the session)\n")
@@ -146,8 +155,14 @@ If tests or build fail, fix the issues before proceeding. Do NOT mark complete o
 		b.WriteString("1. Commit your changes as described above.\n")
 		fmt.Fprintf(&b, "2. claude-irc msg %s \"Task %s complete. Here's what I delivered: <concrete summary>\"\n",
 			task.MasterIRCName, task.ID)
-		b.WriteString("3. claude-irc quit\n")
-		fmt.Fprintf(&b, "4. whip task complete %s --note \"final summary of what was delivered\"\n", task.ID)
+		step := 3
+		if backend.monitorCleanup != "" {
+			fmt.Fprintf(&b, "%d. %s\n", step, backend.monitorCleanup)
+			step++
+		}
+		fmt.Fprintf(&b, "%d. claude-irc quit\n", step)
+		step++
+		fmt.Fprintf(&b, "%d. whip task complete %s --note \"final summary of what was delivered\"\n", step, task.ID)
 		b.WriteString("   (this will auto-terminate the session)\n")
 	} else {
 		b.WriteString("**IMPORTANT: Commit your changes before marking complete.**\n\n")
@@ -160,8 +175,14 @@ If tests or build fail, fix the issues before proceeding. Do NOT mark complete o
 		b.WriteString("1. Commit your changes as described above.\n")
 		fmt.Fprintf(&b, "2. claude-irc msg %s \"Task %s complete. Here's what I delivered: <concrete summary>\"\n",
 			task.MasterIRCName, task.ID)
-		b.WriteString("3. claude-irc quit\n")
-		fmt.Fprintf(&b, "4. whip task complete %s --note \"final summary of what was delivered\"\n", task.ID)
+		step := 3
+		if backend.monitorCleanup != "" {
+			fmt.Fprintf(&b, "%d. %s\n", step, backend.monitorCleanup)
+			step++
+		}
+		fmt.Fprintf(&b, "%d. claude-irc quit\n", step)
+		step++
+		fmt.Fprintf(&b, "%d. whip task complete %s --note \"final summary of what was delivered\"\n", step, task.ID)
 		b.WriteString("   (this will auto-terminate the session)\n")
 	}
 

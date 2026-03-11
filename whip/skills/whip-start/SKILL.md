@@ -60,11 +60,15 @@ Review the output before proceeding:
 - If `claude-irc inbox` truncates a message, read the full entry before acting.
 - Do not assume the user can see master IRC traffic. Relay important agent messages back into the main chat yourself.
 
-In Claude Code, prefer near-real-time inbox monitoring with:
+In Claude Code, use the built-in loop only while the task is active:
 
 ```text
 /loop 1m claude-irc inbox
 ```
+
+When the task is about to finish, fail, cancel, or quit:
+- Use `CronList` if you need to find the scheduled inbox loop.
+- Use `CronDelete` to remove that loop before the terminal action.
 
 If slash commands are unavailable, poll manually:
 
@@ -288,7 +292,7 @@ whip task assign <lead-id> --master-irc <resolved-master-irc>
 
 ### Step 3: Monitor the lead
 
-- Start `/loop 1m claude-irc inbox` so lead escalations surface while you work.
+- If you use `/loop 1m claude-irc inbox` while the lead is active, remove that cron with `CronDelete` before the lead session quits or becomes terminal.
 - Use `whip task list` to monitor overall workspace state.
 - Review lead updates and answer questions promptly.
 

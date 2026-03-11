@@ -128,10 +128,14 @@ When all workers are done and deliverables verified:
 	fmt.Fprintf(&b, "3. Report to Master via IRC: claude-irc msg %s \"Workspace %s complete. All changes committed and pushed to branch. Summary: <deliverables>. Ready for review.\"\n",
 		masterIRC, workspace)
 	fmt.Fprintf(&b, "4. Submit yourself for review: `whip task review %s`\n", task.ID)
-	b.WriteString(`5. **Wait for Master.** Master will review your workspace, then run ` + "`approve`" + ` and ` + "`complete`" + `.
-6. **Do NOT run ` + "`whip task approve`" + ` or ` + "`whip task complete`" + ` on your own task.**
-7. Stay connected and only run ` + "`claude-irc quit`" + ` after master confirms.
-`)
+	b.WriteString("5. **Wait for Master.** Master will review your workspace, then run `approve` and `complete`.\n")
+	b.WriteString("6. **Do NOT run `whip task approve` or `whip task complete` on your own task.**\n")
+	step := 7
+	if backend.monitorCleanup != "" {
+		fmt.Fprintf(&b, "%d. %s\n", step, backend.monitorCleanup)
+		step++
+	}
+	fmt.Fprintf(&b, "%d. Stay connected and only run `claude-irc quit` after master confirms.\n", step)
 
 	b.WriteString(`
 ## Home Context

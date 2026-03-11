@@ -121,7 +121,7 @@ failed --> canceled
 - **메시지**: 피어 간 직접 텍스트 메시지 (`claude-irc msg`)
 - **프레즌스**: Unix 소켓 기반 온라인/오프라인 감지 (`claude-irc who`)
 - **Identity**: 세션 마커 기반 현재 세션 identity 조회 (`claude-irc whoami`)
-- **모니터링**: `/loop 1m claude-irc inbox`로 주기적 메시지 확인
+- **모니터링**: Claude 세션은 active 동안 `/loop 1m claude-irc inbox`를 쓰고 종료 전 `CronDelete`로 제거, Codex 세션은 `claude-irc inbox`를 수동 polling
 
 ### Global vs Workspace
 
@@ -147,8 +147,11 @@ claude-irc whoami 2>/dev/null
 # master identity를 고르기 전에 활성 peer를 확인
 claude-irc who
 
-# 주기적 메시지 모니터링 활성화
+# Claude 전용: active 동안 inbox 모니터링 활성화
 /loop 1m claude-irc inbox
+
+# 종료 직전이나 terminal action 전에 해당 loop 제거
+# (필요하면 CronList로 task ID 확인 후 CronDelete)
 ```
 
 마스터는 전체 세션 동안 연결을 유지합니다. 모든 작업이 끝날 때까지 `claude-irc quit`을 실행하지 마세요.
@@ -220,13 +223,13 @@ whip task assign <task-id> --master-irc <resolved-master-irc>
 whip task start <task-id>                        # assigned -> in_progress, PID 등록
 claude-irc join whip-<task-id>              # IRC 참여
 claude-irc msg <workspace-master> "인수했습니다."    # 시작 알림
-/loop 1m claude-irc inbox                   # 모니터링 활성화
+/loop 1m claude-irc inbox                   # Claude 전용: active 동안 모니터링
 
 # 에이전트가 작업 전 계획을 공유
 claude-irc msg <workspace-master> "계획: <2-3문장 접근 방식>"
 ```
 
-마스터는 `/loop` 크론을 통해 수신 메시지를 모니터링하고 필요에 따라 응답합니다:
+마스터는 수신 메시지를 모니터링하고 필요에 따라 응답합니다. Claude Code에서는 task가 active인 동안 `/loop 1m claude-irc inbox`를 돌릴 수 있고, 종료 직전에는 `CronDelete`로 제거합니다. Codex에서는 `claude-irc inbox`를 수동 polling 합니다:
 
 ```bash
 # 마스터가 에이전트 질문에 응답
@@ -482,7 +485,7 @@ flowchart LR
 # 마스터 세션 시작
 claude-irc whoami 2>/dev/null
 claude-irc who
-/loop 1m claude-irc inbox
+/loop 1m claude-irc inbox   # Claude 전용; 종료 전 CronDelete
 
 # 사용자 요청: "인증 시스템 리팩터링하고 워크플로우 문서 작성해줘"
 

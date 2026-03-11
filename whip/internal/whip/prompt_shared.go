@@ -9,6 +9,7 @@ import (
 type promptBackendSettings struct {
 	messageCheckStep promptMessageCheckStep
 	reviewAppendix   string
+	monitorCleanup   string
 }
 
 type promptMessageCheckStep struct {

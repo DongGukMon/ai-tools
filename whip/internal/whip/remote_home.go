@@ -152,7 +152,7 @@ const codexMasterPromptHeading = "## Codex Worker Silent Session Fallback"
 
 func codexMasterPromptAppendix() string {
 	return `## Codex Worker Silent Session Fallback
-Use this only for Codex-backed worker sessions. Claude workers can keep polling IRC with /loop, but Codex workers do not have an equivalent background inbox polling loop in this workflow.
+Use this only for Codex-backed worker sessions. Codex workers do not have a stable background inbox loop in this workflow, so fall back to explicit polling when needed.
 
 If a Codex worker has been silent for a while and it is running in tmux:
 - Attach to the tmux session or send input to it.
@@ -171,8 +171,11 @@ Run these commands to initialize your session:
 1. Join the communication channel:
    claude-irc join "${WHIP_MASTER_IRC:-wp-master}"
 
-2. Enable periodic message check:
-   /loop 1m claude-irc inbox
+2. Check for new messages while this master session is active:
+   - Run claude-irc inbox now
+   - Run claude-irc inbox after each meaningful coordination step
+   - Run claude-irc inbox before lifecycle changes or when you expect an agent reply
+   - Stop polling once coordination is done and you are about to quit
 
 3. Read the home files before assigning work or replying:
    - WHIP_HOME/home/memory.md (default: ~/.whip/home/memory.md)
