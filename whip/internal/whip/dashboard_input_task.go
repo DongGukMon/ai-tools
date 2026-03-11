@@ -82,6 +82,17 @@ func (m DashboardModel) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.tmuxContent = content
 			}
 		}
+	case "n":
+		if m.selectedTask != nil && len(m.selectedTask.Notes) > 0 {
+			m.noteHistoryScroll = 0
+			m.view = viewNoteHistory
+		}
+	case "m":
+		if m.selectedTask != nil && m.selectedTask.IRCName != "" {
+			m.msgHistoryScroll = 0
+			m.msgHistoryLines = loadIRCMessages(m.selectedTask.IRCName)
+			m.view = viewMsgHistory
+		}
 	case "ctrl+c":
 		return m, tea.Quit
 	}
@@ -98,6 +109,41 @@ func (m DashboardModel) updateTmux(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.pendingAttach = tmuxSessionName(m.selectedTask.ID)
 			return m, tea.Quit
 		}
+	case "ctrl+c":
+		return m, tea.Quit
+	}
+	return m, nil
+}
+
+func (m DashboardModel) updateNoteHistory(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "backspace", "left":
+		m.view = viewDetail
+		m.noteHistoryScroll = 0
+	case "up", "k":
+		if m.noteHistoryScroll > 0 {
+			m.noteHistoryScroll--
+		}
+	case "down", "j":
+		m.noteHistoryScroll++
+	case "ctrl+c":
+		return m, tea.Quit
+	}
+	return m, nil
+}
+
+func (m DashboardModel) updateMsgHistory(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "backspace", "left":
+		m.view = viewDetail
+		m.msgHistoryScroll = 0
+		m.msgHistoryLines = nil
+	case "up", "k":
+		if m.msgHistoryScroll > 0 {
+			m.msgHistoryScroll--
+		}
+	case "down", "j":
+		m.msgHistoryScroll++
 	case "ctrl+c":
 		return m, tea.Quit
 	}

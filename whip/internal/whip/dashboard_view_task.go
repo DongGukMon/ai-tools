@@ -301,6 +301,12 @@ func (m DashboardModel) renderDetailFooter() string {
 	if m.selectedTask != nil && m.selectedTask.Runner == "tmux" && IsTmuxSession(m.selectedTask.ID) {
 		line += dot + footerKey("a", "attach tmux")
 	}
+	if m.selectedTask != nil && len(m.selectedTask.Notes) > 0 {
+		line += dot + footerKey("n", "notes")
+	}
+	if m.selectedTask != nil && m.selectedTask.IRCName != "" {
+		line += dot + footerKey("m", "messages")
+	}
 
 	return lipgloss.NewStyle().MarginTop(1).Render(line)
 }

@@ -65,7 +65,15 @@ const (
 	viewIRCMsg
 	viewRemoteConfig
 	viewRemoteStatus
+	viewNoteHistory
+	viewMsgHistory
 )
+
+type ircMessage struct {
+	From      string    `json:"from"`
+	Content   string    `json:"content"`
+	Timestamp time.Time `json:"timestamp"`
+}
 
 type ircSendResultMsg struct{ err error }
 
@@ -101,6 +109,10 @@ type DashboardModel struct {
 	remoteErr       error
 	remoteWorkspace string
 	serveNotices []string
+
+	noteHistoryScroll int
+	msgHistoryScroll  int
+	msgHistoryLines   []ircMessage
 
 	programRef *programHolder
 
@@ -182,6 +194,10 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateRemoteConfig(msg)
 		case viewRemoteStatus:
 			return m.updateRemoteStatus(msg)
+		case viewNoteHistory:
+			return m.updateNoteHistory(msg)
+		case viewMsgHistory:
+			return m.updateMsgHistory(msg)
 		}
 
 	case tea.WindowSizeMsg:
@@ -263,6 +279,9 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if content, err := CaptureTmuxPane(m.selectedTask.ID); err == nil {
 				m.tmuxContent = content
 			}
+		}
+		if m.view == viewMsgHistory && m.selectedTask != nil && m.selectedTask.IRCName != "" {
+			m.msgHistoryLines = loadIRCMessages(m.selectedTask.IRCName)
 		}
 		if m.serveProcess != nil {
 			m.masterAlive = IsMasterSessionAlive(m.remoteWorkspace)
