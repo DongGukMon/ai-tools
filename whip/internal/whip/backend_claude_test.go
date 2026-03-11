@@ -69,9 +69,9 @@ func TestClaudeBackend_ModelFlags_Difficulty(t *testing.T) {
 		difficulty string
 		wantModel  string
 	}{
-		{"hard", "--model opus --effort high"},
-		{"medium", "--model opus --effort medium"},
-		{"easy", "--model sonnet"},
+		{"hard", "--model opus --effort max"},
+		{"medium", "--model opus --effort high"},
+		{"easy", "--model opus --effort medium"},
 		{"", ""},
 	}
 

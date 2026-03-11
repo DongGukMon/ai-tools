@@ -50,11 +50,11 @@ func (b *ClaudeBackend) prepareSessionFlag(task *Task) string {
 func (b *ClaudeBackend) prepareModelFlags(task *Task) string {
 	switch task.Difficulty {
 	case "hard":
-		return "--model opus --effort high"
+		return "--model opus --effort max"
 	case "medium":
-		return "--model opus --effort medium"
+		return "--model opus --effort high"
 	case "easy":
-		return "--model sonnet"
+		return "--model opus --effort medium"
 	default:
 		return ""
 	}
