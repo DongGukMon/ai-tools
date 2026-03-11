@@ -1,6 +1,8 @@
 package server
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -13,6 +15,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"runtime"
+	"strings"
 	"syscall"
 
 	"github.com/bang9/ai-tools/rewind/internal/parser"
@@ -22,13 +25,18 @@ import (
 // OpenBrowser is a package-level function for opening URLs in the browser.
 var OpenBrowser = openBrowser
 
+type sessionPayload struct {
+	plain   []byte
+	gzipped []byte
+}
+
 // Run starts an HTTP server serving the session timeline and opens a browser.
 func Run(session *parser.Session, port int) error {
 	token := generateToken()
 
-	sessionJSON, err := json.Marshal(session)
+	payload, err := buildSessionPayload(session)
 	if err != nil {
-		return fmt.Errorf("failed to marshal session: %w", err)
+		return err
 	}
 
 	// Get the embedded dist filesystem
@@ -52,8 +60,7 @@ func Run(session *parser.Session, port int) error {
 			http.Error(w, "invalid token", http.StatusForbidden)
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		w.Write(sessionJSON)
+		payload.write(w, r)
 	})
 
 	// Static files from embedded dist
@@ -85,6 +92,53 @@ func Run(session *parser.Session, port int) error {
 	fmt.Fprintln(os.Stderr, "\nShutting down...")
 	srv.Shutdown(context.Background())
 	return nil
+}
+
+func buildSessionPayload(session *parser.Session) (*sessionPayload, error) {
+	sessionJSON, err := json.Marshal(session)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal session: %w", err)
+	}
+
+	payload := &sessionPayload{
+		plain: sessionJSON,
+	}
+
+	var buf bytes.Buffer
+	zw, err := gzip.NewWriterLevel(&buf, gzip.BestSpeed)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize gzip writer: %w", err)
+	}
+	if _, err := zw.Write(sessionJSON); err != nil {
+		return nil, fmt.Errorf("failed to gzip session payload: %w", err)
+	}
+	if err := zw.Close(); err != nil {
+		return nil, fmt.Errorf("failed to finalize gzip payload: %w", err)
+	}
+
+	if buf.Len() > 0 && buf.Len() < len(sessionJSON) {
+		payload.gzipped = buf.Bytes()
+	}
+
+	return payload, nil
+}
+
+func (p *sessionPayload) write(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Vary", "Accept-Encoding")
+
+	if len(p.gzipped) > 0 && acceptsGzip(r.Header.Get("Accept-Encoding")) {
+		w.Header().Set("Content-Encoding", "gzip")
+		_, _ = w.Write(p.gzipped)
+		return
+	}
+
+	_, _ = w.Write(p.plain)
+}
+
+func acceptsGzip(acceptEncoding string) bool {
+	return strings.Contains(acceptEncoding, "gzip")
 }
 
 func generateToken() string {

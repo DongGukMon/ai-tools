@@ -6,6 +6,9 @@ function smoothStep(a: number, b: number, t: number): number {
   return t * t * (3 - 2 * t);
 }
 
+let displacementCanvas: HTMLCanvasElement | null = null;
+let displacementContext: CanvasRenderingContext2D | null = null;
+
 function len(x: number, y: number): number {
   return Math.sqrt(x * x + y * y);
 }
@@ -35,10 +38,23 @@ export function generateDisplacementMap(
   fragment: FragmentFn,
   mouse: Vec2 = { x: 0.5, y: 0.5 },
 ): { dataUrl: string; scale: number } {
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext("2d")!;
+  if (!displacementCanvas) {
+    displacementCanvas = document.createElement("canvas");
+  }
+  if (
+    displacementCanvas.width !== width ||
+    displacementCanvas.height !== height
+  ) {
+    displacementCanvas.width = width;
+    displacementCanvas.height = height;
+  }
+
+  if (!displacementContext) {
+    displacementContext = displacementCanvas.getContext("2d");
+  }
+  if (!displacementContext) {
+    throw new Error("2d canvas context is unavailable");
+  }
 
   const total = width * height * 4;
   const data = new Uint8ClampedArray(total);
@@ -65,8 +81,8 @@ export function generateDisplacementMap(
     data[i + 3] = 255;
   }
 
-  ctx.putImageData(new ImageData(data, width, height), 0, 0);
-  return { dataUrl: canvas.toDataURL(), scale: maxScale };
+  displacementContext.putImageData(new ImageData(data, width, height), 0, 0);
+  return { dataUrl: displacementCanvas.toDataURL(), scale: maxScale };
 }
 
 /** Header fragment: edge refraction + mouse-tracking lens */

@@ -1,4 +1,11 @@
-import { useState, useMemo, useRef, useLayoutEffect } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import {
   User,
@@ -18,6 +25,14 @@ interface TimelineProps {
 }
 
 type EventType = TimelineEvent["type"];
+
+interface TimelineRow {
+  key: string;
+  event: TimelineEvent;
+  gapPx: number;
+  timestampLabel: string;
+  hasContent: boolean;
+}
 
 const eventConfig: Record<
   EventType,
@@ -80,13 +95,26 @@ const eventConfig: Record<
   },
 };
 
-function getTimeGapPx(prev: string, curr: string): number {
+function getTimeGapPx(prevTimestamp: string, currTimestamp: string): number {
   const diff =
-    (new Date(curr).getTime() - new Date(prev).getTime()) / 1000;
+    (new Date(currTimestamp).getTime() - new Date(prevTimestamp).getTime()) / 1000;
   if (diff <= 1) return 4;
   if (diff <= 10) return 12;
   if (diff <= 60) return 24;
   return 48;
+}
+
+function buildTimelineRows(events: TimelineEvent[]): TimelineRow[] {
+  return events.map((event, index) => ({
+    key: `${event.timestamp}-${event.type}-${index}`,
+    event,
+    gapPx:
+      index > 0 ? getTimeGapPx(events[index - 1].timestamp, event.timestamp) : 0,
+    timestampLabel: event.timestamp
+      ? new Date(event.timestamp).toLocaleTimeString()
+      : "",
+    hasContent: Boolean(event.content || event.toolInput || event.toolResult),
+  }));
 }
 
 export function Timeline({ events, scrollToIndexRef }: TimelineProps) {
@@ -94,47 +122,66 @@ export function Timeline({ events, scrollToIndexRef }: TimelineProps) {
   const listRef = useRef<HTMLDivElement>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
 
-  const gaps = useMemo(
-    () =>
-      events.map((_, i) =>
-        i > 0
-          ? getTimeGapPx(events[i - 1].timestamp, events[i].timestamp)
-          : 0,
-      ),
-    [events],
-  );
+  const rows = useMemo(() => buildTimelineRows(events), [events]);
 
-  useLayoutEffect(() => {
-    if (listRef.current) {
-      setScrollMargin(listRef.current.offsetTop);
-    }
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+
+    const updateScrollMargin = () => {
+      setScrollMargin(el.offsetTop);
+    };
+
+    updateScrollMargin();
+
+    const observer =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(updateScrollMargin);
+    observer?.observe(el);
+    window.addEventListener("resize", updateScrollMargin, { passive: true });
+
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", updateScrollMargin);
+    };
   }, []);
 
   const virtualizer = useWindowVirtualizer({
-    count: events.length,
-    estimateSize: (i) => gaps[i] + 48,
-    overscan: 8,
+    count: rows.length,
+    estimateSize: (index) => rows[index].gapPx + 48,
+    getItemKey: (index) => rows[index].key,
+    overscan: rows.length > 1000 ? 10 : 8,
     scrollMargin,
   });
 
-  // Expose scrollToIndex for Minimap
-  if (scrollToIndexRef) {
+  useEffect(() => {
+    if (!scrollToIndexRef) return;
+
     scrollToIndexRef.current = (index: number) => {
+      if (index < 0 || index >= rows.length) return;
       virtualizer.scrollToIndex(index, {
         align: "center",
         behavior: "smooth",
       });
     };
-  }
 
-  const toggle = (index: number) => {
+    return () => {
+      scrollToIndexRef.current = undefined;
+    };
+  }, [rows.length, scrollToIndexRef, virtualizer]);
+
+  const toggleExpanded = useCallback((index: number) => {
     setExpandedSet((prev) => {
       const next = new Set(prev);
-      if (next.has(index)) next.delete(index);
-      else next.add(index);
+      if (next.has(index)) {
+        next.delete(index);
+      } else {
+        next.add(index);
+      }
       return next;
     });
-  };
+  }, []);
 
   const virtualItems = virtualizer.getVirtualItems();
 
@@ -144,33 +191,36 @@ export function Timeline({ events, scrollToIndexRef }: TimelineProps) {
         className="relative"
         style={{ height: `${virtualizer.getTotalSize()}px` }}
       >
-        {/* Continuous vertical line */}
         <div className="absolute left-[11px] top-3 bottom-3 w-px bg-slate-300/60 dark:bg-white/8" />
 
-        {virtualItems.map((item) => (
-          <div
-            key={item.key}
-            data-index={item.index}
-            ref={virtualizer.measureElement}
-            className="virtual-item"
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              width: "100%",
-              transform: `translateY(${item.start - virtualizer.options.scrollMargin}px)`,
-            }}
-          >
-            <div style={{ paddingTop: gaps[item.index] }}>
-              <TimelineItem
-                index={item.index}
-                event={events[item.index]}
-                expanded={expandedSet.has(item.index)}
-                onToggle={() => toggle(item.index)}
-              />
+        {virtualItems.map((item) => {
+          const row = rows[item.index];
+
+          return (
+            <div
+              key={item.key}
+              data-index={item.index}
+              ref={virtualizer.measureElement}
+              className="virtual-item"
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: "100%",
+                transform: `translateY(${item.start - scrollMargin}px)`,
+              }}
+            >
+              <div style={{ paddingTop: row.gapPx }}>
+                <TimelineItem
+                  index={item.index}
+                  row={row}
+                  expanded={expandedSet.has(item.index)}
+                  onToggle={toggleExpanded}
+                />
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -178,30 +228,43 @@ export function Timeline({ events, scrollToIndexRef }: TimelineProps) {
 
 interface TimelineItemProps {
   index: number;
-  event: TimelineEvent;
+  row: TimelineRow;
   expanded: boolean;
-  onToggle: () => void;
+  onToggle: (index: number) => void;
 }
 
-function TimelineItem({
+const TimelineItem = memo(function TimelineItem({
   index,
-  event,
+  row,
   expanded,
   onToggle,
 }: TimelineItemProps) {
+  const { event, hasContent, timestampLabel } = row;
   const config = eventConfig[event.type] ?? eventConfig.system;
   const Icon = config.icon;
-  const hasContent = event.content || event.toolInput || event.toolResult;
-  const timestamp = event.timestamp
-    ? new Date(event.timestamp).toLocaleTimeString()
-    : "";
+
+  const handleToggle = useCallback(() => {
+    if (hasContent) {
+      onToggle(index);
+    }
+  }, [hasContent, index, onToggle]);
+
+  const formattedToolInput = useMemo(() => {
+    if (!expanded || event.type !== "tool_call" || !event.toolInput) {
+      return "";
+    }
+    return formatJSON(event.toolInput);
+  }, [event.toolInput, event.type, expanded]);
+
+  const formattedToolResult = useMemo(() => {
+    if (!expanded || event.type !== "tool_result" || !event.toolResult) {
+      return "";
+    }
+    return formatContent(event.toolResult);
+  }, [event.toolResult, event.type, expanded]);
 
   return (
-    <div
-      className="relative flex items-start gap-4"
-      data-event-index={index}
-    >
-      {/* Dot */}
+    <div className="relative flex items-start gap-4" data-event-index={index}>
       <div
         className={cn(
           "timeline-dot relative z-10 mt-2.5 w-[23px] h-[23px] rounded-full",
@@ -213,14 +276,13 @@ function TimelineItem({
         <Icon className="w-3 h-3 text-white" strokeWidth={2.5} />
       </div>
 
-      {/* Liquid Glass Card */}
       <div
         className={cn(
-          "flex-1 max-w-[calc(100%-40px)] rounded-xl liquid-glass mb-1",
+          "timeline-card flex-1 max-w-[calc(100%-40px)] rounded-xl liquid-glass mb-1",
           hasContent ? "cursor-pointer liquid-glass-hover" : "",
           expanded && config.expandedBg,
         )}
-        onClick={hasContent ? onToggle : undefined}
+        onClick={hasContent ? handleToggle : undefined}
       >
         <div className="flex items-center gap-2 px-3 py-2 relative z-[1]">
           {hasContent &&
@@ -250,41 +312,35 @@ function TimelineItem({
             {event.summary}
           </span>
 
-          {timestamp && (
+          {timestampLabel && (
             <span className="text-[10px] font-mono text-slate-400 dark:text-neutral-600 shrink-0">
-              {timestamp}
+              {timestampLabel}
             </span>
           )}
         </div>
 
-        {/* Animated expand/collapse content */}
-        <div
-          className={cn(
-            "collapse-grid",
-            expanded && hasContent && "expanded",
-          )}
-        >
+        <div className={cn("collapse-grid", expanded && hasContent && "expanded")}>
           <div>
             {hasContent && (
               <div className="px-3 pb-3 pt-1 relative z-[1]">
-                {event.type === "tool_call" && event.toolInput && (
+                {event.type === "tool_call" && formattedToolInput && (
                   <div className="space-y-2">
                     <div className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-neutral-500 font-semibold">
                       Input
                     </div>
                     <pre className="text-xs font-mono text-slate-700 dark:text-neutral-300 bg-black/[0.03] dark:bg-black/30 rounded-lg p-3 overflow-x-auto max-h-96 overflow-y-auto whitespace-pre-wrap break-words">
-                      {formatJSON(event.toolInput)}
+                      {formattedToolInput}
                     </pre>
                   </div>
                 )}
 
-                {event.type === "tool_result" && event.toolResult && (
+                {event.type === "tool_result" && formattedToolResult && (
                   <div className="space-y-2">
                     <div className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-neutral-500 font-semibold">
                       Output
                     </div>
                     <pre className="text-xs font-mono text-slate-700 dark:text-neutral-300 bg-black/[0.03] dark:bg-black/30 rounded-lg p-3 overflow-x-auto max-h-96 overflow-y-auto whitespace-pre-wrap break-words">
-                      {formatContent(event.toolResult)}
+                      {formattedToolResult}
                     </pre>
                   </div>
                 )}
@@ -304,19 +360,23 @@ function TimelineItem({
       </div>
     </div>
   );
-}
+});
 
-function formatJSON(s: string): string {
+function formatJSON(value: string): string {
+  if (!value) {
+    return value;
+  }
+
   try {
-    return JSON.stringify(JSON.parse(s), null, 2);
+    return JSON.stringify(JSON.parse(value), null, 2);
   } catch {
-    return s;
+    return value;
   }
 }
 
-function formatContent(s: string): string {
-  if (s.length > 10000) {
-    return s.slice(0, 10000) + "\n\n... (truncated)";
+function formatContent(value: string): string {
+  if (value.length > 10000) {
+    return `${value.slice(0, 10000)}\n\n... (truncated)`;
   }
-  return s;
+  return value;
 }

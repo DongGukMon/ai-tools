@@ -21,6 +21,7 @@ body {
   font-family: "Outfit", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
   background: linear-gradient(145deg, #e8ecf6 0%, #f2eef8 40%, #eaf2f6 70%, #f0ecf2 100%);
   background-attachment: fixed;
   color: #1e293b;
@@ -49,7 +50,9 @@ body {
     0 8px 24px rgba(0, 0, 0, 0.04),
     inset 0 1px 0 rgba(255, 255, 255, 0.5),
     inset 0 -1px 0 rgba(0, 0, 0, 0.02);
+  contain: paint;
   position: relative;
+  transform: translateZ(0);
 }
 
 .dark .liquid-glass {
@@ -152,6 +155,7 @@ body {
     0 1px 8px rgba(0, 0, 0, 0.04),
     0 4px 24px rgba(0, 0, 0, 0.03),
     inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  contain: paint;
   position: relative;
 }
 
@@ -215,9 +219,12 @@ body {
   overflow: hidden;
 }
 
-/* Virtual item position transition (smooth reflow on expand/collapse) */
 .virtual-item {
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  contain: layout paint;
+}
+
+.timeline-card {
+  will-change: contents;
 }
 
 /* Timeline dot */
@@ -229,6 +236,20 @@ body {
 
 .timeline-dot:hover {
   transform: scale(1.3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .collapse-grid,
+  .liquid-glass-hover,
+  .timeline-dot,
+  .liquid-glass-header::before {
+    transition: none;
+  }
+
+  .timeline-dot:hover,
+  .liquid-glass-hover:hover {
+    transform: none;
+  }
 }
 
 /* ── Scrollbar ───────────────────────────────────────── */

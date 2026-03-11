@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   generateDisplacementMap,
   headerFragment,
@@ -6,43 +6,34 @@ import {
   CARD_FILTER_ID,
 } from "../lib/liquid-glass";
 
-export function LiquidGlassFilters() {
+const HEADER_BUCKET_X = 12;
+const HEADER_BUCKET_Y = 6;
+
+function quantize(value: number, buckets: number): number {
+  return Math.round(value * buckets) / buckets;
+}
+
+export default function LiquidGlassFilters() {
   const feImageRef = useRef<SVGFEImageElement>(null);
   const feScaleRef = useRef<SVGFEDisplacementMapElement>(null);
-  const [ready, setReady] = useState(false);
+  const [interactive, setInteractive] = useState(false);
+  const lastBucketRef = useRef<string>("");
 
-  // Generate initial header displacement map
-  useEffect(() => {
-    const { dataUrl, scale } = generateDisplacementMap(
-      120,
-      36,
-      headerFragment,
-    );
-    if (feImageRef.current && feScaleRef.current) {
-      feImageRef.current.setAttributeNS(
-        "http://www.w3.org/1999/xlink",
-        "href",
-        dataUrl,
-      );
-      feScaleRef.current.setAttribute("scale", String(scale));
+  const applyHeaderFilter = useCallback((x: number, y: number) => {
+    const qx = quantize(Math.max(0, Math.min(1, x)), HEADER_BUCKET_X);
+    const qy = quantize(Math.max(0, Math.min(1, y)), HEADER_BUCKET_Y);
+    const bucketKey = `${qx}:${qy}`;
+
+    if (bucketKey === lastBucketRef.current) {
+      return;
     }
-    setReady(true);
-  }, []);
-
-  // Mouse tracking for interactive header refraction
-  const onMove = useCallback((e: MouseEvent) => {
-    const el = document.querySelector("[data-liquid-header]");
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    const mx = (e.clientX - r.left) / r.width;
-    const my = (e.clientY - r.top) / r.height;
-    // Only update when mouse is near the header
-    if (mx < -0.3 || mx > 1.3 || my < -1 || my > 2) return;
+    lastBucketRef.current = bucketKey;
 
     const { dataUrl, scale } = generateDisplacementMap(120, 36, headerFragment, {
-      x: Math.max(0, Math.min(1, mx)),
-      y: Math.max(0, Math.min(1, my)),
+      x: qx,
+      y: qy,
     });
+
     feImageRef.current?.setAttributeNS(
       "http://www.w3.org/1999/xlink",
       "href",
@@ -52,19 +43,62 @@ export function LiquidGlassFilters() {
   }, []);
 
   useEffect(() => {
-    if (!ready) return;
-    let ticking = false;
-    const throttled = (e: MouseEvent) => {
-      if (ticking) return;
-      ticking = true;
-      requestAnimationFrame(() => {
-        onMove(e);
-        ticking = false;
-      });
+    applyHeaderFilter(0.5, 0.5);
+  }, [applyHeaderFilter]);
+
+  useEffect(() => {
+    const media = window.matchMedia(
+      "(pointer: fine) and (prefers-reduced-motion: no-preference)",
+    );
+
+    const updateInteractive = () => {
+      setInteractive(media.matches);
     };
-    window.addEventListener("mousemove", throttled, { passive: true });
-    return () => window.removeEventListener("mousemove", throttled);
-  }, [ready, onMove]);
+
+    updateInteractive();
+    media.addEventListener("change", updateInteractive);
+    return () => media.removeEventListener("change", updateInteractive);
+  }, []);
+
+  useEffect(() => {
+    if (!interactive) {
+      applyHeaderFilter(0.5, 0.5);
+      return;
+    }
+
+    const header = document.querySelector<HTMLElement>("[data-liquid-header]");
+    if (!header) {
+      return;
+    }
+
+    const onPointerMove = (e: PointerEvent) => {
+      const rect = header.getBoundingClientRect();
+      if (!rect.width || !rect.height) {
+        return;
+      }
+
+      const x = (e.clientX - rect.left) / rect.width;
+      const y = (e.clientY - rect.top) / rect.height;
+
+      if (x < -0.2 || x > 1.2 || y < -0.5 || y > 1.5) {
+        return;
+      }
+
+      applyHeaderFilter(x, y);
+    };
+
+    const onPointerLeave = () => {
+      applyHeaderFilter(0.5, 0.5);
+    };
+
+    header.addEventListener("pointermove", onPointerMove, { passive: true });
+    header.addEventListener("pointerleave", onPointerLeave, { passive: true });
+
+    return () => {
+      header.removeEventListener("pointermove", onPointerMove);
+      header.removeEventListener("pointerleave", onPointerLeave);
+    };
+  }, [applyHeaderFilter, interactive]);
 
   return (
     <svg
@@ -75,25 +109,23 @@ export function LiquidGlassFilters() {
       aria-hidden="true"
     >
       <defs>
-        {/* Card filter: organic turbulence displacement */}
         <filter id={CARD_FILTER_ID}>
           <feTurbulence
             type="fractalNoise"
             baseFrequency="0.012 0.016"
-            numOctaves={3}
+            numOctaves={2}
             seed={5}
             result="n"
           />
           <feDisplacementMap
             in="SourceGraphic"
             in2="n"
-            scale={5}
+            scale={4}
             xChannelSelector="R"
             yChannelSelector="G"
           />
         </filter>
 
-        {/* Header filter: canvas displacement with mouse tracking */}
         <filter
           id={HEADER_FILTER_ID}
           filterUnits="userSpaceOnUse"

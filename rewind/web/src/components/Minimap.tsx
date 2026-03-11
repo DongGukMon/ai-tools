@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { TimelineEvent } from "../types";
 
 interface MinimapProps {
@@ -6,25 +6,46 @@ interface MinimapProps {
   scrollToIndex?: (index: number) => void;
 }
 
-type MinimapColor = "user" | "bot" | "tool";
+type MinimapColor = "--minimap-user" | "--minimap-bot" | "--minimap-tool";
 
 function getMinimapColor(type: TimelineEvent["type"]): MinimapColor {
   switch (type) {
     case "user":
-      return "user";
+      return "--minimap-user";
     case "assistant":
     case "thinking":
-      return "bot";
+      return "--minimap-bot";
     default:
-      return "tool";
+      return "--minimap-tool";
   }
 }
 
-export function Minimap({ events, scrollToIndex }: MinimapProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
+function buildMinimapGradient(events: TimelineEvent[]): string {
+  if (events.length === 0) {
+    return "transparent";
+  }
+
+  const step = 100 / events.length;
+  const stops: string[] = [];
+
+  events.forEach((event, index) => {
+    const start = (index * step).toFixed(3);
+    const end = ((index + 1) * step).toFixed(3);
+    const color = `var(${getMinimapColor(event.type)})`;
+    stops.push(`${color} ${start}%`, `${color} ${end}%`);
+  });
+
+  return `linear-gradient(to bottom, ${stops.join(", ")})`;
+}
+
+export default function Minimap({ events, scrollToIndex }: MinimapProps) {
   const [viewport, setViewport] = useState({ top: 0, height: 20 });
 
+  const gradient = useMemo(() => buildMinimapGradient(events), [events]);
+
   useEffect(() => {
+    let ticking = false;
+
     const updateViewport = () => {
       const scrollH = document.documentElement.scrollHeight;
       const viewH = window.innerHeight;
@@ -40,55 +61,57 @@ export function Minimap({ events, scrollToIndex }: MinimapProps) {
       setViewport({ top, height });
     };
 
+    const onViewportChange = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        updateViewport();
+        ticking = false;
+      });
+    };
+
     updateViewport();
-    window.addEventListener("scroll", updateViewport, { passive: true });
-    window.addEventListener("resize", updateViewport, { passive: true });
+    window.addEventListener("scroll", onViewportChange, { passive: true });
+    window.addEventListener("resize", onViewportChange, { passive: true });
+
     return () => {
-      window.removeEventListener("scroll", updateViewport);
-      window.removeEventListener("resize", updateViewport);
+      window.removeEventListener("scroll", onViewportChange);
+      window.removeEventListener("resize", onViewportChange);
     };
   }, [events.length]);
 
-  const handleClick = (e: React.MouseEvent) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const y = e.clientY - rect.top;
-    const index = Math.floor((y / rect.height) * events.length);
-    const clamped = Math.max(0, Math.min(events.length - 1, index));
+  const handleClick = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const y = e.clientY - rect.top;
+      const index = Math.floor((y / rect.height) * events.length);
+      const clamped = Math.max(0, Math.min(events.length - 1, index));
 
-    if (scrollToIndex) {
-      scrollToIndex(clamped);
-    } else {
-      document
-        .querySelector(`[data-event-index="${clamped}"]`)
-        ?.scrollIntoView({ behavior: "smooth", block: "center" });
-    }
-  };
+      if (scrollToIndex) {
+        scrollToIndex(clamped);
+      } else {
+        document
+          .querySelector(`[data-event-index="${clamped}"]`)
+          ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    },
+    [events.length, scrollToIndex],
+  );
 
   if (events.length === 0) return null;
 
   return (
     <div className="fixed left-3 top-1/2 -translate-y-1/2 z-30 hidden lg:block">
       <div
-        ref={containerRef}
         className="relative w-2 rounded-full overflow-hidden cursor-pointer"
         style={{ height: "min(60vh, 400px)" }}
         onClick={handleClick}
       >
-        {/* Colored segments */}
-        <div className="flex flex-col h-full">
-          {events.map((event, i) => {
-            const color = getMinimapColor(event.type);
-            return (
-              <div
-                key={i}
-                className={`flex-1 min-h-px minimap-${color}`}
-                style={{ opacity: 0.6 }}
-              />
-            );
-          })}
-        </div>
+        <div
+          className="absolute inset-0"
+          style={{ background: gradient, opacity: 0.6 }}
+        />
 
-        {/* Viewport indicator */}
         <div
           className="absolute left-0 right-0 rounded-full bg-black/20 dark:bg-white/25 pointer-events-none"
           style={{

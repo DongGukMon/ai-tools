@@ -6,9 +6,37 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 )
+
+type claudeLine struct {
+	Type          string               `json:"type"`
+	Timestamp     string               `json:"timestamp"`
+	SessionID     string               `json:"sessionId"`
+	CWD           string               `json:"cwd"`
+	Message       json.RawMessage      `json:"message"`
+	ToolUseResult *claudeToolUseResult `json:"toolUseResult"`
+}
+
+type claudeToolUseResult struct {
+	File *struct {
+		Content string `json:"content"`
+	} `json:"file"`
+}
+
+type claudeMessage struct {
+	Model   string          `json:"model"`
+	Content json.RawMessage `json:"content"`
+}
+
+type claudeContentBlock struct {
+	Type     string          `json:"type"`
+	Text     string          `json:"text"`
+	Thinking string          `json:"thinking"`
+	Name     string          `json:"name"`
+	Input    json.RawMessage `json:"input"`
+	Content  json.RawMessage `json:"content"`
+}
 
 // FindClaudeSession locates a Claude session JSONL file by session ID.
 func FindClaudeSession(sessionID string) (string, error) {
@@ -48,69 +76,54 @@ func ParseClaude(path string) (*Session, error) {
 
 	sess := &Session{
 		Backend: "claude",
-		Events:  []TimelineEvent{},
+		Events:  make([]TimelineEvent, 0, estimateEventCapacity(fileSize(f))),
 	}
 
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
 
 	for scanner.Scan() {
-		line := scanner.Bytes()
-		if len(line) == 0 {
+		lineBytes := scanner.Bytes()
+		if len(lineBytes) == 0 {
 			continue
 		}
 
-		var raw map[string]json.RawMessage
-		if err := json.Unmarshal(line, &raw); err != nil {
+		var line claudeLine
+		if err := json.Unmarshal(lineBytes, &line); err != nil {
 			continue
 		}
 
-		var eventType string
-		if t, ok := raw["type"]; ok {
-			json.Unmarshal(t, &eventType)
+		if sess.ID == "" && line.SessionID != "" {
+			sess.ID = line.SessionID
+		}
+		if sess.CWD == "" && line.CWD != "" {
+			sess.CWD = line.CWD
 		}
 
-		var ts time.Time
-		if t, ok := raw["timestamp"]; ok {
-			var tsStr string
-			json.Unmarshal(t, &tsStr)
-			ts, _ = time.Parse(time.RFC3339Nano, tsStr)
-		}
-
-		// Extract session metadata
-		if sess.ID == "" {
-			if sid, ok := raw["sessionId"]; ok {
-				json.Unmarshal(sid, &sess.ID)
-			}
-		}
-		if sess.CWD == "" {
-			if cwd, ok := raw["cwd"]; ok {
-				json.Unmarshal(cwd, &sess.CWD)
-			}
-		}
-
-		switch eventType {
-		case "user":
-			events := parseClaudeUserMessage(raw, ts)
-			sess.Events = append(sess.Events, events...)
-
-		case "assistant":
-			events := parseClaudeAssistantMessage(raw, ts)
-			if sess.Model == "" {
-				if msg, ok := raw["message"]; ok {
-					var m map[string]json.RawMessage
-					if json.Unmarshal(msg, &m) == nil {
-						if model, ok := m["model"]; ok {
-							json.Unmarshal(model, &sess.Model)
-						}
-					}
-				}
-			}
-			sess.Events = append(sess.Events, events...)
-
+		switch line.Type {
+		case "user", "assistant":
 		case "progress", "file-history-snapshot", "last-prompt":
-			// Skip non-conversation events
 			continue
+		default:
+			continue
+		}
+
+		var msg claudeMessage
+		if len(line.Message) == 0 || json.Unmarshal(line.Message, &msg) != nil {
+			continue
+		}
+
+		if sess.Model == "" && line.Type == "assistant" && msg.Model != "" {
+			sess.Model = msg.Model
+		}
+
+		ts := parseTimestamp(line.Timestamp)
+
+		switch line.Type {
+		case "user":
+			sess.Events = append(sess.Events, parseClaudeUserMessage(msg, line.ToolUseResult, ts)...)
+		case "assistant":
+			sess.Events = append(sess.Events, parseClaudeAssistantMessage(msg, ts)...)
 		}
 	}
 
@@ -125,22 +138,12 @@ func ParseClaude(path string) (*Session, error) {
 	return sess, nil
 }
 
-func parseClaudeUserMessage(raw map[string]json.RawMessage, ts time.Time) []TimelineEvent {
-	msgRaw, ok := raw["message"]
-	if !ok {
-		return nil
-	}
-
-	var msg struct {
-		Content json.RawMessage `json:"content"`
-	}
-	if err := json.Unmarshal(msgRaw, &msg); err != nil {
-		return nil
-	}
-
-	// content can be a string or an array
+func parseClaudeUserMessage(msg claudeMessage, toolUseResult *claudeToolUseResult, ts time.Time) []TimelineEvent {
 	var textContent string
 	if err := json.Unmarshal(msg.Content, &textContent); err == nil {
+		if textContent == "" {
+			return nil
+		}
 		return []TimelineEvent{{
 			Timestamp: ts,
 			Type:      "user",
@@ -150,61 +153,36 @@ func parseClaudeUserMessage(raw map[string]json.RawMessage, ts time.Time) []Time
 		}}
 	}
 
-	// content is an array
-	var contentArr []map[string]json.RawMessage
-	if err := json.Unmarshal(msg.Content, &contentArr); err != nil {
+	var blocks []claudeContentBlock
+	if err := json.Unmarshal(msg.Content, &blocks); err != nil {
 		return nil
 	}
 
-	var events []TimelineEvent
-	for _, block := range contentArr {
-		var blockType string
-		if t, ok := block["type"]; ok {
-			json.Unmarshal(t, &blockType)
-		}
+	var fileContent string
+	if toolUseResult != nil && toolUseResult.File != nil {
+		fileContent = toolUseResult.File.Content
+	}
 
-		switch blockType {
+	events := make([]TimelineEvent, 0, len(blocks))
+	for _, block := range blocks {
+		switch block.Type {
 		case "text":
-			var text string
-			json.Unmarshal(block["text"], &text)
+			if block.Text == "" {
+				continue
+			}
 			events = append(events, TimelineEvent{
 				Timestamp: ts,
 				Type:      "user",
 				Role:      "user",
-				Summary:   truncate(firstLine(text), 100),
-				Content:   text,
+				Summary:   truncate(firstLine(block.Text), 100),
+				Content:   block.Text,
 			})
 
 		case "tool_result":
-			var toolUseID string
-			if id, ok := block["tool_use_id"]; ok {
-				json.Unmarshal(id, &toolUseID)
+			resultContent := rawMessageAsString(block.Content)
+			if fileContent != "" {
+				resultContent = fileContent
 			}
-
-			var resultContent string
-			if c, ok := block["content"]; ok {
-				// content can be string or complex
-				if err := json.Unmarshal(c, &resultContent); err != nil {
-					resultContent = string(c)
-				}
-			}
-
-			// Check toolUseResult for richer content
-			if tur, ok := raw["toolUseResult"]; ok {
-				var toolResult map[string]json.RawMessage
-				if json.Unmarshal(tur, &toolResult) == nil {
-					if fileRaw, ok := toolResult["file"]; ok {
-						var file struct {
-							FilePath string `json:"filePath"`
-							Content  string `json:"content"`
-						}
-						if json.Unmarshal(fileRaw, &file) == nil && file.Content != "" {
-							resultContent = file.Content
-						}
-					}
-				}
-			}
-
 			events = append(events, TimelineEvent{
 				Timestamp:  ts,
 				Type:       "tool_result",
@@ -219,86 +197,49 @@ func parseClaudeUserMessage(raw map[string]json.RawMessage, ts time.Time) []Time
 	return events
 }
 
-func parseClaudeAssistantMessage(raw map[string]json.RawMessage, ts time.Time) []TimelineEvent {
-	msgRaw, ok := raw["message"]
-	if !ok {
+func parseClaudeAssistantMessage(msg claudeMessage, ts time.Time) []TimelineEvent {
+	var blocks []claudeContentBlock
+	if err := json.Unmarshal(msg.Content, &blocks); err != nil {
 		return nil
 	}
 
-	var msg struct {
-		Content json.RawMessage `json:"content"`
-	}
-	if err := json.Unmarshal(msgRaw, &msg); err != nil {
-		return nil
-	}
-
-	var contentArr []map[string]json.RawMessage
-	if err := json.Unmarshal(msg.Content, &contentArr); err != nil {
-		return nil
-	}
-
-	var events []TimelineEvent
-	for _, block := range contentArr {
-		var blockType string
-		if t, ok := block["type"]; ok {
-			json.Unmarshal(t, &blockType)
-		}
-
-		switch blockType {
+	events := make([]TimelineEvent, 0, len(blocks))
+	for _, block := range blocks {
+		switch block.Type {
 		case "text":
-			var text string
-			json.Unmarshal(block["text"], &text)
-			if text == "" {
+			if block.Text == "" {
 				continue
 			}
 			events = append(events, TimelineEvent{
 				Timestamp: ts,
 				Type:      "assistant",
 				Role:      "assistant",
-				Summary:   truncate(firstLine(text), 100),
-				Content:   text,
+				Summary:   truncate(firstLine(block.Text), 100),
+				Content:   block.Text,
 			})
 
 		case "thinking":
-			var thinking string
-			json.Unmarshal(block["thinking"], &thinking)
 			events = append(events, TimelineEvent{
 				Timestamp: ts,
 				Type:      "thinking",
 				Role:      "assistant",
 				Summary:   "(thinking)",
-				Content:   thinking,
+				Content:   block.Thinking,
 			})
 
 		case "tool_use":
-			var name string
-			if n, ok := block["name"]; ok {
-				json.Unmarshal(n, &name)
-			}
-			var inputStr string
-			if inp, ok := block["input"]; ok {
-				inputStr = string(inp)
-			}
-
+			input := rawMessageAsString(block.Input)
 			events = append(events, TimelineEvent{
 				Timestamp: ts,
 				Type:      "tool_call",
 				Role:      "assistant",
-				Summary:   fmt.Sprintf("Tool: %s", name),
-				Content:   inputStr,
-				ToolName:  name,
-				ToolInput: inputStr,
+				Summary:   fmt.Sprintf("Tool: %s", block.Name),
+				Content:   input,
+				ToolName:  block.Name,
+				ToolInput: input,
 			})
 		}
 	}
 
 	return events
-}
-
-func firstLine(s string) string {
-	s = strings.TrimSpace(s)
-	if idx := strings.IndexByte(s, '\n'); idx >= 0 {
-		return s[:idx]
-	}
-	return s
 }

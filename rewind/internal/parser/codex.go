@@ -10,6 +10,29 @@ import (
 	"time"
 )
 
+type codexLine struct {
+	ID         string          `json:"id"`
+	Timestamp  string          `json:"timestamp"`
+	RecordType string          `json:"record_type"`
+	Type       string          `json:"type"`
+	Role       string          `json:"role"`
+	Content    json.RawMessage `json:"content"`
+	Summary    json.RawMessage `json:"summary"`
+}
+
+type codexContentBlock struct {
+	Type      string          `json:"type"`
+	Text      string          `json:"text"`
+	Name      string          `json:"name"`
+	Arguments json.RawMessage `json:"arguments"`
+	Output    string          `json:"output"`
+}
+
+type codexSummaryBlock struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
 // FindCodexSession locates a Codex session JSONL file by session ID.
 func FindCodexSession(sessionID string) (string, error) {
 	homeDir, err := os.UserHomeDir()
@@ -48,7 +71,7 @@ func ParseCodex(path string) (*Session, error) {
 
 	sess := &Session{
 		Backend: "codex",
-		Events:  []TimelineEvent{},
+		Events:  make([]TimelineEvent, 0, estimateEventCapacity(fileSize(f))),
 	}
 
 	scanner := bufio.NewScanner(f)
@@ -56,46 +79,33 @@ func ParseCodex(path string) (*Session, error) {
 
 	lineNum := 0
 	for scanner.Scan() {
-		line := scanner.Bytes()
-		if len(line) == 0 {
+		lineBytes := scanner.Bytes()
+		if len(lineBytes) == 0 {
 			continue
 		}
 		lineNum++
 
-		var raw map[string]json.RawMessage
-		if err := json.Unmarshal(line, &raw); err != nil {
+		var line codexLine
+		if err := json.Unmarshal(lineBytes, &line); err != nil {
 			continue
 		}
 
-		// First line is typically session metadata
 		if lineNum == 1 {
-			parseCodexMetadata(raw, sess)
+			parseCodexMetadata(line, sess)
 			continue
 		}
 
-		// Check for record_type
-		if rt, ok := raw["record_type"]; ok {
-			var recordType string
-			json.Unmarshal(rt, &recordType)
-			if recordType == "state" {
-				continue
-			}
+		if line.RecordType == "state" {
+			continue
 		}
 
-		// Check for type field
-		var msgType string
-		if t, ok := raw["type"]; ok {
-			json.Unmarshal(t, &msgType)
-		}
+		ts := parseTimestamp(line.Timestamp)
 
-		switch msgType {
+		switch line.Type {
 		case "message":
-			events := parseCodexMessage(raw)
-			sess.Events = append(sess.Events, events...)
-
+			sess.Events = append(sess.Events, parseCodexMessage(line, ts)...)
 		case "reasoning":
-			event := parseCodexReasoning(raw)
-			if event != nil {
+			if event := parseCodexReasoning(line, ts); event != nil {
 				sess.Events = append(sess.Events, *event)
 			}
 		}
@@ -112,94 +122,72 @@ func ParseCodex(path string) (*Session, error) {
 	return sess, nil
 }
 
-func parseCodexMetadata(raw map[string]json.RawMessage, sess *Session) {
-	if id, ok := raw["id"]; ok {
-		json.Unmarshal(id, &sess.ID)
+func parseCodexMetadata(line codexLine, sess *Session) {
+	if line.ID != "" {
+		sess.ID = line.ID
 	}
-	if ts, ok := raw["timestamp"]; ok {
-		var tsStr string
-		json.Unmarshal(ts, &tsStr)
-		sess.StartedAt, _ = time.Parse(time.RFC3339Nano, tsStr)
+	if line.Timestamp != "" {
+		sess.StartedAt = parseTimestamp(line.Timestamp)
 	}
 }
 
-func parseCodexMessage(raw map[string]json.RawMessage) []TimelineEvent {
-	var role string
-	if r, ok := raw["role"]; ok {
-		json.Unmarshal(r, &role)
-	}
-
-	contentRaw, ok := raw["content"]
-	if !ok {
+func parseCodexMessage(line codexLine, ts time.Time) []TimelineEvent {
+	if len(line.Content) == 0 {
 		return nil
 	}
 
-	var contentArr []map[string]json.RawMessage
-	if err := json.Unmarshal(contentRaw, &contentArr); err != nil {
+	var blocks []codexContentBlock
+	if err := json.Unmarshal(line.Content, &blocks); err != nil {
 		return nil
 	}
 
-	var events []TimelineEvent
-	for _, block := range contentArr {
-		var blockType string
-		if t, ok := block["type"]; ok {
-			json.Unmarshal(t, &blockType)
-		}
-
-		switch blockType {
+	events := make([]TimelineEvent, 0, len(blocks))
+	for _, block := range blocks {
+		switch block.Type {
 		case "input_text":
-			var text string
-			if t, ok := block["text"]; ok {
-				json.Unmarshal(t, &text)
+			if block.Text == "" {
+				continue
 			}
 			events = append(events, TimelineEvent{
-				Type:    "user",
-				Role:    "user",
-				Summary: truncate(firstLine(text), 100),
-				Content: text,
+				Timestamp: ts,
+				Type:      "user",
+				Role:      "user",
+				Summary:   truncate(firstLine(block.Text), 100),
+				Content:   block.Text,
 			})
 
 		case "output_text", "text":
-			var text string
-			if t, ok := block["text"]; ok {
-				json.Unmarshal(t, &text)
+			if block.Text == "" {
+				continue
 			}
 			events = append(events, TimelineEvent{
-				Type:    "assistant",
-				Role:    "assistant",
-				Summary: truncate(firstLine(text), 100),
-				Content: text,
+				Timestamp: ts,
+				Type:      "assistant",
+				Role:      "assistant",
+				Summary:   truncate(firstLine(block.Text), 100),
+				Content:   block.Text,
 			})
 
 		case "tool_call":
-			var name string
-			if n, ok := block["name"]; ok {
-				json.Unmarshal(n, &name)
-			}
-			var inputStr string
-			if inp, ok := block["arguments"]; ok {
-				inputStr = string(inp)
-			}
+			input := rawMessageAsString(block.Arguments)
 			events = append(events, TimelineEvent{
+				Timestamp: ts,
 				Type:      "tool_call",
 				Role:      "assistant",
-				Summary:   fmt.Sprintf("Tool: %s", name),
-				Content:   inputStr,
-				ToolName:  name,
-				ToolInput: inputStr,
+				Summary:   fmt.Sprintf("Tool: %s", block.Name),
+				Content:   input,
+				ToolName:  block.Name,
+				ToolInput: input,
 			})
 
 		case "tool_result":
-			var output string
-			if o, ok := block["output"]; ok {
-				json.Unmarshal(o, &output)
-			}
 			events = append(events, TimelineEvent{
+				Timestamp:  ts,
 				Type:       "tool_result",
 				Role:       "user",
-				Summary:    fmt.Sprintf("Result: %s", truncate(firstLine(output), 80)),
-				Content:    output,
-				ToolResult: output,
+				Summary:    fmt.Sprintf("Result: %s", truncate(firstLine(block.Output), 80)),
+				Content:    block.Output,
+				ToolResult: block.Output,
 			})
 		}
 	}
@@ -207,31 +195,28 @@ func parseCodexMessage(raw map[string]json.RawMessage) []TimelineEvent {
 	return events
 }
 
-func parseCodexReasoning(raw map[string]json.RawMessage) *TimelineEvent {
-	var summaryArr []map[string]json.RawMessage
-	if s, ok := raw["summary"]; ok {
-		json.Unmarshal(s, &summaryArr)
+func parseCodexReasoning(line codexLine, ts time.Time) *TimelineEvent {
+	if len(line.Summary) == 0 {
+		return nil
 	}
 
-	var summaryText string
-	for _, item := range summaryArr {
-		var sType string
-		if t, ok := item["type"]; ok {
-			json.Unmarshal(t, &sType)
-		}
-		if sType == "summary_text" {
-			var text string
-			if t, ok := item["text"]; ok {
-				json.Unmarshal(t, &text)
-			}
-			summaryText += text
+	var summaryBlocks []codexSummaryBlock
+	if err := json.Unmarshal(line.Summary, &summaryBlocks); err != nil {
+		return nil
+	}
+
+	var summaryText strings.Builder
+	for _, item := range summaryBlocks {
+		if item.Type == "summary_text" {
+			summaryText.WriteString(item.Text)
 		}
 	}
 
 	return &TimelineEvent{
-		Type:    "thinking",
-		Role:    "assistant",
-		Summary: "(thinking)",
-		Content: summaryText,
+		Timestamp: ts,
+		Type:      "thinking",
+		Role:      "assistant",
+		Summary:   "(thinking)",
+		Content:   summaryText.String(),
 	}
 }

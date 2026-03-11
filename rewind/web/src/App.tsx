@@ -1,27 +1,64 @@
-import { useEffect, useRef, useState } from "react";
+import {
+  lazy,
+  startTransition,
+  Suspense,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import type { Session } from "./types";
 import { Timeline } from "./components/Timeline";
 import { Header } from "./components/Header";
-import { Minimap } from "./components/Minimap";
-import { LiquidGlassFilters } from "./components/LiquidGlassFilters";
+
+const Minimap = lazy(() => import("./components/Minimap"));
+const LiquidGlassFilters = lazy(() => import("./components/LiquidGlassFilters"));
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [enhancementsReady, setEnhancementsReady] = useState(false);
   const scrollToIndexRef = useRef<((index: number) => void) | undefined>(undefined);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const token = params.get("token") ?? "";
+    const controller = new AbortController();
 
-    fetch(`./api/session?token=${token}`)
+    fetch(`./api/session?token=${token}`, { signal: controller.signal })
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
       })
-      .then(setSession)
-      .catch((err) => setError(err.message));
+      .then((data: Session) => {
+        startTransition(() => {
+          setSession(data);
+        });
+      })
+      .catch((err: Error) => {
+        if (err.name !== "AbortError") {
+          setError(err.message);
+        }
+      });
+
+    return () => controller.abort();
   }, []);
+
+  useEffect(() => {
+    if (!session) return;
+
+    const loadEnhancements = () => setEnhancementsReady(true);
+    const browserWindow = window as Window & typeof globalThis;
+
+    if (typeof browserWindow.requestIdleCallback === "function") {
+      const id = browserWindow.requestIdleCallback(loadEnhancements, {
+        timeout: 250,
+      });
+      return () => browserWindow.cancelIdleCallback?.(id);
+    }
+
+    const id = browserWindow.setTimeout(loadEnhancements, 0);
+    return () => browserWindow.clearTimeout(id);
+  }, [session]);
 
   if (error) {
     return (
@@ -45,11 +82,19 @@ export default function App() {
 
   return (
     <div className="min-h-screen">
-      <LiquidGlassFilters />
-      <Minimap
-        events={session.events}
-        scrollToIndex={(i) => scrollToIndexRef.current?.(i)}
-      />
+      {enhancementsReady && (
+        <>
+          <Suspense fallback={null}>
+            <LiquidGlassFilters />
+          </Suspense>
+          <Suspense fallback={null}>
+            <Minimap
+              events={session.events}
+              scrollToIndex={(i) => scrollToIndexRef.current?.(i)}
+            />
+          </Suspense>
+        </>
+      )}
       <Header session={session} />
       <Timeline events={session.events} scrollToIndexRef={scrollToIndexRef} />
     </div>
