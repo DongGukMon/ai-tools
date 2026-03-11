@@ -12,8 +12,6 @@ import {
   Bot,
   Wrench,
   Brain,
-  ChevronDown,
-  ChevronRight,
   ArrowLeftRight,
 } from "lucide-react";
 import type { TimelineEvent } from "../types";
@@ -70,26 +68,26 @@ const eventConfig: Record<
     name: "Tool",
   },
   tool_result: {
-    dot: "bg-amber-400",
-    textColor: "text-amber-600 dark:text-amber-300",
-    badgeBg: "bg-amber-100/80 dark:bg-amber-500/15",
-    expandedBg: "bg-amber-50/30 dark:bg-amber-500/5",
+    dot: "bg-amber-500",
+    textColor: "text-amber-700 dark:text-amber-400",
+    badgeBg: "bg-amber-100 dark:bg-amber-500/20",
+    expandedBg: "bg-amber-50/40 dark:bg-amber-500/5",
     icon: ArrowLeftRight,
     name: "Result",
   },
   thinking: {
-    dot: "bg-violet-500",
-    textColor: "text-violet-700 dark:text-violet-400",
-    badgeBg: "bg-violet-100 dark:bg-violet-500/20",
-    expandedBg: "bg-violet-50/40 dark:bg-violet-500/5",
+    dot: "bg-emerald-600",
+    textColor: "text-emerald-800 dark:text-emerald-300",
+    badgeBg: "bg-emerald-200 dark:bg-emerald-600/20",
+    expandedBg: "bg-emerald-50/50 dark:bg-emerald-600/5",
     icon: Brain,
     name: "Thinking",
   },
   system: {
-    dot: "bg-slate-400 dark:bg-neutral-500",
-    textColor: "text-slate-600 dark:text-neutral-400",
-    badgeBg: "bg-slate-100 dark:bg-neutral-500/20",
-    expandedBg: "bg-slate-50/40 dark:bg-neutral-500/5",
+    dot: "bg-amber-500",
+    textColor: "text-amber-700 dark:text-amber-400",
+    badgeBg: "bg-amber-100 dark:bg-amber-500/20",
+    expandedBg: "bg-amber-50/40 dark:bg-amber-500/5",
     icon: Bot,
     name: "System",
   },
@@ -265,14 +263,16 @@ const TimelineItem = memo(function TimelineItem({
   }, [event.toolResult, event.type, expanded]);
 
   return (
-    <div className="relative flex items-start gap-4" data-event-index={index}>
+    <div className="timeline-row relative flex items-start gap-4" data-event-index={index}>
       <div
         className={cn(
           "timeline-dot relative z-10 mt-2.5 w-[23px] h-[23px] rounded-full",
           "flex items-center justify-center shrink-0",
+          hasContent ? "cursor-pointer" : "",
           config.dot,
         )}
         style={{ boxShadow: "0 0 0 4px var(--ring-bg)" }}
+        onClick={hasContent ? handleToggle : undefined}
       >
         <Icon className="w-3 h-3 text-white" strokeWidth={2.5} />
       </div>
@@ -286,12 +286,6 @@ const TimelineItem = memo(function TimelineItem({
         onClick={hasContent ? handleToggle : undefined}
       >
         <div className="flex items-center gap-2 px-3 py-2 relative z-[1]">
-          {hasContent &&
-            (expanded ? (
-              <ChevronDown className="w-3.5 h-3.5 text-slate-400 dark:text-neutral-500 shrink-0" />
-            ) : (
-              <ChevronRight className="w-3.5 h-3.5 text-slate-400 dark:text-neutral-500 shrink-0" />
-            ))}
 
           <span
             className={cn(

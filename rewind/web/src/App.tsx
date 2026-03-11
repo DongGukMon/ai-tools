@@ -132,14 +132,6 @@ export default function App() {
 }
 
 function ScrollButtons() {
-  const [show, setShow] = useState(false);
-
-  useEffect(() => {
-    const onScroll = () => setShow(window.scrollY > 200);
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
   const scrollTo = useCallback((position: "top" | "bottom") => {
     window.scrollTo({
       top: position === "top" ? 0 : document.documentElement.scrollHeight,
@@ -148,19 +140,17 @@ function ScrollButtons() {
   }, []);
 
   return (
-    <div
-      className={`fixed bottom-6 right-6 z-30 flex flex-col gap-2 transition-opacity duration-200 ${show ? "opacity-100" : "opacity-0 pointer-events-none"}`}
-    >
+    <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-2">
       <button
         onClick={() => scrollTo("top")}
-        className="p-2.5 rounded-full shadow-lg bg-white/60 dark:bg-white/10 backdrop-blur-md hover:bg-white/80 dark:hover:bg-white/15 transition-colors border border-white/30 dark:border-white/10"
+        className="p-2.5 rounded-full liquid-glass liquid-glass-hover"
         aria-label="Scroll to top"
       >
         <ArrowUp className="w-4 h-4 text-slate-600 dark:text-neutral-300" />
       </button>
       <button
         onClick={() => scrollTo("bottom")}
-        className="p-2.5 rounded-full shadow-lg bg-white/60 dark:bg-white/10 backdrop-blur-md hover:bg-white/80 dark:hover:bg-white/15 transition-colors border border-white/30 dark:border-white/10"
+        className="p-2.5 rounded-full liquid-glass liquid-glass-hover"
         aria-label="Scroll to bottom"
       >
         <ArrowDown className="w-4 h-4 text-slate-600 dark:text-neutral-300" />

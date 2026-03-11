@@ -14,7 +14,7 @@ export function Header({ session, sortOrder, onToggleSort }: HeaderProps) {
   const { theme, toggle } = useTheme();
 
   return (
-    <header className="sticky top-0 z-20 liquid-glass-header">
+    <header className="sticky top-0 z-[9999] liquid-glass-header">
       <div className="max-w-4xl mx-auto px-6 py-4 relative z-[1]">
         <div className="flex items-center gap-3">
           <h1 className="text-lg font-semibold text-slate-900 dark:text-neutral-100 tracking-tight">
