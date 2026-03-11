@@ -3,6 +3,7 @@ package whip
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestCodexBackend_GeneratePrompt(t *testing.T) {
@@ -275,5 +276,65 @@ func TestReviewPrompt_IncludesRequestChangesFlow(t *testing.T) {
 	codexPrompt := (&CodexBackend{}).GeneratePrompt(task)
 	if !strings.Contains(codexPrompt, "continue from the task's returned in_progress state") {
 		t.Fatalf("Codex review prompt should mention resuming after request-changes")
+	}
+}
+
+func TestCodexReviewHandoff_OnlyAppearsForReviewWorkers(t *testing.T) {
+	task := NewTask("Review Prompt", "Build the auth module", "/tmp")
+	task.IRCName = "whip-abc12"
+	task.MasterIRCName = "whip-master"
+
+	nonReviewPrompt := (&CodexBackend{}).GeneratePrompt(task)
+	if strings.Contains(nonReviewPrompt, "## Codex Review Handoff") {
+		t.Fatalf("non-review Codex prompt should not include the review handoff appendix")
+	}
+
+	task.Review = true
+	codexPrompt := (&CodexBackend{}).GeneratePrompt(task)
+	if !strings.Contains(codexPrompt, "## Codex Review Handoff") {
+		t.Fatalf("review Codex prompt should include the review handoff appendix")
+	}
+
+	claudePrompt := (&ClaudeBackend{}).GeneratePrompt(task)
+	if strings.Contains(claudePrompt, "## Codex Review Handoff") {
+		t.Fatalf("Claude prompt should not include the Codex-only review handoff appendix")
+	}
+}
+
+func TestPromptPreviousAttemptNotes_RenderForWorkerAndLead(t *testing.T) {
+	timestamp := time.Date(2026, time.January, 2, 3, 4, 5, 0, time.UTC)
+	note := Note{
+		Timestamp: timestamp,
+		Status:    "failed",
+		Content:   "Need to revisit the prompt split.",
+	}
+	want := "[2026-01-02T03:04:05Z] (failed) Need to revisit the prompt split."
+
+	worker := NewTask("Worker task", "Implement the feature", "/tmp")
+	worker.IRCName = "wp-worker-notes"
+	worker.MasterIRCName = "wp-master-notes"
+	worker.Notes = []Note{note}
+
+	workerPrompt := (&ClaudeBackend{}).GeneratePrompt(worker)
+	if !strings.Contains(workerPrompt, "This task was previously attempted. Review these notes from prior agent(s) before starting:") {
+		t.Fatalf("worker prompt should explain previous attempt notes")
+	}
+	if !strings.Contains(workerPrompt, want) {
+		t.Fatalf("worker prompt should include the previous attempt note")
+	}
+
+	lead := NewTask("Lead task", "Coordinate workers", "/tmp")
+	lead.Role = TaskRoleLead
+	lead.Workspace = "notes-ws"
+	lead.IRCName = "wp-lead-notes-ws"
+	lead.MasterIRCName = "wp-master-notes-ws"
+	lead.Notes = []Note{note}
+
+	leadPrompt := (&ClaudeBackend{}).GeneratePrompt(lead)
+	if !strings.Contains(leadPrompt, "This lead task was previously attempted. Review these notes before resuming:") {
+		t.Fatalf("lead prompt should explain previous attempt notes")
+	}
+	if !strings.Contains(leadPrompt, want) {
+		t.Fatalf("lead prompt should include the previous attempt note")
 	}
 }
