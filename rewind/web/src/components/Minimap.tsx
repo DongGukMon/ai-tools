@@ -3,6 +3,7 @@ import type { TimelineEvent } from "../types";
 
 interface MinimapProps {
   events: TimelineEvent[];
+  scrollToIndex?: (index: number) => void;
 }
 
 type MinimapColor = "user" | "bot" | "tool";
@@ -19,7 +20,7 @@ function getMinimapColor(type: TimelineEvent["type"]): MinimapColor {
   }
 }
 
-export function Minimap({ events }: MinimapProps) {
+export function Minimap({ events, scrollToIndex }: MinimapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [viewport, setViewport] = useState({ top: 0, height: 20 });
 
@@ -54,9 +55,13 @@ export function Minimap({ events }: MinimapProps) {
     const index = Math.floor((y / rect.height) * events.length);
     const clamped = Math.max(0, Math.min(events.length - 1, index));
 
-    document
-      .querySelector(`[data-event-index="${clamped}"]`)
-      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (scrollToIndex) {
+      scrollToIndex(clamped);
+    } else {
+      document
+        .querySelector(`[data-event-index="${clamped}"]`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
   };
 
   if (events.length === 0) return null;

@@ -1,12 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Session } from "./types";
 import { Timeline } from "./components/Timeline";
 import { Header } from "./components/Header";
 import { Minimap } from "./components/Minimap";
+import { LiquidGlassFilters } from "./components/LiquidGlassFilters";
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const scrollToIndexRef = useRef<((index: number) => void) | undefined>(undefined);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -43,9 +45,13 @@ export default function App() {
 
   return (
     <div className="min-h-screen">
-      <Minimap events={session.events} />
+      <LiquidGlassFilters />
+      <Minimap
+        events={session.events}
+        scrollToIndex={(i) => scrollToIndexRef.current?.(i)}
+      />
       <Header session={session} />
-      <Timeline events={session.events} />
+      <Timeline events={session.events} scrollToIndexRef={scrollToIndexRef} />
     </div>
   );
 }

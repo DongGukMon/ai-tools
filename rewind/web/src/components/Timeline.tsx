@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useMemo, useRef, useLayoutEffect } from "react";
+import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import {
   User,
   Bot,
@@ -13,6 +14,7 @@ import { cn } from "../lib/utils";
 
 interface TimelineProps {
   events: TimelineEvent[];
+  scrollToIndexRef?: { current: ((index: number) => void) | undefined };
 }
 
 type EventType = TimelineEvent["type"];
@@ -78,17 +80,52 @@ const eventConfig: Record<
   },
 };
 
-function getTimeGap(prev: string, curr: string): string {
+function getTimeGapPx(prev: string, curr: string): number {
   const diff =
     (new Date(curr).getTime() - new Date(prev).getTime()) / 1000;
-  if (diff <= 1) return "mt-1";
-  if (diff <= 10) return "mt-3";
-  if (diff <= 60) return "mt-6";
-  return "mt-12";
+  if (diff <= 1) return 4;
+  if (diff <= 10) return 12;
+  if (diff <= 60) return 24;
+  return 48;
 }
 
-export function Timeline({ events }: TimelineProps) {
+export function Timeline({ events, scrollToIndexRef }: TimelineProps) {
   const [expandedSet, setExpandedSet] = useState<Set<number>>(new Set());
+  const listRef = useRef<HTMLDivElement>(null);
+  const [scrollMargin, setScrollMargin] = useState(0);
+
+  const gaps = useMemo(
+    () =>
+      events.map((_, i) =>
+        i > 0
+          ? getTimeGapPx(events[i - 1].timestamp, events[i].timestamp)
+          : 0,
+      ),
+    [events],
+  );
+
+  useLayoutEffect(() => {
+    if (listRef.current) {
+      setScrollMargin(listRef.current.offsetTop);
+    }
+  }, []);
+
+  const virtualizer = useWindowVirtualizer({
+    count: events.length,
+    estimateSize: (i) => gaps[i] + 48,
+    overscan: 8,
+    scrollMargin,
+  });
+
+  // Expose scrollToIndex for Minimap
+  if (scrollToIndexRef) {
+    scrollToIndexRef.current = (index: number) => {
+      virtualizer.scrollToIndex(index, {
+        align: "center",
+        behavior: "smooth",
+      });
+    };
+  }
 
   const toggle = (index: number) => {
     setExpandedSet((prev) => {
@@ -99,30 +136,41 @@ export function Timeline({ events }: TimelineProps) {
     });
   };
 
+  const virtualItems = virtualizer.getVirtualItems();
+
   return (
-    <div className="max-w-4xl mx-auto px-6 py-8">
-      <div className="relative">
+    <div ref={listRef} className="max-w-4xl mx-auto px-6 py-8">
+      <div
+        className="relative"
+        style={{ height: `${virtualizer.getTotalSize()}px` }}
+      >
         {/* Continuous vertical line */}
         <div className="absolute left-[11px] top-3 bottom-3 w-px bg-slate-300/60 dark:bg-white/8" />
 
-        <div>
-          {events.map((event, index) => {
-            const gap =
-              index > 0
-                ? getTimeGap(events[index - 1].timestamp, event.timestamp)
-                : "";
-            return (
+        {virtualItems.map((item) => (
+          <div
+            key={item.key}
+            data-index={item.index}
+            ref={virtualizer.measureElement}
+            className="virtual-item"
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "100%",
+              transform: `translateY(${item.start - virtualizer.options.scrollMargin}px)`,
+            }}
+          >
+            <div style={{ paddingTop: gaps[item.index] }}>
               <TimelineItem
-                key={index}
-                index={index}
-                event={event}
-                expanded={expandedSet.has(index)}
-                onToggle={() => toggle(index)}
-                gapClass={gap}
+                index={item.index}
+                event={events[item.index]}
+                expanded={expandedSet.has(item.index)}
+                onToggle={() => toggle(item.index)}
               />
-            );
-          })}
-        </div>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -133,7 +181,6 @@ interface TimelineItemProps {
   event: TimelineEvent;
   expanded: boolean;
   onToggle: () => void;
-  gapClass: string;
 }
 
 function TimelineItem({
@@ -141,7 +188,6 @@ function TimelineItem({
   event,
   expanded,
   onToggle,
-  gapClass,
 }: TimelineItemProps) {
   const config = eventConfig[event.type] ?? eventConfig.system;
   const Icon = config.icon;
@@ -152,7 +198,7 @@ function TimelineItem({
 
   return (
     <div
-      className={cn("relative flex items-start gap-4", gapClass)}
+      className="relative flex items-start gap-4"
       data-event-index={index}
     >
       {/* Dot */}
@@ -167,16 +213,16 @@ function TimelineItem({
         <Icon className="w-3 h-3 text-white" strokeWidth={2.5} />
       </div>
 
-      {/* Glass Card */}
+      {/* Liquid Glass Card */}
       <div
         className={cn(
-          "flex-1 max-w-[calc(100%-40px)] rounded-xl glass mb-1",
-          hasContent ? "cursor-pointer glass-hover" : "",
+          "flex-1 max-w-[calc(100%-40px)] rounded-xl liquid-glass mb-1",
+          hasContent ? "cursor-pointer liquid-glass-hover" : "",
           expanded && config.expandedBg,
         )}
         onClick={hasContent ? onToggle : undefined}
       >
-        <div className="flex items-center gap-2 px-3 py-2">
+        <div className="flex items-center gap-2 px-3 py-2 relative z-[1]">
           {hasContent &&
             (expanded ? (
               <ChevronDown className="w-3.5 h-3.5 text-slate-400 dark:text-neutral-500 shrink-0" />
@@ -212,10 +258,15 @@ function TimelineItem({
         </div>
 
         {/* Animated expand/collapse content */}
-        <div className={cn("collapse-grid", expanded && hasContent && "expanded")}>
+        <div
+          className={cn(
+            "collapse-grid",
+            expanded && hasContent && "expanded",
+          )}
+        >
           <div>
             {hasContent && (
-              <div className="px-3 pb-3 pt-1">
+              <div className="px-3 pb-3 pt-1 relative z-[1]">
                 {event.type === "tool_call" && event.toolInput && (
                   <div className="space-y-2">
                     <div className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-neutral-500 font-semibold">
