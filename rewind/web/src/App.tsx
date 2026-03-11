@@ -2,22 +2,45 @@ import {
   lazy,
   startTransition,
   Suspense,
+  useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
+import { ArrowUp, ArrowDown } from "lucide-react";
 import type { Session } from "./types";
 import { Timeline } from "./components/Timeline";
 import { Header } from "./components/Header";
 
 const Minimap = lazy(() => import("./components/Minimap"));
-const LiquidGlassFilters = lazy(() => import("./components/LiquidGlassFilters"));
+
+type SortOrder = "newest" | "oldest";
+
+const SORT_KEY = "rewind-sort-order";
+
+function loadSortOrder(): SortOrder {
+  try {
+    const v = localStorage.getItem(SORT_KEY);
+    if (v === "oldest" || v === "newest") return v;
+  } catch {}
+  return "newest";
+}
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [enhancementsReady, setEnhancementsReady] = useState(false);
+  const [sortOrder, setSortOrder] = useState<SortOrder>(loadSortOrder);
   const scrollToIndexRef = useRef<((index: number) => void) | undefined>(undefined);
+
+  const toggleSort = useCallback(() => {
+    setSortOrder((prev) => {
+      const next = prev === "newest" ? "oldest" : "newest";
+      try { localStorage.setItem(SORT_KEY, next); } catch {}
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -60,6 +83,13 @@ export default function App() {
     return () => browserWindow.clearTimeout(id);
   }, [session]);
 
+  const sortedEvents = useMemo(() => {
+    if (!session) return [];
+    return sortOrder === "newest"
+      ? [...session.events].reverse()
+      : session.events;
+  }, [session, sortOrder]);
+
   if (error) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -83,20 +113,58 @@ export default function App() {
   return (
     <div className="min-h-screen">
       {enhancementsReady && (
-        <>
-          <Suspense fallback={null}>
-            <LiquidGlassFilters />
-          </Suspense>
-          <Suspense fallback={null}>
-            <Minimap
-              events={session.events}
-              scrollToIndex={(i) => scrollToIndexRef.current?.(i)}
-            />
-          </Suspense>
-        </>
+        <Suspense fallback={null}>
+          <Minimap
+            events={session.events}
+            scrollToIndex={(i) => scrollToIndexRef.current?.(i)}
+          />
+        </Suspense>
       )}
-      <Header session={session} />
-      <Timeline events={session.events} scrollToIndexRef={scrollToIndexRef} />
+      <Header
+        session={session}
+        sortOrder={sortOrder}
+        onToggleSort={toggleSort}
+      />
+      <Timeline events={sortedEvents} scrollToIndexRef={scrollToIndexRef} />
+      <ScrollButtons />
+    </div>
+  );
+}
+
+function ScrollButtons() {
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setShow(window.scrollY > 200);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  const scrollTo = useCallback((position: "top" | "bottom") => {
+    window.scrollTo({
+      top: position === "top" ? 0 : document.documentElement.scrollHeight,
+      behavior: "smooth",
+    });
+  }, []);
+
+  return (
+    <div
+      className={`fixed bottom-6 right-6 z-30 flex flex-col gap-2 transition-opacity duration-200 ${show ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+    >
+      <button
+        onClick={() => scrollTo("top")}
+        className="p-2.5 rounded-full shadow-lg bg-white/60 dark:bg-white/10 backdrop-blur-md hover:bg-white/80 dark:hover:bg-white/15 transition-colors border border-white/30 dark:border-white/10"
+        aria-label="Scroll to top"
+      >
+        <ArrowUp className="w-4 h-4 text-slate-600 dark:text-neutral-300" />
+      </button>
+      <button
+        onClick={() => scrollTo("bottom")}
+        className="p-2.5 rounded-full shadow-lg bg-white/60 dark:bg-white/10 backdrop-blur-md hover:bg-white/80 dark:hover:bg-white/15 transition-colors border border-white/30 dark:border-white/10"
+        aria-label="Scroll to bottom"
+      >
+        <ArrowDown className="w-4 h-4 text-slate-600 dark:text-neutral-300" />
+      </button>
     </div>
   );
 }

@@ -207,6 +207,7 @@ export function Timeline({ events, scrollToIndexRef }: TimelineProps) {
                 top: 0,
                 left: 0,
                 width: "100%",
+                zIndex: rows.length - item.index,
                 transform: `translateY(${item.start - scrollMargin}px)`,
               }}
             >

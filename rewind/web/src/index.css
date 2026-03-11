@@ -35,8 +35,8 @@ body {
 /* ── Liquid Glass: Card ──────────────────────────────── */
 
 .liquid-glass {
-  -webkit-backdrop-filter: url(#liquid-glass-card) blur(16px) saturate(1.5) brightness(1.05);
-  backdrop-filter: url(#liquid-glass-card) blur(16px) saturate(1.5) brightness(1.05);
+  -webkit-backdrop-filter: blur(16px) saturate(1.5) brightness(1.05);
+  backdrop-filter: blur(16px) saturate(1.5) brightness(1.05);
   background: linear-gradient(
     135deg,
     rgba(255, 255, 255, 0.3) 0%,
@@ -50,9 +50,7 @@ body {
     0 8px 24px rgba(0, 0, 0, 0.04),
     inset 0 1px 0 rgba(255, 255, 255, 0.5),
     inset 0 -1px 0 rgba(0, 0, 0, 0.02);
-  contain: paint;
   position: relative;
-  transform: translateZ(0);
 }
 
 .dark .liquid-glass {
@@ -143,8 +141,8 @@ body {
 /* ── Liquid Glass: Header ────────────────────────────── */
 
 .liquid-glass-header {
-  -webkit-backdrop-filter: url(#liquid-glass-header) blur(20px) saturate(1.4) brightness(1.08);
-  backdrop-filter: url(#liquid-glass-header) blur(20px) saturate(1.4) brightness(1.08);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4) brightness(1.08);
+  backdrop-filter: blur(20px) saturate(1.4) brightness(1.08);
   background: linear-gradient(
     180deg,
     rgba(255, 255, 255, 0.55) 0%,
@@ -155,8 +153,6 @@ body {
     0 1px 8px rgba(0, 0, 0, 0.04),
     0 4px 24px rgba(0, 0, 0, 0.03),
     inset 0 1px 0 rgba(255, 255, 255, 0.6);
-  contain: paint;
-  position: relative;
 }
 
 .dark .liquid-glass-header {
@@ -220,11 +216,7 @@ body {
 }
 
 .virtual-item {
-  contain: layout paint;
-}
-
-.timeline-card {
-  will-change: contents;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Timeline dot */
