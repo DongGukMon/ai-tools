@@ -31,13 +31,26 @@ func (m DashboardModel) renderNoteHistoryView(w int) string {
 		notes[len(t.Notes)-1-i] = n
 	}
 
-	// Build rendered lines
+	// Build rendered lines (flat, one entry per display line for correct scrolling)
 	var lines []string
 	for _, n := range notes {
 		ts := lipgloss.NewStyle().Foreground(colorSubtle).Render(n.Timestamp.Format("01/02 15:04"))
 		st := renderNoteStatus(TaskStatus(n.Status))
-		content := lipgloss.NewStyle().Foreground(colorText).Render(n.Content)
-		lines = append(lines, fmt.Sprintf("  %s  %s  %s", ts, st, content))
+
+		prefixWidth := 2 + 11 + 2 + lipgloss.Width(st) + 2
+		contentWidth := w - prefixWidth
+		indent := strings.Repeat(" ", prefixWidth)
+
+		wrappedContent := wrapWithIndent(
+			lipgloss.NewStyle().Foreground(colorText).Render(n.Content),
+			contentWidth,
+			indent,
+		)
+		entry := fmt.Sprintf("  %s  %s  %s", ts, st, wrappedContent)
+		// Flatten multi-line entries for correct scrolling
+		for _, l := range strings.Split(entry, "\n") {
+			lines = append(lines, l)
+		}
 	}
 
 	if len(lines) == 0 {
@@ -94,12 +107,25 @@ func (m DashboardModel) renderMsgHistoryView(w int) string {
 
 	msgs := m.msgHistoryLines
 
+	// Build rendered lines (flat, one entry per display line for correct scrolling)
 	var lines []string
 	for _, msg := range msgs {
 		ts := lipgloss.NewStyle().Foreground(colorSubtle).Render(msg.Timestamp.Format("01/02 15:04"))
 		from := lipgloss.NewStyle().Foreground(colorAccent).Render(msg.From)
-		content := lipgloss.NewStyle().Foreground(colorText).Render(msg.Content)
-		lines = append(lines, fmt.Sprintf("  %s  %s: %s", ts, from, content))
+
+		prefixWidth := 2 + 11 + 2 + lipgloss.Width(from) + 2
+		contentWidth := w - prefixWidth
+		indent := strings.Repeat(" ", prefixWidth)
+
+		wrappedContent := wrapWithIndent(
+			lipgloss.NewStyle().Foreground(colorText).Render(msg.Content),
+			contentWidth,
+			indent,
+		)
+		entry := fmt.Sprintf("  %s  %s: %s", ts, from, wrappedContent)
+		for _, l := range strings.Split(entry, "\n") {
+			lines = append(lines, l)
+		}
 	}
 
 	if len(lines) == 0 {
@@ -136,11 +162,33 @@ func (m DashboardModel) renderMsgHistoryView(w int) string {
 	}
 
 	b.WriteString("\n")
-	refresh := lipgloss.NewStyle().Foreground(colorDim).Render("↻ 2s")
 	dot := lipgloss.NewStyle().Foreground(colorDim).Render("  ·  ")
-	line := "  " + footerKey("←/esc", "back") + dot + footerKey("↑↓", "scroll") + dot + refresh
+	line := "  " + footerKey("←/esc", "back") + dot + footerKey("↑↓", "scroll")
+	if m.selectedTask != nil && !m.selectedTask.Status.IsTerminal() {
+		refresh := lipgloss.NewStyle().Foreground(colorDim).Render("↻ 2s")
+		line += dot + refresh
+	}
 	b.WriteString(lipgloss.NewStyle().MarginTop(1).Render(line))
 	return b.String()
+}
+
+// loadTaskMessages returns IRC messages with live + stored fallback.
+func loadTaskMessages(store *Store, task *Task) []ircMessage {
+	// Non-terminal task with IRCName: try live IRC first
+	if task.IRCName != "" && !task.Status.IsTerminal() {
+		if msgs := loadIRCMessages(task.IRCName); len(msgs) > 0 {
+			return msgs
+		}
+	}
+	// Fall back to stored messages
+	if msgs, err := store.LoadMessages(task.ID); err == nil && len(msgs) > 0 {
+		return msgs
+	}
+	// Last resort: try live IRC even for terminal (IRC might not be cleaned yet)
+	if task.IRCName != "" {
+		return loadIRCMessages(task.IRCName)
+	}
+	return nil
 }
 
 func (m DashboardModel) renderHistoryFooter() string {

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/mdp/qrterminal/v3"
 )
 
@@ -102,13 +103,29 @@ func footerKey(k, desc string) string {
 }
 
 func truncate(s string, max int) string {
-	if len(s) <= max {
+	if lipgloss.Width(s) <= max {
 		return s
 	}
-	if max <= 3 {
-		return s[:max]
+	if max <= 2 {
+		return ansi.Truncate(s, max, "")
 	}
-	return s[:max-2] + ".."
+	return ansi.Truncate(s, max-2, "..")
+}
+
+func wordWrap(s string, limit int) string {
+	if limit <= 0 {
+		return s
+	}
+	return ansi.Wordwrap(s, limit, "")
+}
+
+func wrapWithIndent(s string, contentWidth int, indent string) string {
+	wrapped := wordWrap(s, contentWidth)
+	lines := strings.Split(wrapped, "\n")
+	for i := 1; i < len(lines); i++ {
+		lines[i] = indent + lines[i]
+	}
+	return strings.Join(lines, "\n")
 }
 
 func timeAgo(t time.Time) string {

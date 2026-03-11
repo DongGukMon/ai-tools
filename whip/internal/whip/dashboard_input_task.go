@@ -1,6 +1,8 @@
 package whip
 
 import (
+	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 
@@ -88,10 +90,21 @@ func (m DashboardModel) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.view = viewNoteHistory
 		}
 	case "m":
-		if m.selectedTask != nil && m.selectedTask.IRCName != "" {
+		if m.selectedTask != nil && (m.selectedTask.IRCName != "" || m.store.HasMessages(m.selectedTask.ID)) {
 			m.msgHistoryScroll = 0
-			m.msgHistoryLines = loadIRCMessages(m.selectedTask.IRCName)
+			m.msgHistoryLines = loadTaskMessages(m.store, m.selectedTask)
 			m.view = viewMsgHistory
+		}
+	case "r":
+		if m.selectedTask != nil && m.selectedTask.SessionID != "" {
+			backend := m.selectedTask.Backend
+			if backend == "" {
+				backend = "claude"
+			}
+			cmd := exec.Command("rewind", backend, m.selectedTask.SessionID)
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			_ = cmd.Start()
 		}
 	case "ctrl+c":
 		return m, tea.Quit
@@ -156,6 +169,9 @@ func (m DashboardModel) detailMaxScroll() int {
 		return 0
 	}
 
+	w := min(m.width, 120)
+	descContentWidth := w - 4
+
 	fieldCount := 10
 	if t.IRCName != "" {
 		fieldCount++
@@ -188,8 +204,15 @@ func (m DashboardModel) detailMaxScroll() int {
 		maxDescLines = 3
 	}
 
-	descLines := strings.Split(t.Description, "\n")
-	maxScroll := len(descLines) - maxDescLines
+	// Count wrapped lines, not raw lines
+	rawLines := strings.Split(t.Description, "\n")
+	totalWrapped := 0
+	for _, line := range rawLines {
+		wrapped := wordWrap(line, descContentWidth)
+		totalWrapped += len(strings.Split(wrapped, "\n"))
+	}
+
+	maxScroll := totalWrapped - maxDescLines
 	if maxScroll < 0 {
 		maxScroll = 0
 	}

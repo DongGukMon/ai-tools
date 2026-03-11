@@ -36,6 +36,12 @@ func (m DashboardModel) renderListView(w int) string {
 	return b.String()
 }
 
+type detailField struct {
+	label string
+	value string // raw text, no ANSI
+	style lipgloss.Style
+}
+
 func (m DashboardModel) renderDetailView(w int) string {
 	var b strings.Builder
 	t := m.selectedTask
@@ -43,7 +49,8 @@ func (m DashboardModel) renderDetailView(w int) string {
 		return ""
 	}
 
-	labelStyle := lipgloss.NewStyle().Bold(true).Foreground(colorMuted).Width(14)
+	const labelWidth = 14
+	labelStyle := lipgloss.NewStyle().Bold(true).Foreground(colorMuted).Width(labelWidth)
 	valStyle := lipgloss.NewStyle().Foreground(colorText)
 	dimStyle := lipgloss.NewStyle().Foreground(colorDim)
 
@@ -62,58 +69,83 @@ func (m DashboardModel) renderDetailView(w int) string {
 		roleDisplay = "worker"
 	}
 
-	fields := []struct{ label, value string }{
-		{"ID", idStyle.Render(t.ID)},
-		{"Workspace", valStyle.Render(t.WorkspaceName())},
-		{"Title", valStyle.Render(t.Title)},
-		{"Status", valStyle.Render(string(t.Status))},
-		{"Backend", renderBackend(t.Backend)},
-		{"Role", valStyle.Render(roleDisplay)},
-		{"Difficulty", valStyle.Render(diffDisplay)},
-		{"Review", valStyle.Render(fmt.Sprintf("%v", t.Review))},
-		{"Runner", renderRunner(t.Runner)},
+	fields := []detailField{
+		{"ID", t.ID, idStyle},
+		{"Workspace", t.WorkspaceName(), valStyle},
+		{"Title", t.Title, valStyle},
+		{"Status", string(t.Status), valStyle},
+		{"Backend", t.Backend, valStyle},
+		{"Role", roleDisplay, valStyle},
+		{"Difficulty", diffDisplay, valStyle},
+		{"Review", fmt.Sprintf("%v", t.Review), valStyle},
+		{"Runner", t.Runner, valStyle},
 	}
 
 	if t.IRCName != "" {
-		fields = append(fields, struct{ label, value string }{"IRC", valStyle.Render(t.IRCName)})
+		fields = append(fields, detailField{"IRC", t.IRCName, valStyle})
 	}
 	if t.MasterIRCName != "" {
-		fields = append(fields, struct{ label, value string }{"Master IRC", valStyle.Render(t.MasterIRCName)})
+		fields = append(fields, detailField{"Master IRC", t.MasterIRCName, valStyle})
 	}
 	if t.ShellPID > 0 {
-		fields = append(fields, struct{ label, value string }{"Shell PID", renderPID(t)})
+		fields = append(fields, detailField{"Shell PID", fmt.Sprintf("%d", t.ShellPID), valStyle})
 	}
 	if t.Note != "" {
-		fields = append(fields, struct{ label, value string }{"Note", lipgloss.NewStyle().Foreground(colorMuted).Render(t.Note)})
+		fields = append(fields, detailField{"Note", t.Note, lipgloss.NewStyle().Foreground(colorMuted)})
 	}
 	if len(t.DependsOn) > 0 {
-		fields = append(fields, struct{ label, value string }{"Depends on", lipgloss.NewStyle().Foreground(colorWarning).Render(strings.Join(t.DependsOn, ", "))})
+		fields = append(fields, detailField{"Depends on", strings.Join(t.DependsOn, ", "), lipgloss.NewStyle().Foreground(colorWarning)})
 	}
 	if t.CWD != "" {
-		fields = append(fields, struct{ label, value string }{"CWD", lipgloss.NewStyle().Foreground(colorSubtle).Render(t.CWD)})
+		fields = append(fields, detailField{"CWD", t.CWD, lipgloss.NewStyle().Foreground(colorSubtle)})
 	}
 
-	fields = append(fields, struct{ label, value string }{"Created", lipgloss.NewStyle().Foreground(colorSubtle).Render(t.CreatedAt.Format(time.RFC3339))})
-	fields = append(fields, struct{ label, value string }{"Updated", lipgloss.NewStyle().Foreground(colorSubtle).Render(t.UpdatedAt.Format(time.RFC3339))})
+	fields = append(fields, detailField{"Created", t.CreatedAt.Format(time.RFC3339), lipgloss.NewStyle().Foreground(colorSubtle)})
+	fields = append(fields, detailField{"Updated", t.UpdatedAt.Format(time.RFC3339), lipgloss.NewStyle().Foreground(colorSubtle)})
 	if t.AssignedAt != nil {
-		fields = append(fields, struct{ label, value string }{"Assigned", lipgloss.NewStyle().Foreground(colorSubtle).Render(t.AssignedAt.Format(time.RFC3339))})
+		fields = append(fields, detailField{"Assigned", t.AssignedAt.Format(time.RFC3339), lipgloss.NewStyle().Foreground(colorSubtle)})
 	}
 	if t.CompletedAt != nil {
 		label := "Completed"
 		if t.Status == StatusCanceled {
 			label = "Canceled"
 		}
-		fields = append(fields, struct{ label, value string }{label, lipgloss.NewStyle().Foreground(colorSubtle).Render(t.CompletedAt.Format(time.RFC3339))})
+		fields = append(fields, detailField{label, t.CompletedAt.Format(time.RFC3339), lipgloss.NewStyle().Foreground(colorSubtle)})
 	}
 
+	// Special rendering for Backend, Runner, Shell PID which use custom render funcs
+	contentWidth := w - 2 - labelWidth - 1 // 2 indent + 14 label + 1 space
+	indent := "  " + strings.Repeat(" ", labelWidth+1)
+
 	for _, f := range fields {
-		b.WriteString("  " + labelStyle.Render(f.label) + " " + f.value + "\n")
+		var rendered string
+		switch f.label {
+		case "Backend":
+			rendered = renderBackend(f.value)
+		case "Runner":
+			rendered = renderRunner(f.value)
+		case "Shell PID":
+			rendered = renderPID(t)
+		default:
+			rendered = wrapWithIndent(f.style.Render(f.value), contentWidth, indent)
+		}
+		b.WriteString("  " + labelStyle.Render(f.label) + " " + rendered + "\n")
 	}
 
 	if t.Description != "" {
 		b.WriteString("\n")
 		descLabel := "Description"
-		descLines := strings.Split(t.Description, "\n")
+		descContentWidth := w - 4 // 2 indent each side
+
+		// Word-wrap each raw description line, then flatten to get total visible lines
+		rawLines := strings.Split(t.Description, "\n")
+		var wrappedLines []string
+		for _, line := range rawLines {
+			wrapped := wordWrap(line, descContentWidth)
+			for _, wl := range strings.Split(wrapped, "\n") {
+				wrappedLines = append(wrappedLines, wl)
+			}
+		}
 
 		overhead := 2 + 2 + len(fields) + 2 + 3 + 2
 		maxDescLines := m.height - overhead
@@ -121,7 +153,7 @@ func (m DashboardModel) renderDetailView(w int) string {
 			maxDescLines = 3
 		}
 
-		totalDesc := len(descLines)
+		totalDesc := len(wrappedLines)
 		maxScroll := totalDesc - maxDescLines
 		if maxScroll < 0 {
 			maxScroll = 0
@@ -143,7 +175,7 @@ func (m DashboardModel) renderDetailView(w int) string {
 		if end > totalDesc {
 			end = totalDesc
 		}
-		visible := descLines[m.detailScroll:end]
+		visible := wrappedLines[m.detailScroll:end]
 		for _, line := range visible {
 			b.WriteString("  " + lipgloss.NewStyle().Foreground(colorMuted).Render(line) + "\n")
 		}
@@ -304,8 +336,11 @@ func (m DashboardModel) renderDetailFooter() string {
 	if m.selectedTask != nil && len(m.selectedTask.Notes) > 0 {
 		line += dot + footerKey("n", "notes")
 	}
-	if m.selectedTask != nil && m.selectedTask.IRCName != "" {
+	if m.selectedTask != nil && (m.selectedTask.IRCName != "" || m.store.HasMessages(m.selectedTask.ID)) {
 		line += dot + footerKey("m", "messages")
+	}
+	if m.selectedTask != nil && m.selectedTask.SessionID != "" {
+		line += dot + footerKey("r", "rewind")
 	}
 
 	return lipgloss.NewStyle().MarginTop(1).Render(line)

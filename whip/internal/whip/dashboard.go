@@ -280,8 +280,10 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.tmuxContent = content
 			}
 		}
-		if m.view == viewMsgHistory && m.selectedTask != nil && m.selectedTask.IRCName != "" {
-			m.msgHistoryLines = loadIRCMessages(m.selectedTask.IRCName)
+		if m.view == viewMsgHistory && m.selectedTask != nil {
+			if !m.selectedTask.Status.IsTerminal() {
+				m.msgHistoryLines = loadTaskMessages(m.store, m.selectedTask)
+			}
 		}
 		if m.serveProcess != nil {
 			m.masterAlive = IsMasterSessionAlive(m.remoteWorkspace)
