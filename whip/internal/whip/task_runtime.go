@@ -119,7 +119,7 @@ func ApproveTask(store *Store, id string, source LaunchSource, note string) (*Ta
 }
 
 func CompleteTask(store *Store, id string, source LaunchSource, note string) (*Task, error) {
-	return store.UpdateTask(id, func(task *Task) error {
+	task, err := store.UpdateTask(id, func(task *Task) error {
 		if err := requireTaskStatuses(task, StatusInProgress, StatusApproved); err != nil {
 			return err
 		}
@@ -138,6 +138,16 @@ func CompleteTask(store *Store, id string, source LaunchSource, note string) (*T
 		}
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
+	// Best-effort: snapshot IRC messages before they get cleaned up
+	if task.IRCName != "" {
+		if msgs := loadIRCMessages(task.IRCName); len(msgs) > 0 {
+			_ = store.SaveMessages(task.ID, msgs)
+		}
+	}
+	return task, nil
 }
 
 func FailTask(store *Store, id string, source LaunchSource, note string) (*Task, error) {

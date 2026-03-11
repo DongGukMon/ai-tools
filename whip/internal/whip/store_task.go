@@ -9,6 +9,50 @@ import (
 	"strings"
 )
 
+const messagesFile = "messages.json"
+
+func (s *Store) SaveMessages(id string, msgs []ircMessage) error {
+	dir := s.taskDir(id)
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		return err
+	}
+	data, err := json.MarshalIndent(msgs, "", "  ")
+	if err != nil {
+		return err
+	}
+	return atomicWriteFile(filepath.Join(dir, messagesFile), data, privateFilePerm)
+}
+
+func (s *Store) LoadMessages(id string) ([]ircMessage, error) {
+	path := filepath.Join(s.taskDir(id), messagesFile)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return nil, err
+		}
+		path = filepath.Join(s.archiveTaskDir(id), messagesFile)
+		data, err = os.ReadFile(path)
+		if err != nil {
+			return nil, err
+		}
+	}
+	var msgs []ircMessage
+	if err := json.Unmarshal(data, &msgs); err != nil {
+		return nil, err
+	}
+	return msgs, nil
+}
+
+func (s *Store) HasMessages(id string) bool {
+	if _, err := os.Stat(filepath.Join(s.taskDir(id), messagesFile)); err == nil {
+		return true
+	}
+	if _, err := os.Stat(filepath.Join(s.archiveTaskDir(id), messagesFile)); err == nil {
+		return true
+	}
+	return false
+}
+
 func (s *Store) SaveTask(task *Task) error {
 	task.Workspace = NormalizeWorkspaceName(task.Workspace)
 	return s.withTaskLockInWorkspace(task.Workspace, task.ID, func() error {
