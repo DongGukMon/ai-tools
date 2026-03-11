@@ -55,12 +55,28 @@ func RenderGraph(nodes []GraphNode) string {
 		sortByInputOrder(layerGroups[l], inputOrder)
 	}
 
+	// Insert passthrough nodes for cross-layer edges
+	passthroughs := map[string]map[int]bool{} // parentID -> set of layers it passes through
+	for _, n := range nodes {
+		for _, dep := range n.DependsOn {
+			parentLayer := layers[dep]
+			childLayer := layers[n.ID]
+			if childLayer-parentLayer > 1 {
+				if passthroughs[dep] == nil {
+					passthroughs[dep] = map[int]bool{}
+				}
+				for l := parentLayer + 1; l < childLayer; l++ {
+					passthroughs[dep][l] = true
+				}
+			}
+		}
+	}
+
 	// Render boxes
 	const (
-		padH    = 1 // horizontal padding inside box
-		minW    = 10
-		maxW    = 20
-		hGap    = 4 // horizontal gap between boxes
+		padH = 1  // horizontal padding inside box
+		maxW = 20
+		hGap = 4  // horizontal gap between boxes
 	)
 
 	// Calculate box widths per node
@@ -68,9 +84,6 @@ func RenderGraph(nodes []GraphNode) string {
 	for _, n := range nodes {
 		label := formatLabel(n.ID, n.Title)
 		w := len([]rune(label)) + padH*2 + 2 // +2 for border chars
-		if w < minW {
-			w = minW
-		}
 		if w > maxW {
 			w = maxW
 		}
@@ -108,7 +121,7 @@ func RenderGraph(nodes []GraphNode) string {
 
 		// Draw vertical connectors to next layer
 		if l < maxLayer {
-			connectors := renderConnectors(group, layerGroups[l+1], boxWidth, hGap, xPos, layers, nodeMap, nodes)
+			connectors := renderConnectors(group, layerGroups[l+1], boxWidth, hGap, xPos, layers, nodeMap, nodes, passthroughs, l)
 			if connectors != "" {
 				result = append(result, connectors)
 			}
@@ -301,33 +314,55 @@ var dirToRune = map[int]rune{
 	dirRight: '─',
 }
 
-func renderConnectors(parentGroup, childGroup []string, boxWidth map[string]int, hGap int, xPos map[string]int, layers map[string]int, nodeMap map[string]*GraphNode, nodes []GraphNode) string {
+func renderConnectors(parentGroup, childGroup []string, boxWidth map[string]int, hGap int, xPos map[string]int, layers map[string]int, nodeMap map[string]*GraphNode, nodes []GraphNode, passthroughs map[string]map[int]bool, currentLayer int) string {
 	type edge struct {
 		parentID string
 		childID  string
 	}
 	var edges []edge
+	parentSet := make(map[string]bool, len(parentGroup))
+	for _, id := range parentGroup {
+		parentSet[id] = true
+	}
 	for _, childID := range childGroup {
 		n := nodeMap[childID]
 		if n == nil {
 			continue
 		}
 		for _, dep := range n.DependsOn {
-			for _, parentID := range parentGroup {
-				if dep == parentID {
-					edges = append(edges, edge{parentID, childID})
-				}
+			if parentSet[dep] {
+				// Direct edge: parent is in current layer's group
+				edges = append(edges, edge{dep, childID})
+			} else if depLayer, ok := layers[dep]; ok && depLayer < currentLayer {
+				// Landing edge: parent from an earlier layer connects to this child
+				edges = append(edges, edge{dep, childID})
 			}
 		}
 	}
 
-	if len(edges) == 0 {
+	// Passthrough edges: parents from earlier layers passing through this gap
+	passthroughCenters := map[int]bool{}
+	for parentID, layerSet := range passthroughs {
+		if layerSet[currentLayer+1] {
+			// This parent passes through the next layer — draw vertical line
+			cx := xPos[parentID] + boxWidth[parentID]/2
+			passthroughCenters[cx] = true
+		}
+	}
+
+	if len(edges) == 0 && len(passthroughCenters) == 0 {
 		return ""
 	}
 
 	parentCenter := make(map[string]int)
 	for _, id := range parentGroup {
 		parentCenter[id] = xPos[id] + boxWidth[id]/2
+	}
+	// Add centers for landing parents (from earlier layers)
+	for _, e := range edges {
+		if _, ok := parentCenter[e.parentID]; !ok {
+			parentCenter[e.parentID] = xPos[e.parentID] + boxWidth[e.parentID]/2
+		}
 	}
 	childCenter := make(map[string]int)
 	for _, id := range childGroup {
@@ -346,6 +381,14 @@ func renderConnectors(parentGroup, childGroup []string, boxWidth map[string]int,
 			maxX = end
 		}
 	}
+	// Extend for landing parents from earlier layers
+	for _, e := range edges {
+		if !parentSet[e.parentID] {
+			if end := xPos[e.parentID] + boxWidth[e.parentID]; end > maxX {
+				maxX = end
+			}
+		}
+	}
 
 	// Build direction grid for connector line
 	dirs := make([]int, maxX)
@@ -355,17 +398,14 @@ func renderConnectors(parentGroup, childGroup []string, boxWidth map[string]int,
 		cx := childCenter[e.childID]
 
 		if px == cx {
-			// Straight down: UP from parent, DOWN to child
 			if px < maxX {
 				dirs[px] |= dirUp | dirDown
 			}
 		} else {
-			// Horizontal connector
 			lo, hi := px, cx
 			if lo > hi {
 				lo, hi = hi, lo
 			}
-			// Parent position: UP (from parent above) + horizontal direction
 			if px < maxX {
 				dirs[px] |= dirUp
 				if cx > px {
@@ -374,7 +414,6 @@ func renderConnectors(parentGroup, childGroup []string, boxWidth map[string]int,
 					dirs[px] |= dirLeft
 				}
 			}
-			// Child position: DOWN (to child below) + horizontal direction
 			if cx < maxX {
 				dirs[cx] |= dirDown
 				if px > cx {
@@ -383,11 +422,16 @@ func renderConnectors(parentGroup, childGroup []string, boxWidth map[string]int,
 					dirs[cx] |= dirLeft
 				}
 			}
-			// Fill horizontal between
 			for x := lo + 1; x < hi && x < maxX; x++ {
 				dirs[x] |= dirLeft | dirRight
-				// Preserve any existing vertical connections
 			}
+		}
+	}
+
+	// Add passthrough vertical lines
+	for cx := range passthroughCenters {
+		if cx < maxX {
+			dirs[cx] |= dirUp | dirDown
 		}
 	}
 
@@ -399,11 +443,11 @@ func renderConnectors(parentGroup, childGroup []string, boxWidth map[string]int,
 		} else if r, ok := dirToRune[dirs[i]]; ok {
 			line1[i] = r
 		} else {
-			line1[i] = '┼' // fallback for unexpected combos
+			line1[i] = '┼'
 		}
 	}
 
-	// Build arrow line: ▼ at each unique child center
+	// Build arrow line: ▼ at each unique child center, │ for passthroughs
 	line2 := make([]rune, maxX)
 	for i := range line2 {
 		line2[i] = ' '
@@ -412,6 +456,11 @@ func renderConnectors(parentGroup, childGroup []string, boxWidth map[string]int,
 		cx := childCenter[e.childID]
 		if cx < maxX {
 			line2[cx] = '▼'
+		}
+	}
+	for cx := range passthroughCenters {
+		if cx < maxX && line2[cx] == ' ' {
+			line2[cx] = '│'
 		}
 	}
 
