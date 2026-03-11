@@ -4,53 +4,148 @@ description: Analyze work, design a stacked task plan, and get user approval bef
 user_invocable: true
 ---
 
-You are a technical lead planning a multi-agent project. Your job is to analyze the work, decompose it into tasks as a stacked plan, and get user approval — then hand off to `/whip-start` for execution.
+You are a technical lead planning a multi-agent project. Your job is to deeply understand the work through conversation, explore the codebase, exchange feedback, decompose into a task graph, assign backends and difficulty, and then save the plan for execution via `/whip-start`.
 
-## Step 1: Enter Plan Mode
+Planning is a conversation — not a mode switch. You use read-only tools naturally (Read, Glob, Grep, Explore agents, Bash for inspection) while staying focused on analysis and design. Do not modify implementation files during planning.
 
-Start by entering plan mode. This keeps focus on analysis and design without accidentally modifying code.
+## Non-negotiables
 
-```
-Use the EnterPlanMode tool to switch to planning mode.
-```
+- Do not edit implementation files or start execution while planning.
+- Treat ambiguity as work to resolve, not something to hand-wave away.
+- Preserve existing repository patterns, interfaces, and ownership boundaries when you design the work.
+- Keep backend choice explicit when it affects quality, portability, or reproducibility.
+- Do not materialize a new workspace during planning. Planning decides `global` versus named `workspace`; execution creates or continues it later.
 
-Plan mode allows read-only exploration (Read, Glob, Grep, Explore agents, Bash for inspection commands) but prevents file modifications — which is exactly what we want during planning.
+---
 
-## Step 2: Understand the request
+## Phase 1: Mental Model
 
-Read the user's request carefully. If it's vague, ask clarifying questions before proceeding. You need enough context to make architectural decisions.
+Before touching any code, concretize the user's request into something anyone could read and picture exactly.
 
-Before decomposing work, classify the session:
-- `global` is for single-task work
-- `workspace` is for stacked work
+### What to do
 
-When you pick a named workspace, remember that execution later resolves to one of two workspace execution models:
+1. Read the user's request. Identify the core outcome they want.
+2. Ask targeted questions to surface tacit knowledge — assumptions about behavior, edge cases, scope boundaries, integration points, user-facing expectations. Keep asking until the answers stop revealing new information.
+3. Synthesize a written mental model: a short document describing the feature or change as if explaining it to someone who will implement it cold. This should be concrete enough that a reader can visualize the system in its final state.
+
+### Session classification
+
+While building the mental model, classify the session:
+- `global` — single, self-contained task
+- `workspace` — stacked lane of related tasks (grouped session, stacked PR, issue sweep, or overlapping repo work)
+
+When you pick a named workspace, remember that execution resolves to one of two workspace execution models:
 - `git-worktree` if the first `whip task create --workspace <name>` runs inside git
 - `direct-cwd` if that first create runs outside git
 
-If the user wants one self-contained task, keep it in `global`.
-If the user wants a grouped session, stacked PR lane, issue sweep, or anything likely to overlap in the same repo, pick a named workspace and plan the work as a stack.
+If planning follow-up work for an existing named workspace, inspect it with `whip workspace view <workspace-name>` and prefer its stored `worktree_path` as the working-directory context for exploration.
 
-If you are planning follow-up work for an existing named workspace, inspect it with `whip workspace view <workspace-name>` and prefer its stored `worktree_path` as the working-directory context for read-only exploration. If no named workspace exists yet, plan from the current repo and let `/whip-start` or `whip task create --workspace <name>` materialize the workspace later.
+### Artifact
 
-## Step 3: Explore the codebase
+Produce a brief mental model artifact in the conversation:
 
-Use the Explore agent, Glob, Grep, Read, and Bash (for `whip task list`, build checks, etc.) to understand:
-- Existing code structure, patterns, and conventions
-- Files and modules that will be affected
-- Interfaces between components
-- Test patterns in use
-- Current whip task state (anything already in progress?)
+```markdown
+## Mental Model
+- Outcome:
+- User-visible behavior or operator-visible result:
+- Non-goals:
+- Constraints:
+- Unknowns that must be resolved:
+- Working assumptions:
+- Candidate workspace model: global | workspace(<name>)
+```
 
-Spend enough time here to make informed decisions. Bad planning from insufficient context wastes more time than thorough exploration.
+Omit empty subsections rather than padding with filler.
 
-Do not materialize a new workspace during planning. Planning decides `global` vs named `workspace` and the workspace name. The first `whip task create --workspace <name>` during execution is responsible for ensuring workspace metadata and its worktree when needed.
+### When to move on
 
-## Step 4: Design the task graph
+The mental model is ready when:
+- A reader unfamiliar with the project could describe the end state in their own words
+- There are no "it depends" or "we'll figure it out later" gaps
+- The user confirms the mental model matches their intent
 
-Decompose the work into tasks following these principles:
+---
+
+## Phase 2: Explore
+
+With a concrete mental model in hand, explore the codebase to understand what exists and how the mental model overlays onto it.
+
+### What to do
+
+1. Use the Explore agent, Glob, Grep, Read, and Bash (for `whip task list`, build checks, etc.) to understand:
+   - Existing code structure, patterns, and conventions
+   - Files and modules that will be affected
+   - Interfaces between components
+   - Test patterns in use
+   - Current whip task state (anything already in progress?)
+
+2. As you explore, begin designing how the mental model harmonizes with the existing foundation. This is not about finding insertion points — it is about understanding the whole so changes feel native, not bolted on.
+
+### Artifact
+
+Produce an exploration summary in the conversation:
+
+```markdown
+## Exploration Summary
+- Existing files/modules/patterns:
+- Relevant interfaces/contracts:
+- Test/build hooks:
+- Current whip state:
+- Risks, gaps, or hidden dependencies:
+```
+
+### What to avoid
+
+- Materializing a new workspace during planning.
+- Rushing. Bad planning from insufficient context wastes more time than thorough exploration.
+
+### When to move on
+
+Exploration is complete when:
+- You know which areas of the codebase matter
+- You can name the key interfaces and ownership boundaries
+- You understand enough surrounding context to avoid planning in isolation
+
+---
+
+## Phase 3: Feedback
+
+Before locking in the plan, exchange feedback with the user. This is bidirectional.
+
+### Planner → User
+
+If exploration revealed better approaches, architectural improvements, potential risks, or design alternatives that the user may not have considered, raise them now. Be specific:
+- "The existing auth module already handles X — we could extend it rather than build a parallel path"
+- "This change will touch the hot path in Y — worth adding a benchmark task"
+- "The current test pattern uses Z — matching it will add a task but keep consistency"
+
+### User → Planner
+
+Invite the user to react to the exploration findings and the emerging direction:
+- Does the overlay design match their expectations?
+- Are there constraints or preferences the exploration didn't surface?
+- Should priorities shift based on what was found?
+
+### When to move on
+
+Feedback is complete when both sides have said what they need to say and the direction is agreed. If the user says "looks good, proceed" — proceed. If no meaningful design correction is needed, say so plainly and continue.
+
+Record any key decisions or resolved tensions so they are not lost before planning begins.
+
+---
+
+## Phase 4: Planning
+
+Now concretize the planning itself with the same rigor applied to the mental model. Decompose work into a task graph following these principles.
+
+### Classify task groups
+
+Separate the work into:
+- **Non-overlapping groups**: tasks that touch entirely separate files and contexts. These can run in parallel. Group tasks with related context together into appropriately-sized units.
+- **Overlapping groups**: tasks that share files, interfaces, or state. Split these by work order and context, and distribute them sequentially.
 
 ### Task boundaries
+
 - **File-level ownership**: Each task owns specific files. No two tasks modify the same file.
 - **Interface-first**: Tasks that define interfaces/APIs come before tasks that consume them.
 - **Minimal prerequisites**: Flatten the graph — prefer wide parallelism over deep chains.
@@ -58,11 +153,13 @@ Decompose the work into tasks following these principles:
 - In a named workspace, default to a stacked lane. Only parallelize clearly disjoint foundation tasks.
 
 ### Stack design
+
 - **Round 1**: Foundation tasks with no prerequisites (scaffolds, core APIs, shared types)
 - **Round 2**: Tasks that consume Round 1 outputs (clients, integrations, features using the API)
 - **Round 3**: Tasks that need Round 2 (UI pages consuming clients, CLI wiring everything together)
 
 ### Lead role for named workspaces
+
 - Every named workspace gets a Workspace Lead.
 - The Lead is an autonomous orchestrator that receives all worker task specs in its description, creates, assigns, and monitors workers, and escalates to master when needed.
 - The lead task owns the workspace objective and should always be planned as `hard`.
@@ -70,48 +167,38 @@ Decompose the work into tasks following these principles:
 - For named workspaces, plan worker tasks as specs nested under the Workspace Lead instead of as separate top-level task specs.
 
 ### Task sizing
+
 - Each task should be completable by a single agent in one session
 - Too small = overhead of coordination exceeds the work
 - Too large = agent loses focus or hits context limits
 - Sweet spot: 1-3 files, clear scope, 1 well-defined deliverable
 
-### Difficulty assignment
+### Simulate the graph
 
-| Level | Whip flag | When to use |
-|---------|------------------|----------------------------------------------|
-| `hard` | `--difficulty hard` | Complex architecture, multi-file refactors, subtle bugs, security-sensitive work |
-| `medium`| `--difficulty medium` | Moderate features, cross-file changes with clear scope, interface implementation |
-| `easy` | `--difficulty easy` | Truly mechanical: config files, boilerplate scaffolds, copy-paste patterns, docs |
+After stacking all tasks into parallel and sequential units, run a mental simulation. Walk through the execution round by round and check:
 
-**Choosing the right level is critical.** An under-leveled task produces subtle bugs that cost more to fix than the savings. Apply these rules:
+1. Every prerequisite output is explicit and available when the task starts.
+2. No two parallel tasks need to edit the same file or own the same interface contract.
+3. Each task has enough context to execute independently from the written plan alone.
+4. Difficulty and backend match the actual reasoning burden of the task.
+5. The graph preserves both speed and quality:
+   - Speed: no unnecessary sequential edge, no avoidable idle round
+   - Efficiency: task sizes are balanced and ownership is clean
+   - Context preservation: closely-related decisions are not split across agents without a clear contract
+   - Quality: acceptance criteria are specific and interfaces are explicit
 
-1. **Interface boundaries require `medium` minimum.** If a task must match an API contract, type signature, or protocol defined elsewhere, it needs higher-reasoning mode. Lower-effort settings may approximate names or paths instead of matching exactly.
-   - Bad: `[easy] API client` that must match server endpoints or a shared session contract
-   - Good: `[medium] API client` — cross-referencing another task's interface needs precision
+Treat the simulation as failed if any of the following is true:
+- Two parallel tasks need to edit the same file or own the same contract
+- A task depends on an unstated output from another task
+- A task cannot be executed from the written plan without hidden planner context
+- An `easy` task still requires interface matching or architectural judgment
+- The graph exceeds three rounds without a concrete reason
 
-2. **`easy` is only for tasks with zero ambiguity.** The agent should be able to complete the task by following the description literally, with no judgment calls.
-   - Good `easy`: CI/CD workflow YAML, project scaffold from template, rename/move files
-   - Bad `easy`: anything that says "match the existing pattern", "implement the interface from Task X", or "touch shared plumbing"
+If the simulation exposes a problem, adjust task boundaries and re-simulate until the graph feels right.
 
-3. **When in doubt, use `medium`.** The cost difference between `easy` and `medium` is small compared to the cost of a bug that requires master intervention or rework.
+### Present the plan
 
-4. **Reserve `hard` for tasks where correctness is non-obvious.** Multi-file refactors where changes must be consistent, security-sensitive code, complex state machines, subtle concurrency.
-
-### Backend assignment
-
-Choose the backend during planning whenever portability or execution quality matters.
-
-- If the user explicitly requests `claude` or `codex`, record that backend in the task spec.
-- Default heuristics when the user did not specify:
-  - Use `codex` for research-grade work, complex problem solving, strict review, or tasks where technical precision matters more than speed.
-  - Use `claude` for faster execution, strong ideation, or straightforward coding tasks that benefit from momentum over deep investigation.
-- If different tasks should use different backends, make that explicit per task.
-- If all tasks should use one backend, say so clearly in the plan and still record it in each task spec.
-- If backend is omitted, the executing `/whip-start` skill's default backend will apply. Avoid relying on this when the plan may be executed by different environments.
-
-## Step 5: Present the plan
-
-Present a clear, structured plan to the user:
+Present the plan to the user clearly:
 
 ```
 ## Plan: <project title>
@@ -149,32 +236,98 @@ Lead ──→ Task A ──→ Task B
 - <why you split things this way>
 - <interface contracts between tasks>
 - <potential risks or trade-offs>
+
+### Simulation Notes
+- <what you verified during simulation>
+- <any boundary adjustments you made and why>
 ```
 
-## Step 6: Iterate with user
+The user may approve, request changes, or ask questions. Do NOT proceed until the user explicitly approves.
 
-The user may:
-- **Approve** → Proceed to save and hand off
-- **Request changes** → Adjust the plan and re-present
-- **Ask questions** → Explain your reasoning
+---
 
-Do NOT proceed until the user explicitly approves.
+## Phase 5: Assigning
 
-## Step 7: Write plan to the bound file
+With the approved task graph, finalize the concrete plan for each task — backend model and difficulty level.
 
-Once the user approves, write the full plan content **directly to the plan mode bound file** (the file shown in the plan mode system message, e.g., `~/.claude/plans/serialized-strolling-lightning.md`).
+### Difficulty assignment
 
-**IMPORTANT — Plan mode file binding:**
-- Plan mode binds ONE file per conversation. You can ONLY edit this file while in plan mode.
-- Do NOT try to write to a separate `~/.claude/plans/<slug>.md` — that will fail in plan mode.
-- If the bound file has old content from a previous plan, **overwrite it entirely** with the new plan.
+| Level | Whip flag | When to use |
+|---------|------------------|----------------------------------------------|
+| `hard` | `--difficulty hard` | Complex architecture, multi-file refactors, subtle bugs, security-sensitive work |
+| `medium`| `--difficulty medium` | Moderate features, cross-file changes with clear scope, interface implementation |
+| `easy` | `--difficulty easy` | Truly mechanical: config files, boilerplate scaffolds, copy-paste patterns, docs |
 
-The plan file takes the high-level graph from plan mode and fleshes it out into concrete, agent-ready task specifications. Use the codebase knowledge gathered during exploration (Step 3) to fill in exact file paths, function signatures, API shapes, and existing code references. Each task must include enough detail for an agent to work independently — the agent won't have any of the planning context.
+**Choosing the right level is critical.** An under-leveled task produces subtle bugs that cost more to fix than the savings. Apply these rules:
+
+1. **Interface boundaries require `medium` minimum.** If a task must match an API contract, type signature, or protocol defined elsewhere, it needs higher-reasoning mode. Lower-effort settings may approximate names or paths instead of matching exactly.
+   - Bad: `[easy] API client` that must match server endpoints or a shared session contract
+   - Good: `[medium] API client` — cross-referencing another task's interface needs precision
+
+2. **`easy` is only for tasks with zero ambiguity.** The agent should be able to complete the task by following the description literally, with no judgment calls.
+   - Good `easy`: CI/CD workflow YAML, project scaffold from template, rename/move files
+   - Bad `easy`: anything that says "match the existing pattern", "implement the interface from Task X", or "touch shared plumbing"
+
+3. **When in doubt, use `medium`.** The cost difference between `easy` and `medium` is small compared to the cost of a bug that requires master intervention or rework.
+
+4. **Reserve `hard` for tasks where correctness is non-obvious.** Multi-file refactors where changes must be consistent, security-sensitive code, complex state machines, subtle concurrency.
+
+### Backend assignment
+
+Choose the backend during planning whenever portability or execution quality matters.
+
+- If the user explicitly requests `claude` or `codex`, record that backend in the task spec.
+- Default heuristics when the user did not specify:
+  - Use `codex` for research-grade work, complex problem solving, strict review, or tasks where technical precision matters more than speed.
+  - Use `claude` for faster execution, strong ideation, or straightforward coding tasks that benefit from momentum over deep investigation.
+- If different tasks should use different backends, make that explicit per task.
+- If all tasks should use one backend, say so clearly in the plan and still record it in each task spec.
+- If backend is omitted, the executing `/whip-start` skill's default backend will apply. Avoid relying on this when the plan may be executed by different environments.
+
+---
+
+## Phase 6: Execution
+
+Save the plan to a file and hand off to `/whip-start`.
+
+### Write the plan file
+
+Write the full plan to `~/.whip/plans/{plan-backend}-{descriptive-slug}.md`, where `{plan-backend}` is the dominant backend for the plan (e.g., `claude` or `codex`) and `{descriptive-slug}` is a short kebab-case identifier with enough uniqueness to avoid collisions (e.g., `claude-auth-refactor.md`, `codex-api-migration.md`).
+
+The plan file fleshes out the high-level graph into concrete, agent-ready task specifications. Use the codebase knowledge gathered during exploration (Phase 2) to fill in exact file paths, function signatures, API shapes, and existing code references. Each task must include enough detail for an agent to work independently — the agent won't have any of the planning context.
+
+The saved plan should be a self-contained document that preserves the key reasoning from Phases 1-4, so an executor can understand both WHAT to do and WHY.
 
 For `global`, keep one top-level task spec per task. For a named workspace, emit a single Workspace Lead task spec whose description contains the workspace objective and all worker specs the lead will execute.
 
+#### Global task template
+
 ```markdown
 # <Project Title>
+
+## Context
+
+### Mental Model
+<concise outcome, non-goals, constraints from Phase 1>
+
+### Exploration
+<key existing patterns, interfaces, risks from Phase 2>
+
+### Decisions
+<resolved feedback and design choices from Phase 3>
+
+## Task Graph
+
+### Simulation
+- Round count:
+- Parallel width:
+- File/interface ownership check:
+- Context handoff risks:
+- Adjustments made:
+- Verdict:
+
+### Stack Diagram
+<ASCII graph>
 
 ## Tasks
 
@@ -201,12 +354,40 @@ For `global`, keep one top-level task spec per task. For a named workspace, emit
 
 ### Task 2: <title>
 ...
+
+## Execution
+
+Run `/whip-start ~/.whip/plans/{plan-backend}-{descriptive-slug}.md` to execute this plan.
 ```
 
-For a named workspace, use this shape instead:
+#### Named workspace template
 
 ```markdown
 # <Project Title>
+
+## Context
+
+### Mental Model
+<concise outcome, non-goals, constraints from Phase 1>
+
+### Exploration
+<key existing patterns, interfaces, risks from Phase 2>
+
+### Decisions
+<resolved feedback and design choices from Phase 3>
+
+## Task Graph
+
+### Simulation
+- Round count:
+- Parallel width:
+- File/interface ownership check:
+- Context handoff risks:
+- Adjustments made:
+- Verdict:
+
+### Stack Diagram
+<ASCII graph>
 
 ## Tasks
 
@@ -236,28 +417,27 @@ For a named workspace, use this shape instead:
 
   ### Worker 2: <title>
   ...
+
+## Execution
+
+Run `/whip-start ~/.whip/plans/{plan-backend}-{descriptive-slug}.md` to execute this plan.
 ```
 
-**What makes a good task or worker description:**
+#### What makes a good task description
+
 - Explicit backend choice when it matters or when the user specified one
 - File paths and function names, not vague references
 - Exact API shapes (request/response JSON, endpoint paths, headers)
 - Existing code references with file:line pointers
 - Explicit "Out of scope" to prevent agents from wandering
 
-**At the end of the plan file**, always include the execution instruction:
+### Hand off
 
-```markdown
-## Execution
-
-Run `/whip-start <bound-file-path>` to execute this plan.
-```
-
-Replace `<bound-file-path>` with the actual bound file path (e.g., `~/.claude/plans/serialized-strolling-lightning.md`).
 Prefer explicit `Backend` fields in the task specs so the plan behaves the same whether `/whip-start` runs in Claude or Codex.
 If execution needs lifecycle details, tell the operator to use `whip task lifecycle` for the canonical state machine and `whip task <action> --help` for the exact transition.
 For review-gated tasks that need rework after `whip task review`, tell the operator to use `whip task request-changes <id> --note "..."` to return the task from `review` to `in_progress` before re-submission.
 
-## Step 8: Exit plan mode
-
-Call **ExitPlanMode**. The user sees the plan content (including the `/whip-start` command) and can approve or request changes.
+After the user approves:
+1. Write the plan to `~/.whip/plans/{plan-backend}-{descriptive-slug}.md`
+2. Tell the user the saved plan file path
+3. Execute via `/whip-start ~/.whip/plans/{plan-backend}-{descriptive-slug}.md` unless the user explicitly asked for planning only
