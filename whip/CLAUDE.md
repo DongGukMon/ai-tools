@@ -63,7 +63,7 @@ Rules:
 
 - Only lifecycle commands change status: `assign`, `start`, `review`, `request-changes`, `approve`, `complete`, `fail`, `cancel`
 - Operational commands do not change status: `create`, `list`, `view`, `lifecycle`, `note`, `dep`, `clean`, `delete`
-- `failed` is non-terminal; re-dispatch with `whip task assign <id>`
+- `failed` is non-terminal; re-dispatch with `whip task assign <id> --master-irc <resolved-master-irc>` when you are coordinating directly
 - Review tasks use `assign -> start -> review -> request-changes -> review -> approve -> complete`
 - Non-review tasks can use `assign -> start -> complete`
 
@@ -71,32 +71,43 @@ Rules:
 
 ```bash
 # single-task work
-claude-irc join wp-master
+claude-irc whoami 2>/dev/null
+claude-irc who
 whip task create "Auth module" --difficulty medium --desc "Implement JWT auth"
-whip task assign <task-id>
+whip task assign <task-id> --master-irc <resolved-master-irc>
 whip task list
 ```
 
 ```bash
 # named workspace
-claude-irc join wp-master-issue-sweep
+claude-irc whoami 2>/dev/null
+claude-irc who
 whip workspace view issue-sweep
 whip task create "Auth module" --workspace issue-sweep --difficulty medium --desc "Implement JWT auth"
 whip task dep <deploy-id> --after <auth-id>
-whip task assign <auth-id>
+whip task assign <auth-id> --master-irc <resolved-master-irc>
 whip dashboard
 claude-irc inbox
 ```
 
 ```bash
 # lead-managed workspace — master delegates orchestration to a lead
-claude-irc join wp-master-auth-refactor
+claude-irc whoami 2>/dev/null
+claude-irc who
 whip task create "Refactor auth system" --workspace auth-refactor --role lead --desc "Refactor auth to middleware pattern, update tests, write docs"
-whip task assign <lead-id>
+whip task assign <lead-id> --master-irc <resolved-master-irc>
 # The lead autonomously creates workers, coordinates via IRC, and reports back
 # Monitor via dashboard or claude-irc inbox
 whip dashboard
 ```
+
+Master IRC selection:
+- If `claude-irc whoami` succeeds, reuse that exact identity as `resolved-master-irc`.
+- If it fails, mint a new coordinating identity such as `wp-master-<task-name-short>`.
+- Try `claude-irc join <candidate>` and, on collision, retry with a short suffix such as `wp-master-<task-name-short>-<rand4>`.
+- Reuse that same resolved name for every task assigned from the current coordinating session.
+- For newly created identities, prefer the `wp-master-` prefix so dashboards and humans can recognize them easily.
+- Pass `--master-irc <resolved-master-irc>` explicitly on every `whip task assign`.
 
 Useful operational commands:
 

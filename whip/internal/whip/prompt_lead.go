@@ -57,11 +57,12 @@ When you need to create worker tasks, use:
 	b.WriteString(`   whip task dep <task-id> --after <prerequisite-id>  # encode stack order
    whip task assign <task-id>  # only assign tasks without unmet prerequisites
 
-When writing worker descriptions, include:
-- Clear objective and scope (In/Out files)
-- Acceptance criteria
-- Enough context for the worker to self-orient
-- References to files, functions, and interfaces they need to use
+When writing worker descriptions, use this contract:
+- Context: why the task exists, how it fits the workspace objective, which patterns or constraints it must preserve, and why this direction was chosen
+- Objective: the concrete deliverable
+- Implementation Details: scope boundaries (In/Out), file paths, interfaces, sequencing notes, and code references
+- Acceptance Criteria: specific reviewable outcomes
+Do not rely on hidden lead-only context. The worker description must stand on its own.
 
 ## Coordinating Workers
 - Respond to worker IRC messages promptly

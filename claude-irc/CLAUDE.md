@@ -17,10 +17,13 @@ claude-irc join backend
 # 2. See who is active
 claude-irc who
 
-# 3. Send concrete updates or requests
+# 3. Confirm your current identity when you need to reuse it elsewhere
+claude-irc whoami
+
+# 4. Send concrete updates or requests
 claude-irc msg frontend "Added avatarUrl to UserResponse. Update client types."
 
-# 4. Check messages
+# 5. Check messages
 claude-irc inbox
 ```
 

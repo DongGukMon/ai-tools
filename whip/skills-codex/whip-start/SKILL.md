@@ -19,9 +19,7 @@ Traits: INTP. Code taste. Simplicity obsession. First principles. Intellectual h
 - `global` is for single-task work.
 - `workspace` is for stacked work.
 - When executing grouped work, keep all related tasks in the same named workspace.
-- Use the workspace master identity:
-  - `global` → `wp-master`
-  - `<workspace>` → `wp-master-<workspace>`
+- If you need to mint a new coordinating IRC identity, keep the `wp-master-` prefix so humans and dashboards can recognize it.
 
 ## Workspace execution model
 
@@ -43,13 +41,9 @@ Traits: INTP. Code taste. Simplicity obsession. First principles. Intellectual h
 Every invocation starts here — no exceptions. Check live state before doing anything:
 
 ```bash
-# 1. Ensure IRC is connected
-# First check if you are already joined to any identity
-claude-irc who 2>/dev/null
-# If you are already connected with any wp-master* identity, reuse it — do NOT join again.
-# Only if you are NOT connected at all, join as the workspace master:
-claude-irc join <workspace-master> 2>/dev/null
-# If this fails: claude-irc quit 2>/dev/null && claude-irc join <workspace-master>
+# 1. Inspect IRC state
+claude-irc whoami 2>/dev/null
+claude-irc who
 
 # 2. Live status — what's running right now?
 whip task list
@@ -67,6 +61,29 @@ Review the output before proceeding:
 - Do not assume the user can see master IRC traffic. Relay important agent messages back into the main chat yourself.
 
 Poll for messages by running `claude-irc inbox` manually, especially after state-changing commands such as `assign`, `review`, `request-changes`, `approve`, `complete`, `fail`, and `cancel`.
+
+## Master IRC Selection
+
+Resolve `resolved-master-irc` before any `whip task assign` command. Do not rely on the implicit `wp-master` fallback.
+
+1. Run `claude-irc whoami 2>/dev/null`.
+   - If it succeeds, reuse that exact identity as `resolved-master-irc`.
+   - Do NOT join again. The current session identity already owns the coordination channel for this run.
+2. If `whoami` fails, mint a fresh candidate for this coordinating session:
+   - Base form: `wp-master-<task-name-short>`
+   - Keep `<task-name-short>` short, lowercase, and hyphenated so the full peer name stays within the IRC name limit.
+   - If a workspace slug helps readability, include it only if the full name still fits comfortably.
+3. Try `claude-irc join <candidate>`.
+   - If it succeeds, use that name as `resolved-master-irc`.
+   - If it fails because the name already exists, append a short unique suffix and retry:
+     - `wp-master-<task-name-short>-<rand4>`
+4. Reuse the same `resolved-master-irc` for every task assigned from this coordinating session. Do not mint a different master IRC per task.
+5. After you resolve it, pass `--master-irc <resolved-master-irc>` explicitly on every `whip task assign`, including lead tasks.
+
+Important:
+- `claude-irc who` shows all peers; it does NOT tell you which one is the current session.
+- `claude-irc whoami` is the command for the current session identity.
+- Reusing a non-`wp-master*` current identity is functionally valid. For newly created identities, prefer the `wp-master-` prefix for readability.
 
 ## Decide Mode
 
@@ -92,29 +109,46 @@ Whip owns the backend-specific prompt, model, effort, and session tracking behav
 
 ---
 
+## Task Description Contract
+
+Whether you are dispatching a solo task, direct-team worker, or a workspace lead with nested worker specs, write the handoff so the receiving agent does not need hidden planner memory.
+
+Use this contract whenever the task requires judgment instead of purely mechanical execution:
+- `Context`: why the task exists, how it fits the larger outcome, which existing patterns or constraints it must preserve, and why this direction was chosen
+- `Objective`: the concrete deliverable
+- `Implementation Details`: file paths, interfaces, sequencing notes, scope boundaries, and code references
+- `Acceptance Criteria`: reviewable outcomes
+
+For direct `whip task create` descriptions below, keep `Scope` as its own section because the CLI stores a single freeform description string. Put `Context` first so the worker understands the rationale before deciding how to implement the task.
+
+---
+
 ## Solo Flow
 
-Dispatch without heavy planning, but define clear scope and acceptance criteria in the description.
+Dispatch without heavy planning, but still write the description as a compact handoff. Front-load the context so the worker knows why this task exists before reading implementation details.
 
 ```bash
-whip task create "<title>" --backend <chosen-backend> --difficulty <level> --desc "## Objective
+whip task create "<title>" --backend <chosen-backend> --difficulty <level> --desc "## Context
+<why this task exists, how it fits the larger change, and which existing patterns or constraints it must preserve>
+
+## Objective
 <what needs to be done>
 
 ## Scope
 - In: <files/areas to modify>
 - Out: <what NOT to touch>
 
+## Implementation Details
+- <key file paths, interfaces, sequencing notes>
+- <reference existing code, tests, or contracts to follow>
+
 ## Acceptance Criteria
 - <specific, verifiable condition>
-- <specific, verifiable condition>
-
-## Context
-<any additional context the agent needs>"
-whip task assign <task-id> --master-irc <your-current-irc-identity>
+- <specific, verifiable condition>"
+whip task assign <task-id> --master-irc <resolved-master-irc>
 ```
 
-Use your current IRC identity (from `claude-irc who`) as `--master-irc` so the worker can reach you.
-If you are not connected to IRC, omit `--master-irc` — it defaults to `wp-master`.
+Use `--master-irc <resolved-master-irc>` from the Master IRC Selection rules above so the worker can always reach the correct coordinating session.
 
 Monitor the agent: review its initial plan when it arrives, respond to questions, and check progress via `whip task list`. Do NOT run `claude-irc quit` — stay connected for future dispatches.
 
@@ -131,7 +165,7 @@ Define each agent's role and scope. Each agent should:
 - Be able to work independently
 - Have minimal cross-task coupling with other agents
 
-Avoid central implementation planning, but do enough scoping to define ownership, interfaces, and acceptance criteria. Include enough context in descriptions for agents to self-orient. Present the team composition to the user before proceeding.
+Avoid central implementation planning, but do enough scoping to define ownership, interfaces, and acceptance criteria. Include enough context and implementation detail in descriptions for agents to self-orient. Present the team composition to the user before proceeding.
 
 Parallelization guardrails:
 - If two tasks need to edit the same file, shared interface, or session plumbing, do not parallelize that part.
@@ -145,25 +179,28 @@ Create all tasks, encode stack order if needed, then assign independent tasks. D
 If you are using a named workspace for direct team control, inspect it first with `whip workspace view <workspace-name>`. If it already has a `worktree_path`, use that path as the working-directory context for your own repo commands. If it does not exist yet, the first `whip task create --workspace <workspace-name>` below will ensure it. For `global`, skip this step and omit `--workspace`.
 
 ```bash
-whip task create "<agent role/title>" [--workspace <workspace-name>] --backend <chosen-backend> --difficulty <level> --desc "## Objective
+whip task create "<agent role/title>" [--workspace <workspace-name>] --backend <chosen-backend> --difficulty <level> --desc "## Context
+<why this task exists, how it fits the team plan, and which existing patterns or constraints it must preserve>
+
+## Objective
 <what needs to be done>
 
 ## Scope
 - In: <files/areas to modify>
 - Out: <what NOT to touch>
 
+## Implementation Details
+- <key file paths, interfaces, sequencing notes>
+- <reference existing code, tests, or contracts to follow>
+
 ## Acceptance Criteria
 - <specific, verifiable condition>
-- <specific, verifiable condition>
-
-## Context
-<any additional context the agent needs>"
+- <specific, verifiable condition>"
 whip task dep <task-id> --after <prerequisite-id>  # only if needed; this encodes stack order
-whip task assign <task-id> --master-irc <your-current-irc-identity>  # only assign tasks without unmet prerequisites
+whip task assign <task-id> --master-irc <resolved-master-irc>  # only assign tasks without unmet prerequisites
 ```
 
-Use your current IRC identity (from `claude-irc who`) as `--master-irc` so the worker can reach you.
-If you are not connected to IRC, omit `--master-irc` — it defaults to `wp-master`.
+Use `--master-irc <resolved-master-irc>` from the Master IRC Selection rules above so each worker reports back to the correct coordinating session.
 
 ### Step 3: Coordinate
 
@@ -181,7 +218,7 @@ As team lead:
 As agents complete:
 - Review their deliverables
 - Dependent agents auto-deploy when prerequisites are met
-- If an agent failed and you want to preserve context/notes/session history: use `whip task assign <id>` to re-dispatch the failed task.
+- If an agent failed and you want to preserve context/notes/session history: use `whip task assign <id> --master-irc <resolved-master-irc>` to re-dispatch the failed task.
 - If work must stop permanently: use `whip task cancel <id> --note "..."`
 - Run `whip task lifecycle` or `whip task <action> --help` whenever you need the exact state transition rules.
 
@@ -194,6 +231,8 @@ When all agents are done, summarize what was accomplished across the team. If th
 ## Lead Flow
 
 Use Lead Flow when the work belongs in a named workspace with multiple tasks. Create one lead task, give it the full workspace objective plus worker specs, and let that lead create, assign, and monitor workers inside the workspace. Lead tasks are always review-gated (enforced automatically — `--review` is implicit).
+
+Keep the nested worker specs high-fidelity. The lead uses them as the execution source of truth, so do not collapse away context, design rationale, or file/interface guidance that workers need in order to execute independently.
 
 ### Step 1: Create the lead task
 
@@ -212,8 +251,18 @@ whip task create "<workspace lead title>" --role lead --workspace <workspace-nam
 - Scope:
   - In: <files/areas to modify>
   - Out: <what NOT to touch>
-- Objective: <specific deliverable>
-- Acceptance Criteria:
+- Description:
+
+  #### Context
+  <why this worker exists, how it supports the workspace objective, which patterns or constraints it must preserve, and why this approach was chosen>
+
+  #### Objective
+  <specific deliverable>
+
+  #### Implementation Details
+  <file paths, interfaces, sequencing requirements, code references>
+
+  #### Acceptance Criteria
   - <specific, verifiable condition>
   - <specific, verifiable condition>
 
@@ -224,7 +273,7 @@ whip task create "<workspace lead title>" --role lead --workspace <workspace-nam
 ### Step 2: Assign the lead
 
 ```bash
-whip task assign <lead-id>
+whip task assign <lead-id> --master-irc <resolved-master-irc>
 ```
 
 ### Step 3: Monitor the lead

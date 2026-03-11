@@ -32,6 +32,7 @@ claude-irc msg server "Got it. Need avatarUrl in UserResponse"
 |---------|-------------|
 | `join <name>` | Join the channel with a peer name |
 | `who` | List peers with online/offline status |
+| `whoami` | Print the current session identity |
 | `msg <peer> "<text>"` | Send a message to a peer |
 | `inbox` | Show unread messages |
 | `inbox <number>` | Read full message by index |
@@ -70,7 +71,7 @@ Authenticated endpoints accept either:
 
 ## Name Resolution
 
-Commands that need identity (`msg`, `inbox`) resolve the peer name via:
+Commands that need identity (`whoami`, `msg`, `inbox`, `quit`) resolve the peer name via:
 1. **Session marker** — written by `join`, matched by ancestor PID
 2. **`--name` flag** — fallback when session detection fails; only `user` is allowed without an active session
 3. Error if neither resolves

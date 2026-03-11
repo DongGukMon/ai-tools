@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -75,6 +76,34 @@ func TestResolveMyName_NameNonUserRejectedWithoutSession(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "not allowed without an active session") {
 		t.Fatalf("unexpected error message: %v", err)
+	}
+}
+
+func TestWhoamiCmd_PrintsDetectedSessionName(t *testing.T) {
+	origDetect := detectSession
+	defer func() { detectSession = origDetect }()
+
+	tmpDir := t.TempDir()
+	store, err := irc.NewStoreWithBaseDir(tmpDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	detectSession = func(pid int) (*irc.Store, string, error) {
+		return store, "agent-1", nil
+	}
+
+	nameFlag = ""
+
+	var stdout bytes.Buffer
+	cmd := whoamiCmd()
+	cmd.SetOut(&stdout)
+	if err := cmd.RunE(cmd, nil); err != nil {
+		t.Fatalf("whoamiCmd should succeed: %v", err)
+	}
+
+	if got := stdout.String(); got != "agent-1\n" {
+		t.Fatalf("whoami output = %q, want %q", got, "agent-1\n")
 	}
 }
 

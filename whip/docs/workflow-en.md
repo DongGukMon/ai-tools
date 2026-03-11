@@ -69,11 +69,11 @@ sequenceDiagram
     loop Lead coordination
         Worker->>IRC: msg wp-lead-<workspace> "Progress..."
         Lead->>IRC: msg wp-<worker-id> "Feedback..."
-        Lead->>IRC: msg wp-master-<workspace> "Status update..."
+        Lead->>IRC: msg resolved-master-irc "Status update..."
     end
 
     Worker->>Whip: task complete <id>
-    Lead->>IRC: msg wp-master-<workspace> "All workers done. Summary..."
+    Lead->>IRC: msg resolved-master-irc "All workers done. Summary..."
     Master->>Whip: task complete <lead-id>
 ```
 
@@ -120,6 +120,7 @@ failed --> canceled
 
 - **Messages**: Direct peer-to-peer text messages (`claude-irc msg`)
 - **Presence**: Real-time online/offline detection via Unix sockets (`claude-irc who`)
+- **Identity**: Current-session identity lookup via session markers (`claude-irc whoami`)
 - **Monitoring**: Periodic inbox checks via `/loop 1m claude-irc inbox`
 
 ### Global vs Workspace
@@ -131,9 +132,7 @@ failed --> canceled
 - If the current working directory is inside git, that first create ensures `WHIP_HOME/workspaces/<name>/worktree` and resolves task `cwd` inside that worktree.
 - If the current working directory is not inside git, the workspace falls back to the current `cwd` and may not have a worktree path.
 - When continuing a named workspace, prefer the stored workspace worktree as the working-directory context for repo inspection, tests, and review commands.
-- `claude-irc` stays shared, but master identity is scoped by workspace:
-  - `global` → `wp-master`
-  - `<workspace>` → `wp-master-<workspace>`
+- `claude-irc` stays shared. When you mint a new coordinating identity, prefer the `wp-master-` prefix so it is recognizable in logs and dashboards.
 
 ---
 
@@ -142,11 +141,11 @@ failed --> canceled
 ### 1. Initialize the Master Session
 
 ```bash
-# Single-task work in global
-claude-irc join wp-master
+# Check whether this session already owns an IRC identity
+claude-irc whoami 2>/dev/null
 
-# Stacked work in a named workspace
-claude-irc join wp-master-issue-sweep
+# Inspect active peers before choosing a master identity
+claude-irc who
 
 # Enable periodic message monitoring
 /loop 1m claude-irc inbox
@@ -154,29 +153,41 @@ claude-irc join wp-master-issue-sweep
 
 The master stays connected throughout the entire session. Never run `claude-irc quit` until all work is done.
 
+Resolve `master-irc` before assigning tasks:
+- If `claude-irc whoami` succeeds, reuse that exact identity as `resolved-master-irc`.
+- If it fails, mint a new coordinating identity such as `wp-master-<task-name-short>`.
+- Try `claude-irc join <candidate>` and, on name collision, retry with a short suffix such as `wp-master-<task-name-short>-<rand4>`.
+- Reuse that same resolved name for every task assigned from the current coordinating session.
+- For newly created identities, prefer the `wp-master-` prefix so humans and dashboards can recognize them easily.
+- Pass `--master-irc <resolved-master-irc>` explicitly on every `whip task assign`.
+
 ### 2. Create Tasks
 
-Each task needs a structured description with clear scope and acceptance criteria. For named workspaces, the first `whip task create --workspace <name>` also ensures the workspace metadata and, in git repos, the workspace worktree:
+Each task needs a structured description with clear scope, implementation guidance, and acceptance criteria. For named workspaces, the first `whip task create --workspace <name>` also ensures the workspace metadata and, in git repos, the workspace worktree:
 
 ```bash
-whip task create "Auth module" --workspace issue-sweep --desc "## Objective
+whip task create "Auth module" --workspace issue-sweep --desc "## Context
+- This task owns the authentication foundation for the workspace.
+- Preserve the existing request-context pattern and reuse the current token payload shape.
+
+## Objective
 Implement JWT authentication with refresh tokens.
 
 ## Scope
 - In: src/auth/, src/middleware/auth.ts
 - Out: Database schema changes (handled by another task)
 
+## Implementation Details
+- Update token issuance in src/auth/ and request validation in src/middleware/auth.ts.
+- Follow the middleware composition pattern already used by src/middleware/request-id.ts.
+
 ## Acceptance Criteria
 - JWT tokens issued on login
 - Refresh token rotation implemented
-- Auth middleware validates tokens on protected routes
-
-## Context
-- Using jsonwebtoken library already in package.json
-- Token expiry: 15m access, 7d refresh"
+- Auth middleware validates tokens on protected routes"
 ```
 
-The structured format (Objective / Scope / Acceptance Criteria / Context) helps agents self-orient and work independently. After a workspace has a resolved worktree, keep later repo commands pointed at that workspace path instead of the original checkout.
+The structured format (Context / Objective / Scope / Implementation Details / Acceptance Criteria) helps agents self-orient and work independently without hidden planner memory. After a workspace has a resolved worktree, keep later repo commands pointed at that workspace path instead of the original checkout.
 
 ### 3. Encode Stack Order (if needed)
 
@@ -190,13 +201,13 @@ Tasks with unmet prerequisites cannot be assigned. `whip task dep` is the low-le
 ### 4. Assign Tasks
 
 ```bash
-whip task assign <task-id>   # created|failed -> assigned
+whip task assign <task-id> --master-irc <resolved-master-irc>   # created|failed -> assigned
 ```
 
 This:
 - Opens a new Terminal tab
 - Starts `claude --dangerously-skip-permissions` with a generated prompt file
-- Uses the task's workspace to derive the correct master identity
+- Uses the explicit `--master-irc` you resolved for this master session
 - Uses the task's stored `cwd`, which points at the workspace worktree when one exists
 - The prompt file contains: task details, IRC setup instructions, reporting protocol, and completion steps
 
@@ -258,7 +269,7 @@ When an agent finishes without a review hold:
 
 ```bash
 # Agent side
-claude-irc msg wp-master "Task <id> complete. Implemented JWT auth with refresh tokens."
+claude-irc msg <resolved-master-irc> "Task <id> complete. Implemented JWT auth with refresh tokens."
 claude-irc quit
 whip task complete <id> --note "JWT + refresh token auth. Files: src/auth/, src/middleware/auth.ts"
 # Session auto-terminates
@@ -294,7 +305,7 @@ If an agent cannot complete its task:
 
 ```bash
 # Agent writes detailed handoff note
-claude-irc msg wp-master "Task <id> failed: <reason>. Handoff note written."
+claude-irc msg <resolved-master-irc> "Task <id> failed: <reason>. Handoff note written."
 claude-irc quit
 whip task fail <id> --note "Accomplished X. Failed at Y because Z. Next agent should start at..."
 ```
@@ -302,7 +313,7 @@ whip task fail <id> --note "Accomplished X. Failed at Y because Z. Next agent sh
 The master can then re-dispatch the same task directly:
 
 ```bash
-whip task assign <id>      # failed -> assigned; handoff note stays in context
+whip task assign <id> --master-irc <resolved-master-irc>      # failed -> assigned; handoff note stays in context
 ```
 
 If the work should stop permanently, cancel it explicitly:
@@ -329,8 +340,8 @@ For a single, self-contained piece of work:
 
 ```bash
 # Create and assign one task
-whip task create "Fix login bug" --desc "## Objective ..."
-whip task assign <id>
+whip task create "Fix login bug" --desc "## Context ..."
+whip task assign <id> --master-irc <resolved-master-irc>
 
 # Monitor, respond to questions, review when done
 ```
@@ -355,9 +366,9 @@ whip workspace view issue-sweep                                            # ins
 whip task dep j7k8l --after a1b2c --after d3e4f --after g5h6i
 
 # Step 3: Assign root tasks inside the same workspace
-whip task assign a1b2c
-whip task assign d3e4f
-whip task assign g5h6i
+whip task assign a1b2c --master-irc <resolved-master-irc>
+whip task assign d3e4f --master-irc <resolved-master-irc>
+whip task assign g5h6i --master-irc <resolved-master-irc>
 
 # Step 4: Coordinate — respond to messages, relay info between agents
 # Step 5: Deploy auto-assigns when auth + API + frontend all complete
@@ -375,7 +386,7 @@ For workspaces where you want autonomous orchestration:
 ```bash
 # Master creates a single lead task
 whip task create "Refactor auth system" --workspace auth-refactor --role lead --desc "..."
-whip task assign <lead-id>
+whip task assign <lead-id> --master-irc <resolved-master-irc>
 
 # The lead handles everything: decomposition, worker creation, coordination, reviews
 # Master monitors via dashboard or IRC
@@ -404,14 +415,14 @@ flowchart TB
     Master[Master Session]
 
     subgraph "Solo Flow"
-        S_Create[whip task create] --> S_Assign[whip task assign]
+        S_Create[whip task create] --> S_Assign[whip task assign --master-irc]
         S_Assign --> S_Agent[Agent]
         S_Agent --> S_Done[completed]
     end
 
     subgraph "Team Flow"
         T_Create[whip task create x N] --> T_Dep[encode stack order]
-        T_Dep --> T_Assign[whip task assign independent tasks]
+        T_Dep --> T_Assign[whip task assign --master-irc]
         T_Assign --> T_A1[Agent A]
         T_Assign --> T_A2[Agent B]
         T_Assign --> T_A3[Agent C]
@@ -423,7 +434,7 @@ flowchart TB
     end
 
     subgraph "Lead Flow"
-        L_Create[whip task create --role lead] --> L_Assign[whip task assign lead]
+        L_Create[whip task create --role lead] --> L_Assign[whip task assign --master-irc]
         L_Assign --> L_Lead[Lead Session]
         L_Lead --> L_W1[Worker A]
         L_Lead --> L_W2[Worker B]
@@ -472,39 +483,50 @@ Here's what a typical multi-task session looks like (based on actual usage):
 
 ```bash
 # Master session starts
-claude-irc join wp-master
+claude-irc whoami 2>/dev/null
+claude-irc who
 /loop 1m claude-irc inbox
 
 # User asks: "Refactor the auth system and write docs for the workflow"
 
 # Master creates tasks
-whip task create "Refactor auth module" --desc "## Objective
+whip task create "Refactor auth module" --desc "## Context
+- This task owns the auth refactor and sets the shared contract for downstream callers.
+- Preserve the middleware entrypoint shape already used by neighboring request middleware.
+
+## Objective
 Refactor auth to use middleware pattern...
 ## Scope
 - In: src/auth/
 - Out: API endpoints (separate task)
+## Implementation Details
+- Move token parsing and validation out of route handlers into shared middleware.
+- Update the auth entrypoint without changing endpoint ownership for the separate API task.
 ## Acceptance Criteria
 - Auth middleware extracts and validates JWT
-- Refresh token rotation works
-## Context
-- Current auth is inline in route handlers"
+- Refresh token rotation works"
 # → Created task a1b2c
 
-whip task create "Workflow documentation" --desc "## Objective
+whip task create "Workflow documentation" --desc "## Context
+- This task documents the operator workflow after the auth refactor lands.
+- Reuse terminology already established in README.md, SKILL.md, and CLAUDE.md.
+
+## Objective
 Write docs/workflow.md covering whip + claude-irc workflow...
 ## Scope
 - In: New file docs/workflow.md
 - Out: No code changes
+## Implementation Details
+- Cover solo, team, and workspace lead flows with concrete command examples.
+- Reuse existing naming conventions for IRC identities and workspace terminology.
 ## Acceptance Criteria
 - Markdown document with Mermaid diagrams
-- Covers solo and team flows
-## Context
-- Reference README.md, SKILL.md, CLAUDE.md for content"
+- Covers solo and team flows"
 # → Created task 3aae4
 
 # Assign both tasks (no stack prerequisite between them)
-whip task assign a1b2c --master-irc wp-master
-whip task assign 3aae4 --master-irc wp-master
+whip task assign a1b2c --master-irc <resolved-master-irc>
+whip task assign 3aae4 --master-irc <resolved-master-irc>
 
 # Agents initialize and share plans
 # [claude-irc] wp-a1b2c: Acknowledged. Plan: Extract auth logic into middleware...
@@ -533,7 +555,7 @@ whip task clean
 
 | Command | Description |
 |---------|-------------|
-| `whip task assign <id> [--master-irc <name>]` | `created|failed -> assigned`; spawn an agent session |
+| `whip task assign <id> [--master-irc <name>]` | `created|failed -> assigned`; spawn an agent session. Prefer explicit `--master-irc`. |
 | `whip task start <id>` | `assigned -> in_progress`; register PID for the current run |
 | `whip task review <id>` | `in_progress -> review` |
 | `whip task request-changes <id>` | `review -> in_progress` |
@@ -579,6 +601,7 @@ Legacy task commands from the old generic status flow have been removed.
 |---------|-------------|
 | `claude-irc join <name>` | Join the channel |
 | `claude-irc who` | List peers (online/offline) |
+| `claude-irc whoami` | Print the current session identity |
 | `claude-irc msg <peer> "text"` | Send a message |
 | `claude-irc inbox` | Show unread messages |
 | `claude-irc inbox <n>` | Read full message by index |

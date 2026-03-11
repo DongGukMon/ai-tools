@@ -20,7 +20,7 @@ Or via Claude Code Plugin:
 ```bash
 # single-task work in global
 whip task create "Auth module" --desc "Implement JWT authentication"
-whip task assign <task-id>
+whip task assign <task-id> --master-irc <resolved-master-irc>
 ```
 
 ```bash
@@ -33,9 +33,27 @@ whip dashboard
 ```bash
 # lead-managed workspace — the lead autonomously spawns and coordinates workers
 whip task create "Refactor auth system" --workspace auth-refactor --role lead --desc "Refactor auth to middleware pattern, update tests, write docs"
-whip task assign <task-id>
+whip task assign <task-id> --master-irc <resolved-master-irc>
 # The lead session handles worker creation, IRC coordination, and review internally
 ```
+
+Before assigning tasks, resolve `master-irc` explicitly:
+
+```bash
+# Reuse the current IRC identity when this session is already joined
+claude-irc whoami 2>/dev/null
+
+# Inspect active peers for awareness; this is not your identity check
+claude-irc who
+```
+
+Use this rule:
+- If `claude-irc whoami` succeeds, reuse that exact identity as `master-irc`.
+- If it fails, mint a new coordinating identity such as `wp-master-<task-name-short>`.
+- Try `claude-irc join <candidate>` and, on name collision, retry with a short suffix such as `wp-master-<task-name-short>-<rand4>`.
+- Reuse that same resolved name for every task assigned from the current coordinating session.
+- For newly created identities, prefer the `wp-master-` prefix so dashboards and humans can recognize them easily.
+- Pass `--master-irc <resolved-master-irc>` explicitly on every `whip task assign`.
 
 ## Task Lifecycle
 
@@ -69,7 +87,7 @@ For the exact CLI surface, use:
 
 | Command | Description |
 |---------|-------------|
-| `task assign <id> [--master-irc <name>]` | `created|failed -> assigned`; spawn agent session |
+| `task assign <id> [--master-irc <name>]` | `created|failed -> assigned`; spawn agent session. Prefer passing `--master-irc` explicitly. |
 | `task start <id>` | `assigned -> in_progress`; register PID for the live run |
 | `task review <id>` | `in_progress -> review`; mark work ready for review |
 | `task request-changes <id>` | `review -> in_progress`; send review feedback and resume active work |
@@ -137,7 +155,7 @@ Create a lead task with `--role lead`:
 
 ```bash
 whip task create "Refactor auth system" --workspace auth-refactor --role lead --desc "..."
-whip task assign <lead-id>
+whip task assign <lead-id> --master-irc <resolved-master-irc>
 ```
 
 The lead session receives a specialized prompt that enables it to:

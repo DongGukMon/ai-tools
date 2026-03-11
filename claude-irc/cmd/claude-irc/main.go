@@ -34,6 +34,7 @@ func main() {
 	root.AddCommand(
 		joinCmd(),
 		whoCmd(),
+		whoamiCmd(),
 		msgCmd(),
 		inboxCmd(),
 		quitCmd(),

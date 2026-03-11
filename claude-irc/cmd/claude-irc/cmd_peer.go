@@ -100,6 +100,28 @@ func whoCmd() *cobra.Command {
 	}
 }
 
+func whoamiCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "whoami",
+		Short: "Print the current session identity",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			store, err := irc.NewStore()
+			if err != nil {
+				return err
+			}
+
+			name, err := resolveMyName(store)
+			if err != nil {
+				return err
+			}
+
+			fmt.Fprintln(cmd.OutOrStdout(), name)
+			return nil
+		},
+	}
+}
+
 func msgCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "msg <peer> <message>",

@@ -345,6 +345,12 @@ Write the approved plan to the resolved file under `~/.whip/plans/`. The saved p
 
 Use stable headings so other agents can navigate the document quickly. Omit empty subsections rather than padding the file with filler.
 
+Every task description should preserve a compressed handoff of Phases 1-3:
+- `Context`: why this task exists, how it fits the overall outcome, which existing patterns or constraints it must honor, and why this direction was chosen
+- `Objective`: the concrete deliverable
+- `Implementation Details`: file paths, interfaces, sequencing notes, and code references needed to execute without hidden planner memory
+- `Acceptance Criteria`: reviewable outcomes that let an operator or lead verify correctness
+
 For `global`, use this default shape:
 
 ```markdown
@@ -425,11 +431,14 @@ Round 2 (after Round 1):
   - Out: <files NOT to touch>
 - **Description**:
 
+  ## Context
+  <why this task exists, how it fits the overall plan, which patterns or constraints it must preserve, and why this approach was chosen>
+
   ## Objective
   <what needs to be done>
 
   ## Implementation Details
-  <concrete guidance: file paths, function signatures, API shapes, code references>
+  <concrete guidance: file paths, function signatures, API shapes, sequencing notes, code references>
 
   ## Acceptance Criteria
   - <specific, verifiable condition>
@@ -503,6 +512,9 @@ Worker sequence:
     - Out: <files NOT to touch>
   - **Description**:
 
+    #### Context
+    <why this worker exists, how it supports the workspace objective, which existing patterns or constraints it must preserve, and why this approach was chosen>
+
     #### Objective
     <specific deliverable>
 
@@ -521,6 +533,7 @@ What makes a good saved plan:
 - every phase leaves behind concrete, reviewable context
 - task ownership is explicit
 - backend and difficulty are recorded, not implied
+- task descriptions carry context and rationale instead of assuming planner memory
 - implementation details contain real file paths, interfaces, and code references when available
 - acceptance criteria are specific enough to review
 - the file is sufficient for execution without hidden planner context

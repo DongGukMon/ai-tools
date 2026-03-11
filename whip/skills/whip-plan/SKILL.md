@@ -338,6 +338,12 @@ The plan file fleshes out the high-level graph into concrete, agent-ready task s
 
 The saved plan should be a self-contained document that preserves the key reasoning from Phases 1-4, so an executor can understand both WHAT to do and WHY.
 
+Every task description should preserve a compressed handoff of Phases 1-3:
+- `Context`: why this task exists, how it fits the overall outcome, which existing patterns or constraints it must honor, and why this direction was chosen
+- `Objective`: the concrete deliverable
+- `Implementation Details`: file paths, interfaces, sequencing notes, and code references needed to execute without hidden planner memory
+- `Acceptance Criteria`: reviewable outcomes that let an operator or lead verify correctness
+
 For `global`, keep one top-level task spec per task. For a named workspace, emit a single Workspace Lead task spec whose description contains the workspace objective and all worker specs the lead will execute.
 
 #### Global task template
@@ -420,11 +426,14 @@ Round 2 (after Round 1):
   - Out: <files NOT to touch>
 - **Description**:
 
+  ## Context
+  <why this task exists, how it fits the overall plan, which patterns or constraints it must preserve, and why this approach was chosen>
+
   ## Objective
   <what needs to be done — be specific>
 
   ## Implementation Details
-  <concrete guidance: function signatures, struct shapes, API paths, routing patterns>
+  <concrete guidance: function signatures, struct shapes, API paths, routing patterns, sequencing notes>
   <reference existing code: "See store.go:CheckAllPresence() for the method signature">
 
   ## Acceptance Criteria
@@ -505,6 +514,9 @@ Worker sequence:
     - Out: <files NOT to touch>
   - **Description**:
 
+    #### Context
+    <why this worker exists, how it supports the workspace objective, which existing patterns or constraints it must preserve, and why this approach was chosen>
+
     #### Objective
     <specific deliverable>
 
@@ -530,6 +542,7 @@ Run `/whip-start <actual-path>` to execute this plan.
 - Every phase leaves behind concrete, reviewable context
 - Task ownership is explicit
 - Backend and difficulty are recorded, not implied
+- Task descriptions carry context and rationale instead of assuming planner memory
 - Implementation details contain real file paths, interfaces, and code references when available
 - Acceptance criteria are specific enough to review
 - The file is sufficient for execution without hidden planner context
