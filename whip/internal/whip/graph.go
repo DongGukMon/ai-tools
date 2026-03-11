@@ -115,6 +115,19 @@ func RenderGraph(nodes []GraphNode) string {
 		// Bottom border line
 		botLine := renderBottomBorder(group, boxWidth, hGap, l < maxLayer, layers, nodeMap, nodes)
 
+		// Overlay passthrough vertical lines through this layer's box rows
+		var ptPositions []int
+		for parentID, layerSet := range passthroughs {
+			if layerSet[l] {
+				ptPositions = append(ptPositions, xPos[parentID]+boxWidth[parentID]/2)
+			}
+		}
+		if len(ptPositions) > 0 {
+			topLine = overlayPassthroughs(topLine, ptPositions)
+			midLine = overlayPassthroughs(midLine, ptPositions)
+			botLine = overlayPassthroughs(botLine, ptPositions)
+		}
+
 		result = append(result, topLine)
 		result = append(result, midLine)
 		result = append(result, botLine)
@@ -225,6 +238,25 @@ func truncateRunes(s string, maxLen int) string {
 		return string(runes[:maxLen])
 	}
 	return string(runes[:maxLen-1]) + "…"
+}
+
+func overlayPassthroughs(line string, positions []int) string {
+	runes := []rune(line)
+	maxNeeded := 0
+	for _, x := range positions {
+		if x+1 > maxNeeded {
+			maxNeeded = x + 1
+		}
+	}
+	for len(runes) < maxNeeded {
+		runes = append(runes, ' ')
+	}
+	for _, x := range positions {
+		if x < len(runes) && runes[x] == ' ' {
+			runes[x] = '│'
+		}
+	}
+	return strings.TrimRight(string(runes), " ")
 }
 
 func renderTopBorder(group []string, boxWidth map[string]int, hGap int) string {
