@@ -96,10 +96,12 @@ const eventConfig: Record<
 function getTimeGapPx(prevTimestamp: string, currTimestamp: string): number {
   const diff =
     (new Date(currTimestamp).getTime() - new Date(prevTimestamp).getTime()) / 1000;
-  if (diff <= 1) return 4;
-  if (diff <= 10) return 12;
-  if (diff <= 60) return 24;
-  return 48;
+  if (diff <= 1) return 6;
+  if (diff <= 5) return 16;
+  if (diff <= 15) return 32;
+  if (diff <= 60) return 56;
+  if (diff <= 300) return 80;
+  return 120;
 }
 
 function buildTimelineRows(events: TimelineEvent[]): TimelineRow[] {
@@ -263,10 +265,11 @@ const TimelineItem = memo(function TimelineItem({
   }, [event.toolResult, event.type, expanded]);
 
   return (
-    <div className="timeline-row relative flex items-start gap-4" data-event-index={index}>
+    <div className={cn("timeline-row relative flex gap-4", expanded ? "items-start" : "items-center")} data-event-index={index}>
       <div
         className={cn(
-          "timeline-dot relative z-10 mt-2.5 w-[23px] h-[23px] rounded-full",
+          "timeline-dot relative z-10 w-[23px] h-[23px] rounded-full",
+          expanded && "mt-2.5",
           "flex items-center justify-center shrink-0",
           hasContent ? "cursor-pointer" : "",
           config.dot,
@@ -279,7 +282,7 @@ const TimelineItem = memo(function TimelineItem({
 
       <div
         className={cn(
-          "timeline-card flex-1 max-w-[calc(100%-40px)] rounded-xl liquid-glass mb-1",
+          "timeline-card flex-1 max-w-[calc(100%-40px)] rounded-xl liquid-glass",
           hasContent ? "cursor-pointer liquid-glass-hover" : "",
           expanded && config.expandedBg,
         )}
