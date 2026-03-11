@@ -456,6 +456,197 @@ func TestFormJS_SetNestedHelper(t *testing.T) {
 	}
 }
 
+func TestCloseEndpoint(t *testing.T) {
+	token := "closetoken"
+	resultCh := make(chan string, 1)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/close", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", 405)
+			return
+		}
+		if r.URL.Query().Get("token") != token {
+			http.Error(w, "invalid token", http.StatusForbidden)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"ok":true}`))
+		result := Result{Status: "closed"}
+		b, _ := json.Marshal(result)
+		resultCh <- string(b)
+	})
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	resp, err := http.Post(srv.URL+"/close?token="+token, "", nil)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	if resp.StatusCode != 200 {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+
+	result := <-resultCh
+	var r Result
+	json.Unmarshal([]byte(result), &r)
+	if r.Status != "closed" {
+		t.Errorf("expected status 'closed', got '%s'", r.Status)
+	}
+}
+
+func TestCloseEndpoint_InvalidToken(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/close", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", 405)
+			return
+		}
+		if r.URL.Query().Get("token") != "correct" {
+			http.Error(w, "invalid token", http.StatusForbidden)
+			return
+		}
+		w.Write([]byte(`{"ok":true}`))
+	})
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	resp, err := http.Post(srv.URL+"/close?token=wrong", "", nil)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	if resp.StatusCode != http.StatusForbidden {
+		t.Errorf("expected 403, got %d", resp.StatusCode)
+	}
+}
+
+func TestRun_Close(t *testing.T) {
+	getURL, cleanup := captureURL(t)
+	defer cleanup()
+
+	// View-only schema with only c_html field
+	s := newTestSchema(t, `{"t":"View","f":[["content","c_html","View",{"body":"<p>Hello</p>"}]]}`)
+
+	resultCh := make(chan string, 1)
+	errCh := make(chan error, 1)
+	go func() {
+		result, err := Run(s, 10)
+		if err != nil {
+			errCh <- err
+			return
+		}
+		resultCh <- result
+	}()
+
+	url := getURL()
+	base, tok := parseURL(url)
+
+	resp, err := http.Post(base+"/close?token="+tok, "", nil)
+	if err != nil {
+		t.Fatalf("close failed: %v", err)
+	}
+	resp.Body.Close()
+
+	select {
+	case result := <-resultCh:
+		var r Result
+		json.Unmarshal([]byte(result), &r)
+		if r.Status != "closed" {
+			t.Errorf("expected 'closed', got '%s'", r.Status)
+		}
+	case err := <-errCh:
+		t.Fatalf("Run() error: %v", err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for result")
+	}
+}
+
+func TestPreRenderContentFields(t *testing.T) {
+	// c_md field should be converted to c_html
+	input := `{"t":"Test","f":[["info","c_md","Info",{"body":"# Hello"}],["name","t","Name"]]}`
+	s := newTestSchema(t, input)
+
+	preRenderContentFields(s)
+
+	var raw map[string]any
+	if err := json.Unmarshal([]byte(s.JSON()), &raw); err != nil {
+		t.Fatalf("unmarshal error: %v", err)
+	}
+	fields := raw["f"].([]any)
+
+	// First field should now be c_html
+	first := fields[0].([]any)
+	if first[1] != "c_html" {
+		t.Errorf("expected c_md to be converted to c_html, got %v", first[1])
+	}
+	opts := first[3].(map[string]any)
+	body := opts["body"].(string)
+	if !strings.Contains(body, "<h1>") {
+		t.Errorf("expected rendered markdown with <h1>, got %q", body)
+	}
+
+	// Second field should be unchanged
+	second := fields[1].([]any)
+	if second[1] != "t" {
+		t.Errorf("expected interactive field to be unchanged, got %v", second[1])
+	}
+}
+
+func TestPreRenderContentFields_CTable_Preserved(t *testing.T) {
+	// c_table should NOT be converted — it stays for frontend rendering
+	input := `{"t":"Test","f":[["tbl","c_table","Table",{"headers":["A","B"],"rows":[["1","2"]]}]]}`
+	s := newTestSchema(t, input)
+
+	preRenderContentFields(s)
+
+	var raw map[string]any
+	json.Unmarshal([]byte(s.JSON()), &raw)
+	fields := raw["f"].([]any)
+	first := fields[0].([]any)
+	if first[1] != "c_table" {
+		t.Errorf("expected c_table to remain unchanged, got %v", first[1])
+	}
+}
+
+func TestPreRenderContentFields_CKv_Preserved(t *testing.T) {
+	input := `{"t":"Test","f":[["kv","c_kv","KV",{"entries":[["key","val"]]}]]}`
+	s := newTestSchema(t, input)
+
+	preRenderContentFields(s)
+
+	var raw map[string]any
+	json.Unmarshal([]byte(s.JSON()), &raw)
+	fields := raw["f"].([]any)
+	first := fields[0].([]any)
+	if first[1] != "c_kv" {
+		t.Errorf("expected c_kv to remain unchanged, got %v", first[1])
+	}
+}
+
+func TestFormJS_ContentFieldSupport(t *testing.T) {
+	// Verify form.js has content field builders and mode detection
+	if !strings.Contains(web.FormJS, "isContentField") {
+		t.Error("form.js must have isContentField function for mode detection")
+	}
+	if !strings.Contains(web.FormJS, "c_html") {
+		t.Error("form.js must have c_html builder registered")
+	}
+	if !strings.Contains(web.FormJS, "c_table") {
+		t.Error("form.js must have c_table builder registered")
+	}
+	if !strings.Contains(web.FormJS, "c_kv") {
+		t.Error("form.js must have c_kv builder registered")
+	}
+	if !strings.Contains(web.FormJS, "hasInteractive") {
+		t.Error("form.js must detect interactive vs content mode")
+	}
+	if !strings.Contains(web.FormJS, "/close") {
+		t.Error("form.js must support /close endpoint for view mode")
+	}
+}
+
 func TestRun_SubmitInvalidToken(t *testing.T) {
 	getURL, cleanup := captureURL(t)
 	defer cleanup()

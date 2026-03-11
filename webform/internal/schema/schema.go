@@ -94,6 +94,12 @@ func validate(s *Schema) error {
 	return nil
 }
 
+// NewViewSchema creates a view-only schema with a single c_html content field.
+func NewViewSchema(title, htmlBody string) (*Schema, error) {
+	field := []any{"content", "c_html", title, map[string]any{"body": htmlBody}}
+	return newSchema(title, "", 0, []any{field})
+}
+
 func (s *Schema) JSON() string {
 	return s.raw
 }
@@ -114,6 +120,15 @@ Field line:
 Types:
   t pw ta n sel msel rad cb url email tel date time dt
   color range file json list grp
+
+Content types (c_* prefix, display-only, not collected in submit data):
+  c_md       Rendered markdown         opts: {body: "# markdown..."}
+  c_table    Structured table          opts: {headers: ["A","B"], rows: [["1","2"]]}
+  c_json     Pretty-printed JSON       opts: {body: "{...}" or {...}}
+  c_code     Code block with syntax    opts: {body: "code...", lang: "go"}
+  c_text     Fixed-width plain text    opts: {body: "plain text"}
+  c_kv       Key-value pairs           opts: {entries: [["key","val"],...]}
+  c_html     Raw HTML                  opts: {body: "<div>...</div>"}
 
 Flags:
   req            required

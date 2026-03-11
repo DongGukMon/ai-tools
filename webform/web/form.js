@@ -251,6 +251,48 @@
     return fieldset;
   }
 
+  // ── Content Field Builders ──
+
+  function buildContentHtml(name, label, opts) {
+    var div = el('div', 'prose');
+    div.innerHTML = opts.body || '';
+    return div;
+  }
+
+  function buildContentTable(name, label, opts) {
+    var table = el('table', 'content-table');
+    if (opts.headers) {
+      var thead = el('thead');
+      var tr = el('tr');
+      opts.headers.forEach(function (h) {
+        tr.appendChild(el('th', '', h));
+      });
+      thead.appendChild(tr);
+      table.appendChild(thead);
+    }
+    if (opts.rows) {
+      var tbody = el('tbody');
+      opts.rows.forEach(function (row) {
+        var tr = el('tr');
+        row.forEach(function (cell) {
+          tr.appendChild(el('td', '', cell));
+        });
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+    }
+    return table;
+  }
+
+  function buildContentKv(name, label, opts) {
+    var dl = el('dl', 'content-kv');
+    (opts.entries || []).forEach(function (entry) {
+      dl.appendChild(el('dt', '', entry[0]));
+      dl.appendChild(el('dd', '', entry[1]));
+    });
+    return dl;
+  }
+
   // Builder registry
   var builders = {
     t: function (n, l, o) { return buildInput(n, 'text', o); },
@@ -272,8 +314,17 @@
     file: buildFile,
     json: buildJson,
     list: buildList,
-    grp: buildGroup
+    grp: buildGroup,
+    c_html: buildContentHtml,
+    c_table: buildContentTable,
+    c_kv: buildContentKv
   };
+
+  // ── Mode detection ──
+
+  function isContentField(type) { return type.indexOf('c_') === 0; }
+  var hasInteractive = schema.f.some(function (raw) { return !isContentField(raw[1]); });
+  var hasContent = schema.f.some(function (raw) { return isContentField(raw[1]); });
 
   // ── Build a single field with label ──
 
@@ -289,8 +340,13 @@
 
     var wrapper = el('div', 'space-y-1.5');
 
-    // Label (checkbox has inline label)
-    if (type !== 'cb') {
+    if (isContentField(type)) {
+      // Content fields: label as section title (skip if empty/same as schema title)
+      if (label && label !== schema.t) {
+        wrapper.appendChild(el('h3', 'content-section-title', label));
+      }
+    } else if (type !== 'cb') {
+      // Interactive fields: standard label
       var labelEl = el('label', 'block text-sm font-medium text-gray-700');
       labelEl.textContent = label;
       labelEl.setAttribute('for', 'field-' + fullName);
@@ -316,6 +372,9 @@
       var type = raw[1];
       var opts = raw[3] || {};
       var fullName = (prefix || '') + name;
+
+      // Skip content fields — they are display-only
+      if (isContentField(type)) return;
 
       switch (type) {
         case 'cb':
@@ -406,7 +465,8 @@
   // ── Render ──
 
   var container = el('div', 'py-8 px-4 sm:py-12');
-  var card = el('div', 'max-w-2xl mx-auto bg-white rounded-2xl shadow-lg shadow-gray-200/60 overflow-hidden');
+  var cardWidth = hasContent ? 'max-w-4xl' : 'max-w-2xl';
+  var card = el('div', cardWidth + ' mx-auto bg-white rounded-2xl shadow-lg shadow-gray-200/60 overflow-hidden');
   var header = el('div', 'px-8 pt-8 pb-2');
   var body = el('div', 'px-8 pb-8');
 
@@ -438,15 +498,22 @@
     if (fieldEl) form.appendChild(fieldEl);
   });
 
-  // Buttons
+  // Buttons — conditional on mode
   var btnGroup = el('div', 'flex gap-3 pt-6');
-  var cancelBtn = el('button', 'btn-secondary flex-1', 'Cancel');
-  cancelBtn.type = 'button';
-  var submitBtn = el('button', 'btn-primary flex-1', 'Submit');
-  submitBtn.type = 'submit';
+  var cancelBtn, submitBtn, closeBtn;
 
-  btnGroup.appendChild(cancelBtn);
-  btnGroup.appendChild(submitBtn);
+  if (hasInteractive) {
+    cancelBtn = el('button', 'btn-secondary flex-1', 'Cancel');
+    cancelBtn.type = 'button';
+    submitBtn = el('button', 'btn-primary flex-1', 'Submit');
+    submitBtn.type = 'submit';
+    btnGroup.appendChild(cancelBtn);
+    btnGroup.appendChild(submitBtn);
+  } else {
+    closeBtn = el('button', 'btn-primary w-full', 'Close');
+    closeBtn.type = 'button';
+    btnGroup.appendChild(closeBtn);
+  }
   form.appendChild(btnGroup);
 
   body.appendChild(form);
@@ -491,6 +558,7 @@
 
   form.onsubmit = function (e) {
     e.preventDefault();
+    if (!submitBtn) return;
     submitBtn.disabled = true;
     submitBtn.textContent = 'Submitting...';
 
@@ -522,13 +590,23 @@
     });
   };
 
-  // ── Cancel ──
+  // ── Cancel / Close ──
 
-  cancelBtn.onclick = function () {
-    fetch('/cancel?token=' + token, { method: 'POST' }).then(function () {
-      showResult('Cancelled', 'cancelled');
-    });
-  };
+  if (cancelBtn) {
+    cancelBtn.onclick = function () {
+      fetch('/cancel?token=' + token, { method: 'POST' }).then(function () {
+        showResult('Cancelled', 'cancelled');
+      });
+    };
+  }
+
+  if (closeBtn) {
+    closeBtn.onclick = function () {
+      fetch('/close?token=' + token, { method: 'POST' }).then(function () {
+        showResult('Closed', 'closed');
+      });
+    };
+  }
 
   // ── Result overlay ──
 
@@ -542,6 +620,7 @@
     var icon = el('div', 'text-4xl mb-3');
     if (type === 'success') icon.textContent = '\u2705';
     else if (type === 'cancelled') icon.textContent = '\u274c';
+    else if (type === 'closed') icon.textContent = '\u2705';
     else if (type === 'timeout') icon.textContent = '\u23f0';
     else icon.textContent = '\u26a0\ufe0f';
 

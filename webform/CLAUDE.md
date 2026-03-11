@@ -25,6 +25,42 @@ EOF
 # -> {"status":"submitted","data":{"key":"...","env":"prod"}}
 ```
 
+## View Mode
+
+Use `webform view` to display read-only content in the browser:
+
+```bash
+# Markdown (auto-detected)
+echo "# Hello World" | webform view
+
+# JSON with explicit format
+echo '{"a":1}' | webform view --format json
+
+# With title and timeout
+cat report.md | webform view --title "Report" --timeout 60
+```
+
+Result: `{"status":"closed"}` on Close, `{"status":"timeout"}` on timeout.
+
+## Content Field Types
+
+Mix display content with form inputs in a single schema using `c_*` field types:
+
+```bash
+webform <<'EOF'
+{"t":"Deploy Review","f":[
+  ["summary","c_md","Summary",{"body":"# Deploy v2.1\n- Fix auth bug\n- Add caching"}],
+  ["metrics","c_table","Metrics",{"headers":["Metric","Value"],"rows":[["Latency","120ms"],["Errors","0.1%"]]}],
+  ["approve","cb","Approve deploy",{}],
+  ["note","ta","Notes",{"ph":"Optional notes..."}]
+]}
+EOF
+```
+
+Available content types: `c_md`, `c_table`, `c_json`, `c_code`, `c_text`, `c_kv`, `c_html`.
+
+Content fields are display-only and excluded from submitted data.
+
 ## Help
 
 Run `webform schema` when you need the DSL format, and `webform --help` for CLI flags.
@@ -33,4 +69,4 @@ Run `webform schema` when you need the DSL format, and `webform --help` for CLI 
 
 - The server binds to localhost only and uses a one-time token.
 - Prefer `pw`, `sel`, `cb`, `list`, and validation options over ad hoc text prompts.
-- The result always comes back as JSON with `submitted`, `cancelled`, or `timeout`.
+- The result always comes back as JSON with `submitted`, `cancelled`, `closed`, or `timeout`.

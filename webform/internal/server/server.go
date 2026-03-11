@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/bang9/ai-tools/webform/internal/schema"
+	"github.com/bang9/ai-tools/webform/internal/viewer"
 	"github.com/bang9/ai-tools/webform/web"
 )
 
@@ -30,10 +31,97 @@ var OpenBrowser = openBrowser
 
 const maxBodySize = 1 << 20 // 1MB
 
+// preRenderContentFields converts c_md, c_json, c_code, c_text body fields
+// to HTML and replaces them with c_html fields. c_table and c_kv are kept
+// as-is since they are rendered client-side from structured data.
+func preRenderContentFields(s *schema.Schema) {
+	var raw map[string]any
+	if err := json.Unmarshal([]byte(s.JSON()), &raw); err != nil {
+		return
+	}
+	fields, ok := raw["f"].([]any)
+	if !ok {
+		return
+	}
+
+	changed := false
+	for i, f := range fields {
+		arr, ok := f.([]any)
+		if !ok || len(arr) < 4 {
+			continue
+		}
+		typ, _ := arr[1].(string)
+		opts, _ := arr[3].(map[string]any)
+		if opts == nil {
+			continue
+		}
+
+		body, _ := opts["body"].(string)
+		if body == "" {
+			continue
+		}
+
+		var htmlBody string
+		switch typ {
+		case "c_md":
+			htmlBody = viewer.RenderMarkdown(body)
+		case "c_json":
+			htmlBody = viewer.RenderJSON(body)
+		case "c_code":
+			lang, _ := opts["lang"].(string)
+			htmlBody = viewer.RenderCode(body, lang)
+		case "c_text":
+			htmlBody = viewer.RenderText(body)
+		default:
+			continue
+		}
+
+		arr[1] = "c_html"
+		arr[3] = map[string]any{"body": htmlBody}
+		fields[i] = arr
+		changed = true
+	}
+
+	if changed {
+		raw["f"] = fields
+		b, err := json.Marshal(raw)
+		if err != nil {
+			return
+		}
+		s.SetRaw(string(b))
+	}
+}
+
+// hasInteractiveFields checks whether the schema has any non-content (interactive) fields.
+func hasInteractiveFields(s *schema.Schema) bool {
+	var raw map[string]any
+	if err := json.Unmarshal([]byte(s.JSON()), &raw); err != nil {
+		return true
+	}
+	fields, ok := raw["f"].([]any)
+	if !ok {
+		return true
+	}
+	for _, f := range fields {
+		arr, ok := f.([]any)
+		if !ok || len(arr) < 2 {
+			continue
+		}
+		typ, _ := arr[1].(string)
+		if !strings.HasPrefix(typ, "c_") {
+			return true
+		}
+	}
+	return false
+}
+
 func Run(s *schema.Schema, timeoutSec int) (string, error) {
 	if timeoutSec <= 0 {
 		timeoutSec = 300
 	}
+
+	// Pre-render content fields (c_md, c_json, c_code, c_text → c_html)
+	preRenderContentFields(s)
 
 	token := generateToken()
 
@@ -160,6 +248,24 @@ func Run(s *schema.Schema, timeoutSec int) (string, error) {
 		resultCh <- string(b)
 	})
 
+	mux.HandleFunc("/close", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", 405)
+			return
+		}
+		if r.URL.Query().Get("token") != token {
+			http.Error(w, "invalid token", http.StatusForbidden)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"ok":true}`))
+
+		result := Result{Status: "closed"}
+		b, _ := json.Marshal(result)
+		resultCh <- string(b)
+	})
+
 	srv := &http.Server{Handler: mux}
 	go srv.Serve(listener)
 	defer func() {
@@ -169,7 +275,11 @@ func Run(s *schema.Schema, timeoutSec int) (string, error) {
 	}()
 
 	url := fmt.Sprintf("http://127.0.0.1:%d/?token=%s", port, token)
-	fmt.Fprintf(os.Stderr, "Opening form at %s\n", url)
+	if hasInteractiveFields(s) {
+		fmt.Fprintf(os.Stderr, "Opening form at %s\n", url)
+	} else {
+		fmt.Fprintf(os.Stderr, "Opening viewer at %s\n", url)
+	}
 	OpenBrowser(url)
 
 	select {

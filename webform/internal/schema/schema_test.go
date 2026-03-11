@@ -202,11 +202,47 @@ func TestReference(t *testing.T) {
 		`grp "Profile" {`,
 		`JSON fallback:`,
 		`webform --help`,
+		`c_md`,
+		`c_table`,
+		`c_json`,
+		`c_code`,
+		`c_kv`,
+		`c_html`,
 	}
 	for _, snippet := range requiredSnippets {
 		if !strings.Contains(ref, snippet) {
 			t.Errorf("reference missing snippet: %s", snippet)
 		}
+	}
+}
+
+func TestNewViewSchema(t *testing.T) {
+	s, err := NewViewSchema("My View", "<h1>Hello</h1>")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if s.Title != "My View" {
+		t.Errorf("expected title 'My View', got '%s'", s.Title)
+	}
+	if len(s.Fields) != 1 {
+		t.Fatalf("expected 1 field, got %d", len(s.Fields))
+	}
+
+	// Parse the field to verify it's c_html
+	var field []json.RawMessage
+	if err := json.Unmarshal(s.Fields[0], &field); err != nil {
+		t.Fatalf("field parse error: %v", err)
+	}
+	var typ string
+	json.Unmarshal(field[1], &typ)
+	if typ != "c_html" {
+		t.Errorf("expected type 'c_html', got '%s'", typ)
+	}
+
+	// Verify JSON is valid
+	var raw map[string]any
+	if err := json.Unmarshal([]byte(s.JSON()), &raw); err != nil {
+		t.Fatalf("JSON parse error: %v", err)
 	}
 }
 
