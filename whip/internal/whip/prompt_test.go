@@ -338,3 +338,123 @@ func TestPromptPreviousAttemptNotes_RenderForWorkerAndLead(t *testing.T) {
 		t.Fatalf("lead prompt should include the previous attempt note")
 	}
 }
+
+func TestFinalPromptShapes_Matrix(t *testing.T) {
+	worker := NewTask("Worker Example", "Implement feature X", "/tmp/project")
+	worker.ID = "worker-123"
+	worker.IRCName = "wp-worker-123"
+	worker.MasterIRCName = "wp-master"
+	worker.Review = true
+
+	lead := NewTask("Lead Example", "Coordinate workers", "/tmp/project")
+	lead.ID = "lead-123"
+	lead.Role = TaskRoleLead
+	lead.Workspace = "demo"
+	lead.IRCName = "wp-lead-demo"
+	lead.MasterIRCName = "wp-master-demo"
+
+	cases := []struct {
+		name     string
+		prompt   string
+		mustHave []string
+		mustNot  []string
+	}{
+		{
+			name:   "claude worker",
+			prompt: (&ClaudeBackend{}).GeneratePrompt(worker),
+			mustHave: []string{
+				"You are an agent working under a lead session.",
+				"/loop 1m claude-irc inbox",
+				"Task worker-123 ready for review.",
+			},
+			mustNot: []string{
+				"You are a Workspace Lead",
+				"Run claude-irc inbox now",
+				"## Codex Review Handoff",
+			},
+		},
+		{
+			name:   "codex worker",
+			prompt: (&CodexBackend{}).GeneratePrompt(worker),
+			mustHave: []string{
+				"You are an agent working under a lead session.",
+				"Run claude-irc inbox now",
+				"## Codex Review Handoff",
+				"Task worker-123 ready for review.",
+			},
+			mustNot: []string{
+				"You are a Workspace Lead",
+				"/loop 1m claude-irc inbox",
+			},
+		},
+		{
+			name:   "claude lead",
+			prompt: (&ClaudeBackend{}).GeneratePrompt(lead),
+			mustHave: []string{
+				"You are a Workspace Lead",
+				"/loop 1m claude-irc inbox",
+				"whip workspace view demo",
+				"claude-irc join wp-lead-demo",
+			},
+			mustNot: []string{
+				"You are an agent working under a lead session.",
+				"Run claude-irc inbox now",
+				"## Codex Review Handoff",
+			},
+		},
+		{
+			name:   "codex lead",
+			prompt: (&CodexBackend{}).GeneratePrompt(lead),
+			mustHave: []string{
+				"You are a Workspace Lead",
+				"Run claude-irc inbox now",
+				"whip workspace view demo",
+				"claude-irc join wp-lead-demo",
+			},
+			mustNot: []string{
+				"You are an agent working under a lead session.",
+				"/loop 1m claude-irc inbox",
+				"## Codex Review Handoff",
+			},
+		},
+		{
+			name:   "master default",
+			prompt: defaultMasterPrompt(),
+			mustHave: []string{
+				"You are the whip master session managing task agents.",
+				"/loop 1m claude-irc inbox",
+				"WHIP_HOME/home/ (default: ~/.whip/home/) persists across master sessions.",
+			},
+			mustNot: []string{
+				codexMasterPromptHeading,
+				"Run claude-irc inbox now",
+			},
+		},
+		{
+			name:   "master codex",
+			prompt: renderMasterPromptForBackend(defaultMasterPrompt(), "codex"),
+			mustHave: []string{
+				"You are the whip master session managing task agents.",
+				"/loop 1m claude-irc inbox",
+				codexMasterPromptHeading,
+				"Tell the worker to run: claude-irc inbox",
+			},
+			mustNot: []string{
+				"Run claude-irc inbox now",
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		for _, want := range tc.mustHave {
+			if !strings.Contains(tc.prompt, want) {
+				t.Fatalf("%s missing %q", tc.name, want)
+			}
+		}
+		for _, forbid := range tc.mustNot {
+			if strings.Contains(tc.prompt, forbid) {
+				t.Fatalf("%s unexpectedly contains %q", tc.name, forbid)
+			}
+		}
+	}
+}
