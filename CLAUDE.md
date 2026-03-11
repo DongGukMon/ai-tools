@@ -110,6 +110,21 @@ When adding or updating a skill, check if it exists in both directories and keep
 
 Every `CLAUDE.md` in this repo must have a corresponding `AGENTS.md` symlink (`ln -s CLAUDE.md AGENTS.md`) in the same directory. When creating or moving a `CLAUDE.md`, always create the symlink alongside it.
 
+## CLI Documentation Philosophy
+
+These tools are used by AI agents. Documentation should optimize for discoverability, not exhaustiveness.
+
+Principles:
+- Every CLI must be fully discoverable via `<tool> --help` and `<tool> <subcommand> --help`
+- Do NOT duplicate help output into documentation — it goes stale
+- If a tool has a schema/reference command (e.g., `webform schema`), point to it instead of inlining the reference
+
+AI-facing docs (CLAUDE.md, skill prompts) should contain only:
+- One-line description: what the tool does and when to use it
+- Non-obvious rules: workflow patterns, conventions, and constraints that `--help` doesn't convey
+- One concrete example showing the core workflow
+- Discovery pointers: which help/schema commands to run for details
+
 ## Code Style
 
 - **Language**: Go for performance-critical tools
