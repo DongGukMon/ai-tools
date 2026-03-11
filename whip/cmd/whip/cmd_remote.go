@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	"github.com/bang9/ai-tools/whip/internal/whip"
+	qrterminal "github.com/mdp/qrterminal/v3"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
@@ -116,6 +117,16 @@ func remoteCmd() *cobra.Command {
 			fmt.Fprintf(os.Stderr, "  Workspace:     %s\n", remoteCfg.Workspace)
 			fmt.Fprintf(os.Stderr, "  Master tmux:   tmux attach -t %s\n", masterSession)
 			fmt.Fprintln(os.Stderr, "")
+
+			qrTarget := shortURL
+			if qrTarget == "" {
+				qrTarget = serveOpenURL(shortURL)
+			}
+			if qrTarget != "" {
+				qrterminal.Generate(qrTarget, qrterminal.L, os.Stderr)
+				fmt.Fprintln(os.Stderr, "")
+			}
+
 			fmt.Fprintln(os.Stderr, "  Shortcuts: [o] open short URL  [c] copy connect URL  [q] quit")
 
 			tokenFromURL := connectURLToken(connectURL)

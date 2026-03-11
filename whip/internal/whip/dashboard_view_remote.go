@@ -65,6 +65,39 @@ func (m DashboardModel) renderRemoteStatusView(w int) string {
 		}
 	}
 
+	// Serve notice log box
+	{
+		const logBoxHeight = 6
+		logTitle := lipgloss.NewStyle().Bold(true).Foreground(colorMuted).Render("Device Auth")
+		var logLines []string
+		if len(m.serveNotices) == 0 {
+			logLines = []string{lipgloss.NewStyle().Foreground(colorSubtle).Italic(true).Render("(waiting for device auth...)")}
+		} else {
+			start := 0
+			if len(m.serveNotices) > logBoxHeight {
+				start = len(m.serveNotices) - logBoxHeight
+			}
+			for _, n := range m.serveNotices[start:] {
+				logLines = append(logLines, lipgloss.NewStyle().Foreground(colorText).Render(n))
+			}
+		}
+		// Pad to fixed height
+		for len(logLines) < logBoxHeight {
+			logLines = append(logLines, "")
+		}
+		logContent := strings.Join(logLines, "\n")
+		logBox := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(colorDim).
+			Padding(0, 1).
+			Width(50).
+			Render(logTitle + "\n" + logContent)
+		b.WriteString("\n")
+		for _, line := range strings.Split(logBox, "\n") {
+			b.WriteString("  " + line + "\n")
+		}
+	}
+
 	b.WriteString("\n")
 	dot := lipgloss.NewStyle().Foreground(colorDim).Render("  ·  ")
 	var parts []string

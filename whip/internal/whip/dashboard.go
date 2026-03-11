@@ -46,6 +46,7 @@ var (
 
 type tickMsg time.Time
 type cleanedMsg int
+type serveNoticeMsg string
 
 type peerInfo struct {
 	Name   string
@@ -99,12 +100,23 @@ type DashboardModel struct {
 	remoteStarting  bool
 	remoteErr       error
 	remoteWorkspace string
+	serveNotices []string
+
+	programRef *programHolder
 
 	tunnelInput    string
 	portInput      string
 	workspaceInput string
 	configCursor   int
 	cwd            string
+}
+
+type programHolder struct {
+	p *tea.Program
+}
+
+func (m *DashboardModel) SetProgram(p *tea.Program) {
+	m.programRef.p = p
 }
 
 func (m DashboardModel) PendingAttach() string {
@@ -134,6 +146,7 @@ func NewDashboardModel(store *Store, version string) DashboardModel {
 		width:           120,
 		cwd:             cwd,
 		remoteWorkspace: GlobalWorkspaceName,
+		programRef:      &programHolder{},
 	}
 }
 
@@ -224,12 +237,21 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.view = viewRemoteStatus
 		return m, m.loadTasks()
 
+	case serveNoticeMsg:
+		const maxNotices = 6
+		m.serveNotices = append(m.serveNotices, string(msg))
+		if len(m.serveNotices) > maxNotices {
+			m.serveNotices = m.serveNotices[len(m.serveNotices)-maxNotices:]
+		}
+		return m, nil
+
 	case remoteStoppedMsg:
 		m.serveProcess = nil
 		m.serveURL = ""
 		m.shortURL = ""
 		m.webURL = ""
 		m.masterAlive = false
+		m.serveNotices = nil
 		m.view = viewList
 		return m, nil
 

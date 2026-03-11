@@ -89,10 +89,12 @@ func dashboardCmd() *cobra.Command {
 				return err
 			}
 
+			model := whip.NewDashboardModel(store, version)
 			p := tea.NewProgram(
-				whip.NewDashboardModel(store, version),
+				model,
 				tea.WithAltScreen(),
 			)
+			model.SetProgram(p)
 			for {
 				m, err := p.Run()
 				if err != nil {
@@ -112,10 +114,12 @@ func dashboardCmd() *cobra.Command {
 				} else {
 					fmt.Fprintf(os.Stderr, "tmux session %s no longer exists\n", sessionName)
 				}
+				model = whip.NewDashboardModel(store, version)
 				p = tea.NewProgram(
-					whip.NewDashboardModel(store, version),
+					model,
 					tea.WithAltScreen(),
 				)
+				model.SetProgram(p)
 			}
 		},
 	}
