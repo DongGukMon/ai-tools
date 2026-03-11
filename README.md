@@ -80,6 +80,25 @@ curl -fsSL https://raw.githubusercontent.com/bang9/ai-tools/main/webform/install
 /plugin install webform
 ```
 
+### [rewind](./rewind)
+
+Session transcript timeline viewer for Claude Code and Codex agent sessions. Opens a visual timeline in the browser showing user messages, assistant responses, tool calls, and thinking events.
+
+#### Installation
+
+**CLI**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/bang9/ai-tools/main/rewind/install.sh | bash
+```
+
+**Plugin** (via Claude Code Plugin)
+
+```bash
+/plugin marketplace add bang9/ai-tools
+/plugin install rewind
+```
+
 ### [whip](./whip)
 
 Task orchestrator for Claude Code. Run single-task work in `global`, run stacked work in a named `workspace`, and manage multiple Claude Code sessions via tmux with inter-session communication through `claude-irc`. Includes a TUI dashboard, web dashboard with real-time terminal view, and remote mode for headless operation.

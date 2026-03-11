@@ -1,0 +1,82 @@
+name: "rewind: Release"
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate release version
+        env:
+          RAW_VERSION: ${{ inputs.version }}
+        run: |
+          version="$RAW_VERSION"
+          semver_tag_pattern='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*)|[0-9A-Za-z-][0-9A-Za-z-]*)(\.((0|[1-9][0-9]*)|[0-9A-Za-z-][0-9A-Za-z-]*))*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'
+          case "$version" in
+            *$'\n'*|*$'\r'*)
+              echo "Invalid release version: must be a single-line semver tag" >&2
+              exit 1
+              ;;
+          esac
+          if ! printf '%s' "$version" | grep -Eq "$semver_tag_pattern"; then
+            echo "Invalid release version: must match semver tag format" >&2
+            exit 1
+          fi
+          printf 'RELEASE_VERSION=%s\n' "$version" >> "$GITHUB_ENV"
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache-dependency-path: rewind/go.sum
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Build frontend
+        run: |
+          cd rewind/web
+          pnpm install
+          pnpm build
+
+      - name: Build binaries
+        run: |
+          cd rewind
+          VERSION="$RELEASE_VERSION"
+          LDFLAGS="-s -w -X main.version=${VERSION}"
+          mkdir -p dist
+          GOOS=darwin GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o dist/rewind-darwin-arm64 ./cmd/rewind
+          GOOS=darwin GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o dist/rewind-darwin-amd64 ./cmd/rewind
+          GOOS=linux GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o dist/rewind-linux-amd64 ./cmd/rewind
+
+      - name: Generate checksums
+        run: |
+          cd rewind/dist
+          sha256sum * > rewind-checksums.txt
+
+      - name: Upload binaries
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "$RELEASE_VERSION" \
+            rewind/dist/rewind-darwin-arm64 \
+            rewind/dist/rewind-darwin-amd64 \
+            rewind/dist/rewind-linux-amd64 \
+            rewind/dist/rewind-checksums.txt
