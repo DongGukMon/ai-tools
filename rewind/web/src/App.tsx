@@ -143,14 +143,14 @@ function ScrollButtons() {
     <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-2">
       <button
         onClick={() => scrollTo("top")}
-        className="p-3 rounded-2xl liquid-glass liquid-glass-hover shadow-lg"
+        className="scroll-btn p-3 rounded-2xl cursor-pointer"
         aria-label="Scroll to top"
       >
         <ArrowUp className="w-4 h-4 text-slate-600 dark:text-neutral-300" />
       </button>
       <button
         onClick={() => scrollTo("bottom")}
-        className="p-3 rounded-2xl liquid-glass liquid-glass-hover shadow-lg"
+        className="scroll-btn p-3 rounded-2xl cursor-pointer"
         aria-label="Scroll to bottom"
       >
         <ArrowDown className="w-4 h-4 text-slate-600 dark:text-neutral-300" />

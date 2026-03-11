@@ -265,11 +265,10 @@ const TimelineItem = memo(function TimelineItem({
   }, [event.toolResult, event.type, expanded]);
 
   return (
-    <div className={cn("timeline-row relative flex gap-4", expanded ? "items-start" : "items-center")} data-event-index={index}>
+    <div className="timeline-row relative flex items-start gap-4" data-event-index={index}>
       <div
         className={cn(
-          "timeline-dot relative z-10 w-[23px] h-[23px] rounded-full",
-          expanded && "mt-2.5",
+          "timeline-dot relative z-10 w-[23px] h-[23px] rounded-full mt-[7px]",
           "flex items-center justify-center shrink-0",
           hasContent ? "cursor-pointer" : "",
           config.dot,
