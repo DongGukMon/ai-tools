@@ -309,10 +309,13 @@ Lead: [hard][codex] Workspace Lead - <1-line scope>
 
 ### Stack Diagram
 
-A --+--> C
-B --/
+Generate the dependency graph JSON and pipe it through `whip graph` to render an ASCII box diagram:
 
-Lead --> Worker 1 --> Worker 2
+```bash
+echo '[{"id":"A","deps":[]},{"id":"B","deps":[]},{"id":"C","deps":["A","B"]}]' | whip graph
+```
+
+Show the rendered output directly in the plan presentation. Each node `id` should match the task identifier used in the Task Graph section above.
 
 ### Key Design Decisions
 - <why the graph is shaped this way>
@@ -407,7 +410,7 @@ Round 2 (after Round 1):
 - Task 3: <title> (depends on: Task 1, Task 2)
 
 ### Stack Diagram
-<ASCII graph>
+<output of `echo '<graph-json>' | whip graph`>
 
 ### Simulation
 - Round count:
@@ -477,7 +480,7 @@ Worker sequence:
 - Worker 2: <title> (after: Worker 1)
 
 ### Stack Diagram
-<ASCII graph>
+<output of `echo '<graph-json>' | whip graph`>
 
 ### Simulation
 - Round count:

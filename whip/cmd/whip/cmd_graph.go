@@ -12,15 +12,15 @@ import (
 
 func graphCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "graph",
-		Short:   "Render task dependency graph as ASCII box diagram",
-		GroupID: "operations",
-		Long: `Read task graph data from stdin (JSON array) and render an ASCII box diagram.
+		Use:    "graph",
+		Short:  "Render dependency graph as ASCII box diagram",
+		Hidden: true,
+		Long: `Read graph data from stdin (JSON array) and render an ASCII box diagram.
 
 Each node has: id, title, status (optional), deps (array of dependency IDs).
 
 Example:
-  echo '[{"id":"A","title":"Auth","deps":[]},{"id":"B","title":"API","deps":["A"]}]' | whip task graph`,
+  echo '[{"id":"A","title":"Auth","deps":[]},{"id":"B","title":"API","deps":["A"]}]' | whip graph`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			data, err := io.ReadAll(os.Stdin)

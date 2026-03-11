@@ -31,7 +31,6 @@ func taskCmd() *cobra.Command {
 		cleanCmd(),
 		archiveCmd(),
 		depCmd(),
-		graphCmd(),
 	)
 	return cmd
 }
