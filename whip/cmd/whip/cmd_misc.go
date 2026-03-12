@@ -17,7 +17,7 @@ func upgradeCmd() *cobra.Command {
 				Repo:           "bang9/ai-tools",
 				BinaryName:     "whip",
 				Version:        version,
-				CompanionTools: []string{"claude-irc", "webform"},
+				CompanionTools: []string{"claude-irc", "webform", "rewind"},
 			})
 		},
 	}

@@ -263,17 +263,13 @@ main() {
     echo ""
     step "Installing required tools..."
 
-    if ! command -v claude-irc &> /dev/null && ! [ -x "${INSTALL_DIR}/claude-irc" ]; then
-        install_binary "claude-irc" "$os" "$arch" "$version" || true
-    else
-        info "  claude-irc already installed"
-    fi
-
-    if ! command -v webform &> /dev/null && ! [ -x "${INSTALL_DIR}/webform" ]; then
-        install_binary "webform" "$os" "$arch" "$version" || true
-    else
-        info "  webform already installed"
-    fi
+    for tool in claude-irc webform rewind; do
+        if ! command -v "$tool" &> /dev/null && ! [ -x "${INSTALL_DIR}/$tool" ]; then
+            install_binary "$tool" "$os" "$arch" "$version" || true
+        else
+            info "  $tool already installed"
+        fi
+    done
 
     ensure_path
 

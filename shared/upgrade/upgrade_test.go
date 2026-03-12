@@ -36,17 +36,20 @@ func TestConfigWithCompanionTools(t *testing.T) {
 		Repo:           "bang9/ai-tools",
 		BinaryName:     "whip",
 		Version:        "v1.0.0",
-		CompanionTools: []string{"claude-irc", "webform"},
+		CompanionTools: []string{"claude-irc", "webform", "rewind"},
 	}
 
-	if len(cfg.CompanionTools) != 2 {
-		t.Fatalf("expected 2 companion tools, got %d", len(cfg.CompanionTools))
+	if len(cfg.CompanionTools) != 3 {
+		t.Fatalf("expected 3 companion tools, got %d", len(cfg.CompanionTools))
 	}
 	if cfg.CompanionTools[0] != "claude-irc" {
 		t.Errorf("expected first companion claude-irc, got %s", cfg.CompanionTools[0])
 	}
 	if cfg.CompanionTools[1] != "webform" {
 		t.Errorf("expected second companion webform, got %s", cfg.CompanionTools[1])
+	}
+	if cfg.CompanionTools[2] != "rewind" {
+		t.Errorf("expected third companion rewind, got %s", cfg.CompanionTools[2])
 	}
 }
 
@@ -317,9 +320,9 @@ func TestRunToolList(t *testing.T) {
 			name: "self with companions",
 			cfg: Config{
 				BinaryName:     "whip",
-				CompanionTools: []string{"claude-irc", "webform"},
+				CompanionTools: []string{"claude-irc", "webform", "rewind"},
 			},
-			wantTools: []string{"whip", "claude-irc", "webform"},
+			wantTools: []string{"whip", "claude-irc", "webform", "rewind"},
 		},
 	}
 
