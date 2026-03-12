@@ -1,15 +1,13 @@
-name: "claude-irc: Test"
+name: "shared/upgrade: Test"
 
 on:
   push:
     branches: [main]
     paths:
-      - 'claude-irc/**'
       - 'shared/upgrade/**'
   pull_request:
     branches: [main]
     paths:
-      - 'claude-irc/**'
       - 'shared/upgrade/**'
 
 concurrency:
@@ -31,15 +29,10 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
-          go-version-file: claude-irc/go.mod
-          cache-dependency-path: claude-irc/go.sum
+          go-version-file: shared/upgrade/go.mod
+          cache-dependency-path: shared/upgrade/go.mod
 
       - name: Run tests
         run: |
-          cd claude-irc
+          cd shared/upgrade
           go test ./...
-
-      - name: Build release binaries
-        run: |
-          cd claude-irc
-          make cross VERSION=test

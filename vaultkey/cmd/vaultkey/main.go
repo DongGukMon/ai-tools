@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -54,21 +55,36 @@ func initCmd() *cobra.Command {
 				return err
 			}
 
-			repoPath := filepath.Join(vaultkey.ConfigDir(), "repo")
-
-			if _, err := os.Stat(repoPath); err == nil {
-				return fmt.Errorf("repo already exists at %s (delete it first to reinit)", repoPath)
+			configDir := vaultkey.ConfigDir()
+			if err := vaultkey.EnsurePathNotSymlink(configDir); err != nil {
+				return fmt.Errorf("checking config dir: %w", err)
 			}
 
-			fmt.Fprintf(os.Stderr, "Cloning %s...\n", repoURL)
+			repoPath := filepath.Join(configDir, "repo")
+			if err := vaultkey.EnsurePathNotSymlink(repoPath); err != nil {
+				return fmt.Errorf("checking repo path: %w", err)
+			}
+
+			if _, err := os.Lstat(repoPath); err == nil {
+				return fmt.Errorf("repo already exists at %s (delete it first to reinit)", repoPath)
+			} else if !errors.Is(err, os.ErrNotExist) {
+				return fmt.Errorf("checking repo path: %w", err)
+			}
+
+			fmt.Fprintf(os.Stderr, "Cloning %s...\n", vaultkey.RedactURLCredentials(repoURL))
 			if err := vaultkey.GitClone(repoURL, repoPath); err != nil {
 				return err
 			}
 
 			vaultPath := filepath.Join(repoPath, "vault.json")
-			if _, err := os.Stat(vaultPath); err == nil {
+			if err := vaultkey.EnsurePathNotSymlink(vaultPath); err != nil {
+				return fmt.Errorf("checking vault path: %w", err)
+			}
+			if _, err := os.Lstat(vaultPath); err == nil {
 				// vault.json already exists in repo — just save config
 				fmt.Fprintln(os.Stderr, "Found existing vault.json in repo.")
+			} else if !errors.Is(err, os.ErrNotExist) {
+				return fmt.Errorf("checking vault path: %w", err)
 			} else {
 				// Create new vault
 				if _, err := vaultkey.CreateVault(repoPath, pw); err != nil {

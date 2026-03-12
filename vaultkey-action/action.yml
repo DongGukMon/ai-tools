@@ -3,10 +3,14 @@ description: "Install vaultkey CLI and clone vault repo"
 inputs:
   gh-pat:
     description: "GitHub PAT with read access to the vault repo"
-    required: true
+    required: false
   vault-repo:
     description: "Vault repo (e.g. your-user/your-secrets-repo)"
-    required: true
+    required: false
+  vault-url:
+    description: "Optional full git URL override for tests or non-GitHub remotes (e.g. file:///tmp/vault.git)"
+    required: false
+    default: ""
   password:
     description: "Vault password (sets VAULTKEY_PASSWORD env for subsequent steps)"
     required: true
@@ -23,60 +27,305 @@ inputs:
     description: "vaultkey version to install (default: latest)"
     required: false
     default: "latest"
+  skip-install:
+    description: "Skip cache/install steps and use an already-available vaultkey binary on PATH"
+    required: false
+    default: "false"
 runs:
   using: "composite"
   steps:
     - name: Resolve version
       id: version
+      if: inputs.skip-install != 'true'
       shell: bash
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
       run: |
-        if [ "${{ inputs.version }}" = "latest" ]; then
+        semver_tag_pattern='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*)|[0-9A-Za-z-][0-9A-Za-z-]*)(\.((0|[1-9][0-9]*)|[0-9A-Za-z-][0-9A-Za-z-]*))*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'
+        if [ "$INPUT_VERSION" = "latest" ]; then
           VERSION=$(curl -sfSL https://api.github.com/repos/bang9/ai-tools/releases/latest | grep '"tag_name"' | head -1 | cut -d'"' -f4)
         else
-          VERSION="${{ inputs.version }}"
+          VERSION="$INPUT_VERSION"
         fi
-        echo "tag=$VERSION" >> $GITHUB_OUTPUT
+        if ! printf '%s\n' "$VERSION" | grep -Eq "$semver_tag_pattern"; then
+          echo "Invalid vaultkey version: $VERSION" >&2
+          exit 1
+        fi
+        printf 'tag=%s\n' "$VERSION" >> "$GITHUB_OUTPUT"
 
     - name: Cache vaultkey binary
       id: cache
-      uses: actions/cache@v4
+      if: inputs.skip-install != 'true'
+      uses: actions/cache@v5
       with:
-        path: ~/.local/bin/vaultkey
+        path: |
+          ~/.local/bin/vaultkey
+          ~/.local/bin/vaultkey.exe
         key: vaultkey-${{ runner.os }}-${{ runner.arch }}-${{ steps.version.outputs.tag }}
 
-    - name: Install vaultkey
-      if: steps.cache.outputs.cache-hit != 'true'
+    - name: Verify cached vaultkey binary
+      id: verify-cache
+      if: inputs.skip-install != 'true' && steps.cache.outputs.cache-hit == 'true'
       shell: bash
+      env:
+        RESOLVED_VERSION: ${{ steps.version.outputs.tag }}
       run: |
-        curl -fsSL https://raw.githubusercontent.com/bang9/ai-tools/main/vaultkey/install.sh | bash
+        set -euo pipefail
+
+        download_text() {
+          local url="$1"
+          if command -v curl >/dev/null 2>&1; then
+            curl -fsSL "$url"
+            return $?
+          fi
+          if command -v wget >/dev/null 2>&1; then
+            wget -q -O - "$url"
+            return $?
+          fi
+          echo "Neither curl nor wget is installed" >&2
+          return 1
+        }
+
+        sha256_file() {
+          local file="$1"
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "$file" | awk '{print $1}'
+            return $?
+          fi
+          if command -v shasum >/dev/null 2>&1; then
+            shasum -a 256 "$file" | awk '{print $1}'
+            return $?
+          fi
+          if command -v openssl >/dev/null 2>&1; then
+            openssl dgst -sha256 "$file" | awk '{print $NF}'
+            return $?
+          fi
+          echo "No SHA-256 tool found (tried sha256sum, shasum, openssl)" >&2
+          return 1
+        }
+
+        lookup_checksum() {
+          local manifest="$1" asset_name="$2"
+          awk -v name="$asset_name" '
+            NF >= 2 {
+              file = $2
+              sub(/^\*/, "", file)
+              if (file == name) {
+                print $1
+                exit
+              }
+            }
+          ' "$manifest"
+        }
+
+        invalidate_cache() {
+          rm -f "$HOME/.local/bin/vaultkey" "$HOME/.local/bin/vaultkey.exe"
+          printf 'valid=false\n' >> "$GITHUB_OUTPUT"
+          exit 0
+        }
+
+        case "$RUNNER_OS" in
+          Linux)
+            os="linux"
+            binary="$HOME/.local/bin/vaultkey"
+            ;;
+          macOS)
+            os="darwin"
+            binary="$HOME/.local/bin/vaultkey"
+            ;;
+          Windows)
+            os="windows"
+            binary="$HOME/.local/bin/vaultkey.exe"
+            ;;
+          *)
+            echo "Unsupported runner OS: $RUNNER_OS" >&2
+            invalidate_cache
+            ;;
+        esac
+
+        case "$RUNNER_ARCH" in
+          X64)
+            arch="amd64"
+            ;;
+          ARM64)
+            arch="arm64"
+            ;;
+          *)
+            echo "Unsupported runner arch: $RUNNER_ARCH" >&2
+            invalidate_cache
+            ;;
+        esac
+
+        if [ ! -x "$binary" ]; then
+          echo "Cached vaultkey binary is missing or not executable; reinstalling." >&2
+          invalidate_cache
+        fi
+
+        asset_name="vaultkey-${os}-${arch}"
+        if [ "$os" = "windows" ]; then
+          asset_name="${asset_name}.exe"
+        fi
+
+        manifest_url="https://github.com/bang9/ai-tools/releases/download/${RESOLVED_VERSION}/vaultkey-checksums.txt"
+        manifest=$(mktemp)
+        trap 'rm -f "$manifest"' EXIT
+
+        if ! download_text "$manifest_url" > "$manifest"; then
+          echo "Failed to download checksum manifest for cached vaultkey; reinstalling." >&2
+          invalidate_cache
+        fi
+
+        expected_checksum=$(lookup_checksum "$manifest" "$asset_name")
+        if [ -z "$expected_checksum" ]; then
+          echo "Checksum entry missing for cached vaultkey asset ${asset_name}; reinstalling." >&2
+          invalidate_cache
+        fi
+
+        if ! actual_checksum=$(sha256_file "$binary"); then
+          echo "Failed to hash cached vaultkey binary; reinstalling." >&2
+          invalidate_cache
+        fi
+
+        if [ "$actual_checksum" != "$expected_checksum" ]; then
+          echo "Cached vaultkey checksum mismatch; reinstalling." >&2
+          invalidate_cache
+        fi
+
+        printf 'valid=true\n' >> "$GITHUB_OUTPUT"
+
+    - name: Install vaultkey
+      if: inputs.skip-install != 'true' && (steps.cache.outputs.cache-hit != 'true' || steps.verify-cache.outputs.valid != 'true')
+      shell: bash
+      run: VAULTKEY_VERSION="${{ steps.version.outputs.tag }}" bash "${{ github.action_path }}/../vaultkey/install.sh"
 
     - name: Add to PATH
       shell: bash
-      run: echo "$HOME/.local/bin" >> $GITHUB_PATH
+      run: printf '%s\n' "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+    - name: Verify vaultkey binary
+      shell: bash
+      run: |
+        if ! command -v vaultkey >/dev/null 2>&1; then
+          echo "vaultkey binary not found on PATH" >&2
+          exit 1
+        fi
 
     - name: Set vault password
       shell: bash
-      run: echo "VAULTKEY_PASSWORD=${{ inputs.password }}" >> $GITHUB_ENV
+      env:
+        INPUT_PASSWORD: ${{ inputs.password }}
+      run: |
+        escape_workflow_command() {
+          local value="$1"
+          value="${value//'%'/'%25'}"
+          value="${value//$'\r'/'%0D'}"
+          value="${value//$'\n'/'%0A'}"
+          printf '%s' "$value"
+        }
+
+        password="$INPUT_PASSWORD"
+        delimiter="VAULTKEY_PASSWORD_${RANDOM}_${RANDOM}_$$"
+
+        echo "::add-mask::$(escape_workflow_command "$password")"
+        {
+          printf 'VAULTKEY_PASSWORD<<%s\n' "$delimiter"
+          printf '%s\n' "$password"
+          printf '%s\n' "$delimiter"
+        } >> "$GITHUB_ENV"
 
     - name: Init vault
       shell: bash
-      run: vaultkey init --ci https://${{ inputs.gh-pat }}@github.com/${{ inputs.vault-repo }}.git
       env:
+        INPUT_VAULT_REPO: ${{ inputs.vault-repo }}
+        INPUT_VAULT_URL: ${{ inputs.vault-url }}
         VAULTKEY_PASSWORD: ${{ inputs.password }}
+        VAULTKEY_GH_PAT: ${{ inputs.gh-pat }}
+        GIT_TERMINAL_PROMPT: "0"
+        GIT_ASKPASS: ${{ runner.temp }}/vaultkey-askpass.sh
+      run: |
+        case "$INPUT_VAULT_URL" in
+          *$'\n'*|*$'\r'*)
+            echo "Invalid vault URL: must be a single line" >&2
+            exit 1
+            ;;
+        esac
+
+        repo_url=""
+        if [ -n "$INPUT_VAULT_URL" ]; then
+          repo_url="$INPUT_VAULT_URL"
+        else
+          if ! printf '%s\n' "$INPUT_VAULT_REPO" | grep -Eq '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$'; then
+            echo "Invalid vault repository: $INPUT_VAULT_REPO" >&2
+            exit 1
+          fi
+          if [ -z "$VAULTKEY_GH_PAT" ]; then
+            echo "gh-pat is required when vault-url is not provided" >&2
+            exit 1
+          fi
+
+          askpass_path="$RUNNER_TEMP/vaultkey-askpass.sh"
+          {
+            printf '%s\n' '#!/bin/bash'
+            printf '%s\n' 'case "$1" in'
+            printf '%s\n' '  *Username*) printf '\''%s\n'\'' "x-access-token" ;;'
+            printf '%s\n' '  *Password*) printf '\''%s\n'\'' "$VAULTKEY_GH_PAT" ;;'
+            printf '%s\n' '  *) exit 1 ;;'
+            printf '%s\n' 'esac'
+          } > "$askpass_path"
+          chmod 700 "$askpass_path"
+          trap 'rm -f "$askpass_path"' EXIT
+          repo_url="https://github.com/${INPUT_VAULT_REPO}.git"
+        fi
+
+        vaultkey init --ci "$repo_url"
 
     - name: Load secrets
       if: inputs.secrets != ''
       shell: bash
+      env:
+        INPUT_SECRETS: ${{ inputs.secrets }}
+        VAULTKEY_PASSWORD: ${{ inputs.password }}
       run: |
+        escape_workflow_command() {
+          local value="$1"
+          value="${value//'%'/'%25'}"
+          value="${value//$'\r'/'%0D'}"
+          value="${value//$'\n'/'%0A'}"
+          printf '%s' "$value"
+        }
+
+        write_github_env() {
+          local name="$1" value="$2" delimiter
+          delimiter="VAULTKEY_ENV_${RANDOM}_${RANDOM}_$$"
+          {
+            printf '%s<<%s\n' "$name" "$delimiter"
+            printf '%s\n' "$value"
+            printf '%s\n' "$delimiter"
+          } >> "$GITHUB_ENV"
+        }
+
         while IFS= read -r line; do
           [ -z "$line" ] && continue
+          case "$line" in
+            *=*" "*) ;;
+            *)
+              echo "Invalid secrets entry: $line" >&2
+              exit 1
+              ;;
+          esac
           ENV_NAME="${line%%=*}"
           SPEC="${line#*=}"
+          if ! printf '%s\n' "$ENV_NAME" | grep -Eq '^[A-Za-z_][A-Za-z0-9_]*$'; then
+            echo "Invalid environment variable name: $ENV_NAME" >&2
+            exit 1
+          fi
           SCOPE="${SPEC%% *}"
           KEY="${SPEC#* }"
+          if [ -z "$SCOPE" ] || [ -z "$KEY" ] || [ "$KEY" = "$SPEC" ]; then
+            echo "Invalid secret spec for $ENV_NAME: $SPEC" >&2
+            exit 1
+          fi
           VALUE=$(vaultkey get "$SCOPE" "$KEY")
-          echo "::add-mask::$VALUE"
-          echo "$ENV_NAME=$VALUE" >> $GITHUB_ENV
-        done <<< "${{ inputs.secrets }}"
-      env:
-        VAULTKEY_PASSWORD: ${{ inputs.password }}
+          echo "::add-mask::$(escape_workflow_command "$VALUE")"
+          write_github_env "$ENV_NAME" "$VALUE"
+        done <<< "$INPUT_SECRETS"

@@ -1,9 +1,10 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 REPO="bang9/ai-tools"
 INSTALL_DIR="$HOME/.local/bin"
 BINARY_NAME="vaultkey"
+SEMVER_TAG_PATTERN='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*)|[0-9A-Za-z-][0-9A-Za-z-]*)(\.((0|[1-9][0-9]*)|[0-9A-Za-z-][0-9A-Za-z-]*))*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -46,7 +47,30 @@ get_latest_version() {
     if [ -z "$version" ]; then
         error "Failed to fetch latest version from GitHub"
     fi
+    case "$version" in
+        *$'\n'*|*$'\r'*)
+            error "Invalid release version: must be a single-line semver tag"
+            ;;
+    esac
+    if ! printf '%s\n' "$version" | grep -Eq "$SEMVER_TAG_PATTERN"; then
+        error "Invalid release version: must match semver tag format"
+    fi
     echo "$version"
+}
+
+resolve_version() {
+    local requested="${1:-${VAULTKEY_VERSION:-latest}}"
+
+    if [ "$requested" = "latest" ]; then
+        get_latest_version
+        return 0
+    fi
+
+    if ! printf '%s\n' "$requested" | grep -Eq "$SEMVER_TAG_PATTERN"; then
+        error "Invalid version: $requested"
+    fi
+
+    echo "$requested"
 }
 
 download_file() {
@@ -93,47 +117,53 @@ lookup_checksum() {
     ' "$manifest"
 }
 
+cleanup_install_artifacts() {
+    rm -f "$1" "$2"
+}
+
 install_verified_binary() {
     local download_url="$1" checksum_url="$2" asset_name="$3" dest="$4"
-    local tmp="${dest}.tmp.$$" manifest="${tmp}.checksums"
+    local tmp manifest
     local expected_checksum actual_checksum
 
+    tmp=$(mktemp "${dest}.tmp.XXXXXX")
+    manifest=$(mktemp "${dest}.checksums.XXXXXX")
+
     if ! download_file "$checksum_url" "$manifest"; then
-        rm -f "$tmp" "$manifest"
+        cleanup_install_artifacts "$tmp" "$manifest"
         return 1
     fi
 
     expected_checksum=$(lookup_checksum "$manifest" "$asset_name")
     if [ -z "$expected_checksum" ]; then
         warn "Checksum entry not found for ${asset_name}"
-        rm -f "$tmp" "$manifest"
+        cleanup_install_artifacts "$tmp" "$manifest"
         return 1
     fi
 
     if ! download_file "$download_url" "$tmp"; then
-        rm -f "$tmp" "$manifest"
+        cleanup_install_artifacts "$tmp" "$manifest"
         return 1
     fi
 
     if ! actual_checksum=$(sha256_file "$tmp"); then
-        rm -f "$tmp" "$manifest"
+        cleanup_install_artifacts "$tmp" "$manifest"
         return 1
     fi
 
     if [ "$actual_checksum" != "$expected_checksum" ]; then
         warn "Checksum mismatch for ${asset_name}"
-        rm -f "$tmp" "$manifest"
+        cleanup_install_artifacts "$tmp" "$manifest"
         return 1
     fi
 
     if ! chmod +x "$tmp"; then
-        rm -f "$tmp" "$manifest"
+        cleanup_install_artifacts "$tmp" "$manifest"
         return 1
     fi
 
-    rm -f "$dest"
-    if ! mv "$tmp" "$dest"; then
-        rm -f "$tmp" "$manifest"
+    if ! mv -f "$tmp" "$dest"; then
+        cleanup_install_artifacts "$tmp" "$manifest"
         return 1
     fi
 
@@ -143,10 +173,15 @@ install_verified_binary() {
 
 ensure_path() {
     local shell_profile=""
+    local shell_name=""
 
-    if [ -n "$ZSH_VERSION" ] || [ "$(basename "$SHELL")" = "zsh" ]; then
+    if [ -n "${SHELL:-}" ]; then
+        shell_name="$(basename "$SHELL")"
+    fi
+
+    if [ -n "${ZSH_VERSION:-}" ] || [ "$shell_name" = "zsh" ]; then
         shell_profile="$HOME/.zshrc"
-    elif [ -n "$BASH_VERSION" ] || [ "$(basename "$SHELL")" = "bash" ]; then
+    elif [ -n "${BASH_VERSION:-}" ] || [ "$shell_name" = "bash" ]; then
         if [ -f "$HOME/.bash_profile" ]; then
             shell_profile="$HOME/.bash_profile"
         else
@@ -179,7 +214,7 @@ main() {
 
     os=$(detect_os)
     arch=$(detect_arch)
-    version=$(get_latest_version)
+    version=$(resolve_version "${1:-}")
 
     binary_name="vaultkey-${os}-${arch}"
     checksum_name="${BINARY_NAME}-checksums.txt"
@@ -209,4 +244,4 @@ main() {
     info "vaultkey ${version} installed successfully!"
 }
 
-main
+main "$@"

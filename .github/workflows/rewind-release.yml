@@ -16,7 +16,9 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: Validate release version
         env:
@@ -37,7 +39,7 @@ jobs:
           printf 'RELEASE_VERSION=%s\n' "$version" >> "$GITHUB_ENV"
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: rewind/go.mod
           cache-dependency-path: |
@@ -45,7 +47,7 @@ jobs:
             rewind/go.mod
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20'
 
@@ -57,7 +59,7 @@ jobs:
       - name: Build frontend
         run: |
           cd rewind/web
-          pnpm install
+          pnpm install --frozen-lockfile
           pnpm build
 
       - name: Build binaries

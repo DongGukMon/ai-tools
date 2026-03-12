@@ -24,7 +24,17 @@ func ConfigPath() string {
 }
 
 func LoadConfig() (*Config, error) {
-	raw, err := os.ReadFile(ConfigPath())
+	configDir := ConfigDir()
+	if err := EnsurePathNotSymlink(configDir); err != nil {
+		return nil, fmt.Errorf("checking config dir: %w", err)
+	}
+
+	configPath := ConfigPath()
+	if err := EnsurePathNotSymlink(configPath); err != nil {
+		return nil, fmt.Errorf("checking config path: %w", err)
+	}
+
+	raw, err := os.ReadFile(configPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, fmt.Errorf("not initialized (run 'vaultkey init' first)")
@@ -41,6 +51,9 @@ func LoadConfig() (*Config, error) {
 
 func SaveConfig(cfg *Config) error {
 	dir := ConfigDir()
+	if err := EnsurePathNotSymlink(dir); err != nil {
+		return fmt.Errorf("checking config dir: %w", err)
+	}
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return fmt.Errorf("creating config dir: %w", err)
 	}
@@ -51,7 +64,7 @@ func SaveConfig(cfg *Config) error {
 	}
 	raw = append(raw, '\n')
 
-	if err := os.WriteFile(ConfigPath(), raw, 0600); err != nil {
+	if err := writeFileAtomically(ConfigPath(), raw, 0600); err != nil {
 		return fmt.Errorf("writing config: %w", err)
 	}
 	return nil
