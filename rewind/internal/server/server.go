@@ -1,163 +1,381 @@
 package server
 
 import (
-	"bytes"
-	"compress/gzip"
-	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
-	"net"
-	"net/http"
 	"os"
 	"os/exec"
-	"os/signal"
+	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
-	"syscall"
+	"time"
 
 	"github.com/bang9/ai-tools/rewind/internal/parser"
 	"github.com/bang9/ai-tools/rewind/web"
+	"github.com/tdewolff/minify/v2"
+	"github.com/tdewolff/minify/v2/css"
+	htmlmin "github.com/tdewolff/minify/v2/html"
+	"github.com/tdewolff/minify/v2/js"
 )
 
-// OpenBrowser is a package-level function for opening URLs in the browser.
+// OpenBrowser is a package-level function for opening viewer files in the browser.
 var OpenBrowser = openBrowser
 
-type sessionPayload struct {
-	plain   []byte
-	gzipped []byte
+const (
+	referrerMeta    = `<meta name="referrer" content="no-referrer" />`
+	cspMeta         = `<meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; connect-src 'none'; font-src 'self' data:; img-src 'self' data:; object-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'" />`
+	sessionDataID   = "rewind-session-data"
+	staleViewerTTL  = 30 * time.Minute
+	viewerDirPrefix = "rewind-view-"
+)
+
+var (
+	moduleScriptPattern = regexp.MustCompile(`<script[^>]*type="module"[^>]*src="([^"]+)"[^>]*>\s*</script>`)
+	stylesheetPattern   = regexp.MustCompile(`<link[^>]*rel="stylesheet"[^>]*href="([^"]+)"[^>]*>`)
+	viewerMinifier      = newViewerMinifier()
+	userHomeDir         = os.UserHomeDir
+)
+
+type Options struct {
+	Port        int
+	OpenBrowser bool
 }
 
-// Run starts an HTTP server serving the session timeline and opens a browser.
-func Run(session *parser.Session, port int) error {
-	token := generateToken()
-
-	payload, err := buildSessionPayload(session)
-	if err != nil {
-		return err
-	}
-
-	// Get the embedded dist filesystem
+// Run exports a static viewer bundle with the session data embedded into the
+// generated index.html, then optionally opens it in the default browser.
+func Run(session *parser.Session, options Options) error {
 	distFS, err := fs.Sub(web.StaticFS, "dist")
 	if err != nil {
 		return fmt.Errorf("failed to access embedded dist: %w", err)
 	}
 
-	addr := fmt.Sprintf("127.0.0.1:%d", port)
-	listener, err := net.Listen("tcp", addr)
-	if err != nil {
-		return fmt.Errorf("failed to start server: %w", err)
+	if _, err := CleanupStaleViewerDirs(); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to remove stale viewer directories: %v\n", err)
 	}
-	actualPort := listener.Addr().(*net.TCPAddr).Port
 
-	mux := http.NewServeMux()
+	sessionJSON, err := json.Marshal(session)
+	if err != nil {
+		return fmt.Errorf("failed to marshal session: %w", err)
+	}
 
-	// API endpoint: session data
-	mux.HandleFunc("/api/session", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Query().Get("token") != token {
-			http.Error(w, "invalid token", http.StatusForbidden)
-			return
+	viewerRoot, err := prepareViewerExportRoot()
+	if err != nil {
+		return err
+	}
+
+	viewerDir, err := os.MkdirTemp(viewerRoot, viewerDirPrefix)
+	if err != nil {
+		return fmt.Errorf("failed to create viewer directory: %w", err)
+	}
+
+	viewerPath, err := exportViewer(distFS, viewerDir, sessionJSON)
+	if err != nil {
+		_ = os.RemoveAll(viewerDir)
+		return err
+	}
+
+	if options.Port != 0 {
+		fmt.Fprintln(os.Stderr, "Note: --port is ignored in static viewer mode")
+	}
+
+	fmt.Fprintf(os.Stderr, "Session viewer: %s\n", viewerPath)
+
+	if options.OpenBrowser {
+		fmt.Fprintln(os.Stderr, "Opening exported session viewer")
+		if err := OpenBrowser(viewerPath); err != nil {
+			return err
 		}
-		payload.write(w, r)
-	})
+		return nil
+	}
 
-	// Static files from embedded dist
-	fileServer := http.FileServer(http.FS(distFS))
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// For the root path, validate token
-		if r.URL.Path == "/" {
-			if r.URL.Query().Get("token") != token {
-				http.Error(w, "invalid token", http.StatusForbidden)
-				return
-			}
-		}
-		fileServer.ServeHTTP(w, r)
-	})
-
-	srv := &http.Server{Handler: mux}
-	go srv.Serve(listener)
-
-	url := fmt.Sprintf("http://127.0.0.1:%d/?token=%s", actualPort, token)
-	fmt.Fprintf(os.Stderr, "Opening session at %s\n", url)
-	fmt.Fprintf(os.Stderr, "Press Ctrl+C to stop\n")
-	OpenBrowser(url)
-
-	// Wait for interrupt
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	<-sigCh
-
-	fmt.Fprintln(os.Stderr, "\nShutting down...")
-	srv.Shutdown(context.Background())
+	fmt.Fprintln(os.Stderr, "Auto-open disabled")
 	return nil
 }
 
-func buildSessionPayload(session *parser.Session) (*sessionPayload, error) {
-	sessionJSON, err := json.Marshal(session)
+// CleanupStaleViewerDirs removes exported viewer directories older than the
+// configured stale TTL and returns the number removed.
+func CleanupStaleViewerDirs() (int, error) {
+	root, err := prepareViewerExportRoot()
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal session: %w", err)
+		return 0, err
 	}
+	return cleanupViewerDirs(root, time.Now(), staleViewerTTL)
+}
 
-	payload := &sessionPayload{
-		plain: sessionJSON,
-	}
-
-	var buf bytes.Buffer
-	zw, err := gzip.NewWriterLevel(&buf, gzip.BestSpeed)
+func exportViewer(distFS fs.FS, outputDir string, sessionJSON []byte) (string, error) {
+	indexHTML, err := fs.ReadFile(distFS, "index.html")
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize gzip writer: %w", err)
-	}
-	if _, err := zw.Write(sessionJSON); err != nil {
-		return nil, fmt.Errorf("failed to gzip session payload: %w", err)
-	}
-	if err := zw.Close(); err != nil {
-		return nil, fmt.Errorf("failed to finalize gzip payload: %w", err)
+		return "", fmt.Errorf("failed to read viewer index: %w", err)
 	}
 
-	if buf.Len() > 0 && buf.Len() < len(sessionJSON) {
-		payload.gzipped = buf.Bytes()
+	inlinedIndex, err := inlineAssets(indexHTML, distFS)
+	if err != nil {
+		return "", err
 	}
 
-	return payload, nil
+	renderedIndex, err := injectSessionData(inlinedIndex, sessionJSON)
+	if err != nil {
+		return "", err
+	}
+	renderedIndex, err = minifyHTMLDocument(renderedIndex)
+	if err != nil {
+		return "", err
+	}
+
+	indexPath := filepath.Join(outputDir, "index.html")
+	if err := os.WriteFile(indexPath, renderedIndex, 0o600); err != nil {
+		return "", fmt.Errorf("failed to write viewer index: %w", err)
+	}
+
+	return indexPath, nil
 }
 
-func (p *sessionPayload) write(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "no-store")
-	w.Header().Set("Vary", "Accept-Encoding")
+func inlineAssets(indexHTML []byte, distFS fs.FS) ([]byte, error) {
+	html := string(indexHTML)
 
-	if len(p.gzipped) > 0 && acceptsGzip(r.Header.Get("Accept-Encoding")) {
-		w.Header().Set("Content-Encoding", "gzip")
-		_, _ = w.Write(p.gzipped)
-		return
+	var err error
+	html, err = replaceAssetRefs(html, distFS, stylesheetPattern, func(content []byte) (string, error) {
+		minified, err := minifyAsset("text/css", content)
+		if err != nil {
+			return "", err
+		}
+		return "<style>" + string(minified) + "</style>", nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	_, _ = w.Write(p.plain)
+	html, err = replaceAssetRefs(html, distFS, moduleScriptPattern, func(content []byte) (string, error) {
+		minified, err := minifyAsset("application/javascript", content)
+		if err != nil {
+			return "", err
+		}
+		return "<script type=\"module\">" + string(minified) + "</script>", nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return []byte(html), nil
 }
 
-func acceptsGzip(acceptEncoding string) bool {
-	return strings.Contains(acceptEncoding, "gzip")
+func replaceAssetRefs(html string, distFS fs.FS, pattern *regexp.Regexp, render func([]byte) (string, error)) (string, error) {
+	matches := pattern.FindAllStringSubmatch(html, -1)
+	for _, match := range matches {
+		if len(match) < 2 {
+			continue
+		}
+
+		assetPath, err := normalizeAssetPath(match[1])
+		if err != nil {
+			return "", err
+		}
+
+		assetBytes, err := fs.ReadFile(distFS, assetPath)
+		if err != nil {
+			return "", fmt.Errorf("failed to read embedded asset %s: %w", assetPath, err)
+		}
+
+		rendered, err := render(assetBytes)
+		if err != nil {
+			return "", err
+		}
+
+		html = strings.Replace(html, match[0], rendered, 1)
+	}
+
+	return html, nil
 }
 
-func generateToken() string {
-	b := make([]byte, 16)
-	rand.Read(b)
-	return hex.EncodeToString(b)
+func normalizeAssetPath(raw string) (string, error) {
+	path := strings.TrimSpace(raw)
+	path = strings.TrimPrefix(path, "./")
+	path = strings.TrimPrefix(path, "/")
+	path = filepath.ToSlash(filepath.Clean(path))
+	if path == "." || path == "" || strings.HasPrefix(path, "../") {
+		return "", fmt.Errorf("invalid embedded asset path: %q", raw)
+	}
+	return path, nil
 }
 
-func openBrowser(url string) {
+func injectSessionData(indexHTML, sessionJSON []byte) ([]byte, error) {
+	bootstrap := `<script id="` + sessionDataID + `" type="application/json">` + escapeInlineJSON(sessionJSON) + `</script>`
+
+	html := string(indexHTML)
+	switch {
+	case strings.Contains(html, "<script"):
+		html = strings.Replace(html, "<script", bootstrap+"<script", 1)
+	case strings.Contains(html, "</head>"):
+		html = strings.Replace(html, "</head>", bootstrap+"</head>", 1)
+	default:
+		return nil, fmt.Errorf("viewer index is missing an injection point")
+	}
+
+	if strings.Contains(html, "</head>") {
+		headInsertions := make([]string, 0, 2)
+		if !strings.Contains(html, cspMeta) {
+			headInsertions = append(headInsertions, cspMeta)
+		}
+		if !strings.Contains(html, referrerMeta) {
+			headInsertions = append(headInsertions, referrerMeta)
+		}
+		if len(headInsertions) > 0 {
+			html = strings.Replace(html, "</head>", strings.Join(headInsertions, "")+"</head>", 1)
+		}
+	}
+
+	return []byte(html), nil
+}
+
+func minifyHTMLDocument(html []byte) ([]byte, error) {
+	minified, err := viewerMinifier.Bytes("text/html", html)
+	if err != nil {
+		return nil, fmt.Errorf("failed to minify viewer html: %w", err)
+	}
+	return minified, nil
+}
+
+func minifyAsset(mime string, content []byte) ([]byte, error) {
+	minified, err := viewerMinifier.Bytes(mime, content)
+	if err != nil {
+		return nil, fmt.Errorf("failed to minify %s asset: %w", mime, err)
+	}
+	return minified, nil
+}
+
+func newViewerMinifier() *minify.M {
+	m := minify.New()
+	m.AddFunc("text/html", htmlmin.Minify)
+	m.AddFunc("text/css", css.Minify)
+	m.AddFunc("application/javascript", js.Minify)
+	m.AddFunc("text/javascript", js.Minify)
+	return m
+}
+
+func escapeInlineJSON(sessionJSON []byte) string {
+	replacer := strings.NewReplacer(
+		"</", "<\\/",
+		"\u2028", "\\u2028",
+		"\u2029", "\\u2029",
+	)
+	return replacer.Replace(string(sessionJSON))
+}
+
+func viewerExportRoot() (string, error) {
+	homeDir, err := userHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve user home directory: %w", err)
+	}
+	if homeDir == "" {
+		return "", fmt.Errorf("user home directory is empty")
+	}
+	return filepath.Join(homeDir, ".rewind", "viewers"), nil
+}
+
+func prepareViewerExportRoot() (string, error) {
+	root, err := viewerExportRoot()
+	if err != nil {
+		return "", err
+	}
+
+	homeDir, err := userHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve user home directory: %w", err)
+	}
+	if err := ensurePrivateDirTree(homeDir, filepath.Join(homeDir, ".rewind"), 0o700); err != nil {
+		return "", err
+	}
+	if err := ensurePrivateDirTree(homeDir, root, 0o700); err != nil {
+		return "", err
+	}
+	return root, nil
+}
+
+func ensurePrivateDirTree(base, target string, mode os.FileMode) error {
+	relPath, err := filepath.Rel(base, target)
+	if err != nil {
+		return fmt.Errorf("failed to resolve viewer directory: %w", err)
+	}
+	if relPath == ".." || strings.HasPrefix(relPath, ".."+string(os.PathSeparator)) {
+		return fmt.Errorf("viewer directory must stay under %s", base)
+	}
+
+	current := base
+	for _, part := range strings.Split(relPath, string(os.PathSeparator)) {
+		if part == "" || part == "." {
+			continue
+		}
+		current = filepath.Join(current, part)
+
+		info, err := os.Lstat(current)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				if err := os.Mkdir(current, mode); err != nil {
+					return fmt.Errorf("failed to create viewer directory %s: %w", current, err)
+				}
+				continue
+			}
+			return fmt.Errorf("failed to inspect viewer directory %s: %w", current, err)
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("viewer directory must not be a symlink: %s", current)
+		}
+		if !info.IsDir() {
+			return fmt.Errorf("viewer directory path must be a directory: %s", current)
+		}
+	}
+
+	return nil
+}
+
+func cleanupViewerDirs(root string, now time.Time, ttl time.Duration) (int, error) {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return 0, nil
+		}
+		return 0, fmt.Errorf("failed to read viewer cache directory: %w", err)
+	}
+
+	cutoff := now.Add(-ttl)
+	removed := 0
+	for _, entry := range entries {
+		if !entry.IsDir() || !strings.HasPrefix(entry.Name(), viewerDirPrefix) {
+			continue
+		}
+
+		info, err := entry.Info()
+		if err != nil || info.ModTime().After(cutoff) {
+			continue
+		}
+
+		if err := os.RemoveAll(filepath.Join(root, entry.Name())); err != nil {
+			return removed, fmt.Errorf("failed to remove stale viewer directory %s: %w", entry.Name(), err)
+		}
+		removed++
+	}
+
+	return removed, nil
+}
+
+func openBrowser(path string) error {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "darwin":
-		cmd = exec.Command("open", url)
+		cmd = exec.Command("open", path)
 	case "linux":
-		cmd = exec.Command("xdg-open", url)
+		cmd = exec.Command("xdg-open", path)
 	case "windows":
-		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", path)
 	}
-	if cmd != nil {
-		cmd.Start()
+	if cmd == nil {
+		return fmt.Errorf("unsupported platform for browser auto-open: %s", runtime.GOOS)
 	}
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to open browser for %s: %w", path, err)
+	}
+	return nil
 }

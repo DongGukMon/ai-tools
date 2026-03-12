@@ -28,18 +28,24 @@ rewind claude <session-id>
 # Codex session
 rewind codex <session-id>
 
-# Bind to a fixed port instead of a random one
-rewind codex <session-id> --port 8080
+# Use an explicit session file to skip auto-discovery
+rewind codex --path ~/.codex/sessions/2026/03/11/run-abc12345.jsonl
+
+# Export the static viewer without opening a browser automatically
+rewind codex <session-id> --no-open
+
+# Remove stale exported viewers from the cache directory
+rewind cleanup
 ```
 
-`rewind` searches for the matching session file locally, starts a localhost web server, and opens the timeline in your browser. Press `Ctrl+C` in the terminal to stop the server.
+`rewind` searches for the matching session file locally, exports a self-contained viewer bundle to `~/.rewind/viewers`, and opens the timeline in your browser.
 
 Discover commands: `rewind --help`
 
 ## Supported Session Sources
 
 - `claude`: looks for `~/.claude/projects/*/<session-id>.jsonl`
-- `codex`: looks for `~/.codex/sessions/**/*-<session-id>.jsonl`
+- `codex`: looks for `~/.codex/sessions/YYYY/MM/DD/*-<session-id>.jsonl`
 
 ## What It Shows
 
@@ -53,13 +59,18 @@ Discover commands: `rewind --help`
 
 | Command | Description |
 |---------|-------------|
-| `rewind <backend> <session-id> [--port <port>]` | Parse a session and open the browser timeline |
+| `rewind <backend> <session-id> [--no-open]` | Parse a discovered session and open the browser timeline |
+| `rewind <backend> --path <session-file.jsonl> [--no-open]` | Parse an explicit session file without auto-discovery |
+| `rewind cleanup` | Delete stale exported viewer directories from `~/.rewind/viewers` |
 | `rewind version` | Print the current version |
 | `rewind upgrade` | Upgrade to the latest release |
 
-## Local Server
+## Viewer Export
 
-The viewer is served from `127.0.0.1` only. Each session launch uses a one-time token in the URL, and session data is served from an in-memory payload rather than writing parsed output to disk.
+Each launch writes a static viewer bundle to `~/.rewind/viewers` with the parsed session embedded into `index.html`. The exported page blocks external network fetches with a CSP meta tag, sets `referrer` to `no-referrer`, and avoids sending session data over localhost HTTP.
+
+`--port` remains accepted for compatibility but is ignored in static viewer mode.
+Viewer directories older than 30 minutes are deleted on the next run, or immediately via `rewind cleanup`.
 
 ## Build from Source
 
@@ -69,6 +80,8 @@ make build
 make test
 make cross
 ```
+
+`rewind/web/dist` is a generated frontend build artifact. It is rebuilt during local builds and CI and is not meant to be checked in.
 
 ## License
 

@@ -9,7 +9,9 @@ on:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
+    env:
+      GOTOOLCHAIN: local
     permissions:
       contents: write
     steps:
@@ -37,8 +39,10 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
-          cache-dependency-path: rewind/go.sum
+          go-version-file: rewind/go.mod
+          cache-dependency-path: |
+            rewind/go.sum
+            rewind/go.mod
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -69,7 +73,7 @@ jobs:
       - name: Generate checksums
         run: |
           cd rewind/dist
-          sha256sum * > rewind-checksums.txt
+          shasum -a 256 * > rewind-checksums.txt
 
       - name: Upload binaries
         env:

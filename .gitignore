@@ -14,6 +14,7 @@ whip/whip
 whip/dist/
 rewind/rewind
 rewind/dist/
+rewind/web/dist/
 rewind/web/node_modules/
 
 # Local files

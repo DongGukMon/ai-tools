@@ -6,20 +6,28 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
 type claudeLine struct {
-	Type          string               `json:"type"`
-	Timestamp     string               `json:"timestamp"`
-	SessionID     string               `json:"sessionId"`
-	CWD           string               `json:"cwd"`
-	Message       json.RawMessage      `json:"message"`
-	ToolUseResult *claudeToolUseResult `json:"toolUseResult"`
+	Type          string          `json:"type"`
+	Timestamp     string          `json:"timestamp"`
+	SessionID     string          `json:"sessionId"`
+	CWD           string          `json:"cwd"`
+	Message       json.RawMessage `json:"message"`
+	ToolUseResult json.RawMessage `json:"toolUseResult"`
 }
 
 type claudeToolUseResult struct {
-	File *struct {
+	Type             string `json:"type"`
+	Text             string
+	Stdout           string `json:"stdout"`
+	Stderr           string `json:"stderr"`
+	Interrupted      bool   `json:"interrupted"`
+	IsImage          bool   `json:"isImage"`
+	NoOutputExpected bool   `json:"noOutputExpected"`
+	File             *struct {
 		Content string `json:"content"`
 	} `json:"file"`
 }
@@ -40,6 +48,10 @@ type claudeContentBlock struct {
 
 // FindClaudeSession locates a Claude session JSONL file by session ID.
 func FindClaudeSession(sessionID string) (string, error) {
+	if err := validateSessionID(sessionID); err != nil {
+		return "", err
+	}
+
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("failed to get home directory: %w", err)
@@ -48,26 +60,36 @@ func FindClaudeSession(sessionID string) (string, error) {
 	projectsDir := filepath.Join(homeDir, ".claude", "projects")
 	target := sessionID + ".jsonl"
 
-	var found string
-	filepath.Walk(projectsDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil
-		}
-		if !info.IsDir() && info.Name() == target {
-			found = path
-			return filepath.SkipAll
-		}
-		return nil
-	})
-
-	if found == "" {
-		return "", fmt.Errorf("session file not found: %s under %s", target, projectsDir)
+	matches, err := filepath.Glob(filepath.Join(projectsDir, "*", target))
+	if err != nil {
+		return "", fmt.Errorf("failed to search session files under %s: %w", projectsDir, err)
 	}
-	return found, nil
+
+	validMatches := make([]string, 0, len(matches))
+	for _, match := range matches {
+		resolved, err := resolveDiscoveredSessionPath(projectsDir, match)
+		if err == nil {
+			validMatches = append(validMatches, resolved)
+		}
+	}
+
+	switch len(validMatches) {
+	case 0:
+		return "", fmt.Errorf("session file not found: %s under %s", target, projectsDir)
+	case 1:
+		return validMatches[0], nil
+	default:
+		return "", fmt.Errorf("multiple session files matched %s under %s", target, projectsDir)
+	}
 }
 
 // ParseClaude parses a Claude JSONL session file into a normalized Session.
 func ParseClaude(path string) (*Session, error) {
+	path, err := ResolveSessionPath(path)
+	if err != nil {
+		return nil, err
+	}
+
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %w", err)
@@ -82,7 +104,9 @@ func ParseClaude(path string) (*Session, error) {
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
 
+	lineNum := 0
 	for scanner.Scan() {
+		lineNum++
 		lineBytes := scanner.Bytes()
 		if len(lineBytes) == 0 {
 			continue
@@ -90,7 +114,7 @@ func ParseClaude(path string) (*Session, error) {
 
 		var line claudeLine
 		if err := json.Unmarshal(lineBytes, &line); err != nil {
-			continue
+			return nil, fmt.Errorf("invalid Claude JSON on line %d: %w", lineNum, err)
 		}
 
 		if sess.ID == "" && line.SessionID != "" {
@@ -109,40 +133,82 @@ func ParseClaude(path string) (*Session, error) {
 		}
 
 		var msg claudeMessage
-		if len(line.Message) == 0 || json.Unmarshal(line.Message, &msg) != nil {
-			continue
+		if len(line.Message) == 0 {
+			return nil, fmt.Errorf("invalid Claude message on line %d: message payload is empty", lineNum)
+		}
+		if err := json.Unmarshal(line.Message, &msg); err != nil {
+			return nil, fmt.Errorf("invalid Claude message on line %d: %w", lineNum, err)
 		}
 
 		if sess.Model == "" && line.Type == "assistant" && msg.Model != "" {
 			sess.Model = msg.Model
 		}
 
-		ts := parseTimestamp(line.Timestamp)
+		toolUseResult, err := parseClaudeToolUseResult(line.ToolUseResult)
+		if err != nil {
+			return nil, fmt.Errorf("invalid Claude tool result on line %d: %w", lineNum, err)
+		}
 
+		ts, err := parseTimestampStrict(line.Timestamp)
+		if err != nil {
+			return nil, fmt.Errorf("invalid Claude timestamp on line %d: %w", lineNum, err)
+		}
+
+		var events []TimelineEvent
 		switch line.Type {
 		case "user":
-			sess.Events = append(sess.Events, parseClaudeUserMessage(msg, line.ToolUseResult, ts)...)
+			events, err = parseClaudeUserMessage(msg, toolUseResult, ts)
 		case "assistant":
-			sess.Events = append(sess.Events, parseClaudeAssistantMessage(msg, ts)...)
+			events, err = parseClaudeAssistantMessage(msg, ts)
 		}
+		if err != nil {
+			return nil, fmt.Errorf("invalid Claude event on line %d: %w", lineNum, err)
+		}
+		sess.Events = append(sess.Events, events...)
 	}
 
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("error reading file: %w", err)
 	}
-
-	if len(sess.Events) > 0 {
-		sess.StartedAt = sess.Events[0].Timestamp
+	if len(sess.Events) == 0 {
+		return nil, fmt.Errorf("no supported Claude events found in session")
 	}
+
+	sess.StartedAt = sess.Events[0].Timestamp
 
 	return sess, nil
 }
 
-func parseClaudeUserMessage(msg claudeMessage, toolUseResult *claudeToolUseResult, ts time.Time) []TimelineEvent {
+func parseClaudeToolUseResult(raw json.RawMessage) (*claudeToolUseResult, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+
+	var text string
+	if err := json.Unmarshal(raw, &text); err == nil {
+		return &claudeToolUseResult{Text: text}, nil
+	}
+	if text, ok := claudeInlineText(raw); ok {
+		return &claudeToolUseResult{Text: text}, nil
+	}
+
+	var result claudeToolUseResult
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+func parseClaudeUserMessage(msg claudeMessage, toolUseResult *claudeToolUseResult, ts time.Time) ([]TimelineEvent, error) {
+	if len(msg.Content) == 0 {
+		return nil, fmt.Errorf("message content is empty")
+	}
+
 	var textContent string
 	if err := json.Unmarshal(msg.Content, &textContent); err == nil {
 		if textContent == "" {
-			return nil
+			return nil, fmt.Errorf("message text content is empty")
 		}
 		return []TimelineEvent{{
 			Timestamp: ts,
@@ -150,20 +216,17 @@ func parseClaudeUserMessage(msg claudeMessage, toolUseResult *claudeToolUseResul
 			Role:      "user",
 			Summary:   truncate(firstLine(textContent), 100),
 			Content:   textContent,
-		}}
+		}}, nil
 	}
 
 	var blocks []claudeContentBlock
 	if err := json.Unmarshal(msg.Content, &blocks); err != nil {
-		return nil
+		return nil, fmt.Errorf("unsupported message content format")
 	}
 
-	var fileContent string
-	if toolUseResult != nil && toolUseResult.File != nil {
-		fileContent = toolUseResult.File.Content
-	}
-
+	toolResultContent, preferToolUseResult := claudeToolResultContent(toolUseResult)
 	events := make([]TimelineEvent, 0, len(blocks))
+	sawToolResult := false
 	for _, block := range blocks {
 		switch block.Type {
 		case "text":
@@ -179,9 +242,16 @@ func parseClaudeUserMessage(msg claudeMessage, toolUseResult *claudeToolUseResul
 			})
 
 		case "tool_result":
-			resultContent := rawMessageAsString(block.Content)
-			if fileContent != "" {
-				resultContent = fileContent
+			sawToolResult = true
+			resultContent := claudeToolResultValue(block.Content)
+			switch {
+			case preferToolUseResult && toolResultContent != "":
+				resultContent = toolResultContent
+			case resultContent == "" && toolResultContent != "":
+				resultContent = toolResultContent
+			}
+			if resultContent == "" {
+				continue
 			}
 			events = append(events, TimelineEvent{
 				Timestamp:  ts,
@@ -194,13 +264,76 @@ func parseClaudeUserMessage(msg claudeMessage, toolUseResult *claudeToolUseResul
 		}
 	}
 
-	return events
+	if len(events) == 0 {
+		if sawToolResult {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("message produced no supported events")
+	}
+
+	return events, nil
 }
 
-func parseClaudeAssistantMessage(msg claudeMessage, ts time.Time) []TimelineEvent {
+func claudeToolResultContent(result *claudeToolUseResult) (content string, prefer bool) {
+	if result == nil {
+		return "", false
+	}
+	if result.File != nil && result.File.Content != "" {
+		return result.File.Content, true
+	}
+	if result.Stdout != "" || result.Stderr != "" {
+		parts := make([]string, 0, 2)
+		if result.Stdout != "" {
+			parts = append(parts, result.Stdout)
+		}
+		if result.Stderr != "" {
+			parts = append(parts, result.Stderr)
+		}
+		return strings.Join(parts, "\n"), true
+	}
+	if result.Text != "" {
+		return result.Text, false
+	}
+	return "", false
+}
+
+func claudeToolResultValue(raw json.RawMessage) string {
+	if text, ok := claudeInlineText(raw); ok {
+		return text
+	}
+	return rawMessageAsString(raw)
+}
+
+func claudeInlineText(raw json.RawMessage) (string, bool) {
+	if len(raw) == 0 {
+		return "", false
+	}
+
+	var blocks []claudeContentBlock
+	if err := json.Unmarshal(raw, &blocks); err != nil {
+		return "", false
+	}
+
+	parts := make([]string, 0, len(blocks))
+	for _, block := range blocks {
+		if block.Type == "text" && block.Text != "" {
+			parts = append(parts, block.Text)
+		}
+	}
+	if len(parts) == 0 {
+		return "", false
+	}
+	return strings.Join(parts, "\n"), true
+}
+
+func parseClaudeAssistantMessage(msg claudeMessage, ts time.Time) ([]TimelineEvent, error) {
+	if len(msg.Content) == 0 {
+		return nil, fmt.Errorf("message content is empty")
+	}
+
 	var blocks []claudeContentBlock
 	if err := json.Unmarshal(msg.Content, &blocks); err != nil {
-		return nil
+		return nil, fmt.Errorf("unsupported assistant content format")
 	}
 
 	events := make([]TimelineEvent, 0, len(blocks))
@@ -241,5 +374,9 @@ func parseClaudeAssistantMessage(msg claudeMessage, ts time.Time) []TimelineEven
 		}
 	}
 
-	return events
+	if len(events) == 0 {
+		return nil, fmt.Errorf("message produced no supported events")
+	}
+
+	return events, nil
 }

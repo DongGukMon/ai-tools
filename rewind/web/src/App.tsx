@@ -17,7 +17,14 @@ const Minimap = lazy(() => import("./components/Minimap"));
 
 type SortOrder = "newest" | "oldest";
 
+declare global {
+  interface Window {
+    __REWIND_SESSION__?: Session;
+  }
+}
+
 const SORT_KEY = "rewind-sort-order";
+const SESSION_DATA_ID = "rewind-session-data";
 
 function loadSortOrder(): SortOrder {
   try {
@@ -25,6 +32,24 @@ function loadSortOrder(): SortOrder {
     if (v === "oldest" || v === "newest") return v;
   } catch {}
   return "newest";
+}
+
+function loadInjectedSession(): Session | null {
+  const sessionNode = document.getElementById(SESSION_DATA_ID);
+  if (sessionNode?.textContent) {
+    try {
+      sessionNode.remove();
+      return JSON.parse(sessionNode.textContent) as Session;
+    } catch {}
+  }
+
+  const injectedSession = window.__REWIND_SESSION__;
+  if (injectedSession) {
+    delete window.__REWIND_SESSION__;
+    return injectedSession;
+  }
+
+  return null;
 }
 
 export default function App() {
@@ -43,11 +68,20 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const token = params.get("token") ?? "";
+    const injectedSession = loadInjectedSession();
+    if (injectedSession) {
+      startTransition(() => {
+        setSession(injectedSession);
+      });
+      return;
+    }
+
     const controller = new AbortController();
 
-    fetch(`./api/session?token=${token}`, { signal: controller.signal })
+    fetch("./api/session", {
+      credentials: "same-origin",
+      signal: controller.signal,
+    })
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
