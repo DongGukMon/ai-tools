@@ -131,6 +131,39 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
+func readWhipTasksFromDir(dir string, workspace string) ([]whipTask, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	var tasks []whipTask
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		taskPath := filepath.Join(dir, entry.Name(), "task.json")
+		task, err := readWhipTaskFromDir(taskPath, workspace)
+		if err != nil {
+			continue
+		}
+		tasks = append(tasks, *task)
+	}
+	return tasks, nil
+}
+
+func sortWhipTasks(tasks []whipTask) {
+	sort.Slice(tasks, func(i, j int) bool {
+		if tasks[i].CreatedAt.Equal(tasks[j].CreatedAt) {
+			return tasks[i].ID < tasks[j].ID
+		}
+		return tasks[i].CreatedAt.Before(tasks[j].CreatedAt)
+	})
+}
+
 func readAllWhipTasks() ([]whipTask, error) {
 	var tasks []whipTask
 	workspaces, err := workspaceNames()
@@ -142,33 +175,27 @@ func readAllWhipTasks() ([]whipTask, error) {
 		if err != nil {
 			return nil, err
 		}
-		entries, err := os.ReadDir(dir)
+		workspaceTasks, err := readWhipTasksFromDir(dir, workspace)
 		if err != nil {
-			if os.IsNotExist(err) {
-				continue
-			}
 			return nil, err
 		}
-		for _, entry := range entries {
-			if !entry.IsDir() {
-				continue
-			}
-			taskPath := filepath.Join(dir, entry.Name(), "task.json")
-			task, err := readWhipTaskFromDir(taskPath, workspace)
-			if err != nil {
-				continue
-			}
-			tasks = append(tasks, *task)
-		}
+		tasks = append(tasks, workspaceTasks...)
 	}
 
-	sort.Slice(tasks, func(i, j int) bool {
-		if tasks[i].CreatedAt.Equal(tasks[j].CreatedAt) {
-			return tasks[i].ID < tasks[j].ID
-		}
-		return tasks[i].CreatedAt.Before(tasks[j].CreatedAt)
-	})
+	sortWhipTasks(tasks)
+	return tasks, nil
+}
 
+func readAllArchivedWhipTasks() ([]whipTask, error) {
+	baseDir, err := whipBaseDir()
+	if err != nil {
+		return nil, err
+	}
+	tasks, err := readWhipTasksFromDir(filepath.Join(baseDir, "archive"), "")
+	if err != nil {
+		return nil, err
+	}
+	sortWhipTasks(tasks)
 	return tasks, nil
 }
 
@@ -197,7 +224,20 @@ func readWhipTask(id string) (*whipTask, error) {
 		}
 		return nil, err
 	}
-	return nil, fmt.Errorf("task %s not found", id)
+
+	baseDir, err := whipBaseDir()
+	if err != nil {
+		return nil, err
+	}
+	taskPath := filepath.Join(baseDir, "archive", id, "task.json")
+	task, err := readWhipTaskFromDir(taskPath, "")
+	if err == nil {
+		return task, nil
+	}
+	if os.IsNotExist(err) {
+		return nil, fmt.Errorf("task %s not found", id)
+	}
+	return nil, err
 }
 
 func isWhipPIDAlive(pid int) bool {
@@ -207,8 +247,16 @@ func isWhipPIDAlive(pid int) bool {
 	return syscall.Kill(pid, 0) == nil
 }
 
-func handleGetTasks(w http.ResponseWriter) {
-	tasks, err := readAllWhipTasks()
+func handleGetTasks(w http.ResponseWriter, r *http.Request) {
+	var (
+		tasks []whipTask
+		err   error
+	)
+	if r.URL.Query().Get("archive") == "true" {
+		tasks, err = readAllArchivedWhipTasks()
+	} else {
+		tasks, err = readAllWhipTasks()
+	}
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return

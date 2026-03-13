@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import type { Task } from '../api/types'
-import type { WhipClient } from '../api/client'
+import type { TaskListMode, WhipClient } from '../api/client'
 import { AuthError, ConnectionError } from '../api/client'
 
 const DEFAULT_POLL_INTERVAL = 2000
@@ -13,6 +13,7 @@ interface Callbacks {
 
 export function useTasks(
   client: WhipClient | null,
+  mode: TaskListMode,
   callbacks: Callbacks,
   pollInterval: number = DEFAULT_POLL_INTERVAL,
 ) {
@@ -24,7 +25,8 @@ export function useTasks(
   const fetchTasks = useCallback(async (signal?: AbortSignal) => {
     if (!client) return
     try {
-      const data = await client.getTasks(signal)
+      const data = await client.getTasks(mode, signal)
+      if (signal?.aborted) return
       setTasks(data)
       setError(null)
       callbacksRef.current.onConnectionSuccess()
@@ -40,7 +42,12 @@ export function useTasks(
       }
       setError(err instanceof Error ? err.message : 'Failed to fetch tasks')
     }
-  }, [client])
+  }, [client, mode])
+
+  useEffect(() => {
+    setTasks([])
+    setError(null)
+  }, [client, mode])
 
   useEffect(() => {
     const controller = new AbortController()

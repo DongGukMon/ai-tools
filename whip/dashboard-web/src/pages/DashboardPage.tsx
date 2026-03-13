@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import type { Task, Peer, Message } from '../api/types'
 import { AuthError, ConnectionError } from '../api/client'
+import type { TaskListMode } from '../api/client'
 import { getClient, clearAuth } from '../stores/auth'
 import { useTasks } from '../hooks/useTasks'
 import { useConnectionStatus, getBackoffInterval } from '../hooks/useConnectionStatus'
@@ -27,6 +28,7 @@ interface Props {
 export function DashboardPage({ onDisconnect }: Props) {
   const client = useMemo(() => getClient(), [])
   const [activeTab, setActiveTab] = useState<Tab>('tasks')
+  const [taskMode, setTaskMode] = useState<TaskListMode>('active')
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [terminalFullscreen, setTerminalFullscreen] = useState(false)
   const [mobileChatOpen, setMobileChatOpen] = useState(false)
@@ -58,7 +60,7 @@ export function DashboardPage({ onDisconnect }: Props) {
     ? getBackoffInterval(connectionStatus.retryCount)
     : 2000
 
-  const { tasks, error } = useTasks(client, {
+  const { tasks, error } = useTasks(client, taskMode, {
     onAuthError: connectionStatus.onAuthError,
     onConnectionError: connectionStatus.onConnectionError,
     onConnectionSuccess: connectionStatus.onConnectionSuccess,
@@ -70,6 +72,12 @@ export function DashboardPage({ onDisconnect }: Props) {
     ? tasks.find(t => t.id === selectedTask.id) ?? null
     : null
 
+
+  useEffect(() => {
+    if (selectedTask && !tasks.some(task => task.id === selectedTask.id)) {
+      setSelectedTask(null)
+    }
+  }, [selectedTask, tasks])
 
   // Stable refs for connection callbacks to avoid effect restarts
   const onConnectionSuccessRef = useRef(connectionStatus.onConnectionSuccess)
@@ -286,6 +294,31 @@ export function DashboardPage({ onDisconnect }: Props) {
 
       {activeTab === 'tasks' && (
         <div>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div className="inline-flex rounded-md border border-gray-200 dark:border-slate-700 p-0.5 bg-white dark:bg-slate-900">
+              <button
+                onClick={() => setTaskMode('active')}
+                className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${
+                  taskMode === 'active'
+                    ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                }`}
+              >
+                Active
+              </button>
+              <button
+                onClick={() => setTaskMode('archived')}
+                className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${
+                  taskMode === 'archived'
+                    ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                }`}
+              >
+                Archived
+              </button>
+            </div>
+          </div>
+
           {/* Summary stats */}
           <div className="mb-4">
             <SummaryStats tasks={tasks} />

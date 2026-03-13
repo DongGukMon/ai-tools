@@ -60,8 +60,41 @@ func TestAPITasks(t *testing.T) {
 		t.Error("expected pid_alive=false for shell_pid 0")
 	}
 
-	resp = doRequest(t, ts, token, "GET", "/api/tasks/abc12", nil)
+	archiveDir := filepath.Join(tmpHome, ".whip", "archive", "arch1")
+	archivedTask := map[string]interface{}{
+		"id":         "arch1",
+		"title":      "Archived task",
+		"status":     "completed",
+		"shell_pid":  0,
+		"depends_on": []string{},
+		"created_at": time.Now().Add(-30 * time.Minute).Format(time.RFC3339Nano),
+		"updated_at": time.Now().Format(time.RFC3339Nano),
+	}
+	if err := os.MkdirAll(archiveDir, 0755); err != nil {
+		t.Fatalf("mkdir archive dir: %v", err)
+	}
+	archiveData, _ := json.MarshalIndent(archivedTask, "", "  ")
+	if err := os.WriteFile(filepath.Join(archiveDir, "task.json"), archiveData, 0644); err != nil {
+		t.Fatalf("write archived task: %v", err)
+	}
+
+	resp = doRequest(t, ts, token, "GET", "/api/tasks?archive=true", nil)
+	decodeJSON(t, resp, &tasks)
+	if len(tasks) != 1 {
+		t.Fatalf("expected 1 archived task, got %d", len(tasks))
+	}
+	if tasks[0].ID != "arch1" {
+		t.Fatalf("expected archived task 'arch1', got %q", tasks[0].ID)
+	}
+
 	var task whipTask
+	resp = doRequest(t, ts, token, "GET", "/api/tasks/arch1", nil)
+	decodeJSON(t, resp, &task)
+	if task.Title != "Archived task" {
+		t.Errorf("expected archived detail 'Archived task', got %q", task.Title)
+	}
+
+	resp = doRequest(t, ts, token, "GET", "/api/tasks/abc12", nil)
 	decodeJSON(t, resp, &task)
 	if task.Title != "First task" {
 		t.Errorf("expected 'First task', got %q", task.Title)

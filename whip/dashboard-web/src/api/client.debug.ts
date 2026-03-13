@@ -1,5 +1,5 @@
 import type { Message, Peer, Task } from './types'
-import type { WhipClient } from './client'
+import type { TaskListMode, WhipClient } from './client'
 
 type MockInbox = Record<string, Message[]>
 
@@ -247,9 +247,11 @@ export class MockWhipClient implements WhipClient {
     return { session: 'whip-master-dev', alive: true }
   }
 
-  async getTasks(signal?: AbortSignal): Promise<Task[]> {
+  async getTasks(mode: TaskListMode, signal?: AbortSignal): Promise<Task[]> {
     assertNotAborted(signal)
-    return this.tasks
+    return this.tasks.filter(task => mode === 'archived'
+      ? task.status === 'completed' || task.status === 'canceled'
+      : task.status !== 'completed' && task.status !== 'canceled')
   }
 
   async getTask(id: string): Promise<Task> {

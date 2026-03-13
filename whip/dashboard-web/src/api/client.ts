@@ -72,6 +72,8 @@ interface AuthExchangeResponse {
   session_secret: string
 }
 
+export type TaskListMode = 'active' | 'archived'
+
 export interface WhipClient {
   getPeers(signal?: AbortSignal): Promise<Peer[]>
   sendMessage(to: string, content: string): Promise<void>
@@ -81,7 +83,7 @@ export interface WhipClient {
   getMasterCapture(): Promise<{ content: string }>
   sendMasterKeys(keys: string): Promise<void>
   getMasterStatus(): Promise<{ session: string; alive: boolean }>
-  getTasks(signal?: AbortSignal): Promise<Task[]>
+  getTasks(mode: TaskListMode, signal?: AbortSignal): Promise<Task[]>
   getTask(id: string): Promise<Task>
   ping(): Promise<boolean>
 }
@@ -193,8 +195,9 @@ export class WhipAPIClient implements WhipClient {
     return this.request<{ session: string; alive: boolean }>('/api/master/status')
   }
 
-  async getTasks(signal?: AbortSignal): Promise<Task[]> {
-    return this.request<Task[]>('/api/tasks', { signal })
+  async getTasks(mode: TaskListMode, signal?: AbortSignal): Promise<Task[]> {
+    const params = mode === 'archived' ? '?archive=true' : ''
+    return this.request<Task[]>(`/api/tasks${params}`, { signal })
   }
 
   async getTask(id: string): Promise<Task> {

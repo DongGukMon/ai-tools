@@ -297,7 +297,7 @@ func route(w http.ResponseWriter, r *http.Request, store *Store, masterTmux stri
 
 	case "tasks":
 		if len(segments) == 2 && r.Method == http.MethodGet {
-			handleGetTasks(w)
+			handleGetTasks(w, r)
 			return
 		} else if len(segments) == 3 && r.Method == http.MethodGet {
 			handleGetTask(w, segments[2])
