@@ -27,13 +27,21 @@ function buildMinimapGradient(events: TimelineEvent[]): string {
 
   const step = 100 / events.length;
   const stops: string[] = [];
+  let runStart = 0;
+  let runColor = getMinimapColor(events[0].type);
 
-  events.forEach((event, index) => {
-    const start = (index * step).toFixed(3);
-    const end = ((index + 1) * step).toFixed(3);
-    const color = `var(${getMinimapColor(event.type)})`;
-    stops.push(`${color} ${start}%`, `${color} ${end}%`);
-  });
+  for (let i = 1; i <= events.length; i++) {
+    const color = i < events.length ? getMinimapColor(events[i].type) : null;
+    if (color !== runColor) {
+      const c = `var(${runColor})`;
+      stops.push(
+        `${c} ${(runStart * step).toFixed(3)}%`,
+        `${c} ${(i * step).toFixed(3)}%`,
+      );
+      runStart = i;
+      runColor = color!;
+    }
+  }
 
   return `linear-gradient(to bottom, ${stops.join(", ")})`;
 }
