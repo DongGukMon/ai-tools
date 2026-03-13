@@ -8,11 +8,20 @@ Task orchestrator for Claude Code. Use `whip task ...` for task lifecycle, `whip
 curl -fsSL https://raw.githubusercontent.com/bang9/ai-tools/main/whip/install.sh | bash
 ```
 
-Or via Claude Code Plugin:
+**Claude Code Plugin**
 
 ```bash
 /plugin marketplace add bang9/ai-tools
 /plugin install whip
+```
+
+**Codex Skill-Installer**
+
+```text
+$skill-installer bang9/ai-tools
+- whip/skills-codex/whip-plan
+- whip/skills-codex/whip-start
+- whip/skills-codex/whip-lesson-learn
 ```
 
 ## Quick Start
