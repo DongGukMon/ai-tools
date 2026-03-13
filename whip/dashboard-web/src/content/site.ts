@@ -83,6 +83,16 @@ export const toolCatalog: ToolEntry[] = [
     accent: '#8B5CF6',
   },
   {
+    id: 'rewind',
+    name: 'rewind',
+    category: 'Development',
+    tagline: 'Replay agent sessions as a visual timeline.',
+    description: 'Session transcript viewer that exports a self-contained timeline of user messages, assistant responses, tool calls, and thinking events for Claude Code and Codex sessions.',
+    install: '/plugin install rewind',
+    href: 'https://github.com/bang9/ai-tools/tree/main/rewind',
+    accent: '#EC4899',
+  },
+  {
     id: 'vaultkey-action',
     name: 'vaultkey-action',
     category: 'CI companion',
