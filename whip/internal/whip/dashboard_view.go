@@ -26,7 +26,7 @@ func styledSep() string {
 func (m DashboardModel) View() string {
 	var b strings.Builder
 	w := min(m.width, 120)
-	if m.view == viewList && len(m.tasks) > 0 {
+	if m.view == viewList {
 		w = max(w, tableContentWidth()+1)
 	}
 

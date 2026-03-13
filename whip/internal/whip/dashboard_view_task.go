@@ -246,8 +246,12 @@ func (m DashboardModel) renderTable() string {
 		padRight(hdrStyle.Render("NOTE"), colNote),
 		padRight(hdrStyle.Render("UPDATED"), colUpdated),
 	}
-	header := "  " + strings.Join(hdrCells, sep)
-	underline := "  " + lipgloss.NewStyle().Foreground(colorDim).Render(strings.Repeat("─", lipgloss.Width(header)-2))
+	headerPrefix := "  "
+	header := headerPrefix + strings.Join(hdrCells, sep)
+	underline := headerPrefix + lipgloss.NewStyle().Foreground(colorDim).Render(strings.Repeat("─", lipgloss.Width(header)-len(headerPrefix)))
+	selectedIDStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#FFFFFF")).
+		Background(colorPrimary)
 
 	var rows []string
 	rows = append(rows, header, underline)
@@ -255,28 +259,19 @@ func (m DashboardModel) renderTable() string {
 	for i, row := range m.taskRows() {
 		t := row.task
 		selected := i == m.cursor
-		indicator := "  "
-		if selected {
-			indicator = lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render("▸ ")
+		gutterGlyph := row.gutterGlyph()
+		gutter := "  "
+		if gutterGlyph != "" {
+			gutter = lipgloss.NewStyle().Foreground(colorWarning).Bold(true).Render(gutterGlyph + " ")
 		}
 
-		id := padRight(idStyle.Render(truncate(t.ID, colID)), colID)
-		titlePrefix := ""
-		switch row.kind {
-		case dashboardTaskRowLead:
-			if row.isExpanded {
-				titlePrefix = "▼ "
-			} else {
-				titlePrefix = "▶ "
-			}
-		case dashboardTaskRowWorker:
-			if row.isLastChild {
-				titlePrefix = "└─ "
-			} else {
-				titlePrefix = "├─ "
-			}
+		idText := truncate(t.ID, colID)
+		id := padRight(idStyle.Render(idText), colID)
+		if selected {
+			selectedIDText := truncate(t.ID, colID)
+			id = padRight(selectedIDStyle.Render(selectedIDText), colID)
 		}
-		title := padRight(truncate(titlePrefix+t.Title, colTitle), colTitle)
+		title := padRight(truncate(t.Title, colTitle), colTitle)
 		status := padRight(renderStatus(t.Status), colStatus)
 		backend := padRight(renderBackend(t.Backend), colBackend)
 
@@ -305,10 +300,7 @@ func (m DashboardModel) renderTable() string {
 		updated := padRight(lipgloss.NewStyle().Foreground(colorSubtle).Render(timeAgo(t.UpdatedAt)), colUpdated)
 
 		workspace := padRight(truncate(t.WorkspaceName(), colWorkspace), colWorkspace)
-		row := indicator + strings.Join([]string{id, workspace, title, status, backend, role, irc, deps, note, updated}, sep)
-		if selected {
-			row = lipgloss.NewStyle().Background(lipgloss.Color("#1E1B4B")).Render(row)
-		}
+		row := gutter + strings.Join([]string{id, workspace, title, status, backend, role, irc, deps, note, updated}, sep)
 		rows = append(rows, row)
 	}
 
@@ -372,7 +364,7 @@ func (m DashboardModel) renderListFooter() string {
 		remoteHint = footerKey("R", "remote")
 	}
 
-	line1 := "  " + footerKey("↑↓", "navigate") + dot + footerKey("→", "expand") + dot + footerKey("←", "collapse")
+	line1 := "  " + footerKey("↑↓", "navigate") + dot + footerKey("←/→", "expand/collapse")
 	line2 := "  " + footerKey("enter", "detail") + dot + footerKey("tab", m.toggleModeLabel()) + dot + footerKey("i", "irc") + dot + remoteHint + dot + footerKey("q", "quit")
 	if m.listMode == listModeActive {
 		line2 += dot + footerKey("c", "clean")

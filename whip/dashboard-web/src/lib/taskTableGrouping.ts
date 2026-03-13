@@ -8,6 +8,7 @@ export interface TaskTableRow {
   workspace: string
   childCount: number
   isExpanded: boolean
+  isLastChild: boolean
 }
 
 function workspaceName(task: Task) {
@@ -40,24 +41,31 @@ export function buildTaskTableRows(tasks: Task[], expandedWorkspace: string | nu
     const lead = leadByWorkspace.get(workspace)
 
     if (workspace === 'global' || !lead) {
-      rows.push({ task, kind: 'flat', workspace, childCount: 0, isExpanded: false })
+      rows.push({ task, kind: 'flat', workspace, childCount: 0, isExpanded: false, isLastChild: false })
       continue
     }
 
     if (task === lead) {
       const workers = workersByWorkspace.get(workspace) ?? []
       if (workers.length === 0) {
-        rows.push({ task, kind: 'flat', workspace, childCount: 0, isExpanded: false })
+        rows.push({ task, kind: 'flat', workspace, childCount: 0, isExpanded: false, isLastChild: false })
         continue
       }
 
       const isExpanded = workspace === expandedWorkspace
-      rows.push({ task, kind: 'lead', workspace, childCount: workers.length, isExpanded })
+      rows.push({ task, kind: 'lead', workspace, childCount: workers.length, isExpanded, isLastChild: false })
       if (!isExpanded) {
         continue
       }
-      for (const worker of workers) {
-        rows.push({ task: worker, kind: 'worker', workspace, childCount: 0, isExpanded: false })
+      for (const [index, worker] of workers.entries()) {
+        rows.push({
+          task: worker,
+          kind: 'worker',
+          workspace,
+          childCount: 0,
+          isExpanded: false,
+          isLastChild: index === workers.length - 1,
+        })
       }
       continue
     }
@@ -66,9 +74,8 @@ export function buildTaskTableRows(tasks: Task[], expandedWorkspace: string | nu
       continue
     }
 
-    rows.push({ task, kind: 'flat', workspace, childCount: 0, isExpanded: false })
+    rows.push({ task, kind: 'flat', workspace, childCount: 0, isExpanded: false, isLastChild: false })
   }
 
   return rows
 }
-

@@ -36,17 +36,9 @@ function ChevronButton({
         event.stopPropagation()
         onToggle()
       }}
-      className="mr-1 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-slate-800 dark:hover:text-gray-200"
+      className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-sm font-bold text-amber-500 transition-colors hover:bg-gray-100 hover:text-amber-600 dark:text-amber-400 dark:hover:bg-slate-800 dark:hover:text-amber-300"
     >
-      <svg
-        className={`h-3.5 w-3.5 transition-transform ${expanded ? 'rotate-90' : ''}`}
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-        strokeWidth={2.25}
-      >
-        <path strokeLinecap="round" strokeLinejoin="round" d="m9 6 6 6-6 6" />
-      </svg>
+      {expanded ? '▼' : '▶'}
     </button>
   )
 }
@@ -120,7 +112,7 @@ export function TaskTable({ tasks, selectedId, onSelect }: TaskTableProps) {
                 onClick={() => onSelect(task)}
                 className={`cursor-pointer transition-colors ${
                   isSelected
-                    ? 'bg-indigo-950/60 dark:bg-[#1E1B4B]'
+                    ? 'bg-indigo-50 dark:bg-[#1E1B4B]'
                     : row.kind === 'worker'
                       ? 'bg-gray-50/60 hover:bg-gray-100/70 dark:bg-slate-900/40 dark:hover:bg-slate-800/50'
                       : 'hover:bg-gray-50 dark:hover:bg-slate-800/50'
@@ -130,39 +122,33 @@ export function TaskTable({ tasks, selectedId, onSelect }: TaskTableProps) {
                     : 'border-b border-gray-100 dark:border-gray-800/50'
                 }`}
               >
-                <td className="w-6 text-center">
-                  {isSelected ? (
-                    <span className="text-purple-400 font-bold">▸</span>
+                <td className={`w-6 border-l-2 text-center ${isSelected ? 'border-l-indigo-500 dark:border-l-indigo-300' : 'border-l-transparent'}`}>
+                  {row.kind === 'lead' ? (
+                    <ChevronButton
+                      expanded={row.isExpanded}
+                      onToggle={() => {
+                        setExpandedWorkspace(current =>
+                          current === row.workspace ? null : row.workspace,
+                        )
+                      }}
+                    />
                   ) : row.kind === 'worker' ? (
-                    <span className="text-gray-300 dark:text-gray-700 text-xs leading-none">│</span>
+                    <span className="text-xs font-bold leading-none text-amber-500 dark:text-amber-400">
+                      {row.isLastChild ? '└' : '├'}
+                    </span>
                   ) : null}
                 </td>
                 <td className={`py-1.5 px-1.5 ${row.kind === 'worker' ? 'text-amber-500/50 dark:text-amber-400/40' : 'text-amber-500 dark:text-amber-400'}`}>
                   {task.id.slice(0, 7)}
                 </td>
                 <td className={`py-1.5 px-1.5 ${H}`}>
-                  {row.kind === 'worker' ? (
-                    <span className="text-gray-300 dark:text-gray-700">&mdash;</span>
-                  ) : (
-                    <span className="text-gray-700 dark:text-gray-300">
-                      {task.workspace || 'global'}
-                    </span>
-                  )}
+                  <span className="text-gray-700 dark:text-gray-300">
+                    {task.workspace || 'global'}
+                  </span>
                 </td>
                 <td className="py-1.5 px-1.5 text-gray-900 dark:text-gray-100 truncate max-w-[10rem]">
-                  <div className={`flex min-w-0 items-center ${row.kind === 'worker' ? 'pl-6' : ''}`}>
-                    {row.kind === 'lead' ? (
-                      <ChevronButton
-                        expanded={row.isExpanded}
-                        onToggle={() => {
-                          setExpandedWorkspace(current =>
-                            current === row.workspace ? null : row.workspace,
-                          )
-                        }}
-                      />
-                    ) : row.kind === 'worker' ? (
-                      <span className="mr-2 h-0.5 w-2.5 shrink-0 rounded-full bg-indigo-400/40 dark:bg-indigo-400/25" />
-                    ) : task.role === 'lead' ? (
+                  <div className={`flex min-w-0 items-center ${row.kind === 'worker' ? 'pl-2' : ''}`}>
+                    {row.kind === 'flat' && task.role === 'lead' ? (
                       <span className="mr-2 shrink-0 text-purple-400">●</span>
                     ) : null}
                     <span className="truncate">{truncate(task.title, 24)}</span>

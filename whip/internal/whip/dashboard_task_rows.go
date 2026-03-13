@@ -20,6 +20,23 @@ type dashboardTaskRow struct {
 	isLastWorker    bool
 }
 
+func (row dashboardTaskRow) gutterGlyph() string {
+	switch row.kind {
+	case dashboardTaskRowLead:
+		if row.isExpanded {
+			return "▼"
+		}
+		return "▶"
+	case dashboardTaskRowWorker:
+		if row.isLastChild {
+			return "└"
+		}
+		return "├"
+	default:
+		return ""
+	}
+}
+
 func (m DashboardModel) taskRows() []dashboardTaskRow {
 	return buildDashboardTaskRows(m.tasks, m.expandedWorkspace)
 }
@@ -77,25 +94,6 @@ func (m *DashboardModel) moveListCursor(delta int) {
 		next = len(rows) - 1
 	} else if next >= len(rows) {
 		next = 0
-	}
-
-	start, end, ok := findExpandedDashboardTaskRange(rows, m.expandedWorkspace)
-	if ok && m.cursor >= start && m.cursor <= end && (next < start || next > end) {
-		removedWorkers := end - start
-		m.expandedWorkspace = ""
-		if next > end {
-			next -= removedWorkers
-		}
-		collapsedRows := m.taskRows()
-		if len(collapsedRows) == 0 {
-			m.cursor = 0
-			return
-		}
-		if next < 0 {
-			next = len(collapsedRows) - 1
-		} else if next >= len(collapsedRows) {
-			next = 0
-		}
 	}
 
 	m.cursor = next

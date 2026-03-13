@@ -68,7 +68,7 @@ func TestDashboardRenderTableShowsTreeGlyphs(t *testing.T) {
 	m.expandedWorkspace = "lane"
 
 	table := m.renderTable()
-	for _, want := range []string{"▼ Lead", "├─ Worker A", "└─ Worker B"} {
+	for _, want := range []string{"▼", "├", "└", "Lead", "Worker A", "Worker B"} {
 		if !strings.Contains(table, want) {
 			t.Fatalf("renderTable missing %q:\n%s", want, table)
 		}
@@ -124,7 +124,7 @@ func TestDashboardListExpandAndCollapseInteractions(t *testing.T) {
 	}
 }
 
-func TestDashboardListAutoCollapseWhenLeavingExpandedSubtree(t *testing.T) {
+func TestDashboardListKeepsExpandedWorkspaceWhenLeavingSubtree(t *testing.T) {
 	before := NewTask("Before", "desc", "/tmp")
 	lead := NewTask("Lead", "desc", "/tmp")
 	lead.Workspace = "lane"
@@ -151,8 +151,8 @@ func TestDashboardListAutoCollapseWhenLeavingExpandedSubtree(t *testing.T) {
 		dm = model.(DashboardModel)
 	}
 
-	if dm.expandedWorkspace != "" {
-		t.Fatalf("expandedWorkspace = %q, want collapsed subtree", dm.expandedWorkspace)
+	if dm.expandedWorkspace != "lane" {
+		t.Fatalf("expandedWorkspace = %q, want lane to stay expanded", dm.expandedWorkspace)
 	}
 	row, ok := dm.taskRowAtCursor()
 	if !ok || row.task.ID != after.ID {
