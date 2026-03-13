@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 )
 
 const messagesFile = "messages.json"
@@ -65,6 +66,9 @@ func (s *Store) saveTaskUnlocked(task *Task) error {
 	if !task.Status.IsValid() {
 		return fmt.Errorf("invalid task status %q", task.Status)
 	}
+	if err := s.validateTaskDependencyWorkspaces(task); err != nil {
+		return err
+	}
 	dir := s.taskDirInWorkspace(task.Workspace, task.ID)
 	if err := ensurePrivateDir(dir); err != nil {
 		return err
@@ -74,6 +78,32 @@ func (s *Store) saveTaskUnlocked(task *Task) error {
 		return err
 	}
 	return atomicWriteFile(filepath.Join(dir, taskFile), data, privateFilePerm)
+}
+
+func (s *Store) validateTaskDependencyWorkspaces(task *Task) error {
+	if task == nil {
+		return fmt.Errorf("task is nil")
+	}
+	workspace := task.WorkspaceName()
+	for _, depID := range task.DependsOn {
+		if depID == "" {
+			continue
+		}
+
+		depWorkspace := ""
+		if dep, err := s.LoadTask(depID); err == nil {
+			depWorkspace = dep.WorkspaceName()
+		} else if dep, err := s.LoadArchivedTask(depID); err == nil {
+			depWorkspace = dep.WorkspaceName()
+		} else {
+			continue
+		}
+
+		if depWorkspace != workspace {
+			return fmt.Errorf("cross-workspace dependencies are not allowed: task %s is in %s but dependency %s is in %s", task.ID, workspace, depID, depWorkspace)
+		}
+	}
+	return nil
 }
 
 func (s *Store) LoadTask(id string) (*Task, error) {
@@ -341,6 +371,61 @@ func (s *Store) archiveTask(id string) error {
 	return os.Rename(src, dst)
 }
 
+func (s *Store) appendArchivedTaskToWorkspace(task *Task) error {
+	if task == nil || task.WorkspaceName() == GlobalWorkspaceName {
+		return nil
+	}
+	workspace, err := s.LoadWorkspace(task.WorkspaceName())
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return nil
+		}
+		return err
+	}
+	if workspace.ArchivedTaskIDs == nil {
+		workspace.ArchivedTaskIDs = []string{}
+	}
+	for _, existing := range workspace.ArchivedTaskIDs {
+		if existing == task.ID {
+			return nil
+		}
+	}
+	workspace.ArchivedTaskIDs = append(workspace.ArchivedTaskIDs, task.ID)
+	workspace.UpdatedAt = time.Now().UTC()
+	return s.SaveWorkspace(workspace)
+}
+
+func (s *Store) removeArchivedTaskFromWorkspace(task *Task) error {
+	if task == nil || task.WorkspaceName() == GlobalWorkspaceName {
+		return nil
+	}
+	workspace, err := s.LoadWorkspace(task.WorkspaceName())
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return nil
+		}
+		return err
+	}
+	if workspace.ArchivedTaskIDs == nil {
+		return nil
+	}
+	filtered := workspace.ArchivedTaskIDs[:0]
+	removed := false
+	for _, existing := range workspace.ArchivedTaskIDs {
+		if existing == task.ID {
+			removed = true
+			continue
+		}
+		filtered = append(filtered, existing)
+	}
+	if !removed {
+		return nil
+	}
+	workspace.ArchivedTaskIDs = filtered
+	workspace.UpdatedAt = time.Now().UTC()
+	return s.SaveWorkspace(workspace)
+}
+
 func (s *Store) isArchivedTask(id string) bool {
 	_, err := os.Stat(filepath.Join(s.archiveTaskDir(id), taskFile))
 	return err == nil
@@ -365,7 +450,10 @@ func (s *Store) ArchiveTask(id string) error {
 		return err
 	}
 
-	return s.archiveTask(id)
+	if err := s.archiveTask(id); err != nil {
+		return err
+	}
+	return s.appendArchivedTaskToWorkspace(task)
 }
 
 // ArchiveTerminal archives completed/canceled tasks that are no longer
@@ -386,6 +474,9 @@ func (s *Store) ArchiveTerminal() (int, error) {
 		if err := s.archiveTask(task.ID); err != nil {
 			return count, err
 		}
+		if err := s.appendArchivedTaskToWorkspace(task); err != nil {
+			return count, err
+		}
 		count++
 	}
 	return count, nil
@@ -393,13 +484,27 @@ func (s *Store) ArchiveTerminal() (int, error) {
 
 // DeleteArchivedTask permanently removes an archived task from the archive.
 func (s *Store) DeleteArchivedTask(id string) error {
-	if _, err := s.LoadArchivedTask(id); err != nil {
+	task, err := s.LoadArchivedTask(id)
+	if err != nil {
 		if _, activeErr := s.LoadTask(id); activeErr == nil {
 			return fmt.Errorf("task %s is active; archive it before deleting", id)
 		}
 		return err
 	}
-	return os.RemoveAll(s.archiveTaskDir(id))
+	if workspace := task.WorkspaceName(); workspace != GlobalWorkspaceName {
+		loadedWorkspace, workspaceErr := s.LoadWorkspace(workspace)
+		if workspaceErr == nil {
+			if !loadedWorkspace.IsArchived() {
+				return fmt.Errorf("task %s belongs to active workspace %s; archive the workspace before deleting its archived tasks", id, workspace)
+			}
+		} else if !strings.Contains(workspaceErr.Error(), "not found") {
+			return workspaceErr
+		}
+	}
+	if err := os.RemoveAll(s.archiveTaskDir(id)); err != nil {
+		return err
+	}
+	return s.removeArchivedTaskFromWorkspace(task)
 }
 
 // ListArchivedTasks returns all tasks in the archive directory.

@@ -111,7 +111,7 @@ func TestWhipStartSoloFlowRegression(t *testing.T) {
 	}
 
 	runWhipCLI(t, "task", "clean")
-	assertNoTasksRemain(t, h.store, workspace)
+	assertWorkspaceHasNoActiveTasks(t, h.store, workspace)
 }
 
 func TestWhipStartReviewFlowRegression(t *testing.T) {
@@ -177,7 +177,7 @@ func TestWhipStartReviewFlowRegression(t *testing.T) {
 	}
 
 	runWhipCLI(t, "task", "clean")
-	assertNoTasksRemain(t, h.store, workspace)
+	assertWorkspaceHasNoActiveTasks(t, h.store, workspace)
 }
 
 func TestWhipLeadFlowRegression(t *testing.T) {
@@ -254,13 +254,13 @@ func TestWhipLeadFlowRegression(t *testing.T) {
 	runWhipCLI(t, "task", "start", workerID, "--note", "Worker started")
 	runWhipCLI(t, "task", "complete", workerID, "--note", "Worker done")
 
-	// Complete lead (review-gated): review → approve → complete — auto-drops workspace since all tasks are terminal
+	// Complete lead (review-gated): review → approve → complete — auto-archives workspace since all tasks are terminal
 	runWhipCLI(t, "task", "review", leadID)
 	runWhipCLI(t, "task", "approve", leadID)
 	runWhipCLI(t, "task", "complete", leadID, "--note", "All workers done")
 
-	// After auto-drop, workspace tasks are deleted
-	assertNoTasksRemain(t, h.store, workspace)
+	// After auto-archive, workspace remains but all tasks are archived.
+	assertWorkspaceArchived(t, h.store, workspace)
 }
 
 func TestWhipLeadCreateValidation(t *testing.T) {
@@ -357,10 +357,13 @@ func TestWhipPlanCommandSurfaceRegression(t *testing.T) {
 	if err != nil {
 		t.Fatalf("workspace --help: %v", err)
 	}
-	for _, expected := range []string{"broadcast", "view", "drop"} {
+	for _, expected := range []string{"broadcast", "view", "archive", "delete"} {
 		if !strings.Contains(workspaceHelp, expected) {
 			t.Fatalf("workspace --help missing %q:\n%s", expected, workspaceHelp)
 		}
+	}
+	if helpListsCommand(workspaceHelp, "drop") {
+		t.Fatalf("workspace --help should not mention drop:\n%s", workspaceHelp)
 	}
 	if helpListsCommand(workspaceHelp, "show") {
 		t.Fatalf("workspace --help should not mention show:\n%s", workspaceHelp)
@@ -606,23 +609,64 @@ func assertWorkspaceView(t *testing.T, workspace string, executionModel string) 
 	}
 }
 
-func assertNoTasksRemain(t *testing.T, store *whiplib.Store, workspace string) {
+func assertWorkspaceHasNoActiveTasks(t *testing.T, store *whiplib.Store, workspace string) {
 	t.Helper()
 
 	tasks, err := store.ListTasks()
 	if err != nil {
 		t.Fatalf("ListTasks after clean: %v", err)
 	}
-	if len(tasks) != 0 {
-		t.Fatalf("ListTasks after clean = %d, want 0", len(tasks))
+	for _, task := range tasks {
+		if task.WorkspaceName() == workspace {
+			t.Fatalf("workspace %s should have no active tasks after clean; found %s", workspace, task.ID)
+		}
 	}
 
 	workspaceAfterClean, _, err := execWhipCLICapture(t, "workspace", "view", workspace)
 	if err != nil {
 		t.Fatalf("workspace view after clean: %v", err)
 	}
-	if !strings.Contains(workspaceAfterClean, "Tasks:            none") {
-		t.Fatalf("workspace view after clean should report no tasks:\n%s", workspaceAfterClean)
+	if !strings.Contains(workspaceAfterClean, "Status:           active") {
+		t.Fatalf("workspace should remain active after clean:\n%s", workspaceAfterClean)
+	}
+	if !strings.Contains(workspaceAfterClean, "Active tasks:     none") {
+		t.Fatalf("workspace view after clean should report no active tasks:\n%s", workspaceAfterClean)
+	}
+	if !strings.Contains(workspaceAfterClean, "Archived tasks:") {
+		t.Fatalf("workspace view after clean should report archived tasks:\n%s", workspaceAfterClean)
+	}
+}
+
+func assertWorkspaceArchived(t *testing.T, store *whiplib.Store, workspace string) {
+	t.Helper()
+
+	loadedWorkspace, err := store.LoadWorkspace(workspace)
+	if err != nil {
+		t.Fatalf("LoadWorkspace after auto-archive: %v", err)
+	}
+	if loadedWorkspace.EffectiveStatus() != whiplib.WorkspaceStatusArchived {
+		t.Fatalf("workspace status = %q, want archived", loadedWorkspace.EffectiveStatus())
+	}
+
+	tasks, err := store.ListTasks()
+	if err != nil {
+		t.Fatalf("ListTasks after auto-archive: %v", err)
+	}
+	for _, task := range tasks {
+		if task.WorkspaceName() == workspace {
+			t.Fatalf("workspace %s should have no active tasks after auto-archive; found %s", workspace, task.ID)
+		}
+	}
+
+	workspaceView, _, err := execWhipCLICapture(t, "workspace", "view", workspace)
+	if err != nil {
+		t.Fatalf("workspace view after auto-archive: %v", err)
+	}
+	if !strings.Contains(workspaceView, "Status:           archived") {
+		t.Fatalf("workspace view should report archived status:\n%s", workspaceView)
+	}
+	if !strings.Contains(workspaceView, "Archived tasks:") {
+		t.Fatalf("workspace view should report archived tasks:\n%s", workspaceView)
 	}
 }
 

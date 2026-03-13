@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"strings"
 	"text/tabwriter"
 
 	"github.com/bang9/ai-tools/whip/internal/whip"
@@ -20,17 +19,25 @@ func workspaceCmd() *cobra.Command {
 		workspaceListCmd(),
 		workspaceViewCmd(),
 		workspaceBroadcastCmd(),
-		workspaceDropCmd(),
+		workspaceArchiveCmd(),
+		workspaceDeleteCmd(),
 	)
 	return cmd
 }
 
 func workspaceListCmd() *cobra.Command {
-	return &cobra.Command{
+	var showArchive bool
+	var showAll bool
+
+	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List named workspaces",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if showArchive && showAll {
+				return fmt.Errorf("--archive and --all cannot be used together")
+			}
+
 			store, err := whip.NewStore()
 			if err != nil {
 				return err
@@ -45,25 +52,54 @@ func workspaceListCmd() *cobra.Command {
 				return nil
 			}
 
-			tasks, err := store.ListTasks()
-			if err != nil {
-				return err
-			}
-			taskCounts := map[string]int{}
-			for _, task := range tasks {
-				if task.WorkspaceName() == whip.GlobalWorkspaceName {
+			filtered := make([]*whip.Workspace, 0, len(workspaces))
+			for _, workspace := range workspaces {
+				status := workspace.EffectiveStatus()
+				if showAll {
+					filtered = append(filtered, workspace)
 					continue
 				}
-				taskCounts[task.WorkspaceName()]++
+				if showArchive {
+					if status == whip.WorkspaceStatusArchived {
+						filtered = append(filtered, workspace)
+					}
+					continue
+				}
+				if status == whip.WorkspaceStatusActive {
+					filtered = append(filtered, workspace)
+				}
+			}
+
+			if len(filtered) == 0 {
+				switch {
+				case showAll:
+					fmt.Println("No workspaces.")
+				case showArchive:
+					fmt.Println("No archived workspaces.")
+				default:
+					fmt.Println("No active workspaces.")
+				}
+				return nil
 			}
 
 			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-			fmt.Fprintln(w, "NAME\tMODEL\tTASKS\tREPO\tWORKTREE")
-			for _, workspace := range workspaces {
-				fmt.Fprintf(w, "%s\t%s\t%d\t%s\t%s\n",
+			fmt.Fprintln(w, "NAME\tSTATUS\tMODEL\tACTIVE\tARCHIVED\tTOTAL\tREPO\tWORKTREE")
+			for _, workspace := range filtered {
+				active, err := store.CountTasksInWorkspace(workspace.WorkspaceName())
+				if err != nil {
+					return err
+				}
+				archived, err := store.CountArchivedTasksInWorkspace(workspace.WorkspaceName())
+				if err != nil {
+					return err
+				}
+				fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%d\t%d\t%s\t%s\n",
 					workspace.WorkspaceName(),
+					workspace.StatusLabel(),
 					workspace.ExecutionModelLabel(),
-					taskCounts[workspace.WorkspaceName()],
+					active,
+					archived,
+					active+archived,
 					workspace.OriginalRepoPath,
 					workspace.WorktreePath,
 				)
@@ -71,6 +107,9 @@ func workspaceListCmd() *cobra.Command {
 			return w.Flush()
 		},
 	}
+	cmd.Flags().BoolVar(&showArchive, "archive", false, "List archived workspaces instead of active workspaces")
+	cmd.Flags().BoolVar(&showAll, "all", false, "List all workspaces regardless of status")
+	return cmd
 }
 
 func workspaceViewCmd() *cobra.Command {
@@ -79,9 +118,9 @@ func workspaceViewCmd() *cobra.Command {
 		Short: "View workspace details",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			name := whip.NormalizeWorkspaceName(args[0])
-			if name == whip.GlobalWorkspaceName {
-				return fmt.Errorf("global is not a named workspace")
+			name, err := resolveNamedWorkspaceArg(args[0])
+			if err != nil {
+				return err
 			}
 
 			store, err := whip.NewStore()
@@ -90,50 +129,58 @@ func workspaceViewCmd() *cobra.Command {
 			}
 
 			workspace, err := store.LoadWorkspace(name)
-			if err != nil && !strings.Contains(err.Error(), "not found") {
+			if err != nil {
 				return err
 			}
-			if workspace == nil {
-				workspace = &whip.Workspace{Name: name}
-			}
 
-			tasks, err := store.ListTasks()
+			activeTasks, err := store.ListTasksInWorkspace(name)
+			if err != nil {
+				return err
+			}
+			archivedTasks, err := store.ListArchivedTasksInWorkspace(name)
 			if err != nil {
 				return err
 			}
 
 			fmt.Printf("Name:             %s\n", name)
+			fmt.Printf("Status:           %s\n", workspace.StatusLabel())
 			fmt.Printf("Execution model:  %s\n", workspace.ExecutionModelLabel())
 			fmt.Printf("Original repo:    %s\n", workspace.OriginalRepoPath)
 			fmt.Printf("Original cwd:     %s\n", workspace.OriginalCWD)
 			fmt.Printf("Worktree path:    %s\n", workspace.WorktreePath)
 
-			count := 0
-			for _, task := range tasks {
-				if task.WorkspaceName() != name {
-					continue
+			activeCount := 0
+			for _, task := range activeTasks {
+				if activeCount == 0 {
+					fmt.Printf("\nActive tasks:\n")
 				}
-				if count == 0 {
-					fmt.Printf("\nTasks:\n")
-				}
-				count++
+				activeCount++
 				fmt.Printf("- %s  %s  %s\n", task.ID, task.Status, task.Title)
 			}
-			if count == 0 {
-				fmt.Printf("\nTasks:            none\n")
+			if activeCount == 0 {
+				fmt.Printf("\nActive tasks:     none\n")
+			}
+
+			archivedCount := 0
+			for _, task := range archivedTasks {
+				if archivedCount == 0 {
+					fmt.Printf("\nArchived tasks:\n")
+				}
+				archivedCount++
+				fmt.Printf("- %s  %s  %s\n", task.ID, task.Status, task.Title)
+			}
+			if archivedCount == 0 {
+				fmt.Printf("\nArchived tasks:   none\n")
 			}
 			return nil
 		},
 	}
 }
 
-func workspaceDropCmd() *cobra.Command {
-	var force bool
-	var archive bool
-
+func workspaceArchiveCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "drop <name>",
-		Short: "Delete a workspace, its tasks, and its worktree",
+		Use:   "archive <name>",
+		Short: "Archive a terminal workspace and tear down its runtime",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store, err := whip.NewStore()
@@ -141,19 +188,57 @@ func workspaceDropCmd() *cobra.Command {
 				return err
 			}
 
-			name := whip.NormalizeWorkspaceName(args[0])
-			count, err := whip.DropWorkspace(store, name, force, archive)
+			name, err := resolveNamedWorkspaceArg(args[0])
+			if err != nil {
+				return err
+			}
+			count, err := whip.ArchiveWorkspace(store, name)
 			if err != nil {
 				return err
 			}
 
-			fmt.Fprintf(os.Stderr, "Dropped workspace %s (%d task(s))\n", name, count)
+			fmt.Fprintf(os.Stderr, "Archived workspace %s (%d task(s))\n", name, count)
 			return nil
 		},
 	}
-	cmd.Flags().BoolVarP(&force, "force", "f", false, "Kill active sessions before dropping the workspace")
-	cmd.Flags().BoolVar(&archive, "archive", false, "Archive terminal tasks instead of deleting them")
 	return cmd
+}
+
+func workspaceDeleteCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "delete <name>",
+		Short: "Permanently delete an archived workspace and its archived tasks",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			store, err := whip.NewStore()
+			if err != nil {
+				return err
+			}
+
+			name, err := resolveNamedWorkspaceArg(args[0])
+			if err != nil {
+				return err
+			}
+			count, err := whip.DeleteArchivedWorkspace(store, name)
+			if err != nil {
+				return err
+			}
+
+			fmt.Fprintf(os.Stderr, "Deleted workspace %s (%d archived task(s))\n", name, count)
+			return nil
+		},
+	}
+}
+
+func resolveNamedWorkspaceArg(raw string) (string, error) {
+	if err := whip.ValidateWorkspaceName(raw); err != nil {
+		return "", err
+	}
+	name := whip.NormalizeWorkspaceName(raw)
+	if name == whip.GlobalWorkspaceName {
+		return "", fmt.Errorf("global is not a named workspace")
+	}
+	return name, nil
 }
 
 func workspaceBroadcastCmd() *cobra.Command {
@@ -162,8 +247,8 @@ func workspaceBroadcastCmd() *cobra.Command {
 		Short: "Send a message to all active tasks in a workspace",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			workspaceName := whip.NormalizeWorkspaceName(args[0])
-			if err := whip.ValidateWorkspaceName(workspaceName); err != nil {
+			workspaceName, err := resolveNamedWorkspaceArg(args[0])
+			if err != nil {
 				return err
 			}
 
@@ -171,20 +256,20 @@ func workspaceBroadcastCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			workspace, err := store.LoadWorkspace(workspaceName)
+			if err != nil {
+				return err
+			}
+			if workspace.IsArchived() {
+				return fmt.Errorf("workspace %s is archived; broadcasting is disabled", workspaceName)
+			}
 
-			tasks, err := store.ListTasks()
+			tasks, err := store.ListTasksInWorkspace(workspaceName)
 			if err != nil {
 				return err
 			}
 
-			filtered := make([]*whip.Task, 0, len(tasks))
-			for _, task := range tasks {
-				if task.WorkspaceName() == workspaceName {
-					filtered = append(filtered, task)
-				}
-			}
-
-			sent, err := whip.BroadcastMessage(filtered, args[1])
+			sent, err := whip.BroadcastMessage(tasks, args[1])
 			fmt.Fprintf(os.Stderr, "Broadcast sent to %d session(s) in workspace %s\n", sent, workspaceName)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: %v\n", err)

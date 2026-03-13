@@ -108,7 +108,7 @@ For the exact CLI surface, use:
 | `task dep <id> --after <id>` | Wire stack prerequisites |
 | `task archive <id>` | Archive one active terminal task when no non-terminal dependent still references it |
 | `task clean` | Archive every archiveable terminal task (`completed`, `canceled`) |
-| `task delete <id>` | Permanently delete an archived task |
+| `task delete <id>` | Permanently delete an archived task; workspace tasks require an archived workspace |
 
 ### Workspace Commands
 
@@ -117,7 +117,8 @@ For the exact CLI surface, use:
 | `workspace list` | List named workspaces |
 | `workspace view <name>` | View workspace metadata, execution model, and tasks |
 | `workspace broadcast <workspace> <message>` | Message all active task sessions in that workspace |
-| `workspace drop <name>` | Drop workspace tasks, metadata, and worktree |
+| `workspace archive <name>` | Archive a terminal workspace and tear down its runtime/worktree |
+| `workspace delete <name>` | Permanently delete an archived workspace and its archived tasks |
 
 ## Workspace Model
 

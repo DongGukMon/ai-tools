@@ -166,7 +166,7 @@ func completeCmd() *cobra.Command {
 				}
 			}
 
-			// Auto-drop workspace when lead task completes and all workspace tasks are terminal.
+			// Auto-archive a named workspace when its lead completes and all workspace tasks are terminal.
 			if task.IsLead() && task.WorkspaceName() != whip.GlobalWorkspaceName {
 				allTerminal := true
 				tasks, err := store.ListTasks()
@@ -179,11 +179,11 @@ func completeCmd() *cobra.Command {
 					}
 				}
 				if allTerminal {
-					count, dropErr := whip.DropWorkspace(store, task.WorkspaceName(), false, false)
-					if dropErr != nil {
-						fmt.Fprintf(os.Stderr, "Warning: auto-drop workspace %s: %v\n", task.WorkspaceName(), dropErr)
+					count, archiveErr := whip.ArchiveWorkspace(store, task.WorkspaceName())
+					if archiveErr != nil {
+						fmt.Fprintf(os.Stderr, "Warning: auto-archive workspace %s: %v\n", task.WorkspaceName(), archiveErr)
 					} else {
-						fmt.Fprintf(os.Stderr, "Auto-dropped workspace %s (%d task(s))\n", task.WorkspaceName(), count)
+						fmt.Fprintf(os.Stderr, "Auto-archived workspace %s (%d task(s))\n", task.WorkspaceName(), count)
 					}
 				}
 			}

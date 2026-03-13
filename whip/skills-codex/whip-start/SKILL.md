@@ -225,7 +225,7 @@ As agents complete:
 
 ### Step 5: Wrap up
 
-When all agents are done, summarize what was accomplished across the team. If this named workspace was temporary and the user wants it removed, run `whip workspace drop <workspace-name>` after all deliverables are accepted. Do NOT run `claude-irc quit` — stay connected for future dispatches.
+When all agents are done, summarize what was accomplished across the team. If this named workspace is finished, run `whip workspace archive <workspace-name>` after all deliverables are accepted. If the archived workspace should be purged permanently, follow with `whip workspace delete <workspace-name>`. Do NOT run `claude-irc quit` — stay connected for future dispatches.
 
 ---
 
@@ -300,13 +300,13 @@ When the lead submits itself for review (`whip task review <lead-id>`), inspect 
 ```bash
 # If changes look good:
 whip task approve <lead-id>    # review → approved
-whip task complete <lead-id>   # approved → completed (auto-drops workspace)
+whip task complete <lead-id>   # approved → completed (auto-archives workspace)
 
 # If changes need rework:
 whip task request-changes <lead-id> --note "..."  # review → in_progress (lead continues)
 ```
 
-The Lead cannot self-approve or self-complete; only the master/user runs these commands. Completing the lead auto-drops the workspace when all tasks are terminal.
+The Lead cannot self-approve or self-complete; only the master/user runs these commands. Completing the lead auto-archives the workspace when all tasks are terminal and archiveable.
 
 Do NOT run `claude-irc quit` — stay connected for future dispatches.
 

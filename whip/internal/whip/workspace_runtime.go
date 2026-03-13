@@ -13,6 +13,8 @@ import (
 
 type Workspace struct {
 	Name             string                  `json:"name"`
+	Status           WorkspaceStatus         `json:"status,omitempty"`
+	ArchivedTaskIDs  []string                `json:"archived_task_ids,omitempty"`
 	ExecutionModel   WorkspaceExecutionModel `json:"execution_model,omitempty"`
 	OriginalRepoPath string                  `json:"original_repo_path,omitempty"`
 	OriginalCWD      string                  `json:"original_cwd,omitempty"`
@@ -27,14 +29,33 @@ type gitContext struct {
 }
 
 type WorkspaceExecutionModel string
+type WorkspaceStatus string
 
 const (
 	WorkspaceExecutionModelGitWorktree WorkspaceExecutionModel = "git-worktree"
 	WorkspaceExecutionModelDirectCWD   WorkspaceExecutionModel = "direct-cwd"
+
+	WorkspaceStatusActive   WorkspaceStatus = "active"
+	WorkspaceStatusArchived WorkspaceStatus = "archived"
 )
 
 func (w *Workspace) WorkspaceName() string {
 	return NormalizeWorkspaceName(w.Name)
+}
+
+func (w *Workspace) EffectiveStatus() WorkspaceStatus {
+	if w == nil || w.Status == "" {
+		return WorkspaceStatusActive
+	}
+	return w.Status
+}
+
+func (w *Workspace) StatusLabel() string {
+	return string(w.EffectiveStatus())
+}
+
+func (w *Workspace) IsArchived() bool {
+	return w.EffectiveStatus() == WorkspaceStatusArchived
 }
 
 func (w *Workspace) EffectiveExecutionModel() WorkspaceExecutionModel {
@@ -67,6 +88,19 @@ func (w *Workspace) normalizeExecutionModel() error {
 	}
 }
 
+func (w *Workspace) normalizeStatus() error {
+	if w == nil {
+		return fmt.Errorf("workspace is nil")
+	}
+	switch w.EffectiveStatus() {
+	case WorkspaceStatusActive, WorkspaceStatusArchived:
+		w.Status = w.EffectiveStatus()
+		return nil
+	default:
+		return fmt.Errorf("invalid workspace status %q", w.Status)
+	}
+}
+
 func (w *Workspace) ExecutionModelLabel() string {
 	model := w.EffectiveExecutionModel()
 	if model == "" {
@@ -88,6 +122,9 @@ func (s *Store) LoadWorkspace(name string) (*Workspace, error) {
 	if name == GlobalWorkspaceName {
 		return nil, fmt.Errorf("global does not use workspace metadata")
 	}
+	if err := ValidateWorkspaceName(name); err != nil {
+		return nil, err
+	}
 
 	data, err := os.ReadFile(s.workspaceMetaPath(name))
 	if err != nil {
@@ -102,6 +139,9 @@ func (s *Store) LoadWorkspace(name string) (*Workspace, error) {
 		return nil, fmt.Errorf("corrupt workspace %s: %w", name, err)
 	}
 	workspace.Name = name
+	if err := workspace.normalizeStatus(); err != nil {
+		return nil, fmt.Errorf("workspace %s has invalid status: %w", name, err)
+	}
 	return &workspace, nil
 }
 
@@ -113,6 +153,12 @@ func (s *Store) SaveWorkspace(workspace *Workspace) error {
 	workspace.Name = NormalizeWorkspaceName(workspace.Name)
 	if workspace.Name == GlobalWorkspaceName {
 		return fmt.Errorf("global does not use workspace metadata")
+	}
+	if err := ValidateWorkspaceName(workspace.Name); err != nil {
+		return err
+	}
+	if err := workspace.normalizeStatus(); err != nil {
+		return err
 	}
 	if err := workspace.normalizeExecutionModel(); err != nil {
 		return err
@@ -158,7 +204,122 @@ func (s *Store) ListWorkspaces() ([]*Workspace, error) {
 	return workspaces, nil
 }
 
+func (s *Store) CountTasksInWorkspace(name string) (int, error) {
+	name = NormalizeWorkspaceName(name)
+	entries, err := os.ReadDir(s.workspaceTasksDir(name))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return 0, nil
+		}
+		return 0, err
+	}
+
+	count := 0
+	for _, entry := range entries {
+		if entry.IsDir() {
+			count++
+		}
+	}
+	return count, nil
+}
+
+func (s *Store) ListTasksInWorkspace(name string) ([]*Task, error) {
+	name = NormalizeWorkspaceName(name)
+
+	entries, err := os.ReadDir(s.workspaceTasksDir(name))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []*Task{}, nil
+		}
+		return nil, err
+	}
+
+	var tasks []*Task
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		task, err := s.LoadTask(entry.Name())
+		if err != nil {
+			continue
+		}
+		tasks = append(tasks, task)
+	}
+	sort.Slice(tasks, func(i, j int) bool {
+		return tasks[i].CreatedAt.Before(tasks[j].CreatedAt)
+	})
+	return tasks, nil
+}
+
+func (s *Store) CountArchivedTasksInWorkspace(name string) (int, error) {
+	name = NormalizeWorkspaceName(name)
+	if name == GlobalWorkspaceName {
+		return 0, nil
+	}
+
+	workspace, err := s.LoadWorkspace(name)
+	if err != nil {
+		return 0, err
+	}
+	if workspace.ArchivedTaskIDs != nil {
+		return len(workspace.ArchivedTaskIDs), nil
+	}
+
+	tasks, err := s.ListArchivedTasks()
+	if err != nil {
+		return 0, err
+	}
+	count := 0
+	for _, task := range tasks {
+		if task.WorkspaceName() == name {
+			count++
+		}
+	}
+	return count, nil
+}
+
+func (s *Store) ListArchivedTasksInWorkspace(name string) ([]*Task, error) {
+	name = NormalizeWorkspaceName(name)
+	if name == GlobalWorkspaceName {
+		return []*Task{}, nil
+	}
+
+	workspace, err := s.LoadWorkspace(name)
+	if err != nil {
+		return nil, err
+	}
+	if workspace.ArchivedTaskIDs != nil {
+		tasks := make([]*Task, 0, len(workspace.ArchivedTaskIDs))
+		for _, id := range workspace.ArchivedTaskIDs {
+			task, err := s.LoadArchivedTask(id)
+			if err != nil {
+				continue
+			}
+			tasks = append(tasks, task)
+		}
+		sort.Slice(tasks, func(i, j int) bool {
+			return tasks[i].CreatedAt.Before(tasks[j].CreatedAt)
+		})
+		return tasks, nil
+	}
+
+	tasks, err := s.ListArchivedTasks()
+	if err != nil {
+		return nil, err
+	}
+	filtered := make([]*Task, 0, len(tasks))
+	for _, task := range tasks {
+		if task.WorkspaceName() == name {
+			filtered = append(filtered, task)
+		}
+	}
+	return filtered, nil
+}
+
 func (s *Store) EnsureWorkspace(name string, cwd string) (*Workspace, string, error) {
+	if err := ValidateWorkspaceName(name); err != nil {
+		return nil, "", err
+	}
 	name = NormalizeWorkspaceName(name)
 	if name == GlobalWorkspaceName {
 		return nil, cwd, nil
@@ -175,6 +336,9 @@ func (s *Store) EnsureWorkspace(name string, cwd string) (*Workspace, string, er
 	workspace, err := s.loadOrInitWorkspace(name, resolvedCWD)
 	if err != nil {
 		return nil, "", err
+	}
+	if workspace.IsArchived() {
+		return nil, "", fmt.Errorf("workspace %s is archived; delete it before reusing the name", name)
 	}
 	if workspace.WorktreePath != "" {
 		if canonicalWorktreePath, err := canonicalizeStorePath(workspace.WorktreePath); err == nil {
@@ -261,10 +425,16 @@ func (s *Store) DeleteWorkspace(name string) error {
 	if name == GlobalWorkspaceName {
 		return fmt.Errorf("cannot delete global workspace")
 	}
+	if err := ValidateWorkspaceName(name); err != nil {
+		return err
+	}
 	return os.RemoveAll(s.workspaceDir(name))
 }
 
 func (s *Store) loadOrInitWorkspace(name string, cwd string) (*Workspace, error) {
+	if err := ValidateWorkspaceName(name); err != nil {
+		return nil, err
+	}
 	workspace, err := s.LoadWorkspace(name)
 	if err == nil {
 		return workspace, nil
@@ -274,9 +444,11 @@ func (s *Store) loadOrInitWorkspace(name string, cwd string) (*Workspace, error)
 	}
 	now := time.Now().UTC()
 	return &Workspace{
-		Name:      name,
-		CreatedAt: now,
-		UpdatedAt: now,
+		Name:            name,
+		Status:          WorkspaceStatusActive,
+		ArchivedTaskIDs: []string{},
+		CreatedAt:       now,
+		UpdatedAt:       now,
 	}, nil
 }
 
@@ -328,70 +500,205 @@ func ensureGitWorktree(repoRoot string, worktreePath string) error {
 	return nil
 }
 
-// DropWorkspace removes all tasks, worktree, and metadata for the named workspace.
-// It returns the number of tasks deleted. Only terminal tasks are expected; active
-// tasks are force-stopped when force is true. When archive is true, terminal tasks
-// are archived instead of deleted.
-func DropWorkspace(store *Store, name string, force, archive bool) (int, error) {
+func workspaceTaskSets(store *Store, name string) ([]*Task, []*Task, error) {
+	name = NormalizeWorkspaceName(name)
+	activeTasks, err := store.ListTasksInWorkspace(name)
+	if err != nil {
+		return nil, nil, err
+	}
+	archivedTasks, err := store.ListArchivedTasksInWorkspace(name)
+	if err != nil {
+		return nil, nil, err
+	}
+	return activeTasks, archivedTasks, nil
+}
+
+func validateWorkspaceTerminalTasks(name string, tasks []*Task) error {
+	for _, task := range tasks {
+		if task.Status.IsTerminal() {
+			continue
+		}
+		return fmt.Errorf("workspace %s has non-terminal task %s (%s, %s); archive/delete is allowed only when all workspace tasks are terminal", name, task.ID, task.Title, task.Status)
+	}
+	return nil
+}
+
+func validateWorkspaceDependencyBoundary(store *Store, name string) error {
+	activeTasks, err := store.ListTasks()
+	if err != nil {
+		return err
+	}
+	archivedTasks, err := store.ListArchivedTasks()
+	if err != nil {
+		return err
+	}
+
+	workspaceByTaskID := make(map[string]string, len(activeTasks)+len(archivedTasks))
+	for _, task := range activeTasks {
+		workspaceByTaskID[task.ID] = task.WorkspaceName()
+	}
+	for _, task := range archivedTasks {
+		workspaceByTaskID[task.ID] = task.WorkspaceName()
+	}
+
+	check := func(task *Task) error {
+		taskWorkspace := task.WorkspaceName()
+		for _, depID := range task.DependsOn {
+			depWorkspace, ok := workspaceByTaskID[depID]
+			if !ok {
+				continue
+			}
+			if depWorkspace != taskWorkspace && (taskWorkspace == name || depWorkspace == name) {
+				return fmt.Errorf("workspace %s has cross-workspace dependency: task %s is in %s but dependency %s is in %s", name, task.ID, taskWorkspace, depID, depWorkspace)
+			}
+		}
+		return nil
+	}
+
+	for _, task := range activeTasks {
+		if err := check(task); err != nil {
+			return err
+		}
+	}
+	for _, task := range archivedTasks {
+		if err := check(task); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func teardownTaskRuntimeForArchive(store *Store, id string) error {
+	task, err := store.LoadTask(id)
+	if err != nil {
+		return err
+	}
+
+	snapshotTaskMessages(store, task)
+	if err := stopTaskSession(task); err != nil {
+		return err
+	}
+
+	_, err = store.UpdateTask(id, func(task *Task) error {
+		clearTaskRuntime(task, false)
+		task.UpdatedAt = currentTime()
+		task.RecordEvent("system", "workspace archive", "runtime_cleared", task.Status, task.Status, "workspace archive teardown")
+		return nil
+	})
+	return err
+}
+
+// ArchiveWorkspace archives all remaining active tasks in a workspace, tears down
+// its runtime/worktree, and marks the workspace archived.
+func ArchiveWorkspace(store *Store, name string) (int, error) {
 	name = NormalizeWorkspaceName(name)
 	if name == GlobalWorkspaceName {
 		return 0, fmt.Errorf("global is not a named workspace")
 	}
 
-	tasks, err := store.ListTasks()
+	workspace, err := store.LoadWorkspace(name)
 	if err != nil {
 		return 0, err
 	}
-
-	var workspaceTasks []*Task
-	for _, task := range tasks {
-		if task.WorkspaceName() == name {
-			workspaceTasks = append(workspaceTasks, task)
-		}
+	if workspace.IsArchived() {
+		return 0, fmt.Errorf("workspace %s is already archived", name)
 	}
 
-	if !force {
-		for _, task := range workspaceTasks {
-			if task.Status.IsActive() {
-				return 0, fmt.Errorf("workspace %s has active task %s (%s); use force to override", name, task.ID, task.Title)
-			}
-		}
+	workspaceTasks, _, err := workspaceTaskSets(store, name)
+	if err != nil {
+		return 0, err
+	}
+	if err := validateWorkspaceDependencyBoundary(store, name); err != nil {
+		return 0, err
 	}
 
+	if err := validateWorkspaceTerminalTasks(name, workspaceTasks); err != nil {
+		return 0, err
+	}
+
+	activeTasks, err := store.ListTasks()
+	if err != nil {
+		return 0, err
+	}
+	blockers := archiveDependencyBlockers(activeTasks)
 	for _, task := range workspaceTasks {
-		if task.Runner == "tmux" && IsTmuxSession(task.ID) {
-			_ = KillTmuxSession(task.ID)
-		}
-		if task.ShellPID > 0 && IsProcessAlive(task.ShellPID) {
-			_ = KillProcess(task.ShellPID)
-		}
-		if archive && task.Status.IsTerminal() {
-			if err := store.archiveTask(task.ID); err != nil {
-				return 0, err
-			}
-		} else {
-			if err := store.DeleteTask(task.ID); err != nil {
-				return 0, err
-			}
+		if err := archiveabilityError(task, blockers); err != nil {
+			return 0, fmt.Errorf("workspace %s cannot be archived: %w", name, err)
 		}
 	}
 
-	workspace, err := store.LoadWorkspace(name)
-	if err != nil && !strings.Contains(err.Error(), "not found") {
-		return 0, err
-	}
-	if workspace != nil {
-		if err := RemoveWorkspaceWorktree(workspace); err != nil {
-			return 0, err
+	count := 0
+	for _, task := range workspaceTasks {
+		if err := teardownTaskRuntimeForArchive(store, task.ID); err != nil {
+			return count, err
 		}
+		if err := store.archiveTask(task.ID); err != nil {
+			return count, err
+		}
+		if err := store.appendArchivedTaskToWorkspace(task); err != nil {
+			return count, err
+		}
+		count++
 	}
 
-	if err := store.DeleteWorkspace(name); err != nil {
-		return 0, err
+	if err := RemoveWorkspaceWorktree(workspace); err != nil {
+		return count, err
+	}
+
+	workspace.Status = WorkspaceStatusArchived
+	workspace.WorktreePath = ""
+	workspace.UpdatedAt = time.Now().UTC()
+	if err := store.SaveWorkspace(workspace); err != nil {
+		return count, err
 	}
 
 	_ = exec.Command("claude-irc", "clean").Run()
-	return len(workspaceTasks), nil
+	return count, nil
+}
+
+// DeleteArchivedWorkspace permanently removes an archived workspace and all of
+// its archived tasks.
+func DeleteArchivedWorkspace(store *Store, name string) (int, error) {
+	name = NormalizeWorkspaceName(name)
+	if name == GlobalWorkspaceName {
+		return 0, fmt.Errorf("global is not a named workspace")
+	}
+
+	workspace, err := store.LoadWorkspace(name)
+	if err != nil {
+		return 0, err
+	}
+	if !workspace.IsArchived() {
+		return 0, fmt.Errorf("workspace %s is active; archive it before deleting", name)
+	}
+
+	workspaceTasks, archivedWorkspaceTasks, err := workspaceTaskSets(store, name)
+	if err != nil {
+		return 0, err
+	}
+	if err := validateWorkspaceDependencyBoundary(store, name); err != nil {
+		return 0, err
+	}
+	if len(workspaceTasks) > 0 {
+		if err := validateWorkspaceTerminalTasks(name, workspaceTasks); err != nil {
+			return 0, err
+		}
+		return 0, fmt.Errorf("workspace %s still has active task records; archive the workspace cleanly before deleting", name)
+	}
+
+	count := 0
+	for _, task := range archivedWorkspaceTasks {
+		if err := store.DeleteArchivedTask(task.ID); err != nil {
+			return count, err
+		}
+		count++
+	}
+
+	if err := store.DeleteWorkspace(name); err != nil {
+		return count, err
+	}
+	_ = exec.Command("claude-irc", "clean").Run()
+	return count, nil
 }
 
 func RemoveWorkspaceWorktree(workspace *Workspace) error {

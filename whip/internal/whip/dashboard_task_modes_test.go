@@ -34,6 +34,9 @@ func TestDashboardTabSwitchesBetweenActiveAndArchivedLists(t *testing.T) {
 	if dm.listMode != listModeArchived {
 		t.Fatalf("listMode = %v, want archived", dm.listMode)
 	}
+	if len(dm.tasks) != 0 {
+		t.Fatalf("tasks should be cleared before archived reload, got %v", taskIDs(dm.tasks))
+	}
 	if cmd == nil {
 		t.Fatal("tab should trigger a reload command")
 	}
@@ -43,6 +46,39 @@ func TestDashboardTabSwitchesBetweenActiveAndArchivedLists(t *testing.T) {
 	dm = model.(DashboardModel)
 	if len(dm.tasks) != 1 || dm.tasks[0].ID != archived.ID {
 		t.Fatalf("archived list tasks = %v, want [%s]", taskIDs(dm.tasks), archived.ID)
+	}
+}
+
+func TestDashboardIgnoresStaleTaskLoadForOtherMode(t *testing.T) {
+	store := tempStore(t)
+
+	active := NewTask("Active", "desc", "/tmp")
+	if err := store.SaveTask(active); err != nil {
+		t.Fatalf("SaveTask active: %v", err)
+	}
+
+	archived := NewTask("Archived", "desc", "/tmp")
+	archived.Status = StatusCompleted
+	if err := store.SaveTask(archived); err != nil {
+		t.Fatalf("SaveTask archived: %v", err)
+	}
+	if err := store.archiveTask(archived.ID); err != nil {
+		t.Fatalf("archiveTask: %v", err)
+	}
+
+	m := NewDashboardModel(store, "test")
+	m.listMode = listModeArchived
+
+	model, _ := m.Update(tasksLoadedMsg{tasks: []*Task{active}, mode: listModeActive})
+	dm := model.(DashboardModel)
+	if len(dm.tasks) != 0 {
+		t.Fatalf("stale active load should be ignored in archived mode, got %v", taskIDs(dm.tasks))
+	}
+
+	model, _ = dm.Update(tasksLoadedMsg{tasks: []*Task{archived}, mode: listModeArchived})
+	dm = model.(DashboardModel)
+	if len(dm.tasks) != 1 || dm.tasks[0].ID != archived.ID {
+		t.Fatalf("archived load tasks = %v, want [%s]", taskIDs(dm.tasks), archived.ID)
 	}
 }
 
@@ -112,6 +148,51 @@ func TestDashboardDetailFooterGatesArchiveAndDelete(t *testing.T) {
 	}
 }
 
+func TestDashboardHidesDeleteForArchivedTaskInActiveWorkspace(t *testing.T) {
+	store := tempStore(t)
+
+	workspace := &Workspace{Name: "lane", Status: WorkspaceStatusActive}
+	if err := store.SaveWorkspace(workspace); err != nil {
+		t.Fatalf("SaveWorkspace: %v", err)
+	}
+
+	task := NewTask("Archived", "desc", "/tmp")
+	task.Workspace = "lane"
+	task.Status = StatusCompleted
+	if err := store.SaveTask(task); err != nil {
+		t.Fatalf("SaveTask: %v", err)
+	}
+	if err := store.archiveTask(task.ID); err != nil {
+		t.Fatalf("archiveTask: %v", err)
+	}
+
+	listModel := NewDashboardModel(store, "test")
+	listModel.listMode = listModeArchived
+	listModel.tasks = []*Task{task}
+	listFooter := listModel.renderListFooter()
+	if strings.Contains(listFooter, "d delete") {
+		t.Fatalf("archived list footer should hide delete for active-workspace task: %s", listFooter)
+	}
+
+	detailModel := NewDashboardModel(store, "test")
+	detailModel.listMode = listModeArchived
+	detailModel.view = viewDetail
+	detailModel.selectedTask = task
+	detailFooter := detailModel.renderDetailFooter()
+	if strings.Contains(detailFooter, "d delete") {
+		t.Fatalf("archived detail footer should hide delete for active-workspace task: %s", detailFooter)
+	}
+
+	model, cmd := detailModel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	if cmd != nil {
+		t.Fatal("delete key should not return a command for active-workspace archived task")
+	}
+	dm := model.(DashboardModel)
+	if dm.view != viewDetail {
+		t.Fatalf("view = %v, want detail", dm.view)
+	}
+}
+
 func TestDashboardDetailArchiveKeyArchivesTask(t *testing.T) {
 	store := tempStore(t)
 
@@ -135,6 +216,12 @@ func TestDashboardDetailArchiveKeyArchivesTask(t *testing.T) {
 	dm := model.(DashboardModel)
 	model, cmd = dm.Update(cmd())
 	dm = model.(DashboardModel)
+	if len(dm.tasks) != 0 {
+		t.Fatalf("tasks should be cleared before archive reload, got %v", taskIDs(dm.tasks))
+	}
+	if dm.selectedTask != nil {
+		t.Fatal("selectedTask should be cleared before archive reload")
+	}
 	if cmd == nil {
 		t.Fatal("archive result should trigger a reload command")
 	}
@@ -174,6 +261,12 @@ func TestDashboardArchivedDetailDeleteKeyDeletesTask(t *testing.T) {
 	dm := model.(DashboardModel)
 	model, cmd = dm.Update(cmd())
 	dm = model.(DashboardModel)
+	if len(dm.tasks) != 0 {
+		t.Fatalf("tasks should be cleared before delete reload, got %v", taskIDs(dm.tasks))
+	}
+	if dm.selectedTask != nil {
+		t.Fatal("selectedTask should be cleared before delete reload")
+	}
 	if cmd == nil {
 		t.Fatal("delete result should trigger a reload command")
 	}
@@ -188,6 +281,33 @@ func TestDashboardArchivedDetailDeleteKeyDeletesTask(t *testing.T) {
 	}
 	if dm.listMode != listModeArchived {
 		t.Fatalf("listMode = %v, want archived after delete", dm.listMode)
+	}
+}
+
+func TestDashboardCleanedMsgClearsTasksBeforeReload(t *testing.T) {
+	store := tempStore(t)
+
+	task := NewTask("Done", "desc", "/tmp")
+	task.Status = StatusCompleted
+	if err := store.SaveTask(task); err != nil {
+		t.Fatalf("SaveTask: %v", err)
+	}
+
+	m := NewDashboardModel(store, "test")
+	m.listMode = listModeActive
+	m.tasks = []*Task{task}
+	m.archiveableTasks[task.ID] = true
+
+	model, cmd := m.Update(cleanedMsg(1))
+	dm := model.(DashboardModel)
+	if len(dm.tasks) != 0 {
+		t.Fatalf("tasks should be cleared before clean reload, got %v", taskIDs(dm.tasks))
+	}
+	if len(dm.archiveableTasks) != 0 {
+		t.Fatalf("archiveableTasks should be cleared before clean reload, got %v", dm.archiveableTasks)
+	}
+	if cmd == nil {
+		t.Fatal("cleanedMsg should trigger a reload command")
 	}
 }
 

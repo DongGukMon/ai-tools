@@ -326,7 +326,8 @@ whip task cancel <id> --note "범위가 바뀌어 더 이상 필요하지 않음
 
 ```bash
 whip task clean                 # 보관 가능한 완료/취소 태스크를 아카이브
-whip workspace drop issue-sweep # named workspace의 태스크, metadata, worktree 정리
+whip workspace archive issue-sweep # 남은 workspace 태스크를 아카이브하고 runtime/worktree 정리
+whip workspace delete issue-sweep  # archived workspace와 archived 태스크를 영구 삭제
 claude-irc quit   # IRC 퇴장 (모든 작업이 완전히 끝났을 때만)
 ```
 
@@ -571,7 +572,7 @@ whip task clean
 | `whip task dep <id> --after <id>` | 스택 선행 조건 인코딩 |
 | `whip task archive <id>` | non-terminal dependent가 없을 때 active terminal 태스크 하나를 아카이브 |
 | `whip task clean` | 보관 가능한 완료/취소 태스크를 모두 아카이브 |
-| `whip task delete <id>` | 아카이브된 태스크를 영구 삭제 |
+| `whip task delete <id>` | 아카이브된 태스크를 영구 삭제; workspace 태스크는 workspace도 archived 상태여야 함 |
 
 ### whip workspace 커맨드
 
@@ -580,7 +581,8 @@ whip task clean
 | `whip workspace list` | named workspace 목록 |
 | `whip workspace view <name>` | workspace metadata와 태스크 확인 |
 | `whip workspace broadcast <workspace> <message>` | 해당 workspace의 모든 활성 세션에 메시지 전송 |
-| `whip workspace drop <name>` | workspace 태스크, metadata, worktree 정리 |
+| `whip workspace archive <name>` | terminal workspace를 archive하고 runtime/worktree 정리 |
+| `whip workspace delete <name>` | archived workspace와 archived 태스크를 영구 삭제 |
 
 ### 기타 whip 커맨드
 

@@ -34,7 +34,7 @@ func (m DashboardModel) loadTasks() tea.Cmd {
 		if err != nil {
 			return err
 		}
-		return tasks
+		return tasksLoadedMsg{tasks: tasks, mode: m.listMode}
 	}
 }
 

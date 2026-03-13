@@ -13,7 +13,7 @@ import (
 func deleteCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:     "delete <id>",
-		Short:   "Permanently delete an archived task",
+		Short:   "Permanently delete an archived task (workspace tasks require an archived workspace)",
 		GroupID: "operations",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

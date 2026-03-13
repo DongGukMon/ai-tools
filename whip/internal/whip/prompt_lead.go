@@ -127,7 +127,7 @@ Workers commit to the workspace worktree branch. Before reporting completion to 
 Lead tasks are always review-gated. Follow this exact flow:
 
 ` + "```" + `
-in_progress ──[you]──▶ review ──[master]──▶ approved ──[master]──▶ completed (auto-drops workspace)
+in_progress ──[you]──▶ review ──[master]──▶ approved ──[master]──▶ completed (auto-archives workspace)
 ` + "```" + `
 
 When all workers are done and deliverables verified:

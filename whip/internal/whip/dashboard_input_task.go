@@ -9,16 +9,22 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+func (m *DashboardModel) resetTaskListState() {
+	m.tasks = nil
+	m.archiveableTasks = map[string]bool{}
+	m.cursor = 0
+	m.selectedTask = nil
+	m.detailScroll = 0
+	m.view = viewList
+}
+
 func (m DashboardModel) toggleListMode() (DashboardModel, tea.Cmd) {
 	if m.listMode == listModeArchived {
 		m.listMode = listModeActive
 	} else {
 		m.listMode = listModeArchived
 	}
-	m.cursor = 0
-	m.selectedTask = nil
-	m.detailScroll = 0
-	m.view = viewList
+	m.resetTaskListState()
 	return m, m.loadTasks()
 }
 
@@ -30,7 +36,22 @@ func (m DashboardModel) canArchiveSelectedTask() bool {
 }
 
 func (m DashboardModel) canDeleteSelectedTask() bool {
-	return m.listMode == listModeArchived && m.selectedTask != nil
+	return m.canDeleteTask(m.selectedTask)
+}
+
+func (m DashboardModel) canDeleteTask(task *Task) bool {
+	if m.listMode != listModeArchived || task == nil {
+		return false
+	}
+	workspace := task.WorkspaceName()
+	if workspace == GlobalWorkspaceName {
+		return true
+	}
+	loadedWorkspace, err := m.store.LoadWorkspace(workspace)
+	if err != nil {
+		return strings.Contains(err.Error(), "not found")
+	}
+	return loadedWorkspace.IsArchived()
 }
 
 func (m DashboardModel) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -44,7 +65,7 @@ func (m DashboardModel) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.cleanTasks()
 		}
 	case "d":
-		if m.listMode == listModeArchived && len(m.tasks) > 0 && m.cursor < len(m.tasks) {
+		if m.listMode == listModeArchived && len(m.tasks) > 0 && m.cursor < len(m.tasks) && m.canDeleteTask(m.tasks[m.cursor]) {
 			m.selectedTask = m.tasks[m.cursor]
 			return m, m.deleteSelectedArchivedTask()
 		}

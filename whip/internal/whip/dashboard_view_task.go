@@ -358,7 +358,7 @@ func (m DashboardModel) renderListFooter() string {
 	line := "  " + footerKey("↑↓", "navigate") + dot + footerKey("enter", "detail") + dot + footerKey("tab", m.toggleModeLabel()) + dot + footerKey("i", "irc") + dot + remoteHint + dot + footerKey("q", "quit")
 	if m.listMode == listModeActive {
 		line += dot + footerKey("c", "clean")
-	} else if len(m.tasks) > 0 {
+	} else if len(m.tasks) > 0 && m.cursor < len(m.tasks) && m.canDeleteTask(m.tasks[m.cursor]) {
 		line += dot + footerKey("d", "delete")
 	}
 	line += dot + refresh

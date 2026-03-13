@@ -49,6 +49,10 @@ type cleanedMsg int
 type serveNoticeMsg string
 type taskArchivedMsg struct{ err error }
 type taskDeletedMsg struct{ err error }
+type tasksLoadedMsg struct {
+	tasks []*Task
+	mode  taskListMode
+}
 
 type peerInfo struct {
 	Name   string
@@ -215,8 +219,11 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 
-	case []*Task:
-		m.tasks = msg
+	case tasksLoadedMsg:
+		if msg.mode != m.listMode {
+			return m, nil
+		}
+		m.tasks = msg.tasks
 		m.err = nil
 		if m.listMode == listModeActive {
 			blockers := archiveDependencyBlockers(m.tasks)
@@ -261,6 +268,7 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case cleanedMsg:
+		m.resetTaskListState()
 		return m, m.loadTasks()
 
 	case taskArchivedMsg:
@@ -268,9 +276,7 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = msg.err
 			return m, nil
 		}
-		m.selectedTask = nil
-		m.detailScroll = 0
-		m.view = viewList
+		m.resetTaskListState()
 		return m, m.loadTasks()
 
 	case taskDeletedMsg:
@@ -278,9 +284,7 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = msg.err
 			return m, nil
 		}
-		m.selectedTask = nil
-		m.detailScroll = 0
-		m.view = viewList
+		m.resetTaskListState()
 		return m, m.loadTasks()
 
 	case error:

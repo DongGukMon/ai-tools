@@ -115,8 +115,9 @@ Useful operational commands:
 - `whip workspace broadcast <workspace> "..."` for workspace-wide announcements
 - `whip task archive <id>` to archive one completed/canceled task when it is no longer needed by active dependents
 - `whip task clean` to archive all archiveable terminal tasks
-- `whip task delete <id>` to permanently remove an archived task
-- `whip workspace drop <name>` to remove a named workspace
+- `whip task delete <id>` to permanently remove an archived task; workspace tasks require an archived workspace
+- `whip workspace archive <name>` to archive a terminal workspace and tear down its runtime/worktree
+- `whip workspace delete <name>` to permanently remove an archived workspace and its archived tasks
 
 ## Remote Mode
 

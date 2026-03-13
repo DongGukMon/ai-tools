@@ -329,7 +329,8 @@ whip task cancel <id> --note "Scope changed; this task is no longer needed."
 
 ```bash
 whip task clean                 # Archive archiveable completed/canceled tasks
-whip workspace drop issue-sweep # Drop a named workspace's tasks, metadata, and worktree
+whip workspace archive issue-sweep # Archive remaining workspace tasks and tear down the workspace runtime
+whip workspace delete issue-sweep  # Permanently remove an archived workspace and its archived tasks
 claude-irc quit   # Leave IRC (only when fully done)
 ```
 
@@ -579,7 +580,7 @@ whip task clean
 | `whip task dep <id> --after <id>` | Encode stack prerequisites |
 | `whip task archive <id>` | Archive one active terminal task when no non-terminal dependent still references it |
 | `whip task clean` | Archive every archiveable completed/canceled task |
-| `whip task delete <id>` | Permanently delete an archived task |
+| `whip task delete <id>` | Permanently delete an archived task; workspace tasks require an archived workspace |
 
 Legacy task commands from the old generic status flow have been removed.
 
@@ -590,7 +591,8 @@ Legacy task commands from the old generic status flow have been removed.
 | `whip workspace list` | List named workspaces |
 | `whip workspace view <name>` | View workspace metadata and tasks |
 | `whip workspace broadcast <workspace> <message>` | Message all active sessions in that workspace |
-| `whip workspace drop <name>` | Remove workspace tasks, metadata, and worktree |
+| `whip workspace archive <name>` | Archive a terminal workspace and tear down its runtime/worktree |
+| `whip workspace delete <name>` | Permanently remove an archived workspace and its archived tasks |
 
 ### other whip commands
 

@@ -351,6 +351,13 @@ func depCmd() *cobra.Command {
 				if depID == id {
 					return fmt.Errorf("task cannot depend on itself")
 				}
+				dependency, err := store.LoadTask(depID)
+				if err != nil {
+					return err
+				}
+				if dependency.WorkspaceName() != task.WorkspaceName() {
+					return fmt.Errorf("cross-workspace dependencies are not allowed: task %s is in %s but dependency %s is in %s", id, task.WorkspaceName(), dependency.ID, dependency.WorkspaceName())
+				}
 				found := false
 				for _, existing := range task.DependsOn {
 					if existing == depID {
