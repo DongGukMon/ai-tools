@@ -35,6 +35,7 @@ type whipTask struct {
 	Status        string     `json:"status"`
 	Backend       string     `json:"backend,omitempty"`
 	Runner        string     `json:"runner,omitempty"`
+	Role          string     `json:"role,omitempty"`
 	IRCName       string     `json:"irc_name"`
 	MasterIRCName string     `json:"master_irc_name"`
 	SessionID     string     `json:"session_id,omitempty"`

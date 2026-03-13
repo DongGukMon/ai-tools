@@ -129,6 +129,7 @@ func TestAPITasks_IncludesWorkspaceNamespaces(t *testing.T) {
 		"id":         "work1",
 		"title":      "Workspace task",
 		"workspace":  "issue-sweep",
+		"role":       "lead",
 		"status":     "review",
 		"shell_pid":  0,
 		"depends_on": []string{"glob1"},
@@ -162,8 +163,10 @@ func TestAPITasks_IncludesWorkspaceNamespaces(t *testing.T) {
 	}
 
 	workspaces := map[string]string{}
+	roles := map[string]string{}
 	for _, task := range tasks {
 		workspaces[task.ID] = task.Workspace
+		roles[task.ID] = task.Role
 	}
 	if workspaces["glob1"] != "global" {
 		t.Fatalf("global task workspace = %q, want %q", workspaces["glob1"], "global")
@@ -171,12 +174,18 @@ func TestAPITasks_IncludesWorkspaceNamespaces(t *testing.T) {
 	if workspaces["work1"] != "issue-sweep" {
 		t.Fatalf("workspace task workspace = %q, want %q", workspaces["work1"], "issue-sweep")
 	}
+	if roles["work1"] != "lead" {
+		t.Fatalf("workspace task role = %q, want %q", roles["work1"], "lead")
+	}
 
 	resp = doRequest(t, ts, token, "GET", "/api/tasks/work1", nil)
 	var task whipTask
 	decodeJSON(t, resp, &task)
 	if task.Workspace != "issue-sweep" {
 		t.Fatalf("task.Workspace = %q, want %q", task.Workspace, "issue-sweep")
+	}
+	if task.Role != "lead" {
+		t.Fatalf("task.Role = %q, want %q", task.Role, "lead")
 	}
 }
 
