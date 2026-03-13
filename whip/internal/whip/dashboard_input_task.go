@@ -13,6 +13,7 @@ func (m *DashboardModel) resetTaskListState() {
 	m.tasks = nil
 	m.archiveableTasks = map[string]bool{}
 	m.cursor = 0
+	m.expandedWorkspace = ""
 	m.selectedTask = nil
 	m.detailScroll = 0
 	m.view = viewList
@@ -65,27 +66,26 @@ func (m DashboardModel) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.cleanTasks()
 		}
 	case "d":
-		if m.listMode == listModeArchived && len(m.tasks) > 0 && m.cursor < len(m.tasks) && m.canDeleteTask(m.tasks[m.cursor]) {
-			m.selectedTask = m.tasks[m.cursor]
+		if selected := m.currentListTask(); m.listMode == listModeArchived && m.canDeleteTask(selected) {
+			m.selectedTask = selected
 			return m, m.deleteSelectedArchivedTask()
 		}
 	case "up", "k":
-		if len(m.tasks) > 0 {
-			m.cursor--
-			if m.cursor < 0 {
-				m.cursor = len(m.tasks) - 1
-			}
-		}
+		m.moveTaskCursor(-1)
 	case "down", "j":
-		if len(m.tasks) > 0 {
-			m.cursor++
-			if m.cursor >= len(m.tasks) {
-				m.cursor = 0
-			}
+		m.moveTaskCursor(1)
+	case "right", "l":
+		if row, ok := m.taskRowAtCursor(); ok && row.kind == dashboardTaskRowLead && !row.isExpanded {
+			m.setExpandedWorkspace(row.groupWorkspace)
 		}
+	case "left", "h":
+		if m.focusLeadForSelectedWorker() {
+			return m, nil
+		}
+		m.collapseSelectedLeadRow()
 	case "enter":
-		if len(m.tasks) > 0 && m.cursor < len(m.tasks) {
-			m.selectedTask = m.tasks[m.cursor]
+		if selected := m.currentListTask(); selected != nil {
+			m.selectedTask = selected
 			m.detailScroll = 0
 			m.view = viewDetail
 		}

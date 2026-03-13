@@ -1,6 +1,8 @@
+import { useEffect, useMemo, useState } from 'react'
 import type { Task } from '../api/types'
 import { StatusBadge } from './StatusBadge'
 import { timeAgo, truncate } from '../lib/format'
+import { buildTaskTableRows } from '../lib/taskTableGrouping'
 
 interface TaskTableProps {
   tasks: Task[]
@@ -17,6 +19,36 @@ function BackendCell({ backend }: { backend: string }) {
     default:
       return <span className="text-gray-400 dark:text-gray-700">&mdash;</span>
   }
+}
+
+function ChevronButton({
+  expanded,
+  onToggle,
+}: {
+  expanded: boolean
+  onToggle: () => void
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={expanded ? 'Collapse workspace tasks' : 'Expand workspace tasks'}
+      onClick={(event) => {
+        event.stopPropagation()
+        onToggle()
+      }}
+      className="mr-1 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-slate-800 dark:hover:text-gray-200"
+    >
+      <svg
+        className={`h-3.5 w-3.5 transition-transform ${expanded ? 'rotate-90' : ''}`}
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2.25}
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" d="m9 6 6 6-6 6" />
+      </svg>
+    </button>
+  )
 }
 
 function DepsCell({ deps }: { deps: string[] }) {
@@ -43,6 +75,24 @@ const columns = [
 ] as const
 
 export function TaskTable({ tasks, selectedId, onSelect }: TaskTableProps) {
+  const [expandedWorkspace, setExpandedWorkspace] = useState<string | null>(null)
+  const rows = useMemo(
+    () => buildTaskTableRows(tasks, expandedWorkspace),
+    [expandedWorkspace, tasks],
+  )
+
+  useEffect(() => {
+    if (!expandedWorkspace) {
+      return
+    }
+    const stillExpanded = rows.some(
+      row => row.kind === 'lead' && row.workspace === expandedWorkspace && row.isExpanded,
+    )
+    if (!stillExpanded) {
+      setExpandedWorkspace(null)
+    }
+  }, [expandedWorkspace, rows])
+
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm font-mono">
@@ -61,34 +111,67 @@ export function TaskTable({ tasks, selectedId, onSelect }: TaskTableProps) {
           </tr>
         </thead>
         <tbody>
-          {tasks.map(task => {
+          {rows.map(row => {
+            const task = row.task
             const isSelected = task.id === selectedId
             return (
               <tr
                 key={task.id}
                 onClick={() => onSelect(task)}
-                className={`cursor-pointer border-b border-transparent transition-colors ${
+                className={`cursor-pointer transition-colors ${
                   isSelected
                     ? 'bg-indigo-950/60 dark:bg-[#1E1B4B]'
-                    : 'hover:bg-gray-50 dark:hover:bg-slate-800/50'
+                    : row.kind === 'worker'
+                      ? 'bg-gray-50/60 hover:bg-gray-100/70 dark:bg-slate-900/40 dark:hover:bg-slate-800/50'
+                      : 'hover:bg-gray-50 dark:hover:bg-slate-800/50'
+                } ${
+                  row.kind === 'worker'
+                    ? 'border-b border-gray-100/40 dark:border-gray-800/20'
+                    : 'border-b border-gray-100 dark:border-gray-800/50'
                 }`}
               >
                 <td className="w-6 text-center">
-                  {isSelected && (
+                  {isSelected ? (
                     <span className="text-purple-400 font-bold">▸</span>
-                  )}
+                  ) : row.kind === 'worker' ? (
+                    <span className="text-gray-300 dark:text-gray-700 text-xs leading-none">│</span>
+                  ) : null}
                 </td>
-                <td className="py-1.5 px-1.5 text-amber-500 dark:text-amber-400">
+                <td className={`py-1.5 px-1.5 ${row.kind === 'worker' ? 'text-amber-500/50 dark:text-amber-400/40' : 'text-amber-500 dark:text-amber-400'}`}>
                   {task.id.slice(0, 7)}
                 </td>
                 <td className={`py-1.5 px-1.5 ${H}`}>
-                  <span className="text-gray-700 dark:text-gray-300">
-                    {task.workspace || 'global'}
-                  </span>
+                  {row.kind === 'worker' ? (
+                    <span className="text-gray-300 dark:text-gray-700">&mdash;</span>
+                  ) : (
+                    <span className="text-gray-700 dark:text-gray-300">
+                      {task.workspace || 'global'}
+                    </span>
+                  )}
                 </td>
                 <td className="py-1.5 px-1.5 text-gray-900 dark:text-gray-100 truncate max-w-[10rem]">
-                  {task.role === 'lead' && <span className="text-purple-400">●</span>}{' '}
-                  {truncate(task.title, 24)}
+                  <div className={`flex min-w-0 items-center ${row.kind === 'worker' ? 'pl-6' : ''}`}>
+                    {row.kind === 'lead' ? (
+                      <ChevronButton
+                        expanded={row.isExpanded}
+                        onToggle={() => {
+                          setExpandedWorkspace(current =>
+                            current === row.workspace ? null : row.workspace,
+                          )
+                        }}
+                      />
+                    ) : row.kind === 'worker' ? (
+                      <span className="mr-2 h-0.5 w-2.5 shrink-0 rounded-full bg-indigo-400/40 dark:bg-indigo-400/25" />
+                    ) : task.role === 'lead' ? (
+                      <span className="mr-2 shrink-0 text-purple-400">●</span>
+                    ) : null}
+                    <span className="truncate">{truncate(task.title, 24)}</span>
+                    {row.kind === 'lead' && !row.isExpanded && row.childCount > 0 && (
+                      <span className="ml-2 shrink-0 rounded-full bg-gray-200/80 px-1.5 py-px text-[10px] font-medium leading-tight text-gray-500 dark:bg-slate-700/60 dark:text-gray-400">
+                        {row.childCount}
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="py-1.5 px-1.5">
                   <StatusBadge status={task.status} />
@@ -125,7 +208,7 @@ export function TaskTable({ tasks, selectedId, onSelect }: TaskTableProps) {
           })}
         </tbody>
       </table>
-      {tasks.length === 0 && (
+      {rows.length === 0 && (
         <div className="py-12 text-center text-gray-400 dark:text-gray-600">
           No tasks yet
         </div>

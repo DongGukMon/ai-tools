@@ -90,23 +90,24 @@ type ircMessage struct {
 type ircSendResultMsg struct{ err error }
 
 type DashboardModel struct {
-	store            *Store
-	tasks            []*Task
-	peers            []peerInfo
-	version          string
-	width            int
-	height           int
-	err              error
-	spinnerIndex     int
-	tickCount        int
-	cursor           int
-	view             viewState
-	listMode         taskListMode
-	selectedTask     *Task
-	detailScroll     int
-	tmuxContent      string
-	pendingAttach    string
-	archiveableTasks map[string]bool
+	store             *Store
+	tasks             []*Task
+	peers             []peerInfo
+	version           string
+	width             int
+	height            int
+	err               error
+	spinnerIndex      int
+	tickCount         int
+	cursor            int
+	view              viewState
+	listMode          taskListMode
+	expandedWorkspace string
+	selectedTask      *Task
+	detailScroll      int
+	tmuxContent       string
+	pendingAttach     string
+	archiveableTasks  map[string]bool
 
 	ircCursor      int
 	ircInput       string
@@ -237,12 +238,19 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.archiveableTasks = map[string]bool{}
 		}
-		if m.cursor >= len(m.tasks) && len(m.tasks) > 0 {
-			m.cursor = len(m.tasks) - 1
+		if m.expandedWorkspace != "" {
+			keepExpanded := false
+			for _, row := range buildDashboardTaskRows(m.tasks, m.expandedWorkspace) {
+				if row.kind == dashboardTaskRowLead && row.groupWorkspace == m.expandedWorkspace && row.isExpanded {
+					keepExpanded = true
+					break
+				}
+			}
+			if !keepExpanded {
+				m.expandedWorkspace = ""
+			}
 		}
-		if len(m.tasks) == 0 {
-			m.cursor = 0
-		}
+		m.clampCursorToRows()
 		if m.selectedTask != nil {
 			found := false
 			for _, t := range m.tasks {

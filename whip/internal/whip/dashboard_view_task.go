@@ -252,7 +252,8 @@ func (m DashboardModel) renderTable() string {
 	var rows []string
 	rows = append(rows, header, underline)
 
-	for i, t := range m.tasks {
+	for i, row := range m.taskRows() {
+		t := row.task
 		selected := i == m.cursor
 		indicator := "  "
 		if selected {
@@ -260,7 +261,22 @@ func (m DashboardModel) renderTable() string {
 		}
 
 		id := padRight(idStyle.Render(truncate(t.ID, colID)), colID)
-		title := padRight(truncate(t.Title, colTitle), colTitle)
+		titlePrefix := ""
+		switch row.kind {
+		case dashboardTaskRowLead:
+			if row.isExpanded {
+				titlePrefix = "▼ "
+			} else {
+				titlePrefix = "▶ "
+			}
+		case dashboardTaskRowWorker:
+			if row.isLastChild {
+				titlePrefix = "└─ "
+			} else {
+				titlePrefix = "├─ "
+			}
+		}
+		title := padRight(truncate(titlePrefix+t.Title, colTitle), colTitle)
 		status := padRight(renderStatus(t.Status), colStatus)
 		backend := padRight(renderBackend(t.Backend), colBackend)
 
@@ -356,14 +372,15 @@ func (m DashboardModel) renderListFooter() string {
 		remoteHint = footerKey("R", "remote")
 	}
 
-	line := "  " + footerKey("↑↓", "navigate") + dot + footerKey("enter", "detail") + dot + footerKey("tab", m.toggleModeLabel()) + dot + footerKey("i", "irc") + dot + remoteHint + dot + footerKey("q", "quit")
+	line1 := "  " + footerKey("↑↓", "navigate") + dot + footerKey("→", "expand") + dot + footerKey("←", "collapse")
+	line2 := "  " + footerKey("enter", "detail") + dot + footerKey("tab", m.toggleModeLabel()) + dot + footerKey("i", "irc") + dot + remoteHint + dot + footerKey("q", "quit")
 	if m.listMode == listModeActive {
-		line += dot + footerKey("c", "clean")
-	} else if len(m.tasks) > 0 && m.cursor < len(m.tasks) && m.canDeleteTask(m.tasks[m.cursor]) {
-		line += dot + footerKey("d", "delete")
+		line2 += dot + footerKey("c", "clean")
+	} else if m.canDeleteTask(m.currentListTask()) {
+		line2 += dot + footerKey("d", "delete")
 	}
-	line += dot + refresh
-	return lipgloss.NewStyle().MarginTop(1).Render(line)
+	line2 += dot + refresh
+	return lipgloss.NewStyle().MarginTop(1).Render(line1 + "\n" + line2)
 }
 
 func (m DashboardModel) renderDetailFooter() string {
@@ -374,7 +391,7 @@ func (m DashboardModel) renderDetailFooter() string {
 		line += dot + footerKey("a", "archive")
 	}
 	if m.selectedTask != nil && m.selectedTask.Runner == "tmux" && IsTmuxSession(m.selectedTask.ID) {
-		line += dot + footerKey("t", "attach tmux")
+		line += dot + footerKey("t", "tmux attach")
 	}
 	if m.canDeleteSelectedTask() {
 		line += dot + footerKey("d", "delete")
