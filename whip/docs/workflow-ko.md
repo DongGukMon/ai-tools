@@ -110,7 +110,7 @@ failed --> canceled
 - **canceled**: 더 이상 진행하지 않기로 한 최종 중단 상태입니다.
 - terminal status는 `completed`, `canceled`입니다.
 - status를 바꾸는 명령은 lifecycle command뿐입니다: `assign`, `start`, `review`, `request-changes`, `approve`, `complete`, `fail`, `cancel`
-- `create`, `list`, `view`, `lifecycle`, `note`, `dep`, `clean`, `delete`는 operation command이며 status를 바꾸지 않습니다.
+- `create`, `list`, `view`, `lifecycle`, `note`, `dep`, `archive`, `clean`, `delete`는 operation command이며 status를 바꾸지 않습니다.
 - 전체 상태 머신은 `whip task lifecycle`로 확인합니다.
 - 각 lifecycle command의 정확한 전이와 부수효과는 `whip task <action> --help`로 확인합니다.
 
@@ -261,7 +261,7 @@ whip dashboard
 whip task view <task-id>
 ```
 
-대시보드는 태스크 상태, PID 활성 여부, blocked-by 관계, 진행 노트를 보여줍니다.
+대시보드는 태스크 상태, PID 활성 여부, blocked-by 관계, 진행 노트를 보여줍니다. `tab`으로 active/archived 목록을 전환할 수 있고, `c`는 active 목록에서만, `a`는 archive 가능한 active terminal 상세에서만, `d`는 archived 목록/상세에서만 보입니다. 상세 뷰의 tmux attach 단축키는 `t`입니다.
 
 ### 7. 태스크 완료
 
@@ -325,7 +325,7 @@ whip task cancel <id> --note "범위가 바뀌어 더 이상 필요하지 않음
 ### 9. 정리
 
 ```bash
-whip task clean                 # 완료/취소 태스크 제거
+whip task clean                 # 보관 가능한 완료/취소 태스크를 아카이브
 whip workspace drop issue-sweep # named workspace의 태스크, metadata, worktree 정리
 claude-irc quit   # IRC 퇴장 (모든 작업이 완전히 끝났을 때만)
 ```
@@ -564,13 +564,14 @@ whip task clean
 | `whip task fail <id>` | `assigned|in_progress|review|approved -> failed` |
 | `whip task cancel <id>` | `created|assigned|in_progress|review|approved|failed -> canceled` |
 | `whip task create <title> [--desc/--file/stdin] [--workspace <name>] [--role lead]` | 새 태스크 생성; `--role lead`로 Workspace Lead 생성 |
-| `whip task list` | 모든 태스크 상태 확인 |
-| `whip task view <id>` | 태스크 상세 보기 |
+| `whip task list [--archive]` | active 태스크 목록, `--archive`로 archived 태스크 목록 확인 |
+| `whip task view <id>` | 태스크 상세 보기; active에서 못 찾으면 archived까지 확인 |
 | `whip task lifecycle [id] [--format json]` | 전체 상태 머신 또는 특정 태스크의 다음 액션 확인 |
 | `whip task note <id> "<message>"` | status 변경 없이 진행 노트 추가 |
 | `whip task dep <id> --after <id>` | 스택 선행 조건 인코딩 |
-| `whip task clean` | 완료/취소 태스크 제거 |
-| `whip task delete <id>` | 태스크 삭제 |
+| `whip task archive <id>` | non-terminal dependent가 없을 때 active terminal 태스크 하나를 아카이브 |
+| `whip task clean` | 보관 가능한 완료/취소 태스크를 모두 아카이브 |
+| `whip task delete <id>` | 아카이브된 태스크를 영구 삭제 |
 
 ### whip workspace 커맨드
 

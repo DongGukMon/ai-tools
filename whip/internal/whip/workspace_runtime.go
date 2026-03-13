@@ -366,7 +366,7 @@ func DropWorkspace(store *Store, name string, force, archive bool) (int, error) 
 			_ = KillProcess(task.ShellPID)
 		}
 		if archive && task.Status.IsTerminal() {
-			if err := store.ArchiveTask(task.ID); err != nil {
+			if err := store.archiveTask(task.ID); err != nil {
 				return 0, err
 			}
 		} else {

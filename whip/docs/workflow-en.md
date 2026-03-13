@@ -110,7 +110,7 @@ failed --> canceled
 - **canceled**: Terminal stop state when the task should no longer continue
 - Terminal statuses are `completed` and `canceled`
 - Only lifecycle commands change task status: `assign`, `start`, `review`, `request-changes`, `approve`, `complete`, `fail`, `cancel`
-- Operational commands such as `create`, `list`, `view`, `lifecycle`, `note`, `dep`, `clean`, and `delete` do not change status
+- Operational commands such as `create`, `list`, `view`, `lifecycle`, `note`, `dep`, `archive`, `clean`, and `delete` do not change status
 - Run `whip task lifecycle` to print the canonical state machine
 - Run `whip task <action> --help` to inspect the exact transition handled by that lifecycle command
 
@@ -264,7 +264,7 @@ whip dashboard
 whip task view <task-id>
 ```
 
-The dashboard shows task status, PID liveness, blocked-by relationships, and progress notes.
+The dashboard shows task status, PID liveness, blocked-by relationships, and progress notes. `tab` toggles the list between active and archived tasks. `c` is only available in the active list, `a` only appears in active detail when the selected terminal task can be archived, `d` only appears in archived list/detail, and `t` is the tmux attach shortcut from detail view.
 
 ### 7. Task Completion
 
@@ -328,7 +328,7 @@ whip task cancel <id> --note "Scope changed; this task is no longer needed."
 ### 9. Clean Up
 
 ```bash
-whip task clean                 # Remove completed/canceled tasks
+whip task clean                 # Archive archiveable completed/canceled tasks
 whip workspace drop issue-sweep # Drop a named workspace's tasks, metadata, and worktree
 claude-irc quit   # Leave IRC (only when fully done)
 ```
@@ -572,13 +572,14 @@ whip task clean
 | Command | Description |
 |---------|-------------|
 | `whip task create <title> [--desc/--file/stdin] [--workspace <name>] [--role lead]` | Create a new task; `--role lead` creates a Workspace Lead |
-| `whip task list` | List all tasks with status |
-| `whip task view <id>` | View task details |
+| `whip task list [--archive]` | List active tasks, or archived tasks with `--archive` |
+| `whip task view <id>` | View task details; falls back to archived tasks when needed |
 | `whip task lifecycle [id] [--format json]` | Show the full state machine or valid next actions |
 | `whip task note <id> "<message>"` | Add progress information without changing status |
 | `whip task dep <id> --after <id>` | Encode stack prerequisites |
-| `whip task clean` | Remove completed/canceled tasks |
-| `whip task delete <id>` | Delete a task |
+| `whip task archive <id>` | Archive one active terminal task when no non-terminal dependent still references it |
+| `whip task clean` | Archive every archiveable completed/canceled task |
+| `whip task delete <id>` | Permanently delete an archived task |
 
 Legacy task commands from the old generic status flow have been removed.
 

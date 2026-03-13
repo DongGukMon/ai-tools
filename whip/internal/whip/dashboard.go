@@ -47,6 +47,8 @@ var (
 type tickMsg time.Time
 type cleanedMsg int
 type serveNoticeMsg string
+type taskArchivedMsg struct{ err error }
+type taskDeletedMsg struct{ err error }
 
 type peerInfo struct {
 	Name   string
@@ -56,6 +58,7 @@ type peerInfo struct {
 type peersMsg []peerInfo
 
 type viewState int
+type taskListMode int
 
 const (
 	viewList viewState = iota
@@ -69,6 +72,11 @@ const (
 	viewMsgHistory
 )
 
+const (
+	listModeActive taskListMode = iota
+	listModeArchived
+)
+
 type ircMessage struct {
 	From      string    `json:"from"`
 	Content   string    `json:"content"`
@@ -78,21 +86,23 @@ type ircMessage struct {
 type ircSendResultMsg struct{ err error }
 
 type DashboardModel struct {
-	store         *Store
-	tasks         []*Task
-	peers         []peerInfo
-	version       string
-	width         int
-	height        int
-	err           error
-	spinnerIndex  int
-	tickCount     int
-	cursor        int
-	view          viewState
-	selectedTask  *Task
-	detailScroll  int
-	tmuxContent   string
-	pendingAttach string
+	store            *Store
+	tasks            []*Task
+	peers            []peerInfo
+	version          string
+	width            int
+	height           int
+	err              error
+	spinnerIndex     int
+	tickCount        int
+	cursor           int
+	view             viewState
+	listMode         taskListMode
+	selectedTask     *Task
+	detailScroll     int
+	tmuxContent      string
+	pendingAttach    string
+	archiveableTasks map[string]bool
 
 	ircCursor      int
 	ircInput       string
@@ -108,7 +118,7 @@ type DashboardModel struct {
 	remoteStarting  bool
 	remoteErr       error
 	remoteWorkspace string
-	serveNotices []string
+	serveNotices    []string
 
 	noteHistoryScroll int
 	msgHistoryScroll  int
@@ -153,12 +163,13 @@ func (m DashboardModel) Cleanup() {
 func NewDashboardModel(store *Store, version string) DashboardModel {
 	cwd, _ := os.Getwd()
 	return DashboardModel{
-		store:           store,
-		version:         version,
-		width:           120,
-		cwd:             cwd,
-		remoteWorkspace: GlobalWorkspaceName,
-		programRef:      &programHolder{},
+		store:            store,
+		version:          version,
+		width:            120,
+		cwd:              cwd,
+		remoteWorkspace:  GlobalWorkspaceName,
+		programRef:       &programHolder{},
+		archiveableTasks: map[string]bool{},
 	}
 }
 
@@ -207,15 +218,37 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case []*Task:
 		m.tasks = msg
 		m.err = nil
+		if m.listMode == listModeActive {
+			blockers := archiveDependencyBlockers(m.tasks)
+			m.archiveableTasks = make(map[string]bool, len(m.tasks))
+			for _, task := range m.tasks {
+				archiveable, _ := taskArchiveability(task, blockers)
+				if archiveable {
+					m.archiveableTasks[task.ID] = true
+				}
+			}
+		} else {
+			m.archiveableTasks = map[string]bool{}
+		}
 		if m.cursor >= len(m.tasks) && len(m.tasks) > 0 {
 			m.cursor = len(m.tasks) - 1
 		}
+		if len(m.tasks) == 0 {
+			m.cursor = 0
+		}
 		if m.selectedTask != nil {
+			found := false
 			for _, t := range m.tasks {
 				if t.ID == m.selectedTask.ID {
 					m.selectedTask = t
+					found = true
 					break
 				}
+			}
+			if !found && m.view == viewDetail {
+				m.selectedTask = nil
+				m.detailScroll = 0
+				m.view = viewList
 			}
 		}
 
@@ -228,6 +261,26 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case cleanedMsg:
+		return m, m.loadTasks()
+
+	case taskArchivedMsg:
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		m.selectedTask = nil
+		m.detailScroll = 0
+		m.view = viewList
+		return m, m.loadTasks()
+
+	case taskDeletedMsg:
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		m.selectedTask = nil
+		m.detailScroll = 0
+		m.view = viewList
 		return m, m.loadTasks()
 
 	case error:

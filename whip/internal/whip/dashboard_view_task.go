@@ -8,15 +8,42 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+func (m DashboardModel) listModeTitle() string {
+	if m.listMode == listModeArchived {
+		return "Archived Tasks"
+	}
+	return "Active Tasks"
+}
+
+func (m DashboardModel) listModeLabel() string {
+	if m.listMode == listModeArchived {
+		return "archived"
+	}
+	return "active"
+}
+
+func (m DashboardModel) toggleModeLabel() string {
+	if m.listMode == listModeArchived {
+		return "active"
+	}
+	return "archived"
+}
+
 func (m DashboardModel) renderListView(w int) string {
 	var b strings.Builder
 
+	b.WriteString(lipgloss.NewStyle().Bold(true).Foreground(colorAccent).Render("  " + m.listModeTitle()))
+	b.WriteString("\n\n")
+
 	if len(m.tasks) == 0 {
-		b.WriteString("\n")
+		empty := "  No tasks yet — create one with: whip task create \"title\" --desc \"description\""
+		if m.listMode == listModeArchived {
+			empty = "  No archived tasks."
+		}
 		b.WriteString(lipgloss.NewStyle().
 			Foreground(colorSubtle).
 			Italic(true).
-			Render("  No tasks yet — create one with: whip task create \"title\" --desc \"description\""))
+			Render(empty))
 		b.WriteString("\n")
 	} else {
 		b.WriteString(m.renderTable())
@@ -54,7 +81,13 @@ func (m DashboardModel) renderDetailView(w int) string {
 	valStyle := lipgloss.NewStyle().Foreground(colorText)
 	dimStyle := lipgloss.NewStyle().Foreground(colorDim)
 
+	modeLabel := lipgloss.NewStyle().Foreground(colorAccent).Render(m.listModeTitle())
+	if m.listMode == listModeArchived {
+		modeLabel = lipgloss.NewStyle().Foreground(colorWarning).Render(m.listModeTitle())
+	}
 	breadcrumb := lipgloss.NewStyle().Foreground(colorSubtle).Render("  Tasks") +
+		lipgloss.NewStyle().Foreground(colorDim).Render(" › ") +
+		modeLabel +
 		lipgloss.NewStyle().Foreground(colorDim).Render(" › ") +
 		lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render(t.Title)
 	b.WriteString(breadcrumb + "\n\n")
@@ -274,7 +307,7 @@ func (m DashboardModel) renderSummary() string {
 	dot := lipgloss.NewStyle().Foreground(colorDim).Render(" │ ")
 	total := len(m.tasks)
 	parts := []string{
-		lipgloss.NewStyle().Bold(true).Foreground(colorText).Render(fmt.Sprintf("%d total", total)),
+		lipgloss.NewStyle().Bold(true).Foreground(colorText).Render(fmt.Sprintf("%d %s", total, m.listModeLabel())),
 	}
 	if n := counts[StatusCreated]; n > 0 {
 		parts = append(parts, renderStatusCount(StatusCreated, n))
@@ -322,7 +355,13 @@ func (m DashboardModel) renderListFooter() string {
 		remoteHint = footerKey("R", "remote")
 	}
 
-	line := "  " + footerKey("↑↓", "navigate") + dot + footerKey("enter", "detail") + dot + footerKey("i", "irc") + dot + remoteHint + dot + footerKey("q", "quit") + dot + footerKey("c", "clean") + dot + refresh
+	line := "  " + footerKey("↑↓", "navigate") + dot + footerKey("enter", "detail") + dot + footerKey("tab", m.toggleModeLabel()) + dot + footerKey("i", "irc") + dot + remoteHint + dot + footerKey("q", "quit")
+	if m.listMode == listModeActive {
+		line += dot + footerKey("c", "clean")
+	} else if len(m.tasks) > 0 {
+		line += dot + footerKey("d", "delete")
+	}
+	line += dot + refresh
 	return lipgloss.NewStyle().MarginTop(1).Render(line)
 }
 
@@ -330,8 +369,14 @@ func (m DashboardModel) renderDetailFooter() string {
 	dot := lipgloss.NewStyle().Foreground(colorDim).Render("  ·  ")
 	line := "  " + footerKey("←/esc", "back") + dot + footerKey("↑↓", "scroll")
 
+	if m.canArchiveSelectedTask() {
+		line += dot + footerKey("a", "archive")
+	}
 	if m.selectedTask != nil && m.selectedTask.Runner == "tmux" && IsTmuxSession(m.selectedTask.ID) {
-		line += dot + footerKey("a", "attach tmux")
+		line += dot + footerKey("t", "attach tmux")
+	}
+	if m.canDeleteSelectedTask() {
+		line += dot + footerKey("d", "delete")
 	}
 	if m.selectedTask != nil && len(m.selectedTask.Notes) > 0 {
 		line += dot + footerKey("n", "notes")

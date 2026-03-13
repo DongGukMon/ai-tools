@@ -56,7 +56,7 @@ func TestUpdateTmux_EnterQueuesSessionName(t *testing.T) {
 	}
 }
 
-func TestUpdateDetail_AttachKeyWithDeadSession(t *testing.T) {
+func TestUpdateDetail_TmuxKeyWithDeadSession(t *testing.T) {
 	store := tempStore(t)
 	task := NewTask("Test", "desc", "/tmp")
 	task.Runner = "tmux"
@@ -66,7 +66,7 @@ func TestUpdateDetail_AttachKeyWithDeadSession(t *testing.T) {
 	m.selectedTask = task
 	m.view = viewDetail
 
-	model, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	model, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
 
 	dm := model.(DashboardModel)
 	if dm.view != viewDetail {

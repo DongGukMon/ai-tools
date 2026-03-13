@@ -9,12 +9,45 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+func (m DashboardModel) toggleListMode() (DashboardModel, tea.Cmd) {
+	if m.listMode == listModeArchived {
+		m.listMode = listModeActive
+	} else {
+		m.listMode = listModeArchived
+	}
+	m.cursor = 0
+	m.selectedTask = nil
+	m.detailScroll = 0
+	m.view = viewList
+	return m, m.loadTasks()
+}
+
+func (m DashboardModel) canArchiveSelectedTask() bool {
+	if m.listMode != listModeActive || m.selectedTask == nil {
+		return false
+	}
+	return m.archiveableTasks[m.selectedTask.ID]
+}
+
+func (m DashboardModel) canDeleteSelectedTask() bool {
+	return m.listMode == listModeArchived && m.selectedTask != nil
+}
+
 func (m DashboardModel) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "q", "ctrl+c":
 		return m, tea.Quit
+	case "tab":
+		return m.toggleListMode()
 	case "c":
-		return m, m.cleanTasks()
+		if m.listMode == listModeActive {
+			return m, m.cleanTasks()
+		}
+	case "d":
+		if m.listMode == listModeArchived && len(m.tasks) > 0 && m.cursor < len(m.tasks) {
+			m.selectedTask = m.tasks[m.cursor]
+			return m, m.deleteSelectedArchivedTask()
+		}
 	case "up", "k":
 		if len(m.tasks) > 0 {
 			m.cursor--
@@ -78,6 +111,14 @@ func (m DashboardModel) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.detailScroll++
 		}
 	case "a":
+		if m.canArchiveSelectedTask() {
+			return m, m.archiveSelectedTask()
+		}
+	case "d":
+		if m.canDeleteSelectedTask() {
+			return m, m.deleteSelectedArchivedTask()
+		}
+	case "t":
 		if m.selectedTask != nil && m.selectedTask.Runner == "tmux" && IsTmuxSession(m.selectedTask.ID) {
 			m.view = viewTmux
 			if content, err := CaptureTmuxPane(m.selectedTask.ID); err == nil {

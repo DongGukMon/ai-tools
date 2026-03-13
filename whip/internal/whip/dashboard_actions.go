@@ -22,11 +22,37 @@ func (m DashboardModel) cleanTasks() tea.Cmd {
 
 func (m DashboardModel) loadTasks() tea.Cmd {
 	return func() tea.Msg {
-		tasks, err := m.store.ListTasks()
+		var (
+			tasks []*Task
+			err   error
+		)
+		if m.listMode == listModeArchived {
+			tasks, err = m.store.ListArchivedTasks()
+		} else {
+			tasks, err = m.store.ListTasks()
+		}
 		if err != nil {
 			return err
 		}
 		return tasks
+	}
+}
+
+func (m DashboardModel) archiveSelectedTask() tea.Cmd {
+	return func() tea.Msg {
+		if m.selectedTask == nil {
+			return taskArchivedMsg{err: fmt.Errorf("no task selected")}
+		}
+		return taskArchivedMsg{err: m.store.ArchiveTask(m.selectedTask.ID)}
+	}
+}
+
+func (m DashboardModel) deleteSelectedArchivedTask() tea.Cmd {
+	return func() tea.Msg {
+		if m.selectedTask == nil {
+			return taskDeletedMsg{err: fmt.Errorf("no task selected")}
+		}
+		return taskDeletedMsg{err: m.store.DeleteArchivedTask(m.selectedTask.ID)}
 	}
 }
 

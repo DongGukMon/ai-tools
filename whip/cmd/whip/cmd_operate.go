@@ -12,42 +12,33 @@ import (
 
 func deleteCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:     "delete <id> [id...]",
-		Short:   "Delete tasks and their sessions",
+		Use:     "delete <id>",
+		Short:   "Permanently delete an archived task",
 		GroupID: "operations",
-		Args:    cobra.MinimumNArgs(1),
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			store, err := whip.NewStore()
 			if err != nil {
 				return err
 			}
 
-			for _, arg := range args {
-				id, err := store.ResolveID(arg)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
-					continue
+			id, err := store.ResolveArchivedID(args[0])
+			if err != nil {
+				if activeID, activeErr := store.ResolveID(args[0]); activeErr == nil {
+					return fmt.Errorf("task %s is active; archive it before deleting", activeID)
 				}
-
-				task, err := store.LoadTask(id)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
-					continue
-				}
-
-				if task.Runner == "tmux" && whip.IsTmuxSession(id) {
-					_ = whip.KillTmuxSession(id)
-				}
-				if task.ShellPID > 0 && whip.IsProcessAlive(task.ShellPID) {
-					_ = whip.KillProcess(task.ShellPID)
-				}
-
-				if err := store.DeleteTask(id); err != nil {
-					fmt.Fprintf(os.Stderr, "Warning: delete %s: %v\n", id, err)
-					continue
-				}
-				fmt.Fprintf(os.Stderr, "Deleted task %s (%s)\n", id, task.Title)
+				return err
 			}
+
+			task, err := store.LoadArchivedTask(id)
+			if err != nil {
+				return err
+			}
+			if err := store.DeleteArchivedTask(id); err != nil {
+				return err
+			}
+
+			fmt.Fprintf(os.Stderr, "Deleted archived task %s (%s)\n", id, task.Title)
 			return nil
 		},
 	}
@@ -55,8 +46,42 @@ func deleteCmd() *cobra.Command {
 
 func archiveCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:     "archive",
-		Short:   "Archive completed and canceled tasks",
+		Use:     "archive <id>",
+		Short:   "Archive one completed or canceled active task",
+		GroupID: "operations",
+		Args:    cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			store, err := whip.NewStore()
+			if err != nil {
+				return err
+			}
+
+			id, err := store.ResolveID(args[0])
+			if err != nil {
+				if archivedID, archivedErr := store.ResolveArchivedID(args[0]); archivedErr == nil {
+					return fmt.Errorf("task %s is already archived", archivedID)
+				}
+				return err
+			}
+
+			task, err := store.LoadTask(id)
+			if err != nil {
+				return err
+			}
+			if err := store.ArchiveTask(id); err != nil {
+				return err
+			}
+
+			fmt.Fprintf(os.Stderr, "Archived task %s (%s)\n", id, task.Title)
+			return nil
+		},
+	}
+}
+
+func cleanCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:     "clean",
+		Short:   "Archive all archiveable completed and canceled tasks",
 		GroupID: "operations",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -71,29 +96,6 @@ func archiveCmd() *cobra.Command {
 			}
 
 			fmt.Fprintf(os.Stderr, "Archived %d task(s)\n", count)
-			return nil
-		},
-	}
-}
-
-func cleanCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:     "clean",
-		Short:   "Remove completed and canceled tasks",
-		GroupID: "operations",
-		Args:    cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			store, err := whip.NewStore()
-			if err != nil {
-				return err
-			}
-
-			count, err := store.CleanTerminal()
-			if err != nil {
-				return err
-			}
-
-			fmt.Fprintf(os.Stderr, "Cleaned %d task(s)\n", count)
 			exec.Command("claude-irc", "clean").Run()
 			return nil
 		},

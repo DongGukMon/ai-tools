@@ -141,12 +141,7 @@ func CompleteTask(store *Store, id string, source LaunchSource, note string) (*T
 	if err != nil {
 		return nil, err
 	}
-	// Best-effort: snapshot IRC messages before they get cleaned up
-	if task.IRCName != "" {
-		if msgs := loadIRCMessages(task.IRCName); len(msgs) > 0 {
-			_ = store.SaveMessages(task.ID, msgs)
-		}
-	}
+	snapshotTaskMessages(store, task)
 	return task, nil
 }
 
@@ -155,6 +150,7 @@ func FailTask(store *Store, id string, source LaunchSource, note string) (*Task,
 	if err != nil {
 		return nil, err
 	}
+	snapshotTaskMessages(store, task)
 	stopErr := stopTaskSession(task)
 	task, err = store.UpdateTask(id, func(task *Task) error {
 		clearTaskRuntime(task, false)
@@ -173,6 +169,7 @@ func CancelTask(store *Store, id string, source LaunchSource, note string) (*Tas
 	if err != nil {
 		return nil, err
 	}
+	snapshotTaskMessages(store, task)
 	stopErr := stopTaskSession(task)
 	task, err = store.UpdateTask(id, func(task *Task) error {
 		clearTaskRuntime(task, false)
@@ -359,6 +356,15 @@ func stopTaskSession(task *Task) error {
 		return errors.New(strings.Join(errs, "; "))
 	}
 	return nil
+}
+
+func snapshotTaskMessages(store *Store, task *Task) {
+	if store == nil || task == nil || task.IRCName == "" {
+		return
+	}
+	if msgs := loadIRCMessages(task.IRCName); len(msgs) > 0 {
+		_ = store.SaveMessages(task.ID, msgs)
+	}
 }
 
 func resolveStartShellPID(id string) (int, error) {

@@ -101,13 +101,14 @@ For the exact CLI surface, use:
 | Command | Description |
 |---------|-------------|
 | `task create <title> [--desc/--file/stdin] [--workspace <name>] [--role lead]` | Create a task in `global` or a named workspace; `--role lead` creates a Workspace Lead |
-| `task list` | List all tasks with status |
-| `task view <id>` | View task details |
+| `task list [--archive]` | List active tasks, or archived tasks with `--archive` |
+| `task view <id>` | View task details; falls back to archived tasks when needed |
 | `task lifecycle [id] [--format json]` | Show the full state machine or valid next actions for one task |
 | `task note <id> "<message>"` | Add progress info without changing status |
 | `task dep <id> --after <id>` | Wire stack prerequisites |
-| `task clean` | Remove terminal tasks (`completed`, `canceled`) |
-| `task delete <id>` | Delete a task |
+| `task archive <id>` | Archive one active terminal task when no non-terminal dependent still references it |
+| `task clean` | Archive every archiveable terminal task (`completed`, `canceled`) |
+| `task delete <id>` | Permanently delete an archived task |
 
 ### Workspace Commands
 
@@ -169,9 +170,10 @@ The lead session receives a specialized prompt that enables it to:
 
 `whip dashboard` opens the live TUI for:
 
-- task list and status badges
-- task detail view
+- active/archived task lists with `tab` mode switching
+- task detail view with archive/delete action gating
 - blocked-by tracking
+- `a` to archive an active terminal task, `d` to delete an archived task, `t` to attach tmux from detail
 - live refresh
 - remote mode control
 

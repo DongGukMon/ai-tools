@@ -62,7 +62,7 @@ Terminal statuses:
 Rules:
 
 - Only lifecycle commands change status: `assign`, `start`, `review`, `request-changes`, `approve`, `complete`, `fail`, `cancel`
-- Operational commands do not change status: `create`, `list`, `view`, `lifecycle`, `note`, `dep`, `clean`, `delete`
+- Operational commands do not change status: `create`, `list`, `view`, `lifecycle`, `note`, `dep`, `archive`, `clean`, `delete`
 - `failed` is non-terminal; re-dispatch with `whip task assign <id> --master-irc <resolved-master-irc>` when you are coordinating directly
 - Review tasks use `assign -> start -> review -> request-changes -> review -> approve -> complete`
 - Non-review tasks can use `assign -> start -> complete`
@@ -113,7 +113,9 @@ Useful operational commands:
 
 - `whip task note <id> "..."` for progress without state change
 - `whip workspace broadcast <workspace> "..."` for workspace-wide announcements
-- `whip task clean` to remove terminal tasks
+- `whip task archive <id>` to archive one completed/canceled task when it is no longer needed by active dependents
+- `whip task clean` to archive all archiveable terminal tasks
+- `whip task delete <id>` to permanently remove an archived task
 - `whip workspace drop <name>` to remove a named workspace
 
 ## Remote Mode

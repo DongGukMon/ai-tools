@@ -234,6 +234,61 @@ func (s *Store) GetDependents(id string) ([]*Task, error) {
 	return deps, nil
 }
 
+func archiveDependencyBlockers(tasks []*Task) map[string][]string {
+	blockers := make(map[string][]string)
+	for _, task := range tasks {
+		if task.Status.IsTerminal() {
+			continue
+		}
+		for _, depID := range task.DependsOn {
+			blockers[depID] = append(blockers[depID], task.ID)
+		}
+	}
+	for taskID, dependents := range blockers {
+		sort.Strings(dependents)
+		blockers[taskID] = compactSortedStrings(dependents)
+	}
+	return blockers
+}
+
+func compactSortedStrings(values []string) []string {
+	if len(values) < 2 {
+		return values
+	}
+	out := values[:1]
+	for _, value := range values[1:] {
+		if value == out[len(out)-1] {
+			continue
+		}
+		out = append(out, value)
+	}
+	return out
+}
+
+func taskArchiveability(task *Task, blockers map[string][]string) (bool, []string) {
+	if task == nil || !task.Status.IsTerminal() {
+		return false, nil
+	}
+	blockedBy := blockers[task.ID]
+	if len(blockedBy) == 0 {
+		return true, nil
+	}
+	return false, append([]string(nil), blockedBy...)
+}
+
+func archiveabilityError(task *Task, blockers map[string][]string) error {
+	if task == nil {
+		return fmt.Errorf("task is nil")
+	}
+	if !task.Status.IsTerminal() {
+		return fmt.Errorf("task %s is %s; only completed or canceled tasks can be archived", task.ID, task.Status)
+	}
+	if _, blockedBy := taskArchiveability(task, blockers); len(blockedBy) > 0 {
+		return fmt.Errorf("task %s cannot be archived; non-terminal dependents still reference it: %s", task.ID, strings.Join(blockedBy, ", "))
+	}
+	return nil
+}
+
 // FindWorkspaceLead returns the active lead task for a named workspace, or nil.
 func (s *Store) FindWorkspaceLead(workspace string) (*Task, error) {
 	workspace = NormalizeWorkspaceName(workspace)
@@ -253,14 +308,14 @@ func (s *Store) FindWorkspaceLead(workspace string) (*Task, error) {
 }
 
 // AreDependenciesMet checks if all dependencies of a task are completed.
-// A dependency that no longer exists (e.g. removed by clean) is treated as met
-// because only terminal (completed/canceled) tasks are ever cleaned.
+// A dependency that no longer exists in the active store (for example because
+// it was archived or deleted after reaching a terminal state) is treated as met.
 func (s *Store) AreDependenciesMet(task *Task) (bool, []string, error) {
 	var unmet []string
 	for _, depID := range task.DependsOn {
 		dep, err := s.LoadTask(depID)
 		if err != nil {
-			// Task was cleaned — it was terminal, treat as met.
+			// Task left the active store after reaching a terminal state.
 			continue
 		}
 		if dep.Status != StatusCompleted {
@@ -270,45 +325,47 @@ func (s *Store) AreDependenciesMet(task *Task) (bool, []string, error) {
 	return len(unmet) == 0, unmet, nil
 }
 
-// CleanTerminal removes completed/canceled tasks that are no longer
-// referenced as a dependency by any non-terminal task.
+// CleanTerminal archives completed/canceled tasks that are no longer referenced
+// as a dependency by any non-terminal task.
 func (s *Store) CleanTerminal() (int, error) {
-	tasks, err := s.ListTasks()
-	if err != nil {
-		return 0, err
-	}
-
-	// Build set of IDs still depended on by non-terminal tasks.
-	referenced := make(map[string]bool)
-	for _, t := range tasks {
-		if !t.Status.IsTerminal() {
-			for _, depID := range t.DependsOn {
-				referenced[depID] = true
-			}
-		}
-	}
-
-	count := 0
-	for _, t := range tasks {
-		if t.Status.IsTerminal() && !referenced[t.ID] {
-			if err := s.DeleteTask(t.ID); err != nil {
-				return count, err
-			}
-			count++
-		}
-	}
-	return count, nil
+	return s.ArchiveTerminal()
 }
 
 func (s *Store) archiveTaskDir(id string) string {
 	return filepath.Join(s.BaseDir, archiveDir, id)
 }
 
-// ArchiveTask moves a single task from its active location to the archive.
-func (s *Store) ArchiveTask(id string) error {
+func (s *Store) archiveTask(id string) error {
 	src := s.taskDir(id)
 	dst := s.archiveTaskDir(id)
 	return os.Rename(src, dst)
+}
+
+func (s *Store) isArchivedTask(id string) bool {
+	_, err := os.Stat(filepath.Join(s.archiveTaskDir(id), taskFile))
+	return err == nil
+}
+
+// ArchiveTask moves a single archiveable active task to the archive.
+func (s *Store) ArchiveTask(id string) error {
+	task, err := s.LoadTask(id)
+	if err != nil {
+		if s.isArchivedTask(id) {
+			return fmt.Errorf("task %s is already archived", id)
+		}
+		return err
+	}
+
+	tasks, err := s.ListTasks()
+	if err != nil {
+		return err
+	}
+	blockers := archiveDependencyBlockers(tasks)
+	if err := archiveabilityError(task, blockers); err != nil {
+		return err
+	}
+
+	return s.archiveTask(id)
 }
 
 // ArchiveTerminal archives completed/canceled tasks that are no longer
@@ -319,26 +376,30 @@ func (s *Store) ArchiveTerminal() (int, error) {
 		return 0, err
 	}
 
-	// Build set of IDs still depended on by non-terminal tasks.
-	referenced := make(map[string]bool)
-	for _, t := range tasks {
-		if !t.Status.IsTerminal() {
-			for _, depID := range t.DependsOn {
-				referenced[depID] = true
-			}
-		}
-	}
-
+	blockers := archiveDependencyBlockers(tasks)
 	count := 0
-	for _, t := range tasks {
-		if t.Status.IsTerminal() && !referenced[t.ID] {
-			if err := s.ArchiveTask(t.ID); err != nil {
-				return count, err
-			}
-			count++
+	for _, task := range tasks {
+		archiveable, _ := taskArchiveability(task, blockers)
+		if !archiveable {
+			continue
 		}
+		if err := s.archiveTask(task.ID); err != nil {
+			return count, err
+		}
+		count++
 	}
 	return count, nil
+}
+
+// DeleteArchivedTask permanently removes an archived task from the archive.
+func (s *Store) DeleteArchivedTask(id string) error {
+	if _, err := s.LoadArchivedTask(id); err != nil {
+		if _, activeErr := s.LoadTask(id); activeErr == nil {
+			return fmt.Errorf("task %s is active; archive it before deleting", id)
+		}
+		return err
+	}
+	return os.RemoveAll(s.archiveTaskDir(id))
 }
 
 // ListArchivedTasks returns all tasks in the archive directory.
