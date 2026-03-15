@@ -12,11 +12,11 @@ import (
 	"syscall"
 	"time"
 
-	agentbus "github.com/bang9/ai-tools/shared/agentbus"
+	agentirc "github.com/bang9/ai-tools/shared/agentirc"
 )
 
 func statusForIdentifierError(err error) int {
-	if errors.Is(err, agentbus.ErrInvalidIdentifier) {
+	if errors.Is(err, agentirc.ErrInvalidIdentifier) {
 		return http.StatusBadRequest
 	}
 	return http.StatusInternalServerError
@@ -245,7 +245,7 @@ func readWhipTask(id string) (*whipTask, error) {
 
 func validateTaskID(id string) error {
 	if !isValidRemoteTaskID(id) {
-		return fmt.Errorf("%w: invalid task id", agentbus.ErrInvalidIdentifier)
+		return fmt.Errorf("%w: invalid task id", agentirc.ErrInvalidIdentifier)
 	}
 	return nil
 }
@@ -298,7 +298,7 @@ func handleGetTask(w http.ResponseWriter, id string) {
 	if err != nil {
 		status := http.StatusInternalServerError
 		switch {
-		case errors.Is(err, agentbus.ErrInvalidIdentifier):
+		case errors.Is(err, agentirc.ErrInvalidIdentifier):
 			status = http.StatusBadRequest
 		case os.IsNotExist(err), strings.Contains(err.Error(), "not found"):
 			status = http.StatusNotFound

@@ -1,4 +1,4 @@
-package agentbus
+package agentirc
 
 import (
 	"crypto/rand"

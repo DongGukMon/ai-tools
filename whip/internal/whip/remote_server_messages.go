@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"net/http"
 
-	agentbus "github.com/bang9/ai-tools/shared/agentbus"
+	agentirc "github.com/bang9/ai-tools/shared/agentirc"
 )
 
-type PeerStatus = agentbus.PeerStatus
-type Message = agentbus.Message
+type PeerStatus = agentirc.PeerStatus
+type Message = agentirc.Message
 
-func handleGetPeers(w http.ResponseWriter, store *agentbus.Store) {
+func handleGetPeers(w http.ResponseWriter, store *agentirc.Store) {
 	statuses, err := store.CheckAllPresence()
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
@@ -22,7 +22,7 @@ func handleGetPeers(w http.ResponseWriter, store *agentbus.Store) {
 	writeJSON(w, http.StatusOK, statuses)
 }
 
-func handlePostMessage(w http.ResponseWriter, r *http.Request, store *agentbus.Store) {
+func handlePostMessage(w http.ResponseWriter, r *http.Request, store *agentirc.Store) {
 	var body struct {
 		To      string `json:"to"`
 		From    string `json:"from"`
@@ -36,8 +36,8 @@ func handlePostMessage(w http.ResponseWriter, r *http.Request, store *agentbus.S
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "to, from, and content are required"})
 		return
 	}
-	if !agentbus.IsValidPeerName(body.To) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("%v", fmt.Errorf("%w: invalid peer name", agentbus.ErrInvalidIdentifier))})
+	if !agentirc.IsValidPeerName(body.To) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("%v", fmt.Errorf("%w: invalid peer name", agentirc.ErrInvalidIdentifier))})
 		return
 	}
 	if body.From != dashboardOperatorName {
@@ -59,7 +59,7 @@ func handlePostMessage(w http.ResponseWriter, r *http.Request, store *agentbus.S
 	writeJSON(w, http.StatusOK, map[string]string{"status": "sent"})
 }
 
-func handleGetMessages(w http.ResponseWriter, r *http.Request, store *agentbus.Store, name string) {
+func handleGetMessages(w http.ResponseWriter, r *http.Request, store *agentirc.Store, name string) {
 	var messages []Message
 	var err error
 
@@ -79,7 +79,7 @@ func handleGetMessages(w http.ResponseWriter, r *http.Request, store *agentbus.S
 	writeJSON(w, http.StatusOK, messages)
 }
 
-func handleMarkRead(w http.ResponseWriter, store *agentbus.Store, name string) {
+func handleMarkRead(w http.ResponseWriter, store *agentirc.Store, name string) {
 	if err := store.MarkAllRead(name); err != nil {
 		writeJSON(w, statusForIdentifierError(err), map[string]string{"error": err.Error()})
 		return
@@ -87,7 +87,7 @@ func handleMarkRead(w http.ResponseWriter, store *agentbus.Store, name string) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
-func handleDeleteMessages(w http.ResponseWriter, store *agentbus.Store, name string) {
+func handleDeleteMessages(w http.ResponseWriter, store *agentirc.Store, name string) {
 	if err := store.ClearInbox(name); err != nil {
 		writeJSON(w, statusForIdentifierError(err), map[string]string{"error": err.Error()})
 		return

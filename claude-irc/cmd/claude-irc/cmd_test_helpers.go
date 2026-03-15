@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	irc "github.com/bang9/ai-tools/shared/agentbus"
+	irc "github.com/bang9/ai-tools/shared/agentirc"
 )
 
 func noSessionDetect(pid int) (*irc.Store, string, error) {

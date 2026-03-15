@@ -3,17 +3,16 @@ module github.com/bang9/ai-tools/claude-irc
 go 1.21
 
 require (
-	github.com/bang9/ai-tools/shared/agentbus v0.0.0
+	github.com/bang9/ai-tools/shared/agentirc v0.0.0
 	github.com/bang9/ai-tools/shared/upgrade v0.0.0
 	github.com/spf13/cobra v1.10.2
-	golang.org/x/term v0.29.0
 )
 
 require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/spf13/pflag v1.0.9 // indirect
-	golang.org/x/sys v0.30.0 // indirect
 )
 
 replace github.com/bang9/ai-tools/shared/upgrade => ../shared/upgrade
-replace github.com/bang9/ai-tools/shared/agentbus => ../shared/agentbus
+
+replace github.com/bang9/ai-tools/shared/agentirc => ../shared/agentirc

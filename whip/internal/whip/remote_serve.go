@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	agentbus "github.com/bang9/ai-tools/shared/agentbus"
+	agentirc "github.com/bang9/ai-tools/shared/agentirc"
 )
 
 const deviceChallengeLogPrefix = "Device challenge OTP:"
@@ -99,9 +99,9 @@ func (h *RemoteHandle) stopTunnel() error {
 func StartServe(ctx context.Context, cfg RemoteConfig, token string, _ bool, onServeNotice func(string)) (*RemoteHandle, ServeResult, error) {
 	authMode := NormalizeRemoteAuthMode(cfg.AuthMode)
 
-	busStore, err := agentbus.NewStore()
+	ircStore, err := agentirc.NewStore()
 	if err != nil {
-		return nil, ServeResult{}, fmt.Errorf("agent bus store: %w", err)
+		return nil, ServeResult{}, fmt.Errorf("agent irc store: %w", err)
 	}
 
 	runCtx, cancel := context.WithCancel(ctx)
@@ -120,7 +120,7 @@ func StartServe(ctx context.Context, cfg RemoteConfig, token string, _ bool, onS
 	server, err := startRunningServer(ServerConfig{
 		Port:       cfg.Port,
 		BindHost:   cfg.BindHost,
-		BusStore:   busStore,
+		IRCStore:   ircStore,
 		MasterTmux: WorkspaceMasterSessionName(cfg.Workspace),
 		Token:      token,
 		AuthMode:   authMode,

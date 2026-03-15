@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	irc "github.com/bang9/ai-tools/shared/agentbus"
+	irc "github.com/bang9/ai-tools/shared/agentirc"
 	"github.com/spf13/cobra"
 )
 

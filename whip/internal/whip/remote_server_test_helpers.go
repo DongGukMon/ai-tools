@@ -12,17 +12,17 @@ import (
 	"testing"
 	"time"
 
-	agentbus "github.com/bang9/ai-tools/shared/agentbus"
+	agentirc "github.com/bang9/ai-tools/shared/agentirc"
 )
 
-type RemoteBusStore = agentbus.Store
+type RemoteIRCStore = agentirc.Store
 
-func setupTestServer(t *testing.T) (*httptest.Server, *RemoteBusStore, string) {
+func setupTestServer(t *testing.T) (*httptest.Server, *RemoteIRCStore, string) {
 	t.Helper()
 	dir := t.TempDir()
-	store, err := agentbus.NewStoreWithBaseDir(dir)
+	store, err := agentirc.NewStoreWithBaseDir(dir)
 	if err != nil {
-		t.Fatalf("agentbus.NewStoreWithBaseDir: %v", err)
+		t.Fatalf("agentirc.NewStoreWithBaseDir: %v", err)
 	}
 
 	token := "test-token-abc123"
@@ -37,12 +37,12 @@ func setupTestServer(t *testing.T) (*httptest.Server, *RemoteBusStore, string) {
 	return ts, store, token
 }
 
-func setupTestServerWithMaster(t *testing.T, masterTmux string) (*httptest.Server, *RemoteBusStore, string) {
+func setupTestServerWithMaster(t *testing.T, masterTmux string) (*httptest.Server, *RemoteIRCStore, string) {
 	t.Helper()
 	dir := t.TempDir()
-	store, err := agentbus.NewStoreWithBaseDir(dir)
+	store, err := agentirc.NewStoreWithBaseDir(dir)
 	if err != nil {
-		t.Fatalf("agentbus.NewStoreWithBaseDir: %v", err)
+		t.Fatalf("agentirc.NewStoreWithBaseDir: %v", err)
 	}
 
 	token := "test-token-abc123"
@@ -57,12 +57,12 @@ func setupTestServerWithMaster(t *testing.T, masterTmux string) (*httptest.Serve
 	return ts, store, token
 }
 
-func setupDeviceTestServer(t *testing.T, workspace string) (*httptest.Server, *RemoteBusStore, *RemoteAuthStore) {
+func setupDeviceTestServer(t *testing.T, workspace string) (*httptest.Server, *RemoteIRCStore, *RemoteAuthStore) {
 	t.Helper()
 	return setupDeviceTestServerWithCallbacks(t, workspace, nil, nil)
 }
 
-func setupDeviceTestServerWithCallback(t *testing.T, workspace string, onDeviceChallenge func(DeviceAuthChallengeInfo)) (*httptest.Server, *RemoteBusStore, *RemoteAuthStore) {
+func setupDeviceTestServerWithCallback(t *testing.T, workspace string, onDeviceChallenge func(DeviceAuthChallengeInfo)) (*httptest.Server, *RemoteIRCStore, *RemoteAuthStore) {
 	t.Helper()
 	return setupDeviceTestServerWithCallbacks(t, workspace, onDeviceChallenge, nil)
 }
@@ -72,7 +72,7 @@ func setupDeviceTestServerWithCallbacks(
 	workspace string,
 	onDeviceChallenge func(DeviceAuthChallengeInfo),
 	onDeviceChallengeResult func(DeviceAuthChallengeResultInfo),
-) (*httptest.Server, *RemoteBusStore, *RemoteAuthStore) {
+) (*httptest.Server, *RemoteIRCStore, *RemoteAuthStore) {
 	t.Helper()
 
 	tmpHome := t.TempDir()
@@ -80,9 +80,9 @@ func setupDeviceTestServerWithCallbacks(
 	t.Setenv("WHIP_HOME", filepath.Join(tmpHome, whipDir))
 
 	dir := t.TempDir()
-	store, err := agentbus.NewStoreWithBaseDir(dir)
+	store, err := agentirc.NewStoreWithBaseDir(dir)
 	if err != nil {
-		t.Fatalf("agentbus.NewStoreWithBaseDir: %v", err)
+		t.Fatalf("agentirc.NewStoreWithBaseDir: %v", err)
 	}
 
 	authStore, err := NewRemoteAuthStore(workspace)
