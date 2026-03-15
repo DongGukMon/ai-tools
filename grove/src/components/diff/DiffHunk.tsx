@@ -106,10 +106,11 @@ export default function DiffHunk({
         groupLines(hunk.lines).map((group, gi) => (
           <div
             key={gi}
-            className={
+            className="scroll-snap-group"
+            style={
               group.type === "change"
-                ? "border-l-2 border-l-blue-300/50"
-                : ""
+                ? { borderLeft: "3px solid rgba(59, 130, 246, 0.35)", scrollSnapAlign: "start" }
+                : undefined
             }
           >
             {group.lines.map((line) => (
