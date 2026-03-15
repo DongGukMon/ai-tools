@@ -109,9 +109,9 @@ type DashboardModel struct {
 	pendingAttach     string
 	archiveableTasks  map[string]bool
 
-	ircCursor      int
-	ircInput       string
-	ircTarget      string
+	ircSelectedPeer string
+	ircInput        string
+	ircTarget       string
 	ircLastSendErr error
 	ircLastSendAt  time.Time
 
@@ -269,6 +269,12 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case peersMsg:
 		m.peers = []peerInfo(msg)
+		if m.view == viewIRC || m.view == viewIRCMsg || m.ircSelectedPeer != "" {
+			rows := m.ircRows()
+			if findPeerIndex(rows, m.ircSelectedPeer) < 0 {
+				m.ircSelectedPeer = firstPeerName(rows)
+			}
+		}
 
 	case ircSendResultMsg:
 		m.ircLastSendErr = msg.err

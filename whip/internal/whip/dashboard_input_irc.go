@@ -43,27 +43,17 @@ func (m DashboardModel) ircPeers() []peerInfo {
 }
 
 func (m DashboardModel) updateIRC(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	peers := m.ircPeers()
+	rows := m.ircRows()
 	switch msg.String() {
 	case "esc", "backspace", "left":
 		m.view = viewList
 	case "up", "k":
-		if len(peers) > 0 {
-			m.ircCursor--
-			if m.ircCursor < 0 {
-				m.ircCursor = len(peers) - 1
-			}
-		}
+		m.ircSelectedPeer = adjacentPeer(rows, m.ircSelectedPeer, -1)
 	case "down", "j":
-		if len(peers) > 0 {
-			m.ircCursor++
-			if m.ircCursor >= len(peers) {
-				m.ircCursor = 0
-			}
-		}
+		m.ircSelectedPeer = adjacentPeer(rows, m.ircSelectedPeer, +1)
 	case "enter":
-		if len(peers) > 0 && m.ircCursor < len(peers) {
-			m.ircTarget = peers[m.ircCursor].Name
+		if m.ircSelectedPeer != "" && findPeerIndex(rows, m.ircSelectedPeer) >= 0 {
+			m.ircTarget = m.ircSelectedPeer
 			m.ircInput = ""
 			m.ircLastSendErr = nil
 			m.ircLastSendAt = time.Time{}
