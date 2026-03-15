@@ -14,7 +14,7 @@ function Layout() {
         <Allotment.Pane>
           <TerminalPanel />
         </Allotment.Pane>
-        <Allotment.Pane preferredSize={420} minSize={320}>
+        <Allotment.Pane preferredSize={420} minSize={350}>
           <DiffPanel />
         </Allotment.Pane>
       </Allotment>

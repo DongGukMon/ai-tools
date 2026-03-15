@@ -157,7 +157,7 @@ function FileItem({
 
   return (
     <div
-      className={`group flex items-center gap-1.5 px-3 h-[28px] cursor-pointer text-[12px] select-none transition-colors duration-100 ${
+      className={`group flex items-center gap-1.5 px-3 h-[28px] cursor-pointer text-[12px] select-none overflow-hidden transition-colors duration-100 ${
         isSelected
           ? "bg-[var(--color-primary-light)] border-l-[3px] border-l-[var(--color-primary)]"
           : "hover:bg-[var(--color-bg-tertiary)] border-l-[3px] border-l-transparent"
@@ -170,11 +170,11 @@ function FileItem({
       >
         {statusChar}
       </span>
-      <span className={`truncate ${isSelected ? "font-medium text-[var(--color-text)]" : "text-[var(--color-text)]"}`}>
+      <span className={`min-w-0 truncate ${isSelected ? "font-medium text-[var(--color-text)]" : "text-[var(--color-text)]"}`}>
         {fileName}
       </span>
       {dirPath && (
-        <span className="text-[11px] truncate flex-1 text-[var(--color-text-tertiary)]">
+        <span className="min-w-0 text-[11px] truncate flex-1 text-[var(--color-text-tertiary)]">
           {dirPath}/
         </span>
       )}

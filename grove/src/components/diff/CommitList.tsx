@@ -27,7 +27,7 @@ export default function CommitList({
       <div className="max-h-[180px] overflow-y-auto">
         {/* Working changes entry */}
         <div
-          className={`flex items-center gap-2.5 px-3 h-[32px] cursor-pointer select-none transition-colors duration-100 ${
+          className={`flex items-center gap-2.5 px-3 h-[32px] cursor-pointer select-none overflow-hidden transition-colors duration-100 ${
             isChangesSelected
               ? "bg-[var(--color-primary-light)] border-l-[3px] border-l-[var(--color-primary)]"
               : "hover:bg-[var(--color-bg-tertiary)] border-l-[3px] border-l-transparent"
@@ -57,7 +57,7 @@ export default function CommitList({
           return (
             <div
               key={commit.hash}
-              className={`flex items-center gap-2 px-3 h-[32px] cursor-pointer select-none transition-colors duration-100 ${
+              className={`flex items-center gap-2 px-3 h-[32px] cursor-pointer select-none overflow-hidden transition-colors duration-100 ${
                 isSelected
                   ? "bg-[var(--color-primary-light)] border-l-[3px] border-l-[var(--color-primary)]"
                   : "hover:bg-[var(--color-bg-tertiary)] border-l-[3px] border-l-transparent"
@@ -71,10 +71,10 @@ export default function CommitList({
               <span className="font-mono text-[11px] shrink-0 text-[var(--color-text-tertiary)]">
                 {commit.shortHash}
               </span>
-              <span className={`flex-1 truncate text-[12px] ${isSelected ? "text-[var(--color-text)] font-medium" : "text-[var(--color-text)]"}`}>
+              <span className={`min-w-0 flex-1 truncate text-[12px] ${isSelected ? "text-[var(--color-text)] font-medium" : "text-[var(--color-text)]"}`}>
                 {commit.message.split("\n")[0]}
               </span>
-              <span className="text-[11px] shrink-0 text-[var(--color-text-tertiary)]">
+              <span className="text-[11px] shrink-0 truncate max-w-[80px] text-[var(--color-text-tertiary)]">
                 {commit.author}
               </span>
             </div>

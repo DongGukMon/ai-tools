@@ -1,7 +1,22 @@
 import { useState } from "react";
 import { Plus, Minus, Trash2, ChevronDown, ChevronRight } from "lucide-react";
-import type { DiffHunk as DiffHunkType } from "../../types";
+import type { DiffHunk as DiffHunkType, DiffLine as DiffLineType } from "../../types";
 import DiffLine from "./DiffLine";
+
+function groupLines(lines: DiffLineType[]) {
+  const groups: { type: "change" | "context"; lines: DiffLineType[] }[] = [];
+  for (const line of lines) {
+    const isChange = line.type === "add" || line.type === "remove";
+    const groupType = isChange ? "change" : "context";
+    const last = groups[groups.length - 1];
+    if (last && last.type === groupType) {
+      last.lines.push(line);
+    } else {
+      groups.push({ type: groupType, lines: [line] });
+    }
+  }
+  return groups;
+}
 
 interface Props {
   hunk: DiffHunkType;
@@ -43,7 +58,7 @@ export default function DiffHunk({
             <ChevronDown size={14} strokeWidth={2} />
           )}
         </button>
-        <span className="flex-1 truncate font-mono text-[11px] text-[#656d76]">
+        <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-[#656d76]">
           {hunk.header}
         </span>
         {!readOnly && (
@@ -72,8 +87,19 @@ export default function DiffHunk({
 
       {/* Lines */}
       {!collapsed &&
-        hunk.lines.map((line) => (
-          <DiffLine key={line.index} line={line} />
+        groupLines(hunk.lines).map((group, gi) => (
+          <div
+            key={gi}
+            className={
+              group.type === "change"
+                ? "border-l-2 border-l-blue-300/50"
+                : ""
+            }
+          >
+            {group.lines.map((line) => (
+              <DiffLine key={line.index} line={line} />
+            ))}
+          </div>
         ))}
     </div>
   );

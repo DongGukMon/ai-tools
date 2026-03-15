@@ -43,6 +43,11 @@ function AddProjectDialog({ onClose }: Props) {
             if (e.key === "Escape") onClose();
           }}
         />
+        {loading && (
+          <div className="text-[11px] text-[var(--color-text-muted)] mb-2 animate-pulse">
+            Cloning repository...
+          </div>
+        )}
         {error && (
           <div className="text-[11px] text-[var(--color-danger)] mb-2 break-all leading-relaxed">
             {error}

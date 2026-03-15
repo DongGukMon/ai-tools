@@ -33,13 +33,13 @@ function WorktreeItem({ worktree, projectId }: Props) {
   return (
     <div
       className={`group flex items-center gap-2 px-2.5 h-[30px] rounded-lg cursor-pointer select-none transition-all duration-100 ${
-        removing ? "animate-fade-out" : ""
+        removing ? "animate-fade-out pointer-events-none opacity-50" : ""
       } ${
         isSelected
           ? "bg-white shadow-sm text-[var(--color-primary)]"
           : "text-[#6b7280] hover:bg-white/60 hover:text-[#374151]"
       }`}
-      onClick={() => selectWorktree(worktree)}
+      onClick={() => !removing && selectWorktree(worktree)}
       title={worktree.path}
     >
       <GitBranch
@@ -47,7 +47,7 @@ function WorktreeItem({ worktree, projectId }: Props) {
         strokeWidth={isSelected ? 2.5 : 2}
         className={`shrink-0 ${isSelected ? "text-[var(--color-primary)]" : "text-[#9ca3af]"}`}
       />
-      <span className={`flex-1 text-[13px] truncate ${isSelected ? "font-semibold" : "font-medium"}`}>
+      <span className={`min-w-0 flex-1 text-[13px] truncate ${isSelected ? "font-semibold" : "font-medium"}`}>
         {label}
       </span>
       {isSource && (

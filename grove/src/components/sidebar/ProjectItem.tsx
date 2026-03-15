@@ -51,7 +51,7 @@ function ProjectItem({ project }: Props) {
           {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
         </span>
         <GitFork size={14} className={expanded ? "text-[var(--color-primary)] shrink-0" : "text-[#9ca3af] shrink-0"} />
-        <span className="flex-1 text-[13px] truncate font-semibold text-[#374151]">
+        <span className="min-w-0 flex-1 text-[13px] truncate font-semibold text-[#374151]">
           {project.org}/{project.repo}
         </span>
         <button
@@ -76,21 +76,30 @@ function ProjectItem({ project }: Props) {
           {adding ? (
             <div>
               <form onSubmit={handleAddWorktree} className="px-1 py-1">
-                <input
-                  className="w-full px-2.5 py-1.5 text-[12px] rounded-lg border border-[var(--color-primary)] bg-white text-[var(--color-text)] outline-none focus:ring-2 focus:ring-[var(--color-primary-bg)] shadow-sm transition-all disabled:opacity-50"
-                  type="text"
-                  placeholder="branch name"
-                  value={worktreeName}
-                  onChange={(e) => setWorktreeName(e.target.value)}
-                  autoFocus
-                  disabled={addingLoading}
-                  onBlur={() => {
-                    if (!worktreeName.trim() && !addingLoading) setAdding(false);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Escape" && !addingLoading) setAdding(false);
-                  }}
-                />
+                <div className="relative">
+                  <input
+                    className="w-full px-2.5 py-1.5 text-[12px] rounded-lg border border-[var(--color-primary)] bg-white text-[var(--color-text)] outline-none focus:ring-2 focus:ring-[var(--color-primary-bg)] shadow-sm transition-all disabled:opacity-50"
+                    type="text"
+                    placeholder="branch name"
+                    value={worktreeName}
+                    onChange={(e) => setWorktreeName(e.target.value)}
+                    autoFocus
+                    disabled={addingLoading}
+                    onBlur={() => {
+                      if (!worktreeName.trim() && !addingLoading) setAdding(false);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape" && !addingLoading) setAdding(false);
+                    }}
+                  />
+                  {addingLoading && (
+                    <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-white/70">
+                      <span className="text-[11px] text-[var(--color-text-muted)] animate-pulse">
+                        Creating worktree...
+                      </span>
+                    </div>
+                  )}
+                </div>
               </form>
               {addingLoading && (
                 <div className="flex items-center gap-2 px-2.5 h-[30px]">
