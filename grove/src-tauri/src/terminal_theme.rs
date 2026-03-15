@@ -70,7 +70,16 @@ struct TerminalColors {
 /// profile's colors. Terminal.app exposes colors as {r, g, b} lists with
 /// 16-bit values (0-65535). We divide by 257 to get 8-bit (0-255) values.
 fn detect_terminal_colors() -> Option<TerminalColors> {
-    let profile = get_default_profile_name()?;
+    let profile = match get_default_profile_name() {
+        Some(p) => {
+            crate::logger::grove_info!("theme", &format!("profile name: {}", p));
+            p
+        }
+        None => {
+            crate::logger::grove_warn!("theme", "failed to read default profile name");
+            return None;
+        }
+    };
 
     let script = format!(
         r#"
@@ -88,8 +97,7 @@ fn detect_terminal_colors() -> Option<TerminalColors> {
             set crR to (item 1 of crColor) / 257
             set crG to (item 2 of crColor) / 257
             set crB to (item 3 of crColor) / 257
-            set bgOpacity to background color opacity of prof
-            return (bgR as integer) & "," & (bgG as integer) & "," & (bgB as integer) & "|" & (fgR as integer) & "," & (fgG as integer) & "," & (fgB as integer) & "|" & (crR as integer) & "," & (crG as integer) & "," & (crB as integer) & "|" & bgOpacity
+            return (bgR as integer) & "," & (bgG as integer) & "," & (bgB as integer) & "|" & (fgR as integer) & "," & (fgG as integer) & "," & (fgB as integer) & "|" & (crR as integer) & "," & (crG as integer) & "," & (crB as integer)
         end tell
         "#
     );
@@ -100,11 +108,14 @@ fn detect_terminal_colors() -> Option<TerminalColors> {
         .ok()?;
 
     if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        crate::logger::grove_warn!("theme", &format!("color osascript failed: {}", stderr.trim()));
         return None;
     }
 
     let result = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    // Parse "r,g,b|r,g,b|r,g,b|opacity"
+    crate::logger::grove_info!("theme", &format!("color osascript result: {}", result));
+    // Parse "r,g,b|r,g,b|r,g,b"
     let parts: Vec<&str> = result.split('|').collect();
     if parts.len() < 3 {
         return None;
@@ -113,10 +124,8 @@ fn detect_terminal_colors() -> Option<TerminalColors> {
     let bg = parse_rgb(parts[0])?;
     let fg = parse_rgb(parts[1])?;
     let cursor = parse_rgb(parts[2])?;
-    let bg_opacity = parts
-        .get(3)
-        .and_then(|s| s.trim().parse::<f64>().ok())
-        .unwrap_or(1.0);
+    // Opacity is not available via AppleScript; default to 1.0
+    let bg_opacity = 1.0;
 
     Some(TerminalColors { bg, fg, cursor, bg_opacity })
 }

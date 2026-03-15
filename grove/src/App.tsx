@@ -5,9 +5,13 @@ import { initBackendLogPipe } from "./lib/logger";
 
 function App() {
   useEffect(() => {
+    let cancelled = false;
     let cleanup: (() => void) | undefined;
-    initBackendLogPipe().then((fn) => { cleanup = fn; });
-    return () => { cleanup?.(); };
+    initBackendLogPipe().then((fn) => {
+      if (cancelled) { fn?.(); }
+      else { cleanup = fn; }
+    });
+    return () => { cancelled = true; cleanup?.(); };
   }, []);
 
   return (

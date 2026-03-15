@@ -41,7 +41,11 @@ macro_rules! grove_error {
     };
 }
 
+#[allow(unused_imports)]
 pub(crate) use grove_info;
+#[allow(unused_imports)]
 pub(crate) use grove_warn;
+#[allow(unused_imports)]
 pub(crate) use grove_error;
+#[allow(unused_imports)]
 pub(crate) use log_emit;
