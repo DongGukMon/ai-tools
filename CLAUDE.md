@@ -126,6 +126,18 @@ AI-facing docs (CLAUDE.md, skill prompts) should contain only:
 - One concrete example showing the core workflow
 - Discovery pointers: which help/schema commands to run for details
 
+## Naming: EDR-Safe Conventions
+
+Go module and package paths are embedded in Go binaries through build info, symbol names, and file paths. EDR tools may use these strings as part of heuristic analysis.
+
+Avoid EDR-sensitive names in package names, module paths, and directory names, especially for binaries that also use daemonization, self re-exec, process inspection, or IPC.
+
+Names to avoid in this repo:
+- `agent`, `agentbus`, `agentirc`
+- `payload`, `beacon`, `implant`, `dropper`, `loader`, `injector`, `shellcode`
+
+This project includes binaries that use daemon self-reexec (`os.Executable` + `exec.Command`), process tree walking (`ps`), and Unix socket IPC. Combined with aggressive naming, those patterns can trigger false positives.
+
 ## Code Style
 
 - **Language**: Go for performance-critical tools
