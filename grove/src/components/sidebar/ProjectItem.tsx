@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ChevronRight, ChevronDown, X, Plus, GitFork } from "lucide-react";
 import type { Project } from "../../types";
 import { useProjectStore } from "../../store/project";
+import { useToast } from "../../store/toast";
 import WorktreeItem from "./WorktreeItem";
 import { Button } from "../ui/button";
 import { cn } from "../../lib/cn";
@@ -16,6 +17,7 @@ function ProjectItem({ project }: Props) {
   const [addingLoading, setAddingLoading] = useState(false);
   const [worktreeName, setWorktreeName] = useState("");
   const { addWorktree, removeProject } = useProjectStore();
+  const { toast } = useToast();
 
   const handleAddWorktree = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,10 +26,11 @@ function ProjectItem({ project }: Props) {
     setAddingLoading(true);
     try {
       await addWorktree(project.id, name);
+      toast("success", `Worktree '${name}' created`);
       setWorktreeName("");
       setAdding(false);
     } catch (err) {
-      console.error("Failed to add worktree:", err);
+      toast("error", `Failed to create worktree: ${String(err)}`);
     } finally {
       setAddingLoading(false);
     }

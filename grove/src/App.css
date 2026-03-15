@@ -189,3 +189,22 @@ body,
   from { opacity: 0; transform: scale(0.96); }
   to { opacity: 1; transform: scale(1); }
 }
+
+/* ── Toast animations ── */
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes toast-out {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(16px); }
+}
+
+.animate-toast-in {
+  animation: toast-in 0.2s ease-out forwards;
+}
+
+.animate-toast-out {
+  animation: toast-out 0.35s ease-in forwards;
+}

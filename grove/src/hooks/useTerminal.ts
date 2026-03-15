@@ -1,4 +1,5 @@
-import { useTerminalStore, countLeaves, assignPtyIds } from "../store/terminal";
+import { useTerminalStore } from "../store/terminal";
+import { countLeaves, assignPtyIds } from "../lib/split-tree";
 import {
   createPty as ipcCreatePty,
   closePty as ipcClosePty,

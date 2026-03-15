@@ -1,33 +1,13 @@
 import { create } from "zustand";
 import type { SplitNode, TerminalTheme } from "../types";
-
-// ── Layout persistence helpers ──
-
-/** Strip ptyIds from a SplitNode tree, keeping only the structure. */
-function toLayoutTemplate(node: SplitNode): SplitNode {
-  if (node.type === "leaf") return { type: "leaf" };
-  return {
-    type: node.type,
-    children: node.children?.map(toLayoutTemplate),
-  };
-}
-
-/** Count leaf nodes in a layout. */
-function countLeaves(node: SplitNode): number {
-  if (node.type === "leaf") return 1;
-  return (node.children ?? []).reduce((sum, c) => sum + countLeaves(c), 0);
-}
-
-/** Assign ptyIds from an array into a layout template's leaf nodes. */
-function assignPtyIds(node: SplitNode, ids: string[]): SplitNode {
-  if (node.type === "leaf") {
-    return { type: "leaf", ptyId: ids.shift() };
-  }
-  return {
-    type: node.type,
-    children: node.children?.map((c) => assignPtyIds(c, ids)),
-  };
-}
+import {
+  toLayoutTemplate,
+  countLeaves,
+  splitNode,
+  removeNode,
+  setSizesAtPath,
+  findFirstLeaf,
+} from "../lib/split-tree";
 
 // In-memory cache populated at startup via initLayouts()
 let layoutCache: Record<string, SplitNode> = {};
@@ -73,60 +53,9 @@ interface TerminalState {
   setActiveWorktree: (worktreePath: string | null) => void;
   setFocusedPtyId: (ptyId: string | null) => void;
   loadTheme: (theme: TerminalTheme) => void;
+  updateSizes: (worktreePath: string, nodePath: number[], sizes: number[]) => void;
   getSavedLayout: (worktreePath: string) => SplitNode | null;
   initLayouts: () => Promise<void>;
-}
-
-function splitNode(
-  node: SplitNode,
-  targetPtyId: string,
-  direction: "horizontal" | "vertical",
-  newPtyId: string,
-): SplitNode {
-  if (node.type === "leaf" && node.ptyId === targetPtyId) {
-    return {
-      type: direction,
-      children: [
-        { type: "leaf", ptyId: targetPtyId },
-        { type: "leaf", ptyId: newPtyId },
-      ],
-    };
-  }
-  if (node.children) {
-    const newChildren = node.children.map((child) =>
-      splitNode(child, targetPtyId, direction, newPtyId),
-    );
-    if (newChildren.some((c, i) => c !== node.children![i])) {
-      return { ...node, children: newChildren };
-    }
-  }
-  return node;
-}
-
-function removeNode(node: SplitNode, targetPtyId: string): SplitNode | null {
-  if (node.type === "leaf") {
-    return node.ptyId === targetPtyId ? null : node;
-  }
-  if (!node.children) return node;
-
-  const filtered = node.children
-    .map((child) => removeNode(child, targetPtyId))
-    .filter((child): child is SplitNode => child !== null);
-
-  if (filtered.length === 0) return null;
-  if (filtered.length === 1) return filtered[0];
-  return { ...node, children: filtered };
-}
-
-function findFirstLeaf(node: SplitNode): string | null {
-  if (node.type === "leaf") return node.ptyId ?? null;
-  if (node.children) {
-    for (const child of node.children) {
-      const id = findFirstLeaf(child);
-      if (id) return id;
-    }
-  }
-  return null;
 }
 
 export const useTerminalStore = create<TerminalState>((set) => ({
@@ -206,6 +135,16 @@ export const useTerminalStore = create<TerminalState>((set) => ({
 
   setFocusedPtyId: (ptyId) => set({ focusedPtyId: ptyId }),
 
+  updateSizes: (worktreePath, nodePath, sizes) =>
+    set((state) => {
+      const root = state.sessions[worktreePath];
+      if (!root) return state;
+      const updated = setSizesAtPath(root, nodePath, sizes);
+      const newSessions = { ...state.sessions, [worktreePath]: updated };
+      saveLayouts(newSessions);
+      return { sessions: newSessions };
+    }),
+
   loadTheme: (theme) => set({ theme }),
 
   initLayouts: async () => {
@@ -219,4 +158,4 @@ export const useTerminalStore = create<TerminalState>((set) => ({
   },
 }));
 
-export { countLeaves, assignPtyIds };
+export { countLeaves, assignPtyIds } from "../lib/split-tree";

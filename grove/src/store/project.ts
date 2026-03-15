@@ -8,6 +8,7 @@ interface ProjectState {
   loading: boolean;
 
   loadProjects: () => Promise<void>;
+  syncProjects: () => Promise<void>;
   addProject: (url: string) => Promise<Project>;
   removeProject: (id: string) => Promise<void>;
   addWorktree: (projectId: string, name: string) => Promise<Worktree>;
@@ -27,6 +28,15 @@ export const useProjectStore = create<ProjectState>((set) => ({
       set({ projects });
     } finally {
       set({ loading: false });
+    }
+  },
+
+  syncProjects: async () => {
+    try {
+      const projects = await tauri.listProjects();
+      set({ projects });
+    } catch {
+      // Silent fail — background sync should not disrupt the UI
     }
   },
 
@@ -51,6 +61,11 @@ export const useProjectStore = create<ProjectState>((set) => ({
   },
 
   addWorktree: async (projectId: string, name: string) => {
+    const { projects } = useProjectStore.getState();
+    const project = projects.find((p) => p.id === projectId);
+    if (project?.worktrees.some((w) => w.name === name)) {
+      throw new Error(`Worktree '${name}' already exists`);
+    }
     const worktree = await tauri.addWorktree(projectId, name, name);
     set((state) => ({
       projects: state.projects.map((p) =>

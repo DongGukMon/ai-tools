@@ -2,6 +2,7 @@ import { useState } from "react";
 import { GitBranch, X } from "lucide-react";
 import type { Worktree } from "../../types";
 import { useProjectStore } from "../../store/project";
+import { useToast } from "../../store/toast";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import { cn } from "../../lib/cn";
@@ -15,6 +16,7 @@ function WorktreeItem({ worktree, projectId }: Props) {
   const [removing, setRemoving] = useState(false);
   const { selectedWorktree, selectWorktree, removeWorktree } =
     useProjectStore();
+  const { toast } = useToast();
   const isSelected = selectedWorktree?.path === worktree.path;
   const isSource = worktree.name === "source";
 
@@ -23,9 +25,10 @@ function WorktreeItem({ worktree, projectId }: Props) {
     setRemoving(true);
     try {
       await removeWorktree(projectId, worktree.name);
+      toast("success", `Worktree '${worktree.name}' removed`);
     } catch (err) {
       setRemoving(false);
-      console.error("Failed to remove worktree:", err);
+      toast("error", `Failed to remove worktree: ${String(err)}`);
     }
   };
 

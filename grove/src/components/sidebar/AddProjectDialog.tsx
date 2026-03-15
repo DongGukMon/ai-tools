@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useProjectStore } from "../../store/project";
+import { useToast } from "../../store/toast";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
 import { cn } from "../../lib/cn";
@@ -13,6 +14,7 @@ function AddProjectDialog({ onClose }: Props) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const { addProject } = useProjectStore();
+  const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,9 +25,11 @@ function AddProjectDialog({ onClose }: Props) {
     setLoading(true);
     try {
       await addProject(trimmed);
+      toast("success", "Project cloned successfully");
       onClose();
     } catch (err) {
       setError(String(err));
+      toast("error", `Failed to clone project: ${String(err)}`);
     } finally {
       setLoading(false);
     }
