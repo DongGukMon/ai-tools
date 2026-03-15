@@ -6,6 +6,7 @@ export interface Project {
   repo: string;
   sourcePath: string;
   worktrees: Worktree[];
+  sourceDirty: boolean;
 }
 
 export interface Worktree {

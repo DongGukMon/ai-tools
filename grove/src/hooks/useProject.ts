@@ -1,23 +1,24 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { useProjectStore } from "../store/project";
-
-const SYNC_INTERVAL_MS = 5000;
+import { registerSyncJob, startSyncManager, stopSyncManager } from "../lib/sync-manager";
 
 export function useProject() {
   const store = useProjectStore();
-  const syncTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    store.loadProjects();
+    registerSyncJob(
+      "projects",
+      () => useProjectStore.getState().syncProjects(),
+      10_000,
+    );
 
-    syncTimer.current = setInterval(() => {
-      useProjectStore.getState().syncProjects();
-    }, SYNC_INTERVAL_MS);
+    // Initial load (blocking for first render)
+    store.loadProjects().then(() => {
+      startSyncManager();
+    });
 
     return () => {
-      if (syncTimer.current) {
-        clearInterval(syncTimer.current);
-      }
+      stopSyncManager();
     };
   }, []);
 

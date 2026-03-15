@@ -323,6 +323,8 @@ fn project_from_entry(entry: ProjectEntry) -> Project {
         &entry.source_path,
     );
 
+    let source_dirty = check_source_dirty(&entry.source_path);
+
     Project {
         id: entry.id,
         name: entry.name,
@@ -331,7 +333,28 @@ fn project_from_entry(entry: ProjectEntry) -> Project {
         repo: entry.repo,
         source_path: entry.source_path,
         worktrees,
+        source_dirty,
     }
+}
+
+fn check_source_dirty(source_path: &str) -> bool {
+    let path = std::path::Path::new(source_path);
+    if !path.exists() {
+        return false;
+    }
+    let repo = match git2::Repository::open(path) {
+        Ok(r) => r,
+        Err(_) => return false,
+    };
+    let statuses = match repo.statuses(Some(
+        git2::StatusOptions::new()
+            .include_untracked(true)
+            .recurse_untracked_dirs(false),
+    )) {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
+    !statuses.is_empty()
 }
 
 fn normalized_path(path: &Path) -> PathBuf {
@@ -615,6 +638,26 @@ pub fn list_worktrees_impl(project_id: &str) -> Result<Vec<Worktree>, String> {
         get_worktrees_for_project(&entry.source_path),
         &entry.source_path,
     ))
+}
+
+pub fn is_source_dirty_impl(project_id: &str) -> Result<bool, String> {
+    let entry = find_project_entry(project_id)?;
+    let source_dir = managed_source_dir(&entry)?;
+
+    if !source_dir.exists() {
+        return Ok(false);
+    }
+
+    let repo = git2::Repository::open(&source_dir).map_err(|e| e.to_string())?;
+    let statuses = repo
+        .statuses(Some(
+            git2::StatusOptions::new()
+                .include_untracked(true)
+                .recurse_untracked_dirs(true),
+        ))
+        .map_err(|e| e.to_string())?;
+
+    Ok(!statuses.is_empty())
 }
 
 pub fn refresh_project_impl(project_id: &str) -> Result<Project, String> {

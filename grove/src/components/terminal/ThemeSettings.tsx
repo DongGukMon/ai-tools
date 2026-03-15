@@ -141,7 +141,7 @@ export default function ThemeSettings({ open, onClose }: Props) {
       <div
         className={cn(
           "absolute inset-0 bg-black/20",
-          closing ? "animate-out fade-out-0 duration-200" : "animate-in fade-in-0 duration-200",
+          closing ? "animate-out fade-out-0 duration-200 fill-mode-forwards" : "animate-in fade-in-0 duration-200",
         )}
       />
 
@@ -151,7 +151,7 @@ export default function ThemeSettings({ open, onClose }: Props) {
         className={cn(
           "relative w-[340px] h-full bg-background border-l border-border shadow-lg",
           closing
-            ? "animate-out slide-out-to-right duration-200"
+            ? "animate-out slide-out-to-right duration-200 fill-mode-forwards"
             : "animate-in slide-in-from-right duration-200",
         )}
         style={{ overflowY: "overlay" as never, overscrollBehavior: "none" }}

@@ -22,6 +22,7 @@ pub struct Project {
     pub repo: String,
     pub source_path: String,
     pub worktrees: Vec<Worktree>,
+    pub source_dirty: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -131,6 +132,11 @@ fn create_project(name: String, path: String) -> Result<Project, String> {
 #[tauri::command]
 fn remove_project(id: String) -> Result<(), String> {
     git_project::remove_project_impl(&id)
+}
+
+#[tauri::command]
+fn is_source_dirty(project_id: String) -> Result<bool, String> {
+    git_project::is_source_dirty_impl(&project_id)
 }
 
 #[tauri::command]
@@ -282,6 +288,7 @@ pub fn run() {
             add_project,
             create_project,
             remove_project,
+            is_source_dirty,
             refresh_project,
             add_worktree,
             remove_worktree,

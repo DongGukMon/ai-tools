@@ -194,7 +194,7 @@ function ToastCard({ toast }: { toast: ToastItem }) {
     <div
       className={cn(toastVariants({ variant: config.variant }), {
         "animate-in fade-in-0 slide-in-from-right-full": !exiting,
-        "animate-out fade-out-80 slide-out-to-right-full": exiting,
+        "animate-out fade-out-80 slide-out-to-right-full fill-mode-forwards": exiting,
       })}
     >
       <Icon className={cn("mt-0.5 size-4 shrink-0", config.iconClassName)} />

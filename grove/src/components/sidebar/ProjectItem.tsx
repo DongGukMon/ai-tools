@@ -66,17 +66,17 @@ function ProjectItem({ project }: Props) {
     }
   };
 
-  const handleRefreshProject = async (e: React.MouseEvent) => {
+  const handleRefreshProject = (e: React.MouseEvent) => {
     e.stopPropagation();
     setConfirmingRefresh(true);
   };
 
   const confirmRefreshProject = async () => {
+    setConfirmingRefresh(false);
     setRefreshing(true);
     try {
       await refreshProject(project.id);
       toast("success", `Project '${project.repo}' refreshed`);
-      setConfirmingRefresh(false);
     } catch {
       // Toasts are handled by the command layer.
     } finally {
@@ -106,15 +106,17 @@ function ProjectItem({ project }: Props) {
           {project.org}/{project.repo}
         </span>
         <div className="ml-auto flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-          <IconButton
-            onClick={handleRefreshProject}
-            title="Refresh project source"
-            disabled={refreshing || deleting}
-          >
-            <RotateCw
-              className={cn("h-4 w-4", { "animate-spin": refreshing })}
-            />
-          </IconButton>
+          {project.sourceDirty && (
+            <IconButton
+              onClick={handleRefreshProject}
+              title="Refresh project source"
+              disabled={refreshing || deleting}
+            >
+              <RotateCw
+                className={cn("h-4 w-4", { "animate-spin": refreshing })}
+              />
+            </IconButton>
+          )}
           <IconButton
             onClick={handleRemoveProject}
             title="Remove project"
@@ -179,44 +181,23 @@ function ProjectItem({ project }: Props) {
       )}
       <Dialog
         open={confirmingRefresh}
-        onClose={() => {
-          if (!refreshing) {
-            setConfirmingRefresh(false);
-          }
-        }}
+        onClose={() => { if (!refreshing) setConfirmingRefresh(false); }}
         title="Refresh project source?"
         className="max-w-sm"
       >
         <div className="space-y-4">
           <p className="text-sm leading-relaxed text-muted-foreground">
-            Refresh will hard-sync the hidden source repo for{" "}
+            This will hard-sync the source repo for{" "}
             <span className="font-semibold text-foreground">
               {project.org}/{project.repo}
             </span>
-            .
-          </p>
-          <p className="text-xs leading-relaxed text-muted-foreground/70">
-            Local changes and untracked files inside the internal source repo will
-            be removed. Your visible worktrees are not deleted.
+            . Local changes will be removed.
           </p>
           <div className="flex justify-end gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setConfirmingRefresh(false)}
-              disabled={refreshing}
-            >
+            <Button variant="ghost" size="sm" onClick={() => setConfirmingRefresh(false)}>
               Cancel
             </Button>
-            <Button
-              type="button"
-              variant="default"
-              size="sm"
-              onClick={confirmRefreshProject}
-              disabled={refreshing}
-              className={cn({ "animate-pulse-subtle": refreshing })}
-            >
+            <Button size="sm" onClick={confirmRefreshProject} disabled={refreshing}>
               {refreshing ? "Refreshing..." : "Refresh"}
             </Button>
           </div>
