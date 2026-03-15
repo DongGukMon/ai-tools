@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 use std::process::Command;
 
+const DEFAULT_TERMINAL_FONT_FAMILY: &str =
+    "\"SF Mono\", \"Monaco\", \"Menlo\", \"Consolas\", \"Liberation Mono\", \"DejaVu Sans Mono\", \"Noto Sans Mono CJK KR\", \"Noto Sans Mono CJK SC\", \"Noto Sans Mono CJK TC\", \"Noto Sans Mono CJK JP\", monospace";
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TerminalTheme {
@@ -49,7 +52,7 @@ impl Default for TerminalTheme {
             bright_magenta: "#d49ee6".to_string(),
             bright_cyan: "#6fcfdb".to_string(),
             bright_white: "#ecf0ed".to_string(),
-            font_family: "Menlo, monospace".to_string(),
+            font_family: DEFAULT_TERMINAL_FONT_FAMILY.to_string(),
             font_size: 12.0,
         }
     }
@@ -234,7 +237,11 @@ fn read_font_settings() -> (Option<String>, Option<f64>) {
         .and_then(|o| {
             if o.status.success() {
                 let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
-                if s.is_empty() { None } else { Some(s) }
+                if s.is_empty() {
+                    None
+                } else {
+                    Some(s)
+                }
             } else {
                 None
             }
@@ -247,7 +254,10 @@ fn read_font_settings() -> (Option<String>, Option<f64>) {
         .ok()
         .and_then(|o| {
             if o.status.success() {
-                String::from_utf8_lossy(&o.stdout).trim().parse::<f64>().ok()
+                String::from_utf8_lossy(&o.stdout)
+                    .trim()
+                    .parse::<f64>()
+                    .ok()
             } else {
                 None
             }

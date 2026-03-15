@@ -9,6 +9,30 @@ import type {
   FileDiff,
 } from "../types";
 
+export function getCommandErrorMessage(error: unknown): string {
+  const raw =
+    typeof error === "string"
+      ? error
+      : error instanceof Error
+        ? error.message
+        : String(error);
+  const message = sanitizeCommandErrorMessage(raw);
+  return message || "Unknown error";
+}
+
+function sanitizeCommandErrorMessage(message: string): string {
+  return message
+    .replace(/^Error invoking command '[^']+':\s*/i, "")
+    .replace(/^Error:\s*/i, "")
+    .replace(/Cloning into '[^']+'\.{3}/g, "Cloning repository...")
+    .replace(/(https?:\/\/)([^@\s/]+(?::[^@\s/]+)?@)/gi, "$1***@")
+    .replace(
+      /(^|[\s('"])(\/(?:Users|home|private|tmp|var|Volumes)[^'"\s)\n]*)/g,
+      "$1[path]",
+    )
+    .trim();
+}
+
 // === CONFIG/THEME COMMANDS (W1) ===
 
 export async function getTerminalTheme(): Promise<TerminalTheme> {
@@ -52,6 +76,10 @@ export async function createProject(
 
 export async function removeProject(id: string): Promise<void> {
   return invoke("remove_project", { id });
+}
+
+export async function refreshProject(projectId: string): Promise<Project> {
+  return invoke<Project>("refresh_project", { projectId });
 }
 
 export async function addWorktree(

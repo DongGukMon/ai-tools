@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { FileStatus, CommitInfo, FileDiff } from "../types";
 import * as tauri from "../lib/tauri";
+import { runCommandSafely } from "../lib/command";
 
 interface DiffState {
   commits: CommitInfo[];
@@ -63,33 +64,35 @@ export const useDiffStore = create<DiffState>((set, get) => ({
   loadStatus: async () => {
     const wp = get().worktreePath;
     if (!wp) return;
-    try {
-      const fileStatuses = await tauri.getStatus(wp);
+    const fileStatuses = await runCommandSafely(() => tauri.getStatus(wp), {
+      errorToast: false,
+    });
+    if (fileStatuses) {
       set({ fileStatuses });
-    } catch {
-      /* ignore */
     }
   },
 
   loadCommits: async () => {
     const wp = get().worktreePath;
     if (!wp) return;
-    try {
-      const commits = await tauri.getCommits(wp, 50);
+    const commits = await runCommandSafely(() => tauri.getCommits(wp, 50), {
+      errorToast: false,
+    });
+    if (commits) {
       set({ commits });
-    } catch {
-      /* ignore */
     }
   },
 
   loadWorkingDiff: async (path, staged = false) => {
     const wp = get().worktreePath;
     if (!wp) return;
-    try {
-      const queryPath = staged ? `staged:${path}` : path;
-      const diff = await tauri.getWorkingDiff(wp, queryPath);
+    const queryPath = staged ? `staged:${path}` : path;
+    const diff = await runCommandSafely(() => tauri.getWorkingDiff(wp, queryPath), {
+      errorToast: false,
+    });
+    if (diff) {
       set({ currentDiff: diff, selectedLines: new Set() });
-    } catch {
+    } else {
       set({ currentDiff: null });
     }
   },
@@ -97,15 +100,17 @@ export const useDiffStore = create<DiffState>((set, get) => ({
   loadCommitDiff: async (hash) => {
     const wp = get().worktreePath;
     if (!wp) return;
-    try {
-      const diffs = await tauri.getCommitDiff(wp, hash);
+    const diffs = await runCommandSafely(() => tauri.getCommitDiff(wp, hash), {
+      errorToast: false,
+    });
+    if (diffs) {
       set({
         commitDiffs: diffs,
         currentDiff: diffs[0] ?? null,
         selectedFile: diffs[0]?.path ?? null,
         selectedLines: new Set(),
       });
-    } catch {
+    } else {
       set({ currentDiff: null });
     }
   },
@@ -161,6 +166,13 @@ export const useDiffStore = create<DiffState>((set, get) => ({
 }));
 
 function createMutationActions() {
+  const runMutation = async (
+    action: () => Promise<void>,
+    errorToast: string,
+  ) => {
+    await runCommandSafely(action, { errorToast });
+  };
+
   const refresh = async () => {
     const state = useDiffStore.getState();
     await state.loadStatus();
@@ -173,38 +185,50 @@ function createMutationActions() {
     stageFile: async (path: string) => {
       const wp = useDiffStore.getState().worktreePath;
       if (!wp) return;
-      await tauri.stageFile(wp, path);
-      await refresh();
+      await runMutation(async () => {
+        await tauri.stageFile(wp, path);
+        await refresh();
+      }, "Failed to stage file");
     },
     unstageFile: async (path: string) => {
       const wp = useDiffStore.getState().worktreePath;
       if (!wp) return;
-      await tauri.unstageFile(wp, path);
-      await refresh();
+      await runMutation(async () => {
+        await tauri.unstageFile(wp, path);
+        await refresh();
+      }, "Failed to unstage file");
     },
     discardFile: async (path: string) => {
       const wp = useDiffStore.getState().worktreePath;
       if (!wp) return;
-      await tauri.discardFile(wp, path);
-      await refresh();
+      await runMutation(async () => {
+        await tauri.discardFile(wp, path);
+        await refresh();
+      }, "Failed to discard file");
     },
     stageHunk: async (path: string, hunkIndex: number) => {
       const wp = useDiffStore.getState().worktreePath;
       if (!wp) return;
-      await tauri.stageHunk(wp, path, hunkIndex);
-      await refresh();
+      await runMutation(async () => {
+        await tauri.stageHunk(wp, path, hunkIndex);
+        await refresh();
+      }, "Failed to stage hunk");
     },
     unstageHunk: async (path: string, hunkIndex: number) => {
       const wp = useDiffStore.getState().worktreePath;
       if (!wp) return;
-      await tauri.unstageHunk(wp, path, hunkIndex);
-      await refresh();
+      await runMutation(async () => {
+        await tauri.unstageHunk(wp, path, hunkIndex);
+        await refresh();
+      }, "Failed to unstage hunk");
     },
     discardHunk: async (path: string, hunkIndex: number) => {
       const wp = useDiffStore.getState().worktreePath;
       if (!wp) return;
-      await tauri.discardHunk(wp, path, hunkIndex);
-      await refresh();
+      await runMutation(async () => {
+        await tauri.discardHunk(wp, path, hunkIndex);
+        await refresh();
+      }, "Failed to discard hunk");
     },
     stageLines: async (
       path: string,
@@ -213,8 +237,10 @@ function createMutationActions() {
     ) => {
       const wp = useDiffStore.getState().worktreePath;
       if (!wp) return;
-      await tauri.stageLines(wp, path, hunkIndex, lineIndices);
-      await refresh();
+      await runMutation(async () => {
+        await tauri.stageLines(wp, path, hunkIndex, lineIndices);
+        await refresh();
+      }, "Failed to stage selected lines");
     },
     unstageLines: async (
       path: string,
@@ -223,8 +249,10 @@ function createMutationActions() {
     ) => {
       const wp = useDiffStore.getState().worktreePath;
       if (!wp) return;
-      await tauri.unstageLines(wp, path, hunkIndex, lineIndices);
-      await refresh();
+      await runMutation(async () => {
+        await tauri.unstageLines(wp, path, hunkIndex, lineIndices);
+        await refresh();
+      }, "Failed to unstage selected lines");
     },
     discardLines: async (
       path: string,
@@ -233,8 +261,10 @@ function createMutationActions() {
     ) => {
       const wp = useDiffStore.getState().worktreePath;
       if (!wp) return;
-      await tauri.discardLines(wp, path, hunkIndex, lineIndices);
-      await refresh();
+      await runMutation(async () => {
+        await tauri.discardLines(wp, path, hunkIndex, lineIndices);
+        await refresh();
+      }, "Failed to discard selected lines");
     },
   };
 }

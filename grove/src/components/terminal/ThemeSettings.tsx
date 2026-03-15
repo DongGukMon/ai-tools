@@ -7,6 +7,8 @@ import {
 } from "../../lib/terminal-themes";
 import { useTerminalStore } from "../../store/terminal";
 import { saveAppConfig, getAppConfig } from "../../lib/tauri";
+import { runCommandSafely } from "../../lib/command";
+import { cn } from "../../lib/cn";
 import type { TerminalTheme } from "../../types";
 
 interface Props {
@@ -77,12 +79,12 @@ export default function ThemeSettings({ open, onClose }: Props) {
   const handleApply = useCallback(async () => {
     if (!draft) return;
     loadTheme(draft);
-    try {
+    await runCommandSafely(async () => {
       const config = await getAppConfig();
       await saveAppConfig({ ...config, terminalTheme: draft });
-    } catch (e) {
-      console.error("Failed to save theme config:", e);
-    }
+    }, {
+      errorToast: "Failed to save terminal theme",
+    });
   }, [draft, loadTheme]);
 
   const handleReset = useCallback(() => {
@@ -141,11 +143,12 @@ export default function ThemeSettings({ open, onClose }: Props) {
                   <button
                     key={key}
                     onClick={() => selectPreset(key)}
-                    className={`flex items-center gap-2 px-2.5 py-2 rounded-[var(--radius-md)] border text-left transition-colors ${
+                    className={cn(
+                      "flex items-center gap-2 px-2.5 py-2 rounded-[var(--radius-md)] border text-left transition-colors",
                       activePreset === key
                         ? "border-[var(--color-primary)] bg-[var(--color-primary-light)]"
-                        : "border-[var(--color-border)] hover:border-[var(--color-primary-border)] hover:bg-[var(--color-bg-secondary)]"
-                    }`}
+                        : "border-[var(--color-border)] hover:border-[var(--color-primary-border)] hover:bg-[var(--color-bg-secondary)]",
+                    )}
                   >
                     <div
                       className="w-5 h-5 rounded-[3px] border border-[var(--color-border)] shrink-0"

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useProjectStore } from "../../store/project";
 import { useToast } from "../../store/toast";
+import { getCommandErrorMessage } from "../../lib/tauri";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
 import { cn } from "../../lib/cn";
@@ -28,8 +29,7 @@ function AddProjectDialog({ onClose }: Props) {
       toast("success", "Project cloned successfully");
       onClose();
     } catch (err) {
-      setError(String(err));
-      toast("error", `Failed to clone project: ${String(err)}`);
+      setError(getCommandErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -40,7 +40,7 @@ function AddProjectDialog({ onClose }: Props) {
       <form onSubmit={handleSubmit}>
         <Input
           type="text"
-          placeholder="https://github.com/org/repo.git"
+          placeholder="https://github.com/org/repo.git or git@github.com:org/repo.git"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           autoFocus
@@ -50,6 +50,9 @@ function AddProjectDialog({ onClose }: Props) {
             if (e.key === "Escape") onClose();
           }}
         />
+        <div className="text-[11px] text-[var(--color-text-tertiary)] mb-2 leading-relaxed">
+          Supports HTTPS and SSH Git URLs.
+        </div>
         {loading && (
           <div className="text-[11px] text-[var(--color-text-muted)] mb-2 animate-pulse">
             Cloning repository...

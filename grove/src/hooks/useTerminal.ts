@@ -1,14 +1,17 @@
 import { useTerminalStore } from "../store/terminal";
 import { countLeaves, assignPtyIds } from "../lib/split-tree";
-import {
-  createPty as ipcCreatePty,
-  closePty as ipcClosePty,
-} from "../lib/tauri";
+import { createPty as ipcCreatePty, closePty as ipcClosePty } from "../lib/tauri";
+import { runCommand, runCommandSafely } from "../lib/command";
 
 export function useTerminal() {
   const store = useTerminalStore();
 
   const createTerminal = async (worktreePath: string) => {
+    const createPty = (ptyId: string) =>
+      runCommand(() => ipcCreatePty(ptyId, worktreePath, 80, 24), {
+        errorToast: false,
+      });
+
     // Check for saved layout
     const savedLayout = store.getSavedLayout(worktreePath);
     if (savedLayout) {
@@ -17,7 +20,7 @@ export function useTerminal() {
       // Create PTYs for each leaf
       for (let i = 0; i < leafCount; i++) {
         const ptyId = crypto.randomUUID();
-        await ipcCreatePty(ptyId, worktreePath, 80, 24);
+        await createPty(ptyId);
         ptyIds.push(ptyId);
       }
       const restored = assignPtyIds(structuredClone(savedLayout), [...ptyIds]);
@@ -27,7 +30,7 @@ export function useTerminal() {
 
     // No saved layout — single terminal
     const ptyId = crypto.randomUUID();
-    await ipcCreatePty(ptyId, worktreePath, 80, 24);
+    await createPty(ptyId);
     store.createSession(worktreePath, ptyId);
     return ptyId;
   };
@@ -36,15 +39,24 @@ export function useTerminal() {
     const { activeWorktree, focusedPtyId } = useTerminalStore.getState();
     if (!activeWorktree || !focusedPtyId) return;
     const newPtyId = crypto.randomUUID();
-    await ipcCreatePty(newPtyId, activeWorktree, 80, 24);
-    store.splitTerminal(activeWorktree, focusedPtyId, direction, newPtyId);
+    const created = await runCommandSafely(async () => {
+      await ipcCreatePty(newPtyId, activeWorktree, 80, 24);
+      return true;
+    }, {
+      errorToast: "Failed to split terminal",
+    });
+    if (created) {
+      store.splitTerminal(activeWorktree, focusedPtyId, direction, newPtyId);
+    }
   };
 
   const closeCurrent = async () => {
     const { activeWorktree, focusedPtyId } = useTerminalStore.getState();
     if (!activeWorktree || !focusedPtyId) return;
     store.closeTerminal(activeWorktree, focusedPtyId);
-    await ipcClosePty(focusedPtyId);
+    await runCommandSafely(() => ipcClosePty(focusedPtyId), {
+      errorToast: "Failed to close terminal",
+    });
   };
 
   return {

@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { Project, Worktree } from "../types";
 import * as tauri from "../lib/tauri";
+import { runCommand, runCommandSafely } from "../lib/command";
 
 interface ProjectState {
   projects: Project[];
@@ -9,11 +10,67 @@ interface ProjectState {
 
   loadProjects: () => Promise<void>;
   syncProjects: () => Promise<void>;
+  refreshProject: (id: string) => Promise<Project>;
   addProject: (url: string) => Promise<Project>;
   removeProject: (id: string) => Promise<void>;
   addWorktree: (projectId: string, name: string) => Promise<Worktree>;
   removeWorktree: (projectId: string, name: string) => Promise<void>;
   selectWorktree: (worktree: Worktree | null) => void;
+}
+
+function normalizeProjectUrl(url: string): string {
+  return url.trim().replace(/\/+$/, "").replace(/\.git$/, "");
+}
+
+function sameProjectIdentity(left: Project, right: Project): boolean {
+  return (
+    left.id === right.id ||
+    left.sourcePath === right.sourcePath ||
+    normalizeProjectUrl(left.url) === normalizeProjectUrl(right.url)
+  );
+}
+
+function upsertProject(projects: Project[], project: Project): Project[] {
+  let replaced = false;
+  const nextProjects = projects.map((existing) => {
+    if (sameProjectIdentity(existing, project)) {
+      replaced = true;
+      return project;
+    }
+    return existing;
+  });
+
+  return replaced ? nextProjects : [...nextProjects, project];
+}
+
+function sameWorktreeValue(left: Worktree, right: Worktree): boolean {
+  return (
+    left.path === right.path &&
+    left.name === right.name &&
+    left.branch === right.branch
+  );
+}
+
+function reconcileSelectedWorktree(
+  projects: Project[],
+  selectedWorktree: Worktree | null,
+): Worktree | null {
+  if (!selectedWorktree) {
+    return null;
+  }
+
+  for (const project of projects) {
+    const match = project.worktrees.find(
+      (worktree) => worktree.path === selectedWorktree.path,
+    );
+    if (match) {
+      return sameWorktreeValue(match, selectedWorktree)
+        ? selectedWorktree
+        : match;
+    }
+  }
+
+  return null;
 }
 
 export const useProjectStore = create<ProjectState>((set) => ({
@@ -24,49 +81,85 @@ export const useProjectStore = create<ProjectState>((set) => ({
   loadProjects: async () => {
     set({ loading: true });
     try {
-      const projects = await tauri.listProjects();
-      set({ projects });
+      const projects = await runCommandSafely(() => tauri.listProjects(), {
+        errorToast: "Failed to load projects",
+      });
+      if (projects) {
+        set((state) => ({
+          projects,
+          selectedWorktree: reconcileSelectedWorktree(
+            projects,
+            state.selectedWorktree,
+          ),
+        }));
+      }
     } finally {
       set({ loading: false });
     }
   },
 
   syncProjects: async () => {
-    try {
-      const projects = await tauri.listProjects();
-      set({ projects });
-    } catch {
-      // Silent fail — background sync should not disrupt the UI
+    const projects = await runCommandSafely(() => tauri.listProjects(), {
+      errorToast: false,
+    });
+    if (projects) {
+      set((state) => ({
+        projects,
+        selectedWorktree: reconcileSelectedWorktree(
+          projects,
+          state.selectedWorktree,
+        ),
+      }));
     }
   },
 
+  refreshProject: async (id: string) => {
+    const project = await runCommand(() => tauri.refreshProject(id), {
+      errorToast: "Failed to refresh project",
+    });
+    set((state) => ({
+      projects: upsertProject(state.projects, project),
+      selectedWorktree: reconcileSelectedWorktree(
+        upsertProject(state.projects, project),
+        state.selectedWorktree,
+      ),
+    }));
+    return project;
+  },
+
   addProject: async (url: string) => {
-    const project = await tauri.addProject(url);
-    set((state) => ({ projects: [...state.projects, project] }));
+    const project = await runCommand(() => tauri.addProject(url), {
+      errorToast: "Failed to add project",
+    });
+    set((state) => ({ projects: upsertProject(state.projects, project) }));
     return project;
   },
 
   removeProject: async (id: string) => {
-    await tauri.removeProject(id);
+    await runCommand(() => tauri.removeProject(id), {
+      errorToast: "Failed to remove project",
+    });
     set((state) => ({
       projects: state.projects.filter((p) => p.id !== id),
-      selectedWorktree:
-        state.selectedWorktree &&
-        state.projects
-          .find((p) => p.id === id)
-          ?.worktrees.some((w) => w.path === state.selectedWorktree?.path)
-          ? null
-          : state.selectedWorktree,
+      selectedWorktree: reconcileSelectedWorktree(
+        state.projects.filter((p) => p.id !== id),
+        state.selectedWorktree,
+      ),
     }));
   },
 
   addWorktree: async (projectId: string, name: string) => {
-    const { projects } = useProjectStore.getState();
-    const project = projects.find((p) => p.id === projectId);
-    if (project?.worktrees.some((w) => w.name === name)) {
-      throw new Error(`Worktree '${name}' already exists`);
-    }
-    const worktree = await tauri.addWorktree(projectId, name, name);
+    const worktree = await runCommand(async () => {
+      const { projects } = useProjectStore.getState();
+      const project = projects.find((p) => p.id === projectId);
+      if (project?.worktrees.some((w) => w.name === name)) {
+        throw new Error(`Worktree '${name}' already exists`);
+      }
+
+      return tauri.addWorktree(projectId, name, name);
+    }, {
+      errorToast: "Failed to create worktree",
+    });
     set((state) => ({
       projects: state.projects.map((p) =>
         p.id === projectId
@@ -78,15 +171,23 @@ export const useProjectStore = create<ProjectState>((set) => ({
   },
 
   removeWorktree: async (projectId: string, name: string) => {
-    await tauri.removeWorktree(projectId, name);
+    await runCommand(() => tauri.removeWorktree(projectId, name), {
+      errorToast: "Failed to remove worktree",
+    });
     set((state) => ({
       projects: state.projects.map((p) =>
         p.id === projectId
           ? { ...p, worktrees: p.worktrees.filter((w) => w.name !== name) }
           : p,
       ),
-      selectedWorktree:
-        state.selectedWorktree?.name === name ? null : state.selectedWorktree,
+      selectedWorktree: reconcileSelectedWorktree(
+        state.projects.map((p) =>
+          p.id === projectId
+            ? { ...p, worktrees: p.worktrees.filter((w) => w.name !== name) }
+            : p,
+        ),
+        state.selectedWorktree,
+      ),
     }));
   },
 

@@ -93,11 +93,7 @@ pub fn get_commits_impl(worktree_path: &str, limit: u32) -> Result<Vec<CommitInf
 
         let hash = oid.to_string();
         let short_hash = hash[..7.min(hash.len())].to_string();
-        let message = commit
-            .message()
-            .unwrap_or("")
-            .trim_end()
-            .to_string();
+        let message = commit.message().unwrap_or("").trim_end().to_string();
         let author = commit.author().name().unwrap_or("Unknown").to_string();
         let date = commit.time().seconds().to_string();
 

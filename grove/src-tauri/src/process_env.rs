@@ -1,5 +1,6 @@
 use std::env;
 use std::process::Command;
+use std::sync::OnceLock;
 
 fn normalize_env_value(value: Option<String>) -> Option<String> {
     value.and_then(|value| {
@@ -36,9 +37,22 @@ where
     env_value.or_else(fallback)
 }
 
+#[cfg(target_os = "macos")]
+fn cached_launchctl_ssh_auth_sock() -> Option<String> {
+    static SSH_AUTH_SOCK: OnceLock<Option<String>> = OnceLock::new();
+    SSH_AUTH_SOCK
+        .get_or_init(|| launchctl_getenv("SSH_AUTH_SOCK"))
+        .clone()
+}
+
+#[cfg(not(target_os = "macos"))]
+fn cached_launchctl_ssh_auth_sock() -> Option<String> {
+    None
+}
+
 pub fn preferred_ssh_auth_sock() -> Option<String> {
     resolve_with(normalize_env_value(env::var("SSH_AUTH_SOCK").ok()), || {
-        launchctl_getenv("SSH_AUTH_SOCK")
+        cached_launchctl_ssh_auth_sock()
     })
 }
 

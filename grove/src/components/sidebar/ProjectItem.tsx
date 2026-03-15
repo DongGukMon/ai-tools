@@ -1,10 +1,18 @@
 import { useState } from "react";
-import { ChevronRight, ChevronDown, X, Plus, GitFork } from "lucide-react";
+import {
+  ChevronRight,
+  ChevronDown,
+  X,
+  Plus,
+  GitFork,
+  RotateCw,
+} from "lucide-react";
 import type { Project } from "../../types";
 import { useProjectStore } from "../../store/project";
 import { useToast } from "../../store/toast";
 import WorktreeItem from "./WorktreeItem";
 import { Button } from "../ui/button";
+import { Dialog } from "../ui/dialog";
 import { cn } from "../../lib/cn";
 
 interface Props {
@@ -15,8 +23,12 @@ function ProjectItem({ project }: Props) {
   const [expanded, setExpanded] = useState(true);
   const [adding, setAdding] = useState(false);
   const [addingLoading, setAddingLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [confirmingRefresh, setConfirmingRefresh] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [worktreeName, setWorktreeName] = useState("");
-  const { addWorktree, removeProject } = useProjectStore();
+  const { addWorktree, removeProject, refreshProject } = useProjectStore();
   const { toast } = useToast();
 
   const handleAddWorktree = async (e: React.FormEvent) => {
@@ -29,8 +41,8 @@ function ProjectItem({ project }: Props) {
       toast("success", `Worktree '${name}' created`);
       setWorktreeName("");
       setAdding(false);
-    } catch (err) {
-      toast("error", `Failed to create worktree: ${String(err)}`);
+    } catch {
+      // Toasts are handled by the command layer.
     } finally {
       setAddingLoading(false);
     }
@@ -38,10 +50,37 @@ function ProjectItem({ project }: Props) {
 
   const handleRemoveProject = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    setConfirmingDelete(true);
+  };
+
+  const confirmRemoveProject = async () => {
+    setDeleting(true);
     try {
       await removeProject(project.id);
-    } catch (err) {
-      console.error("Failed to remove project:", err);
+      toast("success", `Project '${project.repo}' removed`);
+      setConfirmingDelete(false);
+    } catch {
+      // Toasts are handled by the command layer.
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleRefreshProject = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setConfirmingRefresh(true);
+  };
+
+  const confirmRefreshProject = async () => {
+    setRefreshing(true);
+    try {
+      await refreshProject(project.id);
+      toast("success", `Project '${project.repo}' refreshed`);
+      setConfirmingRefresh(false);
+    } catch {
+      // Toasts are handled by the command layer.
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -62,9 +101,24 @@ function ProjectItem({ project }: Props) {
         <Button
           variant="ghost"
           size="icon"
+          className="w-[20px] h-[20px] rounded-md opacity-0 group-hover:opacity-100 text-[#9ca3af] hover:text-[var(--color-primary)] hover:bg-white"
+          onClick={handleRefreshProject}
+          title="Refresh project source"
+          disabled={refreshing || deleting}
+        >
+          <RotateCw
+            size={12}
+            strokeWidth={2}
+            className={cn(refreshing && "animate-spin")}
+          />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
           className="w-[20px] h-[20px] rounded-md opacity-0 group-hover:opacity-100 text-[#9ca3af] hover:text-[var(--color-danger)] hover:bg-[var(--color-danger-bg)]"
           onClick={handleRemoveProject}
           title="Remove project"
+          disabled={refreshing}
         >
           <X size={12} strokeWidth={2} />
         </Button>
@@ -128,6 +182,95 @@ function ProjectItem({ project }: Props) {
           )}
         </div>
       )}
+      <Dialog
+        open={confirmingRefresh}
+        onClose={() => {
+          if (!refreshing) {
+            setConfirmingRefresh(false);
+          }
+        }}
+        title="Refresh project source?"
+        className="max-w-sm"
+      >
+        <div className="space-y-4">
+          <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
+            Refresh will hard-sync the hidden source repo for{" "}
+            <span className="font-semibold text-[var(--color-text)]">
+              {project.org}/{project.repo}
+            </span>
+            .
+          </p>
+          <p className="text-[12px] leading-relaxed text-[var(--color-text-tertiary)]">
+            Local changes and untracked files inside the internal source repo will
+            be removed. Your visible worktrees are not deleted.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setConfirmingRefresh(false)}
+              disabled={refreshing}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="default"
+              size="sm"
+              onClick={confirmRefreshProject}
+              disabled={refreshing}
+              className={cn(refreshing && "animate-pulse-subtle")}
+            >
+              {refreshing ? "Refreshing..." : "Refresh"}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+      <Dialog
+        open={confirmingDelete}
+        onClose={() => {
+          if (!deleting) {
+            setConfirmingDelete(false);
+          }
+        }}
+        title="Remove project?"
+        className="max-w-sm"
+      >
+        <div className="space-y-4">
+          <p className="text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
+            <span className="font-semibold text-[var(--color-text)]">
+              {project.org}/{project.repo}
+            </span>{" "}
+            project folder and all worktrees will be deleted.
+          </p>
+          <p className="text-[12px] leading-relaxed text-[var(--color-text-tertiary)]">
+            This removes the hidden source repository too. Use refresh if you only
+            want to sync the project.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setConfirmingDelete(false)}
+              disabled={deleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={confirmRemoveProject}
+              disabled={deleting}
+              className={cn(deleting && "animate-pulse-subtle")}
+            >
+              {deleting ? "Removing..." : "Delete project"}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
     </div>
   );
 }

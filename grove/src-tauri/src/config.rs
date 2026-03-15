@@ -171,8 +171,8 @@ mod tests {
         ProjectEntry {
             id: "project-1".into(),
             name: "grove".into(),
-            url: "https://github.com/sendbird/grove.git".into(),
-            org: "sendbird".into(),
+            url: "https://github.com/bang9/grove.git".into(),
+            org: "bang9".into(),
             repo: "grove".into(),
             source_path: "/tmp/grove/source".into(),
         }
@@ -188,8 +188,8 @@ mod tests {
     {
       "id": "project-1",
       "name": "grove",
-      "url": "https://github.com/sendbird/grove.git",
-      "org": "sendbird",
+      "url": "https://github.com/bang9/grove.git",
+      "org": "bang9",
       "repo": "grove",
       "source_path": "/tmp/grove/source"
     }
@@ -296,8 +296,8 @@ mod tests {
     {
       "id": "project-1",
       "name": "grove",
-      "url": "https://github.com/sendbird/grove.git",
-      "org": "sendbird",
+      "url": "https://github.com/bang9/grove.git",
+      "org": "bang9",
       "repo": "grove",
       "source_path": "/tmp/grove/source"
     }

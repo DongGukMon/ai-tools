@@ -4,7 +4,6 @@ import type { Worktree } from "../../types";
 import { useProjectStore } from "../../store/project";
 import { useToast } from "../../store/toast";
 import { Button } from "../ui/button";
-import { Badge } from "../ui/badge";
 import { cn } from "../../lib/cn";
 
 interface Props {
@@ -18,7 +17,6 @@ function WorktreeItem({ worktree, projectId }: Props) {
     useProjectStore();
   const { toast } = useToast();
   const isSelected = selectedWorktree?.path === worktree.path;
-  const isSource = worktree.name === "source";
 
   const handleRemove = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -26,15 +24,12 @@ function WorktreeItem({ worktree, projectId }: Props) {
     try {
       await removeWorktree(projectId, worktree.name);
       toast("success", `Worktree '${worktree.name}' removed`);
-    } catch (err) {
+    } catch {
       setRemoving(false);
-      toast("error", `Failed to remove worktree: ${String(err)}`);
     }
   };
 
   const displayName = worktree.branch || worktree.name;
-  // Show "main" with a special indicator for the source worktree
-  const label = isSource ? `${displayName}` : displayName;
 
   return (
     <div
@@ -54,36 +49,22 @@ function WorktreeItem({ worktree, projectId }: Props) {
         className={cn("shrink-0", isSelected ? "text-[var(--color-primary)]" : "text-[#9ca3af]")}
       />
       <span className={cn("min-w-0 flex-1 text-[13px] truncate", isSelected ? "font-semibold" : "font-medium")}>
-        {label}
+        {displayName}
       </span>
-      {isSource && (
-        <Badge
-          variant={isSelected ? "default" : "secondary"}
-          className={cn(
-            isSelected
-              ? "bg-[var(--color-primary-light)] text-[var(--color-primary)]"
-              : "bg-[#f0f1f3] text-[#9ca3af]"
-          )}
-        >
-          src
-        </Badge>
-      )}
-      {!isSource && (
-        <Button
-          variant="ghost"
-          size="icon"
-          className={cn(
-            "w-[18px] h-[18px] rounded-md",
-            isSelected
-              ? "opacity-50 hover:opacity-100 text-[var(--color-primary)] hover:text-[var(--color-danger)] hover:bg-[var(--color-danger-bg)]"
-              : "opacity-0 group-hover:opacity-100 text-[#9ca3af] hover:text-[var(--color-danger)] hover:bg-[var(--color-danger-bg)]"
-          )}
-          onClick={handleRemove}
-          title="Remove worktree"
-        >
-          <X size={11} strokeWidth={2} />
-        </Button>
-      )}
+      <Button
+        variant="ghost"
+        size="icon"
+        className={cn(
+          "w-[18px] h-[18px] rounded-md",
+          isSelected
+            ? "opacity-50 hover:opacity-100 text-[var(--color-primary)] hover:text-[var(--color-danger)] hover:bg-[var(--color-danger-bg)]"
+            : "opacity-0 group-hover:opacity-100 text-[#9ca3af] hover:text-[var(--color-danger)] hover:bg-[var(--color-danger-bg)]"
+        )}
+        onClick={handleRemove}
+        title="Remove worktree"
+      >
+        <X size={11} strokeWidth={2} />
+      </Button>
     </div>
   );
 }

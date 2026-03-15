@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useTerminalStore } from "../../store/terminal";
 import { useProjectStore } from "../../store/project";
-import { getTerminalTheme, getAppConfig } from "../../lib/tauri";
+import { getTerminalTheme, getAppConfig, getCommandErrorMessage } from "../../lib/tauri";
+import { runCommand } from "../../lib/command";
 import { useTerminal } from "../../hooks/useTerminal";
 import SplitContainer from "./SplitContainer";
 import TerminalToolbar from "./TerminalToolbar";
@@ -21,14 +22,20 @@ export default function TerminalPanel() {
     async function init() {
       try {
         await useTerminalStore.getState().initLayouts();
-        const config = await getAppConfig();
+        const config = await runCommand(() => getAppConfig(), {
+          errorToast: false,
+        });
         // Use saved theme override if available, otherwise detect
         if (config.terminalTheme) {
-          const detected = await getTerminalTheme();
+          const detected = await runCommand(() => getTerminalTheme(), {
+            errorToast: false,
+          });
           // Merge: saved theme takes precedence, fill gaps from detected
           loadTheme({ ...detected, ...config.terminalTheme });
         } else {
-          const t = await getTerminalTheme();
+          const t = await runCommand(() => getTerminalTheme(), {
+            errorToast: false,
+          });
           loadTheme(t);
         }
         if (!useTerminalStore.getState().activeWorktree) {
@@ -36,7 +43,7 @@ export default function TerminalPanel() {
           setActiveWorktree(home || "/tmp");
         }
       } catch (e) {
-        setError(String(e));
+        setError(getCommandErrorMessage(e));
       }
     }
     init();
@@ -44,16 +51,16 @@ export default function TerminalPanel() {
 
   // Sync sidebar -> terminal
   useEffect(() => {
-    if (selectedWorktree?.path) {
-      setActiveWorktree(selectedWorktree.path);
-    }
-  }, [selectedWorktree?.path]);
+    setActiveWorktree(selectedWorktree?.path ?? null);
+  }, [selectedWorktree?.path, setActiveWorktree]);
 
   // Create session for new worktree
   useEffect(() => {
     if (!activeWorktree || !theme) return;
     if (sessions[activeWorktree]) return;
-    createTerminal(activeWorktree).catch((e) => setError(String(e)));
+    createTerminal(activeWorktree).catch((e) => {
+      setError(getCommandErrorMessage(e));
+    });
   }, [activeWorktree, theme]);
 
   if (error) {
@@ -82,7 +89,7 @@ export default function TerminalPanel() {
     <div className="flex flex-col h-full bg-[var(--color-bg)]">
       <TerminalToolbar />
       <div className="flex-1 relative overflow-hidden">
-        {sessionEntries.length === 0 ? (
+        {!activeWorktree ? (
           <div className="flex items-center justify-center h-full text-[13px] text-[var(--color-text-tertiary)]">
             Select a worktree to open terminal
           </div>

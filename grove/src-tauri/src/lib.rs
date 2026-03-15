@@ -132,6 +132,11 @@ fn remove_project(id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn refresh_project(project_id: String) -> Result<Project, String> {
+    git_project::refresh_project_impl(&project_id)
+}
+
+#[tauri::command]
 fn add_worktree(project_id: String, name: String, _branch: String) -> Result<Worktree, String> {
     git_project::add_worktree_impl(&project_id, &name)
 }
@@ -149,7 +154,13 @@ fn list_worktrees(project_id: String) -> Result<Vec<Worktree>, String> {
 // === PTY COMMANDS (W3) ===
 
 #[tauri::command]
-fn create_pty(app_handle: tauri::AppHandle, id: String, cwd: String, cols: u16, rows: u16) -> Result<(), String> {
+fn create_pty(
+    app_handle: tauri::AppHandle,
+    id: String,
+    cwd: String,
+    cols: u16,
+    rows: u16,
+) -> Result<(), String> {
     pty::create(app_handle, id, cwd, cols, rows)
 }
 
@@ -267,6 +278,7 @@ pub fn run() {
             add_project,
             create_project,
             remove_project,
+            refresh_project,
             add_worktree,
             remove_worktree,
             list_worktrees,

@@ -1,4 +1,5 @@
 import type { TerminalTheme } from "../types";
+import { DEFAULT_TERMINAL_FONT_FAMILY } from "./terminal-fonts";
 
 export const terminalThemes: Record<string, TerminalTheme> = {
   "grove-dark": {
@@ -21,7 +22,7 @@ export const terminalThemes: Record<string, TerminalTheme> = {
     brightMagenta: "#d49ee6",
     brightCyan: "#6fcfdb",
     brightWhite: "#ecf0ed",
-    fontFamily: "Menlo, monospace",
+    fontFamily: DEFAULT_TERMINAL_FONT_FAMILY,
     fontSize: 12,
   },
   "one-dark": {
@@ -44,7 +45,7 @@ export const terminalThemes: Record<string, TerminalTheme> = {
     brightMagenta: "#c678dd",
     brightCyan: "#56b6c2",
     brightWhite: "#ffffff",
-    fontFamily: "Menlo, monospace",
+    fontFamily: DEFAULT_TERMINAL_FONT_FAMILY,
     fontSize: 12,
   },
   "solarized-dark": {
@@ -67,7 +68,7 @@ export const terminalThemes: Record<string, TerminalTheme> = {
     brightMagenta: "#6c71c4",
     brightCyan: "#93a1a1",
     brightWhite: "#fdf6e3",
-    fontFamily: "Menlo, monospace",
+    fontFamily: DEFAULT_TERMINAL_FONT_FAMILY,
     fontSize: 12,
   },
   dracula: {
@@ -90,7 +91,7 @@ export const terminalThemes: Record<string, TerminalTheme> = {
     brightMagenta: "#ff92df",
     brightCyan: "#a4ffff",
     brightWhite: "#ffffff",
-    fontFamily: "Menlo, monospace",
+    fontFamily: DEFAULT_TERMINAL_FONT_FAMILY,
     fontSize: 12,
   },
   "github-dark": {
@@ -113,7 +114,7 @@ export const terminalThemes: Record<string, TerminalTheme> = {
     brightMagenta: "#d2a8ff",
     brightCyan: "#56d4dd",
     brightWhite: "#f0f6fc",
-    fontFamily: "Menlo, monospace",
+    fontFamily: DEFAULT_TERMINAL_FONT_FAMILY,
     fontSize: 12,
   },
   light: {
@@ -136,7 +137,7 @@ export const terminalThemes: Record<string, TerminalTheme> = {
     brightMagenta: "#a475f9",
     brightCyan: "#3192aa",
     brightWhite: "#8c959f",
-    fontFamily: "Menlo, monospace",
+    fontFamily: DEFAULT_TERMINAL_FONT_FAMILY,
     fontSize: 12,
   },
 };
