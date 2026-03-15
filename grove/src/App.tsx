@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import Layout from "./Layout";
 import { ToastContainer } from "./components/ui/toast";
+import { OverlayContainer } from "./lib/overlay";
 import { initBackendLogPipe } from "./lib/logger";
 
 function App() {
@@ -17,6 +18,7 @@ function App() {
   return (
     <>
       <Layout />
+      <OverlayContainer />
       <ToastContainer />
     </>
   );

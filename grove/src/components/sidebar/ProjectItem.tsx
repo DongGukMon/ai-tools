@@ -10,10 +10,12 @@ import {
 import type { Project } from "../../types";
 import { useProjectStore } from "../../store/project";
 import { useToast } from "../../store/toast";
+import { overlay } from "../../lib/overlay";
 import WorktreeItem from "./WorktreeItem";
 import { Button, IconButton } from "../ui/button";
 import { Dialog } from "../ui/dialog";
 import { cn } from "../../lib/cn";
+import { sanitizeBranchName } from "../../lib/git-utils";
 
 interface Props {
   project: Project;
@@ -24,9 +26,6 @@ function ProjectItem({ project }: Props) {
   const [adding, setAdding] = useState(false);
   const [addingLoading, setAddingLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [confirmingRefresh, setConfirmingRefresh] = useState(false);
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [worktreeName, setWorktreeName] = useState("");
   const { addWorktree, removeProject, refreshProject } = useProjectStore();
   const { toast } = useToast();
@@ -50,29 +49,61 @@ function ProjectItem({ project }: Props) {
 
   const handleRemoveProject = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    setConfirmingDelete(true);
-  };
+    const confirmed = await overlay.open<boolean>(({ resolve, close }) => (
+      <Dialog open onClose={close} title="Remove project?" className="max-w-sm">
+        <div className="space-y-4">
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            <span className="font-semibold text-foreground">
+              {project.org}/{project.repo}
+            </span>{" "}
+            project folder and all worktrees will be deleted.
+          </p>
+          <p className="text-xs leading-relaxed text-muted-foreground/70">
+            This removes the hidden source repository too. Use refresh if you only
+            want to sync the project.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" size="sm" onClick={close}>Cancel</Button>
+            <Button variant="destructive" size="sm" onClick={() => resolve(true)}>
+              Delete project
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+    ));
 
-  const confirmRemoveProject = async () => {
-    setDeleting(true);
+    if (!confirmed) return;
+
     try {
       await removeProject(project.id);
       toast("success", `Project '${project.repo}' removed`);
-      setConfirmingDelete(false);
     } catch {
       // Toasts are handled by the command layer.
-    } finally {
-      setDeleting(false);
     }
   };
 
-  const handleRefreshProject = (e: React.MouseEvent) => {
+  const handleRefreshProject = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    setConfirmingRefresh(true);
-  };
+    const confirmed = await overlay.open<boolean>(({ resolve, close }) => (
+      <Dialog open onClose={close} title="Refresh project source?" className="max-w-sm">
+        <div className="space-y-4">
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            This will hard-sync the source repo for{" "}
+            <span className="font-semibold text-foreground">
+              {project.org}/{project.repo}
+            </span>
+            . Local changes will be removed.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" size="sm" onClick={close}>Cancel</Button>
+            <Button size="sm" onClick={() => resolve(true)}>Refresh</Button>
+          </div>
+        </div>
+      </Dialog>
+    ));
 
-  const confirmRefreshProject = async () => {
-    setConfirmingRefresh(false);
+    if (!confirmed) return;
+
     setRefreshing(true);
     try {
       await refreshProject(project.id);
@@ -110,7 +141,7 @@ function ProjectItem({ project }: Props) {
             <IconButton
               onClick={handleRefreshProject}
               title="Refresh project source"
-              disabled={refreshing || deleting}
+              disabled={refreshing}
             >
               <RotateCw
                 className={cn("h-4 w-4", { "animate-spin": refreshing })}
@@ -149,7 +180,7 @@ function ProjectItem({ project }: Props) {
                   type="text"
                   placeholder="branch name"
                   value={worktreeName}
-                  onChange={(e) => setWorktreeName(e.target.value)}
+                  onChange={(e) => setWorktreeName(sanitizeBranchName(e.target.value))}
                   autoFocus
                   disabled={addingLoading}
                   onBlur={() => {
@@ -179,74 +210,6 @@ function ProjectItem({ project }: Props) {
           )}
         </div>
       )}
-      <Dialog
-        open={confirmingRefresh}
-        onClose={() => { if (!refreshing) setConfirmingRefresh(false); }}
-        title="Refresh project source?"
-        className="max-w-sm"
-      >
-        <div className="space-y-4">
-          <p className="text-sm leading-relaxed text-muted-foreground">
-            This will hard-sync the source repo for{" "}
-            <span className="font-semibold text-foreground">
-              {project.org}/{project.repo}
-            </span>
-            . Local changes will be removed.
-          </p>
-          <div className="flex justify-end gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setConfirmingRefresh(false)}>
-              Cancel
-            </Button>
-            <Button size="sm" onClick={confirmRefreshProject} disabled={refreshing}>
-              {refreshing ? "Refreshing..." : "Refresh"}
-            </Button>
-          </div>
-        </div>
-      </Dialog>
-      <Dialog
-        open={confirmingDelete}
-        onClose={() => {
-          if (!deleting) {
-            setConfirmingDelete(false);
-          }
-        }}
-        title="Remove project?"
-        className="max-w-sm"
-      >
-        <div className="space-y-4">
-          <p className="text-sm leading-relaxed text-muted-foreground">
-            <span className="font-semibold text-foreground">
-              {project.org}/{project.repo}
-            </span>{" "}
-            project folder and all worktrees will be deleted.
-          </p>
-          <p className="text-xs leading-relaxed text-muted-foreground/70">
-            This removes the hidden source repository too. Use refresh if you only
-            want to sync the project.
-          </p>
-          <div className="flex justify-end gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setConfirmingDelete(false)}
-              disabled={deleting}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              onClick={confirmRemoveProject}
-              disabled={deleting}
-              className={cn({ "animate-pulse-subtle": deleting })}
-            >
-              {deleting ? "Removing..." : "Delete project"}
-            </Button>
-          </div>
-        </div>
-      </Dialog>
     </div>
   );
 }
