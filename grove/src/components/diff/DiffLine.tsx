@@ -3,20 +3,27 @@ import { cn } from "../../lib/cn";
 
 interface Props {
   line: DiffLineType;
+  readOnly?: boolean;
+  isSelected?: boolean;
+  onToggleLine?: (index: number) => void;
 }
 
-export default function DiffLine({ line }: Props) {
+export default function DiffLine({
+  line,
+  readOnly = false,
+  isSelected = false,
+  onToggleLine,
+}: Props) {
   const isAdd = line.type === "add";
   const isRemove = line.type === "remove";
+  const canSelect = !readOnly && (isAdd || isRemove) && !!onToggleLine;
 
-  // GitHub-style row backgrounds
   const rowBg = isAdd
     ? "bg-[var(--diff-add-bg)]"
     : isRemove
       ? "bg-[var(--diff-remove-bg)]"
       : "";
 
-  // Gutter backgrounds (slightly more saturated than row)
   const gutterBg = isAdd
     ? "bg-[var(--diff-add-gutter-bg)]"
     : isRemove
@@ -31,31 +38,79 @@ export default function DiffLine({ line }: Props) {
 
   return (
     <div
-      className={cn("flex items-stretch min-h-[20px] leading-[20px] font-mono text-[12px]", rowBg)}
+      className={cn(
+        "group flex min-h-[22px] items-stretch font-mono text-[12px] leading-[22px] transition-colors",
+        rowBg,
+        {
+          "cursor-pointer": canSelect,
+          "border-l-[3px] border-l-[var(--color-primary)] ring-1 ring-inset ring-[var(--color-primary-border)]":
+            isSelected,
+        },
+      )}
+      onClick={() => {
+        if (canSelect) {
+          onToggleLine(line.index);
+        }
+      }}
     >
-      {/* Old line number gutter */}
       <span
-        className={cn("w-[40px] text-right pr-2 text-[11px] text-[var(--color-text-tertiary)] shrink-0 select-none", gutterBg)}
+        className={cn(
+          "flex w-6 shrink-0 items-center justify-center border-r border-white/50",
+          gutterBg,
+        )}
+      >
+        <span
+          className={cn(
+            "size-2 rounded-full border transition-opacity",
+            {
+              "border-[var(--color-primary)] bg-[var(--color-primary)] opacity-100":
+                isSelected && canSelect,
+              "border-[var(--color-border)] bg-white opacity-0 group-hover:opacity-100":
+                !isSelected && canSelect,
+              "opacity-0": !canSelect,
+            },
+          )}
+        />
+      </span>
+
+      <span
+        className={cn(
+          "w-[40px] shrink-0 select-none text-right text-[11px] text-[var(--color-text-tertiary)]",
+          gutterBg,
+          "pr-2",
+        )}
       >
         {line.oldLineNumber ?? ""}
       </span>
 
-      {/* New line number gutter */}
       <span
-        className={cn("w-[40px] text-right pr-2 text-[11px] text-[var(--color-text-tertiary)] shrink-0 select-none", gutterBg)}
+        className={cn(
+          "w-[40px] shrink-0 select-none text-right text-[11px] text-[var(--color-text-tertiary)]",
+          gutterBg,
+          "pr-2",
+        )}
       >
         {line.newLineNumber ?? ""}
       </span>
 
-      {/* Prefix (+/-/space) */}
       <span
-        className={cn("w-[18px] text-center shrink-0 select-none font-medium", prefixColor, gutterBg)}
+        className={cn(
+          "w-[18px] shrink-0 select-none text-center font-medium",
+          prefixColor,
+          gutterBg,
+        )}
       >
         {isAdd ? "+" : isRemove ? "-" : " "}
       </span>
 
-      {/* Content */}
-      <span className={cn("diff-line-content flex-1 pr-3 whitespace-pre overflow-x-auto")}>
+      <span
+        className={cn(
+          "diff-line-content flex-1 overflow-x-auto whitespace-pre pr-4",
+          {
+            "font-medium": isSelected,
+          },
+        )}
+      >
         {line.content}
       </span>
     </div>
