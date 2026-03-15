@@ -90,7 +90,7 @@ export default function DiffViewer({
   };
 
   return (
-    <div className="flex-1 overflow-y-auto" style={{ scrollSnapType: "y proximity" }}>
+    <div className="flex-1 overflow-y-auto">
       {/* Floating selection bar */}
       {hasSelection && (
         <div className="sticky top-0 z-10 flex items-center gap-2 px-3 h-[32px] bg-[var(--color-bg-secondary)] border-b border-[var(--color-border)] shadow-sm">

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useProjectStore } from "../../store/project";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
+import { cn } from "../../lib/cn";
 
 interface Props {
   onClose: () => void;
@@ -71,7 +72,7 @@ function AddProjectDialog({ onClose }: Props) {
             variant="default"
             size="sm"
             disabled={loading || !url.trim()}
-            className={loading ? "animate-pulse-subtle" : ""}
+            className={cn(loading && "animate-pulse-subtle")}
           >
             {loading ? "Cloning..." : "Add"}
           </Button>

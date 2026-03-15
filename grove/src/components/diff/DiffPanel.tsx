@@ -3,6 +3,7 @@ import { useDiff } from "../../hooks/useDiff";
 import CommitList from "./CommitList";
 import FileList from "./FileList";
 import DiffViewer from "./DiffViewer";
+import { cn } from "../../lib/cn";
 
 export default function DiffPanel() {
   const selectedWorktree = useProjectStore((s) => s.selectedWorktree);
@@ -48,11 +49,12 @@ export default function DiffPanel() {
               return (
                 <div
                   key={d.path}
-                  className={`flex items-center gap-2 px-3 h-[28px] cursor-pointer text-[12px] select-none transition-colors duration-100 ${
+                  className={cn(
+                    "flex items-center gap-2 px-3 h-[28px] cursor-pointer text-[12px] select-none transition-colors duration-100",
                     isSelected
                       ? "bg-[var(--color-primary-light)] border-l-[3px] border-l-[var(--color-primary)]"
                       : "hover:bg-[var(--color-bg-tertiary)] border-l-[3px] border-l-transparent"
-                  }`}
+                  )}
                   onClick={() => store.selectFile(d.path)}
                 >
                   <span
@@ -68,7 +70,7 @@ export default function DiffPanel() {
                   >
                     {d.status[0].toUpperCase()}
                   </span>
-                  <span className={`truncate ${isSelected ? "text-[var(--color-text)] font-medium" : "text-[var(--color-text)]"}`}>
+                  <span className={cn("truncate", isSelected ? "text-[var(--color-text)] font-medium" : "text-[var(--color-text)]")}>
                     {d.path}
                   </span>
                 </div>

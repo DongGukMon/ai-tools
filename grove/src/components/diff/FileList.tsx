@@ -2,6 +2,7 @@ import { Plus, Minus, Trash2 } from "lucide-react";
 import type { FileStatus } from "../../types";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
+import { cn } from "../../lib/cn";
 
 interface Props {
   fileStatuses: FileStatus[];
@@ -140,7 +141,7 @@ function ActionButton({
     <Button
       variant="ghost"
       size="icon"
-      className={`w-[20px] h-[20px] rounded-[var(--radius-sm)] text-[var(--color-text-tertiary)] ${variantClasses[variant]}`}
+      className={cn("w-[20px] h-[20px] rounded-[var(--radius-sm)] text-[var(--color-text-tertiary)]", variantClasses[variant])}
       title={title}
       onClick={onClick}
     >
@@ -170,11 +171,12 @@ function FileItem({
 
   return (
     <div
-      className={`group flex items-center gap-1.5 px-3 h-[28px] cursor-pointer text-[12px] select-none overflow-hidden transition-colors duration-100 ${
+      className={cn(
+        "group flex items-center gap-1.5 px-3 h-[28px] cursor-pointer text-[12px] select-none overflow-hidden transition-colors duration-100",
         isSelected
           ? "bg-[var(--color-primary-light)] border-l-[3px] border-l-[var(--color-primary)]"
           : "hover:bg-[var(--color-bg-tertiary)] border-l-[3px] border-l-transparent"
-      }`}
+      )}
       onClick={onClick}
     >
       <Badge
@@ -184,7 +186,7 @@ function FileItem({
       >
         {statusChar}
       </Badge>
-      <span className={`min-w-0 truncate ${isSelected ? "font-medium text-[var(--color-text)]" : "text-[var(--color-text)]"}`}>
+      <span className={cn("min-w-0 truncate", isSelected ? "font-medium text-[var(--color-text)]" : "text-[var(--color-text)]")}>
         {fileName}
       </span>
       {dirPath && (

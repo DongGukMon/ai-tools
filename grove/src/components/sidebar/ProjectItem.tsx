@@ -4,6 +4,7 @@ import type { Project } from "../../types";
 import { useProjectStore } from "../../store/project";
 import WorktreeItem from "./WorktreeItem";
 import { Button } from "../ui/button";
+import { cn } from "../../lib/cn";
 
 interface Props {
   project: Project;
@@ -51,7 +52,7 @@ function ProjectItem({ project }: Props) {
         <span className="flex items-center justify-center w-4 shrink-0 text-[#9ca3af]">
           {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
         </span>
-        <GitFork size={14} className={expanded ? "text-[var(--color-primary)] shrink-0" : "text-[#9ca3af] shrink-0"} />
+        <GitFork size={14} className={cn("shrink-0", expanded ? "text-[var(--color-primary)]" : "text-[#9ca3af]")} />
         <span className="min-w-0 flex-1 text-[13px] truncate font-semibold text-[#374151]">
           {project.org}/{project.repo}
         </span>
