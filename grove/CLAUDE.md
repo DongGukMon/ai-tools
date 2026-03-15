@@ -11,10 +11,10 @@ Tauri v2 macOS app — Git project manager + split terminal + diff viewer.
 ## Commands
 
 ```bash
-npm install
-npm run tauri dev      # Dev server + Tauri window
-npm run tauri build    # Production build
-npx vitest run         # Unit tests (split-tree)
+pnpm install
+pnpm tauri dev         # Dev server + Tauri window
+pnpm tauri build       # Production build
+pnpm vitest run        # Unit tests (split-tree)
 ```
 
 ## Structure
