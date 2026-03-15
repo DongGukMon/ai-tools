@@ -20,6 +20,7 @@ export default function TerminalPanel() {
   useEffect(() => {
     async function init() {
       try {
+        await useTerminalStore.getState().initLayouts();
         const t = await getTerminalTheme();
         loadTheme(t);
         if (!useTerminalStore.getState().activeWorktree) {

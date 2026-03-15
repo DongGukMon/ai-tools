@@ -53,7 +53,6 @@ export default function TerminalInstance({ ptyId }: Props) {
       fontSize: theme?.fontSize ?? 13,
       theme: xtheme,
       allowProposedApi: true,
-      macOptionIsMeta: true,
       macOptionClickForcesSelection: true,
     });
     terminalRef.current = term;
@@ -118,12 +117,32 @@ export default function TerminalInstance({ ptyId }: Props) {
       );
     });
 
-    // Cmd+K → clear terminal (macOS convention)
+    // macOS keyboard shortcuts
     term.attachCustomKeyEventHandler((e) => {
-      if (e.type === "keydown" && e.metaKey && e.key === "k") {
+      if (e.type !== "keydown") return true;
+
+      // Cmd+K → clear terminal
+      if (e.metaKey && e.key === "k") {
         term.clear();
-        return false; // prevent default
+        return false;
       }
+
+      // Option+Arrow/Delete → send escape sequences manually
+      // (can't use macOptionIsMeta because it breaks CJK IME composition)
+      if (e.altKey && !e.metaKey && !e.ctrlKey) {
+        const seq: Record<string, string> = {
+          ArrowLeft: "\x1bb",     // ESC+b = word backward
+          ArrowRight: "\x1bf",    // ESC+f = word forward
+          Backspace: "\x1b\x7f", // ESC+DEL = delete word backward
+          Delete: "\x1bd",        // ESC+d = delete word forward
+        };
+        if (seq[e.key]) {
+          const bytes = Array.from(new TextEncoder().encode(seq[e.key]));
+          writePty(ptyId, bytes).catch(() => {});
+          return false;
+        }
+      }
+
       return true;
     });
 

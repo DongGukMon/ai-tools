@@ -1,8 +1,6 @@
 import { create } from "zustand";
 import type { SplitNode, TerminalTheme } from "../types";
 
-const LAYOUTS_KEY = "grove:terminal-layouts";
-
 // ── Layout persistence helpers ──
 
 /** Strip ptyIds from a SplitNode tree, keeping only the structure. */
@@ -31,26 +29,24 @@ function assignPtyIds(node: SplitNode, ids: string[]): SplitNode {
   };
 }
 
-function saveLayouts(sessions: Record<string, SplitNode>) {
-  try {
-    const templates: Record<string, SplitNode> = {};
-    for (const [path, node] of Object.entries(sessions)) {
-      templates[path] = toLayoutTemplate(node);
-    }
-    localStorage.setItem(LAYOUTS_KEY, JSON.stringify(templates));
-  } catch {
-    // ignore
-  }
-}
+// In-memory cache populated at startup via initLayouts()
+let layoutCache: Record<string, SplitNode> = {};
 
-function loadLayouts(): Record<string, SplitNode> {
-  try {
-    const raw = localStorage.getItem(LAYOUTS_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch {
-    // ignore
+// Debounced save to Rust file backend
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+function saveLayouts(sessions: Record<string, SplitNode>) {
+  const templates: Record<string, SplitNode> = {};
+  for (const [path, node] of Object.entries(sessions)) {
+    templates[path] = toLayoutTemplate(node);
   }
-  return {};
+  layoutCache = templates;
+
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    import("../lib/tauri").then(({ saveTerminalLayouts }) => {
+      saveTerminalLayouts(JSON.stringify(templates)).catch(console.error);
+    });
+  }, 500);
 }
 
 // ── Store ──
@@ -73,6 +69,7 @@ interface TerminalState {
   setFocusedPtyId: (ptyId: string | null) => void;
   loadTheme: (theme: TerminalTheme) => void;
   getSavedLayout: (worktreePath: string) => SplitNode | null;
+  initLayouts: () => Promise<void>;
 }
 
 function splitNode(
@@ -134,8 +131,7 @@ export const useTerminalStore = create<TerminalState>((set) => ({
   theme: null,
 
   getSavedLayout: (worktreePath) => {
-    const layouts = loadLayouts();
-    const template = layouts[worktreePath];
+    const template = layoutCache[worktreePath];
     if (!template || countLeaves(template) <= 1) return null;
     return template;
   },
@@ -206,6 +202,16 @@ export const useTerminalStore = create<TerminalState>((set) => ({
   setFocusedPtyId: (ptyId) => set({ focusedPtyId: ptyId }),
 
   loadTheme: (theme) => set({ theme }),
+
+  initLayouts: async () => {
+    try {
+      const { loadTerminalLayouts } = await import("../lib/tauri");
+      const raw = await loadTerminalLayouts();
+      layoutCache = JSON.parse(raw);
+    } catch {
+      layoutCache = {};
+    }
+  },
 }));
 
 export { countLeaves, assignPtyIds };

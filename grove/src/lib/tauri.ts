@@ -23,6 +23,16 @@ export async function saveAppConfig(config: AppConfig): Promise<void> {
   return invoke("save_app_config", { config });
 }
 
+// === TERMINAL LAYOUT PERSISTENCE ===
+
+export async function saveTerminalLayouts(layouts: string): Promise<void> {
+  return invoke("save_terminal_layouts", { layouts });
+}
+
+export async function loadTerminalLayouts(): Promise<string> {
+  return invoke<string>("load_terminal_layouts");
+}
+
 // === GIT PROJECT COMMANDS (W2) ===
 
 export async function listProjects(): Promise<Project[]> {

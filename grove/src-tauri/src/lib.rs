@@ -269,6 +269,8 @@ pub fn run() {
             get_terminal_theme,
             get_app_config,
             save_app_config,
+            config::save_terminal_layouts,
+            config::load_terminal_layouts,
             // Git Project (W2)
             list_projects,
             add_project,

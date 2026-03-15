@@ -1,4 +1,5 @@
-import { Plus, Minus, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { Plus, Minus, Trash2, ChevronDown, ChevronRight } from "lucide-react";
 import type { DiffHunk as DiffHunkType } from "../../types";
 import DiffLine from "./DiffLine";
 
@@ -25,10 +26,23 @@ export default function DiffHunk({
   onUnstageHunk,
   onDiscardHunk,
 }: Props) {
+  const [collapsed, setCollapsed] = useState(false);
+
   return (
     <div className={!isFirst ? "border-t border-[var(--color-border)]" : ""}>
       {/* Hunk header */}
       <div className="flex items-center gap-2 px-3 h-[30px] bg-[#f6f8fa] border-b border-[var(--color-border)] select-none">
+        <button
+          className="flex items-center justify-center w-[18px] h-[18px] shrink-0 rounded hover:bg-[#e1e4e8] transition-colors duration-100 cursor-pointer text-[#656d76]"
+          onClick={() => setCollapsed((prev) => !prev)}
+          aria-label={collapsed ? "Expand hunk" : "Collapse hunk"}
+        >
+          {collapsed ? (
+            <ChevronRight size={14} strokeWidth={2} />
+          ) : (
+            <ChevronDown size={14} strokeWidth={2} />
+          )}
+        </button>
         <span className="flex-1 truncate font-mono text-[11px] text-[#656d76]">
           {hunk.header}
         </span>
@@ -57,9 +71,10 @@ export default function DiffHunk({
       </div>
 
       {/* Lines */}
-      {hunk.lines.map((line) => (
-        <DiffLine key={line.index} line={line} />
-      ))}
+      {!collapsed &&
+        hunk.lines.map((line) => (
+          <DiffLine key={line.index} line={line} />
+        ))}
     </div>
   );
 }

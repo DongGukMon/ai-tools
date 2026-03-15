@@ -42,3 +42,28 @@ pub fn save_config(config: &GroveConfig) -> Result<(), String> {
         .map_err(|e| format!("Failed to serialize config: {e}"))?;
     fs::write(&path, content).map_err(|e| format!("Failed to write config: {e}"))
 }
+
+// ── Terminal layout persistence ──
+
+#[tauri::command]
+pub fn save_terminal_layouts(layouts: String) -> Result<(), String> {
+    let path = dirs::home_dir()
+        .ok_or("No home dir")?
+        .join(".grove")
+        .join("terminal-layouts.json");
+    fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
+    fs::write(&path, layouts).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn load_terminal_layouts() -> Result<String, String> {
+    let path = dirs::home_dir()
+        .ok_or("No home dir")?
+        .join(".grove")
+        .join("terminal-layouts.json");
+    if path.exists() {
+        fs::read_to_string(&path).map_err(|e| e.to_string())
+    } else {
+        Ok("{}".to_string())
+    }
+}
