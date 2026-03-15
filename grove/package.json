@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "lint": "eslint \"src/**/*.{ts,tsx}\"",
+    "lint:fix": "eslint \"src/**/*.{ts,tsx}\" --fix",
     "test": "vitest run",
     "preview": "vite preview",
     "tauri": "tauri"
@@ -25,6 +27,7 @@
     "zustand": "^5"
   },
   "devDependencies": {
+    "@typescript-eslint/parser": "^8.28.0",
     "@tailwindcss/vite": "^4.2.1",
     "@tauri-apps/cli": "^2",
     "@types/node": "^25.5.0",
@@ -32,10 +35,12 @@
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^4",
     "autoprefixer": "^10.4.27",
+    "eslint": "^9.23.0",
     "postcss": "^8.5.8",
     "tailwindcss": "^4.2.1",
     "typescript": "^5",
     "vite": "^6",
     "vitest": "^3.2.4"
-  }
+  },
+  "packageManager": "pnpm@10.28.0+sha512.05df71d1421f21399e053fde567cea34d446fa02c76571441bfc1c7956e98e363088982d940465fd34480d4d90a0668bc12362f8aa88000a64e83d0b0e47be48"
 }

@@ -1,5 +1,7 @@
 import type { FileDiff, DiffHunk as DiffHunkType } from "../../types";
 import DiffHunk from "./DiffHunk";
+import { cn } from "../../lib/cn";
+
 
 interface Props {
   diff: FileDiff | null;
@@ -59,8 +61,8 @@ export default function DiffViewer({
 }: Props) {
   if (!diff || !selectedFile) {
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <span className="text-[13px] text-[var(--color-text-tertiary)]">
+      <div className={cn("flex-1 flex items-center justify-center")}>
+        <span className={cn("text-[13px] text-[var(--color-text-tertiary)]")}>
           Select a file to view diff
         </span>
       </div>
@@ -69,8 +71,8 @@ export default function DiffViewer({
 
   if (diff.hunks.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <span className="text-[13px] text-[var(--color-text-tertiary)]">
+      <div className={cn("flex-1 flex items-center justify-center")}>
+        <span className={cn("text-[13px] text-[var(--color-text-tertiary)]")}>
           No changes
         </span>
       </div>
@@ -90,23 +92,23 @@ export default function DiffViewer({
   };
 
   return (
-    <div className="flex-1 overflow-y-auto">
+    <div className={cn("flex-1 overflow-y-auto")}>
       {/* Floating selection bar */}
       {hasSelection && (
-        <div className="sticky top-0 z-10 flex items-center gap-2 px-3 h-[32px] bg-[var(--color-bg-secondary)] border-b border-[var(--color-border)] shadow-sm">
-          <span className="text-[11px] text-[var(--color-text-secondary)] mr-auto font-medium">
+        <div className={cn("sticky top-0 z-10 flex items-center gap-2 px-3 h-[32px] bg-[var(--color-bg-secondary)] border-b border-[var(--color-border)] shadow-sm")}>
+          <span className={cn("text-[11px] text-[var(--color-text-secondary)] mr-auto font-medium")}>
             {selectedLines.size} line{selectedLines.size > 1 ? "s" : ""} selected
           </span>
           {!isViewingStaged && (
             <>
               <button
-                className="px-2.5 py-1 text-[11px] font-medium rounded-full border border-[var(--color-border)] bg-white text-[var(--color-text)] hover:bg-[var(--color-bg-tertiary)] transition-colors"
+                className={cn("px-2.5 py-1 text-[11px] font-medium rounded-full border border-[var(--color-border)] bg-white text-[var(--color-text)] hover:bg-[var(--color-bg-tertiary)] transition-colors")}
                 onClick={() => applyToSelectedLines(onStageLines)}
               >
                 Stage
               </button>
               <button
-                className="px-2.5 py-1 text-[11px] font-medium rounded-full border border-[var(--color-border)] bg-white text-[var(--color-danger)] hover:bg-[var(--color-danger-bg)] transition-colors"
+                className={cn("px-2.5 py-1 text-[11px] font-medium rounded-full border border-[var(--color-border)] bg-white text-[var(--color-danger)] hover:bg-[var(--color-danger-bg)] transition-colors")}
                 onClick={() => applyToSelectedLines(onDiscardLines)}
               >
                 Discard
@@ -115,14 +117,14 @@ export default function DiffViewer({
           )}
           {isViewingStaged && (
             <button
-              className="px-2.5 py-1 text-[11px] font-medium rounded-full border border-[var(--color-border)] bg-white text-[var(--color-text)] hover:bg-[var(--color-bg-tertiary)] transition-colors"
+              className={cn("px-2.5 py-1 text-[11px] font-medium rounded-full border border-[var(--color-border)] bg-white text-[var(--color-text)] hover:bg-[var(--color-bg-tertiary)] transition-colors")}
               onClick={() => applyToSelectedLines(onUnstageLines)}
             >
               Unstage
             </button>
           )}
           <button
-            className="px-2.5 py-1 text-[11px] font-medium rounded-full border border-[var(--color-border)] bg-white text-[var(--color-text-tertiary)] hover:bg-[var(--color-bg-tertiary)] transition-colors"
+            className={cn("px-2.5 py-1 text-[11px] font-medium rounded-full border border-[var(--color-border)] bg-white text-[var(--color-text-tertiary)] hover:bg-[var(--color-bg-tertiary)] transition-colors")}
             onClick={onClearSelection}
           >
             Clear
@@ -132,7 +134,7 @@ export default function DiffViewer({
 
       {/* Diff hunks */}
       <div className="p-3">
-        <div className="border border-[var(--color-border)] rounded-lg overflow-hidden">
+        <div className={cn("border border-[var(--color-border)] rounded-lg overflow-hidden")}>
           {diff.hunks.map((hunk, i) => (
             <DiffHunk
               key={`${hunk.header}-${i}`}

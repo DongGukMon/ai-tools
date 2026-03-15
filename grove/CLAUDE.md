@@ -55,14 +55,25 @@ src-tauri/src/
 
 ## Code Style
 
-### `cn()` for conditional classes — no ternary in template literals
+### `cn()` for className composition
+
+- If `className` has multiple classes, wrap it in `cn(...)`
+- Use object syntax for conditional classes
+- Do not use ternary expressions inside `cn(...)`
 
 ```tsx
 // ❌
 className={`flex ${isActive ? "bg-blue-500" : "text-gray-500"}`}
+className="flex items-center gap-2"
+className={cn("flex", isActive ? "bg-blue-500" : "text-gray-500")}
+className={cn("flex", isActive && "bg-blue-500")}
 
 // ✅
-className={cn("flex", isActive && "bg-blue-500", !isActive && "text-gray-500")}
+className={cn("flex items-center gap-2")}
+className={cn("flex", {
+  "bg-blue-500": isActive,
+  "text-gray-500": !isActive,
+})}
 ```
 
 ### UI primitives — no raw `<button>` / `<input>`

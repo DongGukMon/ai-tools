@@ -47,11 +47,11 @@ export default function DiffHunk({
   const [collapsed, setCollapsed] = useState(false);
 
   return (
-    <div className={cn(!isFirst && "border-t border-[var(--color-border)]")}>
+    <div className={cn({ "border-t border-[var(--color-border)]": !isFirst })}>
       {/* Hunk header */}
-      <div className="flex items-center gap-2 px-3 h-[30px] bg-[#f6f8fa] border-b border-[var(--color-border)] select-none">
+      <div className={cn("flex items-center gap-2 px-3 h-[30px] bg-[#f6f8fa] border-b border-[var(--color-border)] select-none")}>
         <button
-          className="flex items-center justify-center w-[18px] h-[18px] shrink-0 rounded hover:bg-[#e1e4e8] transition-colors duration-100 cursor-pointer text-[#656d76]"
+          className={cn("flex items-center justify-center w-[18px] h-[18px] shrink-0 rounded hover:bg-[#e1e4e8] transition-colors duration-100 cursor-pointer text-[#656d76]")}
           onClick={() => setCollapsed((prev) => !prev)}
           aria-label={collapsed ? "Expand hunk" : "Collapse hunk"}
         >
@@ -61,17 +61,17 @@ export default function DiffHunk({
             <ChevronDown size={14} strokeWidth={2} />
           )}
         </button>
-        <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-[#656d76]">
+        <span className={cn("min-w-0 flex-1 truncate font-mono text-[11px] text-[#656d76]")}>
           {hunk.header}
         </span>
         {!readOnly && (
-          <span className="flex gap-1.5 shrink-0">
+          <span className={cn("flex gap-1.5 shrink-0")}>
             {!isViewingStaged && (
               <>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-auto px-2 py-0.5 text-[10px] font-semibold text-[#656d76] border-[#d0d7de] bg-white hover:bg-[#f3f4f6] gap-1"
+                  className={cn("h-auto px-2 py-0.5 text-[10px] font-semibold text-[#656d76] border-[#d0d7de] bg-white hover:bg-[#f3f4f6] gap-1")}
                   onClick={onStageHunk}
                 >
                   <Plus size={11} strokeWidth={2.5} />
@@ -80,7 +80,7 @@ export default function DiffHunk({
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-auto px-2 py-0.5 text-[10px] font-semibold text-[#cf222e] border-[#cf222e]/20 bg-white hover:bg-[#ffebe9] gap-1"
+                  className={cn("h-auto px-2 py-0.5 text-[10px] font-semibold text-[#cf222e] border-[#cf222e]/20 bg-white hover:bg-[#ffebe9] gap-1")}
                   onClick={onDiscardHunk}
                 >
                   <Trash2 size={10} strokeWidth={2} />
@@ -92,7 +92,7 @@ export default function DiffHunk({
               <Button
                 variant="outline"
                 size="sm"
-                className="h-auto px-2 py-0.5 text-[10px] font-semibold text-[#656d76] border-[#d0d7de] bg-white hover:bg-[#f3f4f6] gap-1"
+                className={cn("h-auto px-2 py-0.5 text-[10px] font-semibold text-[#656d76] border-[#d0d7de] bg-white hover:bg-[#f3f4f6] gap-1")}
                 onClick={onUnstageHunk}
               >
                 <Minus size={11} strokeWidth={2.5} />
@@ -151,16 +151,16 @@ function ChangeGroup({
         {lines.map((line) => (
           <div
             key={line.index}
-            className="flex min-h-[20px] leading-[20px] font-mono text-[12px]"
+            className={cn("flex min-h-[20px] leading-[20px] font-mono text-[12px]")}
           >
-            <span className="w-[40px] text-right pr-2 text-[11px] text-[var(--color-text-tertiary)] select-none">
+            <span className={cn("w-[40px] text-right pr-2 text-[11px] text-[var(--color-text-tertiary)] select-none")}>
               {line.oldLineNumber ?? ""}
             </span>
-            <span className="w-[40px] text-right pr-2 text-[11px] text-[var(--color-text-tertiary)] select-none">
+            <span className={cn("w-[40px] text-right pr-2 text-[11px] text-[var(--color-text-tertiary)] select-none")}>
               {line.newLineNumber ?? ""}
             </span>
             <span
-              className="w-[18px] text-center select-none font-medium"
+              className={cn("w-[18px] text-center select-none font-medium")}
               style={{ color: prefixColor }}
             >
               {prefix}
@@ -170,11 +170,11 @@ function ChangeGroup({
       </div>
 
       {/* Shared scrollable code content */}
-      <div className="flex-1 overflow-x-auto overflow-y-hidden diff-line-content">
+      <div className={cn("flex-1 overflow-x-auto overflow-y-hidden diff-line-content")}>
         {lines.map((line) => (
           <div
             key={line.index}
-            className="min-h-[20px] leading-[20px] font-mono text-[12px] whitespace-pre pr-3"
+            className={cn("min-h-[20px] leading-[20px] font-mono text-[12px] whitespace-pre pr-3")}
           >
             {line.content}
           </div>

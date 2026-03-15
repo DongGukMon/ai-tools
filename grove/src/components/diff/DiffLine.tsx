@@ -55,7 +55,7 @@ export default function DiffLine({ line }: Props) {
       </span>
 
       {/* Content */}
-      <span className="diff-line-content flex-1 pr-3 whitespace-pre overflow-x-auto">
+      <span className={cn("diff-line-content flex-1 pr-3 whitespace-pre overflow-x-auto")}>
         {line.content}
       </span>
     </div>

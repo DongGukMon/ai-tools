@@ -27,11 +27,11 @@ export default function FileList({
   const unstaged = fileStatuses.filter((f) => !f.staged);
 
   return (
-    <div className="border-b border-[var(--color-border)] shrink-0 max-h-[200px] overflow-y-auto">
+    <div className={cn("border-b border-[var(--color-border)] shrink-0 max-h-[200px] overflow-y-auto")}>
       {/* Staged section */}
       {staged.length > 0 && (
         <div>
-          <div className="text-[11px] uppercase tracking-wider font-medium text-[var(--color-text-tertiary)] px-3 pt-2.5 pb-1 select-none">
+          <div className={cn("text-[11px] uppercase tracking-wider font-medium text-[var(--color-text-tertiary)] px-3 pt-2.5 pb-1 select-none")}>
             Staged ({staged.length})
           </div>
           {staged.map((file) => (
@@ -59,7 +59,7 @@ export default function FileList({
       {/* Unstaged section */}
       {unstaged.length > 0 && (
         <div>
-          <div className="text-[11px] uppercase tracking-wider font-medium text-[var(--color-text-tertiary)] px-3 pt-2.5 pb-1 select-none">
+          <div className={cn("text-[11px] uppercase tracking-wider font-medium text-[var(--color-text-tertiary)] px-3 pt-2.5 pb-1 select-none")}>
             Unstaged ({unstaged.length})
           </div>
           {unstaged.map((file) => (
@@ -96,7 +96,7 @@ export default function FileList({
       )}
 
       {fileStatuses.length === 0 && (
-        <div className="py-4 text-[12px] text-[var(--color-text-tertiary)] text-center">
+        <div className={cn("py-4 text-[12px] text-[var(--color-text-tertiary)] text-center")}>
           No changes
         </div>
       )}
@@ -173,28 +173,35 @@ function FileItem({
     <div
       className={cn(
         "group flex items-center gap-1.5 px-3 h-[28px] cursor-pointer text-[12px] select-none overflow-hidden transition-colors duration-100",
-        isSelected
-          ? "bg-[var(--color-primary-light)] border-l-[3px] border-l-[var(--color-primary)]"
-          : "hover:bg-[var(--color-bg-tertiary)] border-l-[3px] border-l-transparent"
+        {
+          "bg-[var(--color-primary-light)] border-l-[3px] border-l-[var(--color-primary)]":
+            isSelected,
+          "hover:bg-[var(--color-bg-tertiary)] border-l-[3px] border-l-transparent":
+            !isSelected,
+        },
       )}
       onClick={onClick}
     >
       <Badge
         variant={_badgeVariant}
-        className="font-mono font-semibold text-[11px] w-3.5 px-0 py-0 text-center justify-center bg-transparent"
+        className={cn("font-mono font-semibold text-[11px] w-3.5 px-0 py-0 text-center justify-center bg-transparent")}
         style={{ color: statusColor }}
       >
         {statusChar}
       </Badge>
-      <span className={cn("min-w-0 truncate", isSelected ? "font-medium text-[var(--color-text)]" : "text-[var(--color-text)]")}>
+      <span
+        className={cn("min-w-0 truncate text-[var(--color-text)]", {
+          "font-medium": isSelected,
+        })}
+      >
         {fileName}
       </span>
       {dirPath && (
-        <span className="min-w-0 text-[11px] truncate flex-1 text-[var(--color-text-tertiary)]">
+        <span className={cn("min-w-0 text-[11px] truncate flex-1 text-[var(--color-text-tertiary)]")}>
           {dirPath}/
         </span>
       )}
-      <span className="flex gap-0.5 ml-auto shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-100">
+      <span className={cn("flex gap-0.5 ml-auto shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-100")}>
         {actions}
       </span>
     </div>

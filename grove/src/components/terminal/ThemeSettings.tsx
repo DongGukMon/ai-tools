@@ -108,35 +108,35 @@ export default function ThemeSettings({ open, onClose }: Props) {
   if (!open || !draft) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
+    <div className={cn("fixed inset-0 z-50 flex justify-end")}>
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/20" />
+      <div className={cn("absolute inset-0 bg-black/20")} />
 
       {/* Panel */}
       <div
         ref={panelRef}
-        className="relative w-[340px] h-full bg-[var(--color-bg)] border-l border-[var(--color-border)] shadow-lg overflow-y-auto"
+        className={cn("relative w-[340px] h-full bg-[var(--color-bg)] border-l border-[var(--color-border)] shadow-lg overflow-y-auto")}
       >
         {/* Header */}
-        <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 bg-[var(--color-bg)] border-b border-[var(--color-border)]">
-          <span className="text-[13px] font-semibold text-[var(--color-text)]">
+        <div className={cn("sticky top-0 z-10 flex items-center justify-between px-4 py-3 bg-[var(--color-bg)] border-b border-[var(--color-border)]")}>
+          <span className={cn("text-[13px] font-semibold text-[var(--color-text)]")}>
             Terminal Theme
           </span>
           <button
             onClick={onClose}
-            className="flex items-center justify-center w-6 h-6 rounded-[var(--radius-sm)] text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-tertiary)] transition-colors"
+            className={cn("flex items-center justify-center w-6 h-6 rounded-[var(--radius-sm)] text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-tertiary)] transition-colors")}
           >
             <X size={14} strokeWidth={1.5} />
           </button>
         </div>
 
-        <div className="p-4 flex flex-col gap-5">
+        <div className={cn("p-4 flex flex-col gap-5")}>
           {/* Preset Themes */}
           <section>
-            <h3 className="text-[11px] font-medium text-[var(--color-text-tertiary)] uppercase tracking-wider mb-2">
+            <h3 className={cn("text-[11px] font-medium text-[var(--color-text-tertiary)] uppercase tracking-wider mb-2")}>
               Presets
             </h3>
-            <div className="grid grid-cols-2 gap-1.5">
+            <div className={cn("grid grid-cols-2 gap-1.5")}>
               {Object.entries(themeDisplayNames).map(([key, name]) => {
                 const preset = terminalThemes[key];
                 return (
@@ -145,23 +145,26 @@ export default function ThemeSettings({ open, onClose }: Props) {
                     onClick={() => selectPreset(key)}
                     className={cn(
                       "flex items-center gap-2 px-2.5 py-2 rounded-[var(--radius-md)] border text-left transition-colors",
-                      activePreset === key
-                        ? "border-[var(--color-primary)] bg-[var(--color-primary-light)]"
-                        : "border-[var(--color-border)] hover:border-[var(--color-primary-border)] hover:bg-[var(--color-bg-secondary)]",
+                      {
+                        "border-[var(--color-primary)] bg-[var(--color-primary-light)]":
+                          activePreset === key,
+                        "border-[var(--color-border)] hover:border-[var(--color-primary-border)] hover:bg-[var(--color-bg-secondary)]":
+                          activePreset !== key,
+                      },
                     )}
                   >
                     <div
-                      className="w-5 h-5 rounded-[3px] border border-[var(--color-border)] shrink-0"
+                      className={cn("w-5 h-5 rounded-[3px] border border-[var(--color-border)] shrink-0")}
                       style={{ backgroundColor: preset.background }}
                     >
                       <span
-                        className="block text-[8px] leading-[20px] text-center font-bold"
+                        className={cn("block text-[8px] leading-[20px] text-center font-bold")}
                         style={{ color: preset.foreground }}
                       >
                         A
                       </span>
                     </div>
-                    <span className="text-[12px] text-[var(--color-text)] truncate">
+                    <span className={cn("text-[12px] text-[var(--color-text)] truncate")}>
                       {name}
                     </span>
                   </button>
@@ -172,27 +175,27 @@ export default function ThemeSettings({ open, onClose }: Props) {
 
           {/* Font Settings */}
           <section>
-            <h3 className="text-[11px] font-medium text-[var(--color-text-tertiary)] uppercase tracking-wider mb-2">
+            <h3 className={cn("text-[11px] font-medium text-[var(--color-text-tertiary)] uppercase tracking-wider mb-2")}>
               Font
             </h3>
-            <div className="flex flex-col gap-2.5">
+            <div className={cn("flex flex-col gap-2.5")}>
               <div>
-                <label className="block text-[11px] text-[var(--color-text-secondary)] mb-1">
+                <label className={cn("block text-[11px] text-[var(--color-text-secondary)] mb-1")}>
                   Font Family
                 </label>
                 <input
                   type="text"
                   value={draft.fontFamily}
                   onChange={(e) => updateDraft("fontFamily", e.target.value)}
-                  className="w-full px-2.5 py-1.5 text-[12px] rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-text)] focus:outline-none focus:border-[var(--color-primary)] transition-colors"
+                  className={cn("w-full px-2.5 py-1.5 text-[12px] rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-text)] focus:outline-none focus:border-[var(--color-primary)] transition-colors")}
                 />
               </div>
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-[11px] text-[var(--color-text-secondary)]">
+                <div className={cn("flex items-center justify-between mb-1")}>
+                  <label className={cn("text-[11px] text-[var(--color-text-secondary)]")}>
                     Font Size
                   </label>
-                  <span className="text-[11px] text-[var(--color-text-tertiary)] tabular-nums">
+                  <span className={cn("text-[11px] text-[var(--color-text-tertiary)] tabular-nums")}>
                     {draft.fontSize}px
                   </span>
                 </div>
@@ -205,7 +208,7 @@ export default function ThemeSettings({ open, onClose }: Props) {
                   onChange={(e) =>
                     updateDraft("fontSize", Number(e.target.value))
                   }
-                  className="w-full h-1 accent-[var(--color-primary)] cursor-pointer"
+                  className={cn("w-full h-1 accent-[var(--color-primary)] cursor-pointer")}
                 />
               </div>
             </div>
@@ -213,10 +216,10 @@ export default function ThemeSettings({ open, onClose }: Props) {
 
           {/* Core Colors */}
           <section>
-            <h3 className="text-[11px] font-medium text-[var(--color-text-tertiary)] uppercase tracking-wider mb-2">
+            <h3 className={cn("text-[11px] font-medium text-[var(--color-text-tertiary)] uppercase tracking-wider mb-2")}>
               Colors
             </h3>
-            <div className="flex flex-col gap-2">
+            <div className={cn("flex flex-col gap-2")}>
               <ColorRow
                 label="Background"
                 value={draft.background}
@@ -239,7 +242,7 @@ export default function ThemeSettings({ open, onClose }: Props) {
           <section>
             <button
               onClick={() => setColorsOpen((v) => !v)}
-              className="flex items-center gap-1 text-[11px] font-medium text-[var(--color-text-tertiary)] uppercase tracking-wider hover:text-[var(--color-text-secondary)] transition-colors mb-2"
+              className={cn("flex items-center gap-1 text-[11px] font-medium text-[var(--color-text-tertiary)] uppercase tracking-wider hover:text-[var(--color-text-secondary)] transition-colors mb-2")}
             >
               {colorsOpen ? (
                 <ChevronDown size={12} strokeWidth={2} />
@@ -249,7 +252,7 @@ export default function ThemeSettings({ open, onClose }: Props) {
               ANSI Colors
             </button>
             {colorsOpen && (
-              <div className="flex flex-col gap-2">
+              <div className={cn("flex flex-col gap-2")}>
                 {ANSI_LABELS.map(({ key, label }) => (
                   <ColorRow
                     key={key}
@@ -264,11 +267,11 @@ export default function ThemeSettings({ open, onClose }: Props) {
 
           {/* Preview */}
           <section>
-            <h3 className="text-[11px] font-medium text-[var(--color-text-tertiary)] uppercase tracking-wider mb-2">
+            <h3 className={cn("text-[11px] font-medium text-[var(--color-text-tertiary)] uppercase tracking-wider mb-2")}>
               Preview
             </h3>
             <div
-              className="rounded-[var(--radius-md)] border border-[var(--color-border)] p-3 text-[12px] leading-[1.6] overflow-hidden"
+              className={cn("rounded-[var(--radius-md)] border border-[var(--color-border)] p-3 text-[12px] leading-[1.6] overflow-hidden")}
               style={{
                 backgroundColor: draft.background,
                 color: draft.foreground,
@@ -304,17 +307,17 @@ export default function ThemeSettings({ open, onClose }: Props) {
         </div>
 
         {/* Footer actions */}
-        <div className="sticky bottom-0 flex items-center justify-between gap-2 px-4 py-3 bg-[var(--color-bg)] border-t border-[var(--color-border)]">
+        <div className={cn("sticky bottom-0 flex items-center justify-between gap-2 px-4 py-3 bg-[var(--color-bg)] border-t border-[var(--color-border)]")}>
           <button
             onClick={handleReset}
-            className="flex items-center gap-1 px-2.5 py-1.5 text-[12px] text-[var(--color-text-secondary)] rounded-[var(--radius-md)] border border-[var(--color-border)] hover:bg-[var(--color-bg-tertiary)] transition-colors"
+            className={cn("flex items-center gap-1 px-2.5 py-1.5 text-[12px] text-[var(--color-text-secondary)] rounded-[var(--radius-md)] border border-[var(--color-border)] hover:bg-[var(--color-bg-tertiary)] transition-colors")}
           >
             <RotateCcw size={12} strokeWidth={1.5} />
             Reset
           </button>
           <button
             onClick={handleApply}
-            className="px-4 py-1.5 text-[12px] font-medium text-white bg-[var(--color-primary)] rounded-[var(--radius-md)] hover:bg-[var(--color-primary-hover)] transition-colors"
+            className={cn("px-4 py-1.5 text-[12px] font-medium text-white bg-[var(--color-primary)] rounded-[var(--radius-md)] hover:bg-[var(--color-primary-hover)] transition-colors")}
           >
             Apply
           </button>
@@ -334,24 +337,24 @@ function ColorRow({
   onChange: (v: string) => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-2">
-      <span className="text-[11px] text-[var(--color-text-secondary)]">
+    <div className={cn("flex items-center justify-between gap-2")}>
+      <span className={cn("text-[11px] text-[var(--color-text-secondary)]")}>
         {label}
       </span>
-      <div className="flex items-center gap-1.5">
-        <span className="text-[10px] text-[var(--color-text-tertiary)] font-mono tabular-nums uppercase">
+      <div className={cn("flex items-center gap-1.5")}>
+        <span className={cn("text-[10px] text-[var(--color-text-tertiary)] font-mono tabular-nums uppercase")}>
           {value}
         </span>
-        <label className="relative w-5 h-5 rounded-[3px] border border-[var(--color-border)] cursor-pointer overflow-hidden shrink-0">
+        <label className={cn("relative w-5 h-5 rounded-[3px] border border-[var(--color-border)] cursor-pointer overflow-hidden shrink-0")}>
           <div
-            className="absolute inset-0"
+            className={cn("absolute inset-0")}
             style={{ backgroundColor: value }}
           />
           <input
             type="color"
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            className={cn("absolute inset-0 w-full h-full opacity-0 cursor-pointer")}
           />
         </label>
       </div>

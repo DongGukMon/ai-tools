@@ -3,6 +3,8 @@ import { Allotment } from "allotment";
 import type { SplitNode } from "../../types";
 import TerminalInstance from "./TerminalInstance";
 import { useTerminalStore } from "../../store/terminal";
+import { cn } from "../../lib/cn";
+
 
 interface Props {
   node: SplitNode;
@@ -43,7 +45,7 @@ export default function SplitContainer({ node, path = [] }: Props) {
 
   if (node.type === "leaf") {
     return node.ptyId ? (
-      <div className="relative w-full h-full">
+      <div className={cn("relative w-full h-full")}>
         <TerminalInstance ptyId={node.ptyId} />
       </div>
     ) : null;

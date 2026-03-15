@@ -3,10 +3,12 @@ import "allotment/dist/style.css";
 import Sidebar from "./components/sidebar/Sidebar";
 import TerminalPanel from "./components/terminal/TerminalPanel";
 import DiffPanel from "./components/diff/DiffPanel";
+import { cn } from "./lib/cn";
+
 
 function Layout() {
   return (
-    <div className="h-full w-full bg-[var(--color-bg)]">
+    <div className={cn("h-full w-full bg-[var(--color-bg)]")}>
       <Allotment>
         <Allotment.Pane preferredSize={240} minSize={180}>
           <Sidebar />

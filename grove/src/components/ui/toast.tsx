@@ -50,7 +50,10 @@ function ToastCard({ toast }: { toast: ToastItem }) {
         "flex items-start gap-2 w-[300px] px-3 py-2.5 rounded-lg border shadow-sm",
         config.bg,
         config.border,
-        exiting ? "animate-toast-out" : "animate-toast-in",
+        {
+          "animate-toast-out": exiting,
+          "animate-toast-in": !exiting,
+        },
       )}
     >
       <Icon size={15} strokeWidth={2.5} className={cn("shrink-0 mt-px", config.iconColor)} />
@@ -72,7 +75,7 @@ export function ToastContainer() {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none">
+    <div className={cn("fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none")}>
       {toasts.map((t) => (
         <ToastCard key={t.id} toast={t} />
       ))}

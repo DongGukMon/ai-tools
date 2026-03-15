@@ -36,7 +36,7 @@ function AddProjectDialog({ onClose }: Props) {
   };
 
   return (
-    <div className="px-3 py-3 border-b border-[var(--color-border)]">
+    <div className={cn("px-3 py-3 border-b border-[var(--color-border)]")}>
       <form onSubmit={handleSubmit}>
         <Input
           type="text"
@@ -50,20 +50,20 @@ function AddProjectDialog({ onClose }: Props) {
             if (e.key === "Escape") onClose();
           }}
         />
-        <div className="text-[11px] text-[var(--color-text-tertiary)] mb-2 leading-relaxed">
+        <div className={cn("text-[11px] text-[var(--color-text-tertiary)] mb-2 leading-relaxed")}>
           Supports HTTPS and SSH Git URLs.
         </div>
         {loading && (
-          <div className="text-[11px] text-[var(--color-text-muted)] mb-2 animate-pulse">
+          <div className={cn("text-[11px] text-[var(--color-text-muted)] mb-2 animate-pulse")}>
             Cloning repository...
           </div>
         )}
         {error && (
-          <div className="text-[11px] text-[var(--color-danger)] mb-2 break-all leading-relaxed">
+          <div className={cn("text-[11px] text-[var(--color-danger)] mb-2 break-all leading-relaxed")}>
             {error}
           </div>
         )}
-        <div className="flex gap-2 justify-end">
+        <div className={cn("flex gap-2 justify-end")}>
           <Button
             type="button"
             variant="outline"
@@ -79,7 +79,7 @@ function AddProjectDialog({ onClose }: Props) {
             variant="default"
             size="sm"
             disabled={loading || !url.trim()}
-            className={cn(loading && "animate-pulse-subtle")}
+            className={cn({ "animate-pulse-subtle": loading })}
           >
             {loading ? "Cloning..." : "Add"}
           </Button>

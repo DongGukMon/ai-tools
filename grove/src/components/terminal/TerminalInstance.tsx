@@ -13,6 +13,8 @@ import {
   shouldEnableTerminalWebgl,
 } from "../../lib/terminal-input";
 import "@xterm/xterm/css/xterm.css";
+import { cn } from "../../lib/cn";
+
 
 interface Props {
   ptyId: string;
@@ -222,7 +224,7 @@ export default function TerminalInstance({ ptyId }: Props) {
 
   if (error) {
     return (
-      <div className="absolute inset-0 p-3 text-sm text-[var(--color-danger)]">
+      <div className={cn("absolute inset-0 p-3 text-sm text-[var(--color-danger)]")}>
         {error}
       </div>
     );
@@ -230,13 +232,13 @@ export default function TerminalInstance({ ptyId }: Props) {
 
   return (
     <div
-      className="absolute inset-0 p-1"
+      className={cn("absolute inset-0 p-1")}
       onClick={() => {
         setFocusedPtyId(ptyId);
         terminalRef.current?.focus();
       }}
     >
-      <div ref={termRef} className="terminal-instance h-full w-full" />
+      <div ref={termRef} className={cn("terminal-instance h-full w-full")} />
     </div>
   );
 }

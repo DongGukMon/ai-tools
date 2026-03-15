@@ -4,6 +4,8 @@ import { useTerminalCommandPipeline } from "../../hooks/useTerminalCommandPipeli
 import type { TerminalCommandDefinition } from "../../lib/terminal-command-pipeline";
 import ThemeSettings from "./ThemeSettings";
 import { Button } from "../ui/button";
+import { cn } from "../../lib/cn";
+
 
 const terminalCommandIcons = {
   settings: Settings,
@@ -22,8 +24,8 @@ export default function TerminalToolbar() {
 
   return (
     <>
-      <div className="flex items-center justify-end px-2 h-[28px] shrink-0 border-b border-[var(--color-border)] bg-[var(--color-bg)]">
-        <div className="flex items-center gap-0.5">
+      <div className={cn("flex items-center justify-end px-2 h-[28px] shrink-0 border-b border-[var(--color-border)] bg-[var(--color-bg)]")}>
+        <div className={cn("flex items-center gap-0.5")}>
           {commands.map((command) => {
             const Icon = terminalCommandIcons[command.icon];
             const destructive = command.id === "terminal-close";
@@ -33,11 +35,15 @@ export default function TerminalToolbar() {
                 key={command.id}
                 variant="ghost"
                 size="icon"
-                className={
-                  destructive
-                    ? "w-[24px] h-[24px] rounded-[var(--radius-sm)] text-[var(--color-text-tertiary)] hover:text-[var(--color-danger)] hover:bg-[var(--color-danger-bg)] disabled:opacity-20 disabled:cursor-not-allowed"
-                    : "w-[24px] h-[24px] rounded-[var(--radius-sm)] text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-tertiary)] disabled:opacity-20 disabled:cursor-not-allowed"
-                }
+                className={cn(
+                  "w-[24px] h-[24px] rounded-[var(--radius-sm)] text-[var(--color-text-tertiary)] disabled:opacity-20 disabled:cursor-not-allowed",
+                  {
+                    "hover:text-[var(--color-danger)] hover:bg-[var(--color-danger-bg)]":
+                      destructive,
+                    "hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-tertiary)]":
+                      !destructive,
+                  },
+                )}
                 onClick={() => {
                   executeCommand(command).catch(() => {});
                 }}

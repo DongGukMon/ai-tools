@@ -19,20 +19,23 @@ export default function CommitList({
   const isChangesSelected = selectedView === "changes";
 
   return (
-    <div className="border-b border-[var(--color-border)] shrink-0">
+    <div className={cn("border-b border-[var(--color-border)] shrink-0")}>
       {/* Section header */}
-      <div className="text-[11px] uppercase tracking-wider font-medium text-[var(--color-text-tertiary)] px-3 h-[28px] flex items-center border-b border-[var(--color-border)] select-none">
+      <div className={cn("text-[11px] uppercase tracking-wider font-medium text-[var(--color-text-tertiary)] px-3 h-[28px] flex items-center border-b border-[var(--color-border)] select-none")}>
         Commits
       </div>
 
-      <div className="max-h-[180px] overflow-y-auto">
+      <div className={cn("max-h-[180px] overflow-y-auto")}>
         {/* Working changes entry */}
         <div
           className={cn(
             "flex items-center gap-2.5 px-3 h-[32px] cursor-pointer select-none overflow-hidden transition-colors duration-100",
-            isChangesSelected
-              ? "bg-[var(--color-primary-light)] border-l-[3px] border-l-[var(--color-primary)]"
-              : "hover:bg-[var(--color-bg-tertiary)] border-l-[3px] border-l-transparent"
+            {
+              "bg-[var(--color-primary-light)] border-l-[3px] border-l-[var(--color-primary)]":
+                isChangesSelected,
+              "hover:bg-[var(--color-bg-tertiary)] border-l-[3px] border-l-transparent":
+                !isChangesSelected,
+            },
           )}
           onClick={() => onSelectView("changes")}
         >
@@ -40,14 +43,21 @@ export default function CommitList({
           <span
             className={cn(
               "w-[7px] h-[7px] rounded-full shrink-0",
-              hasChanges ? "bg-[var(--color-primary)]" : "bg-[var(--color-text-muted)]"
+              {
+                "bg-[var(--color-primary)]": hasChanges,
+                "bg-[var(--color-text-muted)]": !hasChanges,
+              },
             )}
           />
-          <span className={cn("flex-1 truncate text-[13px]", isChangesSelected ? "font-medium text-[var(--color-text)]" : "text-[var(--color-text)]")}>
+          <span
+            className={cn("flex-1 truncate text-[13px] text-[var(--color-text)]", {
+              "font-medium": isChangesSelected,
+            })}
+          >
             Working Changes
           </span>
           {hasChanges && (
-            <span className="text-[11px] font-mono text-[var(--color-text-tertiary)] tabular-nums">
+            <span className={cn("text-[11px] font-mono text-[var(--color-text-tertiary)] tabular-nums")}>
               {fileStatuses.length}
             </span>
           )}
@@ -62,23 +72,30 @@ export default function CommitList({
               key={commit.hash}
               className={cn(
                 "flex items-center gap-2 px-3 h-[32px] cursor-pointer select-none overflow-hidden transition-colors duration-100",
-                isSelected
-                  ? "bg-[var(--color-primary-light)] border-l-[3px] border-l-[var(--color-primary)]"
-                  : "hover:bg-[var(--color-bg-tertiary)] border-l-[3px] border-l-transparent"
+                {
+                  "bg-[var(--color-primary-light)] border-l-[3px] border-l-[var(--color-primary)]":
+                    isSelected,
+                  "hover:bg-[var(--color-bg-tertiary)] border-l-[3px] border-l-transparent":
+                    !isSelected,
+                },
               )}
               onClick={() => onSelectView(commit)}
             >
               <GitCommit
                 size={12}
-                className="shrink-0 text-[var(--color-text-tertiary)]"
+                className={cn("shrink-0 text-[var(--color-text-tertiary)]")}
               />
-              <span className="font-mono text-[11px] shrink-0 text-[var(--color-text-tertiary)]">
+              <span className={cn("font-mono text-[11px] shrink-0 text-[var(--color-text-tertiary)]")}>
                 {commit.shortHash}
               </span>
-              <span className={cn("min-w-0 flex-1 truncate text-[12px]", isSelected ? "text-[var(--color-text)] font-medium" : "text-[var(--color-text)]")}>
+              <span
+                className={cn("min-w-0 flex-1 truncate text-[12px] text-[var(--color-text)]", {
+                  "font-medium": isSelected,
+                })}
+              >
                 {commit.message.split("\n")[0]}
               </span>
-              <span className="text-[11px] shrink-0 truncate max-w-[80px] text-[var(--color-text-tertiary)]">
+              <span className={cn("text-[11px] shrink-0 truncate max-w-[80px] text-[var(--color-text-tertiary)]")}>
                 {commit.author}
               </span>
             </div>

@@ -6,6 +6,8 @@ import { runCommand } from "../../lib/command";
 import { useTerminal } from "../../hooks/useTerminal";
 import SplitContainer from "./SplitContainer";
 import TerminalToolbar from "./TerminalToolbar";
+import { cn } from "../../lib/cn";
+
 
 export default function TerminalPanel() {
   const sessions = useTerminalStore((s) => s.sessions);
@@ -65,8 +67,8 @@ export default function TerminalPanel() {
 
   if (error) {
     return (
-      <div className="flex flex-col h-full bg-[var(--color-bg)]">
-        <div className="flex items-center justify-center flex-1 text-[13px] text-[var(--color-danger)] px-4">
+      <div className={cn("flex flex-col h-full bg-[var(--color-bg)]")}>
+        <div className={cn("flex items-center justify-center flex-1 text-[13px] text-[var(--color-danger)] px-4")}>
           Error: {error}
         </div>
       </div>
@@ -75,8 +77,8 @@ export default function TerminalPanel() {
 
   if (!theme) {
     return (
-      <div className="flex flex-col h-full bg-[var(--color-bg)]">
-        <div className="flex items-center justify-center flex-1 text-[13px] text-[var(--color-text-tertiary)]">
+      <div className={cn("flex flex-col h-full bg-[var(--color-bg)]")}>
+        <div className={cn("flex items-center justify-center flex-1 text-[13px] text-[var(--color-text-tertiary)]")}>
           Loading...
         </div>
       </div>
@@ -86,11 +88,11 @@ export default function TerminalPanel() {
   const sessionEntries = Object.entries(sessions);
 
   return (
-    <div className="flex flex-col h-full bg-[var(--color-bg)]">
+    <div className={cn("flex flex-col h-full bg-[var(--color-bg)]")}>
       <TerminalToolbar />
-      <div className="flex-1 relative overflow-hidden">
+      <div className={cn("flex-1 relative overflow-hidden")}>
         {!activeWorktree ? (
-          <div className="flex items-center justify-center h-full text-[13px] text-[var(--color-text-tertiary)]">
+          <div className={cn("flex items-center justify-center h-full text-[13px] text-[var(--color-text-tertiary)]")}>
             Select a worktree to open terminal
           </div>
         ) : (
@@ -98,7 +100,7 @@ export default function TerminalPanel() {
           sessionEntries.map(([path, node]) => (
             <div
               key={path}
-              className="absolute inset-0"
+              className={cn("absolute inset-0")}
               style={{ display: path === activeWorktree ? "block" : "none" }}
             >
               <SplitContainer node={node} />
