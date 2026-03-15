@@ -1,0 +1,98 @@
+# Grove
+
+Tauri v2 macOS app — Git project manager + split terminal + diff viewer.
+
+## Stack
+
+- **Backend**: Rust (Tauri v2, portable-pty, git2, plist)
+- **Frontend**: React 19, TypeScript, Vite, Tailwind CSS v4
+- **UI**: allotment (split panes), xterm.js (terminal), lucide-react (icons), Zustand (state)
+
+## Commands
+
+```bash
+pnpm install
+pnpm tauri dev         # Dev server + Tauri window
+pnpm tauri build       # Production build
+pnpm vitest run        # Unit tests (split-tree)
+```
+
+## Structure
+
+```
+src/
+├── components/
+│   ├── ui/                # Design system: Button, Input, Badge, Dialog, Toast
+│   ├── sidebar/           # Project tree, worktree management
+│   ├── terminal/          # xterm.js + PTY + split panes + theme settings
+│   └── diff/              # Commit list, file list, diff viewer, hunk actions
+├── store/                 # Zustand: project.ts, terminal.ts, diff.ts, toast.ts
+├── hooks/                 # useProject, useTerminal, useDiff, useToast
+├── lib/
+│   ├── tauri.ts           # Type-safe IPC wrappers
+│   ├── split-tree.ts      # Terminal layout tree operations (pure functions)
+│   ├── terminal-themes.ts # Preset terminal color themes
+│   └── cn.ts              # clsx + tailwind-merge utility
+├── types/                 # Shared TypeScript interfaces
+├── Layout.tsx             # 3-panel allotment layout
+└── App.tsx                # Root (Layout + ToastContainer)
+
+src-tauri/src/
+├── lib.rs                 # All Tauri commands (config, git_project, pty, git_diff)
+├── config.rs              # App config + terminal layout persistence
+├── git_project.rs         # Clone, worktree, project CRUD
+├── git_diff.rs            # Diff, stage/unstage/discard (file/hunk/line)
+├── pty.rs                 # PTY spawn, read, write, resize, close
+└── terminal_theme.rs      # Terminal.app color auto-detection (AppleScript)
+```
+
+## App Data
+
+- `~/.grove/config.json` — app settings, terminal theme override
+- `~/.grove/terminal-layouts.json` — split tree structure + size ratios per worktree
+- `~/.grove/<host>/<org>/<repo>/source/` — SOT clone (always main)
+- `~/.grove/<host>/<org>/<repo>/worktrees/<name>/` — git worktrees
+
+## Code Style
+
+### `cn()` for className composition
+
+- If `className` has multiple classes, wrap it in `cn(...)`
+- Use object syntax for conditional classes
+- Do not use ternary expressions inside `cn(...)`
+
+```tsx
+// ❌
+className={`flex ${isActive ? "bg-blue-500" : "text-gray-500"}`}
+className="flex items-center gap-2"
+className={cn("flex", isActive ? "bg-blue-500" : "text-gray-500")}
+className={cn("flex", isActive && "bg-blue-500")}
+
+// ✅
+className={cn("flex items-center gap-2")}
+className={cn("flex", {
+  "bg-blue-500": isActive,
+  "text-gray-500": !isActive,
+})}
+```
+
+### UI primitives — no raw `<button>` / `<input>`
+
+```tsx
+import { Button } from "../ui/button";
+<Button variant="default" size="sm">Save</Button>
+// Variants: default, secondary, ghost, outline, destructive
+// Sizes: sm, md, lg, icon
+```
+
+Available: `Button`, `Input`, `Badge`, `Dialog`, `Toast` (via `useToast()`)
+
+### Layout sizes — 0-1 ratios, not pixels
+
+```json
+{ "sizes": [0.3, 0.7] }
+```
+
+### Tests — write alongside features
+
+Split-tree operations tested in `src/lib/split-tree.test.ts`. Run: `npx vitest run`.
