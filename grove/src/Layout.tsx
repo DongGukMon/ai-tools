@@ -6,18 +6,23 @@ import Sidebar from "./components/sidebar/Sidebar";
 import TerminalPanel from "./components/terminal/TerminalPanel";
 import DiffPanel from "./components/diff/DiffPanel";
 import { usePanelLayoutStore } from "./store/panel-layout";
+import { useFullscreen } from "./hooks/useFullscreen";
 
 const TITLE_BAR_HEIGHT = 38;
 
 function TitleBar() {
+  const isFullscreen = useFullscreen();
+
   return (
     <div
       className="flex items-center shrink-0 bg-sidebar select-none border-b border-border"
       style={{ height: TITLE_BAR_HEIGHT }}
       data-tauri-drag-region
     >
-      {/* Traffic light spacer (macOS) */}
-      <div className="w-[86px] shrink-0" data-tauri-drag-region />
+      {/* Traffic light spacer (macOS) — hidden in fullscreen */}
+      {!isFullscreen && (
+        <div className="w-[86px] shrink-0" data-tauri-drag-region />
+      )}
 
       {/* Logo */}
       <div className="flex items-center gap-1" data-tauri-drag-region>
