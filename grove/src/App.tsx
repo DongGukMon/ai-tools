@@ -5,7 +5,9 @@ import { initBackendLogPipe } from "./lib/logger";
 
 function App() {
   useEffect(() => {
-    initBackendLogPipe();
+    let cleanup: (() => void) | undefined;
+    initBackendLogPipe().then((fn) => { cleanup = fn; });
+    return () => { cleanup?.(); };
   }, []);
 
   return (

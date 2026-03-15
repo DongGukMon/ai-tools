@@ -1,12 +1,19 @@
 /// Debug-only log macros. Calls are compiled out entirely in release builds.
 
+#[derive(Clone, serde::Serialize)]
+pub struct LogPayload {
+    pub level: &'static str,
+    pub tag: String,
+    pub message: String,
+}
+
 macro_rules! log_emit {
     ($level:expr, $tag:expr, $msg:expr) => {
-        crate::eventbus::emit("grove:log", &serde_json::json!({
-            "level": $level,
-            "tag": $tag,
-            "message": $msg,
-        }));
+        crate::eventbus::emit("grove:log", crate::logger::LogPayload {
+            level: $level,
+            tag: $tag.to_string(),
+            message: $msg.to_string(),
+        });
         eprintln!("[grove:{}] [{}] {}", $tag, $level, $msg);
     };
 }
@@ -15,7 +22,7 @@ macro_rules! log_emit {
 macro_rules! grove_info {
     ($tag:expr, $msg:expr) => {
         #[cfg(debug_assertions)]
-        { log_emit!("info", $tag, $msg); }
+        { $crate::logger::log_emit!("info", $tag, $msg); }
     };
 }
 
@@ -23,14 +30,14 @@ macro_rules! grove_info {
 macro_rules! grove_warn {
     ($tag:expr, $msg:expr) => {
         #[cfg(debug_assertions)]
-        { log_emit!("warn", $tag, $msg); }
+        { $crate::logger::log_emit!("warn", $tag, $msg); }
     };
 }
 
 #[allow(unused_macros)]
 macro_rules! grove_error {
     ($tag:expr, $msg:expr) => {
-        log_emit!("error", $tag, $msg);
+        $crate::logger::log_emit!("error", $tag, $msg);
     };
 }
 
