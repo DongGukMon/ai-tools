@@ -12,7 +12,7 @@ const TITLE_BAR_HEIGHT = 38;
 function TitleBar() {
   return (
     <div
-      className="flex items-center shrink-0 bg-sidebar select-none"
+      className="flex items-center shrink-0 bg-sidebar select-none border-b border-border"
       style={{ height: TITLE_BAR_HEIGHT }}
       data-tauri-drag-region
     >
