@@ -116,7 +116,11 @@ fn get_default_profile_name() -> Option<String> {
     }
 
     let name = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if name.is_empty() { None } else { Some(name) }
+    if name.is_empty() {
+        None
+    } else {
+        Some(name)
+    }
 }
 
 /// Extract NSRGB float components from a plist NSColor <data> block.
@@ -137,7 +141,9 @@ fn extract_nscolor(xml: &str, profile: &str, key: &str) -> Option<(f64, f64, f64
         .filter(|c| !c.is_whitespace())
         .collect();
 
-    let bytes = base64::engine::general_purpose::STANDARD.decode(&b64).ok()?;
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(&b64)
+        .ok()?;
 
     // Find NSRGB marker, then scan for the float string
     let marker = b"NSRGB";
@@ -169,7 +175,11 @@ fn extract_nscolor(xml: &str, profile: &str, key: &str) -> Option<(f64, f64, f64
         .collect();
 
     if parts.len() >= 3 {
-        let alpha = if parts.len() >= 4 { Some(parts[3]) } else { None };
+        let alpha = if parts.len() >= 4 {
+            Some(parts[3])
+        } else {
+            None
+        };
         Some((parts[0], parts[1], parts[2], alpha))
     } else {
         None
@@ -186,8 +196,7 @@ fn floats_to_hex(r: f64, g: f64, b: f64) -> String {
 
 /// Read a color from the profile, falling back to the Basic profile.
 fn read_color(xml: &str, profile: &str, key: &str) -> Option<(f64, f64, f64, Option<f64>)> {
-    extract_nscolor(xml, profile, key)
-        .or_else(|| extract_nscolor(xml, FALLBACK_PROFILE, key))
+    extract_nscolor(xml, profile, key).or_else(|| extract_nscolor(xml, FALLBACK_PROFILE, key))
 }
 
 /// Read a color as hex, falling back to Basic profile.
@@ -224,7 +233,11 @@ fn read_font_settings() -> (Option<String>, Option<f64>) {
         .and_then(|o| {
             if o.status.success() {
                 let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
-                if s.is_empty() { None } else { Some(s) }
+                if s.is_empty() {
+                    None
+                } else {
+                    Some(s)
+                }
             } else {
                 None
             }
@@ -236,7 +249,10 @@ fn read_font_settings() -> (Option<String>, Option<f64>) {
         .ok()
         .and_then(|o| {
             if o.status.success() {
-                String::from_utf8_lossy(&o.stdout).trim().parse::<f64>().ok()
+                String::from_utf8_lossy(&o.stdout)
+                    .trim()
+                    .parse::<f64>()
+                    .ok()
             } else {
                 None
             }
@@ -257,7 +273,10 @@ pub fn detect_terminal_theme() -> DetectedThemeResult {
         }
         None => {
             crate::logger::grove_warn!("theme", "failed to read default profile name");
-            return DetectedThemeResult { theme, detected: false };
+            return DetectedThemeResult {
+                theme,
+                detected: false,
+            };
         }
     };
 
@@ -265,12 +284,16 @@ pub fn detect_terminal_theme() -> DetectedThemeResult {
         Some(x) => x,
         None => {
             crate::logger::grove_warn!("theme", "failed to export Terminal.app plist");
-            return DetectedThemeResult { theme, detected: false };
+            return DetectedThemeResult {
+                theme,
+                detected: false,
+            };
         }
     };
 
     // Background (with alpha blending)
-    let bg_detected = if let Some((r, g, b, alpha)) = read_color(&xml, &profile, "BackgroundColor") {
+    let bg_detected = if let Some((r, g, b, alpha)) = read_color(&xml, &profile, "BackgroundColor")
+    {
         let hex = floats_to_hex(r, g, b);
         let a = alpha.unwrap_or(1.0);
         crate::logger::grove_info!("theme", &format!("bg: {} alpha: {:.4}", hex, a));
@@ -331,7 +354,10 @@ pub fn detect_terminal_theme() -> DetectedThemeResult {
             ansi_count += 1;
         }
     }
-    crate::logger::grove_info!("theme", &format!("ANSI colors: {}/16 from plist", ansi_count));
+    crate::logger::grove_info!(
+        "theme",
+        &format!("ANSI colors: {}/16 from plist", ansi_count)
+    );
 
     // Font settings
     let (font_name, font_size) = read_font_settings();

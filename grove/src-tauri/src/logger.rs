@@ -9,11 +9,14 @@ pub struct LogPayload {
 
 macro_rules! log_emit {
     ($level:expr, $tag:expr, $msg:expr) => {
-        crate::eventbus::emit("grove:log", crate::logger::LogPayload {
-            level: $level,
-            tag: $tag.to_string(),
-            message: $msg.to_string(),
-        });
+        crate::eventbus::emit(
+            "grove:log",
+            crate::logger::LogPayload {
+                level: $level,
+                tag: $tag.to_string(),
+                message: $msg.to_string(),
+            },
+        );
         eprintln!("[grove:{}] [{}] {}", $tag, $level, $msg);
     };
 }
@@ -22,7 +25,9 @@ macro_rules! log_emit {
 macro_rules! grove_info {
     ($tag:expr, $msg:expr) => {
         #[cfg(debug_assertions)]
-        { $crate::logger::log_emit!("info", $tag, $msg); }
+        {
+            $crate::logger::log_emit!("info", $tag, $msg);
+        }
     };
 }
 
@@ -30,7 +35,9 @@ macro_rules! grove_info {
 macro_rules! grove_warn {
     ($tag:expr, $msg:expr) => {
         #[cfg(debug_assertions)]
-        { $crate::logger::log_emit!("warn", $tag, $msg); }
+        {
+            $crate::logger::log_emit!("warn", $tag, $msg);
+        }
     };
 }
 
@@ -42,10 +49,10 @@ macro_rules! grove_error {
 }
 
 #[allow(unused_imports)]
+pub(crate) use grove_error;
+#[allow(unused_imports)]
 pub(crate) use grove_info;
 #[allow(unused_imports)]
 pub(crate) use grove_warn;
-#[allow(unused_imports)]
-pub(crate) use grove_error;
 #[allow(unused_imports)]
 pub(crate) use log_emit;
