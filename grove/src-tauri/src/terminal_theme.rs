@@ -55,11 +55,42 @@ impl Default for TerminalTheme {
     }
 }
 
-/// Read a color key from Terminal.app's default profile via `defaults read`.
-/// Returns hex color string or None.
-fn read_terminal_color(profile_name: &str, key: &str) -> Option<String> {
-    let output = Command::new("defaults")
-        .args(["read", "com.apple.Terminal", profile_name])
+/// Detected Terminal.app colors (bg, fg, cursor as hex strings).
+struct TerminalColors {
+    bg: String,
+    fg: String,
+    cursor: String,
+}
+
+/// Use AppleScript to query Terminal.app's scripting interface for the current
+/// profile's colors. Terminal.app exposes colors as {r, g, b} lists with
+/// 16-bit values (0-65535). We divide by 257 to get 8-bit (0-255) values.
+fn detect_terminal_colors() -> Option<TerminalColors> {
+    let profile = get_default_profile_name()?;
+
+    let script = format!(
+        r#"
+        tell application "Terminal"
+            set prof to settings set "{profile}"
+            set bgColor to background color of prof
+            set fgColor to normal text color of prof
+            set crColor to cursor color of prof
+            set bgR to (item 1 of bgColor) / 257
+            set bgG to (item 2 of bgColor) / 257
+            set bgB to (item 3 of bgColor) / 257
+            set fgR to (item 1 of fgColor) / 257
+            set fgG to (item 2 of fgColor) / 257
+            set fgB to (item 3 of fgColor) / 257
+            set crR to (item 1 of crColor) / 257
+            set crG to (item 2 of crColor) / 257
+            set crB to (item 3 of crColor) / 257
+            return (bgR as integer) & "," & (bgG as integer) & "," & (bgB as integer) & "|" & (fgR as integer) & "," & (fgG as integer) & "," & (fgB as integer) & "|" & (crR as integer) & "," & (crG as integer) & "," & (crB as integer)
+        end tell
+        "#
+    );
+
+    let output = Command::new("osascript")
+        .args(["-e", &script])
         .output()
         .ok()?;
 
@@ -67,15 +98,111 @@ fn read_terminal_color(profile_name: &str, key: &str) -> Option<String> {
         return None;
     }
 
-    let text = String::from_utf8_lossy(&output.stdout);
+    let result = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    // Parse "r,g,b|r,g,b|r,g,b"
+    let parts: Vec<&str> = result.split('|').collect();
+    if parts.len() < 3 {
+        return None;
+    }
 
-    // Terminal.app stores colors as NSArchiver data in the plist.
-    // The `defaults read` output for the profile is a dict. We look for
-    // color keys that contain RGB float values.
-    // Since NSArchiver colors are opaque binary, we fall back to reading
-    // known profile attributes when available.
-    let _ = (text, key);
-    None
+    let bg = parse_rgb(parts[0])?;
+    let fg = parse_rgb(parts[1])?;
+    let cursor = parse_rgb(parts[2])?;
+
+    Some(TerminalColors { bg, fg, cursor })
+}
+
+/// Try to read the 16-color ANSI palette from Terminal.app via AppleScript.
+/// Returns a Vec of 16 hex color strings in standard ANSI order, or None.
+fn detect_ansi_colors() -> Option<Vec<String>> {
+    let profile = get_default_profile_name()?;
+
+    // Terminal.app scripting dictionary exposes ANSI colors as individual
+    // properties on the settings set. We query all 16 in one script call.
+    let script = format!(
+        r#"
+        tell application "Terminal"
+            set prof to settings set "{profile}"
+            set colorNames to {{ANSI black color, ANSI red color, ANSI green color, ANSI yellow color, ANSI blue color, ANSI magenta color, ANSI cyan color, ANSI white color, ANSI bright black color, ANSI bright red color, ANSI bright green color, ANSI bright yellow color, ANSI bright blue color, ANSI bright magenta color, ANSI bright cyan color, ANSI bright white color}}
+            set out to ""
+            repeat with c in colorNames
+                set cv to c of prof
+                set r to (item 1 of cv) / 257
+                set g to (item 2 of cv) / 257
+                set b to (item 3 of cv) / 257
+                if out is not "" then set out to out & "|"
+                set out to out & (r as integer) & "," & (g as integer) & "," & (b as integer)
+            end repeat
+            return out
+        end tell
+        "#
+    );
+
+    let output = Command::new("osascript")
+        .args(["-e", &script])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let result = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let parts: Vec<&str> = result.split('|').collect();
+    if parts.len() < 16 {
+        return None;
+    }
+
+    let colors: Option<Vec<String>> = parts.iter().take(16).map(|p| parse_rgb(p)).collect();
+    colors
+}
+
+/// Parse a comma-separated "r,g,b" string (0-255 values) into a "#rrggbb" hex string.
+fn parse_rgb(s: &str) -> Option<String> {
+    let nums: Vec<u8> = s
+        .split(',')
+        .filter_map(|n| n.trim().parse::<u8>().ok())
+        .collect();
+    if nums.len() == 3 {
+        Some(format!("#{:02x}{:02x}{:02x}", nums[0], nums[1], nums[2]))
+    } else {
+        None
+    }
+}
+
+/// Compute perceived luminance (0-255) from a "#rrggbb" hex color.
+/// Uses the standard BT.601 luma formula.
+fn hex_luminance(hex: &str) -> u8 {
+    let hex = hex.trim_start_matches('#');
+    if hex.len() < 6 {
+        return 128; // neutral fallback
+    }
+    let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(128) as f64;
+    let g = u8::from_str_radix(&hex[2..4], 16).unwrap_or(128) as f64;
+    let b = u8::from_str_radix(&hex[4..6], 16).unwrap_or(128) as f64;
+    (0.299 * r + 0.587 * g + 0.114 * b) as u8
+}
+
+/// Light-theme ANSI color palette. Used when the detected background is light.
+fn light_ansi_palette() -> [&'static str; 16] {
+    [
+        "#000000", // black
+        "#c91b00", // red
+        "#00a600", // green
+        "#c7c400", // yellow
+        "#0225c7", // blue
+        "#c930c7", // magenta
+        "#00a6b2", // cyan
+        "#c7c7c7", // white
+        "#686868", // bright black
+        "#ff6e67", // bright red
+        "#5ffa68", // bright green
+        "#fffc67", // bright yellow
+        "#6871ff", // bright blue
+        "#ff77ff", // bright magenta
+        "#60fdff", // bright cyan
+        "#ffffff", // bright white
+    ]
 }
 
 /// Get the default profile name from Terminal.app preferences.
@@ -133,10 +260,62 @@ fn read_font_settings() -> (Option<String>, Option<f64>) {
 pub fn detect_terminal_theme() -> TerminalTheme {
     let mut theme = TerminalTheme::default();
 
-    // Try to get the default profile name for potential future color extraction
-    let _profile_name = get_default_profile_name();
+    // 1. Try AppleScript color detection for bg/fg/cursor
+    if let Some(colors) = detect_terminal_colors() {
+        theme.background = colors.bg.clone();
+        theme.foreground = colors.fg;
+        theme.cursor = colors.cursor;
 
-    // Try reading font settings
+        // 2. Try reading the full ANSI palette via AppleScript
+        if let Some(ansi) = detect_ansi_colors() {
+            // ansi is ordered: black, red, green, yellow, blue, magenta, cyan, white,
+            //                  bright_black .. bright_white
+            if ansi.len() >= 16 {
+                theme.black = ansi[0].clone();
+                theme.red = ansi[1].clone();
+                theme.green = ansi[2].clone();
+                theme.yellow = ansi[3].clone();
+                theme.blue = ansi[4].clone();
+                theme.magenta = ansi[5].clone();
+                theme.cyan = ansi[6].clone();
+                theme.white = ansi[7].clone();
+                theme.bright_black = ansi[8].clone();
+                theme.bright_red = ansi[9].clone();
+                theme.bright_green = ansi[10].clone();
+                theme.bright_yellow = ansi[11].clone();
+                theme.bright_blue = ansi[12].clone();
+                theme.bright_magenta = ansi[13].clone();
+                theme.bright_cyan = ansi[14].clone();
+                theme.bright_white = ansi[15].clone();
+            }
+        } else {
+            // 3. ANSI detection failed — pick a palette based on background luminance
+            let lum = hex_luminance(&colors.bg);
+            if lum >= 128 {
+                // Light background: use light-theme ANSI palette
+                let p = light_ansi_palette();
+                theme.black = p[0].to_string();
+                theme.red = p[1].to_string();
+                theme.green = p[2].to_string();
+                theme.yellow = p[3].to_string();
+                theme.blue = p[4].to_string();
+                theme.magenta = p[5].to_string();
+                theme.cyan = p[6].to_string();
+                theme.white = p[7].to_string();
+                theme.bright_black = p[8].to_string();
+                theme.bright_red = p[9].to_string();
+                theme.bright_green = p[10].to_string();
+                theme.bright_yellow = p[11].to_string();
+                theme.bright_blue = p[12].to_string();
+                theme.bright_magenta = p[13].to_string();
+                theme.bright_cyan = p[14].to_string();
+                theme.bright_white = p[15].to_string();
+            }
+            // Dark background: keep the grove-dark defaults from Default impl
+        }
+    }
+
+    // 4. Always try to detect font settings
     let (font_name, font_size) = read_font_settings();
     if let Some(name) = font_name {
         theme.font_family = name;
@@ -144,13 +323,6 @@ pub fn detect_terminal_theme() -> TerminalTheme {
     if let Some(size) = font_size {
         theme.font_size = size;
     }
-
-    // Terminal.app colors are stored as NSArchiver binary data in the plist,
-    // which makes them non-trivial to parse via `defaults read`.
-    // For now, we use sensible dark theme defaults that match common Terminal.app themes.
-    // W1 provides the infrastructure; color extraction can be enhanced later
-    // if a specific profile's colors need to be matched exactly.
-    let _ = read_terminal_color("", "");
 
     theme
 }

@@ -3,6 +3,7 @@ import { ChevronRight, ChevronDown, X, Plus, GitFork } from "lucide-react";
 import type { Project } from "../../types";
 import { useProjectStore } from "../../store/project";
 import WorktreeItem from "./WorktreeItem";
+import { Button } from "../ui/button";
 
 interface Props {
   project: Project;
@@ -54,13 +55,15 @@ function ProjectItem({ project }: Props) {
         <span className="min-w-0 flex-1 text-[13px] truncate font-semibold text-[#374151]">
           {project.org}/{project.repo}
         </span>
-        <button
-          className="flex items-center justify-center w-[20px] h-[20px] rounded-md opacity-0 group-hover:opacity-100 text-[#9ca3af] hover:text-[var(--color-danger)] hover:bg-[var(--color-danger-bg)] transition-all duration-100"
+        <Button
+          variant="ghost"
+          size="icon"
+          className="w-[20px] h-[20px] rounded-md opacity-0 group-hover:opacity-100 text-[#9ca3af] hover:text-[var(--color-danger)] hover:bg-[var(--color-danger-bg)]"
           onClick={handleRemoveProject}
           title="Remove project"
         >
           <X size={12} strokeWidth={2} />
-        </button>
+        </Button>
       </div>
 
       {/* Worktree list */}
@@ -109,13 +112,15 @@ function ProjectItem({ project }: Props) {
               )}
             </div>
           ) : (
-            <button
-              className="flex items-center gap-1.5 w-full px-2.5 py-1.5 text-[11px] font-medium text-[#9ca3af] hover:text-[var(--color-primary)] rounded-lg hover:bg-white/80 transition-all duration-100"
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start gap-1.5 px-2.5 py-1.5 text-[11px] font-medium text-[#9ca3af] hover:text-[var(--color-primary)] rounded-lg hover:bg-white/80"
               onClick={() => setAdding(true)}
             >
               <Plus size={12} strokeWidth={2} />
               <span>Add worktree</span>
-            </button>
+            </Button>
           )}
         </div>
       )}

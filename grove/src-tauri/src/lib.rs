@@ -106,16 +106,38 @@ fn get_app_config() -> AppConfig {
         .to_string_lossy()
         .to_string();
 
+    // Try to load saved config; fall back to detected theme
+    let saved = load_app_config_from_file();
     AppConfig {
         base_dir,
-        terminal_theme: Some(terminal_theme::detect_terminal_theme()),
+        terminal_theme: saved
+            .and_then(|c| c.terminal_theme)
+            .or_else(|| Some(terminal_theme::detect_terminal_theme())),
     }
 }
 
 #[tauri::command]
-fn save_app_config(_config: AppConfig) -> Result<(), String> {
-    // Config persistence will be implemented with the config module
-    Ok(())
+fn save_app_config(config: AppConfig) -> Result<(), String> {
+    let path = dirs::home_dir()
+        .ok_or("No home directory found")?
+        .join(".grove")
+        .join("config.json");
+
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create config dir: {e}"))?;
+    }
+
+    let content = serde_json::to_string_pretty(&config)
+        .map_err(|e| format!("Failed to serialize config: {e}"))?;
+    std::fs::write(&path, content)
+        .map_err(|e| format!("Failed to write config: {e}"))
+}
+
+fn load_app_config_from_file() -> Option<AppConfig> {
+    let path = dirs::home_dir()?.join(".grove").join("config.json");
+    let content = std::fs::read_to_string(&path).ok()?;
+    serde_json::from_str(&content).ok()
 }
 
 // === GIT PROJECT COMMANDS (W2) ===

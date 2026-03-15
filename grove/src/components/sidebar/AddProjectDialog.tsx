@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useProjectStore } from "../../store/project";
+import { Input } from "../ui/input";
+import { Button } from "../ui/button";
 
 interface Props {
   onClose: () => void;
@@ -31,14 +33,14 @@ function AddProjectDialog({ onClose }: Props) {
   return (
     <div className="px-3 py-3 border-b border-[var(--color-border)]">
       <form onSubmit={handleSubmit}>
-        <input
-          className="w-full px-3 py-[7px] text-[13px] rounded-[var(--radius-md)] border border-[var(--color-border)] bg-white text-[var(--color-text)] outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary-light)] transition-all duration-150 placeholder:text-[var(--color-text-muted)] mb-2"
+        <Input
           type="text"
           placeholder="https://github.com/org/repo.git"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           autoFocus
           disabled={loading}
+          className="mb-2"
           onKeyDown={(e) => {
             if (e.key === "Escape") onClose();
           }}
@@ -54,21 +56,25 @@ function AddProjectDialog({ onClose }: Props) {
           </div>
         )}
         <div className="flex gap-2 justify-end">
-          <button
+          <Button
             type="button"
-            className="px-3 py-[5px] text-[12px] font-medium rounded-[var(--radius-md)] border border-[var(--color-border)] bg-white text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-tertiary)] transition-colors duration-100"
+            variant="outline"
+            size="sm"
             onClick={onClose}
             disabled={loading}
+            className="text-[var(--color-text-secondary)]"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             type="submit"
-            className={`px-3 py-[5px] text-[12px] font-medium rounded-[var(--radius-md)] bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-100 shadow-[var(--shadow-xs)] ${loading ? "animate-pulse-subtle" : ""}`}
+            variant="default"
+            size="sm"
             disabled={loading || !url.trim()}
+            className={loading ? "animate-pulse-subtle" : ""}
           >
             {loading ? "Cloning..." : "Add"}
-          </button>
+          </Button>
         </div>
       </form>
     </div>

@@ -3,6 +3,7 @@ import { Plus } from "lucide-react";
 import { useProject } from "../../hooks/useProject";
 import ProjectTree from "./ProjectTree";
 import AddProjectDialog from "./AddProjectDialog";
+import { Button } from "../ui/button";
 
 function Sidebar() {
   const { projects, loading } = useProject();
@@ -15,13 +16,15 @@ function Sidebar() {
         <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-[#8b8fa3]">
           Projects
         </span>
-        <button
-          className="flex items-center justify-center w-[24px] h-[24px] rounded-lg text-[#8b8fa3] hover:text-[var(--color-primary)] hover:bg-white hover:shadow-sm transition-all duration-150"
+        <Button
+          variant="ghost"
+          size="icon"
+          className="w-[24px] h-[24px] rounded-lg text-[#8b8fa3] hover:text-[var(--color-primary)] hover:bg-white hover:shadow-sm"
           onClick={() => setShowAddDialog(true)}
           title="Add project"
         >
           <Plus size={15} strokeWidth={2} />
-        </button>
+        </Button>
       </div>
 
       {showAddDialog && (
