@@ -132,6 +132,17 @@ describe("assignPtyIds", () => {
     expect(ids).toEqual([]);
   });
 
+  it("preserves saved sizes on nested branches", () => {
+    const template = vSplit(
+      [leaf(), hSplit([leaf(), leaf()], [0.8, 0.2])],
+      [0.322, 0.678],
+    );
+    const ids = ["x", "y", "z"];
+    const result = assignPtyIds(template, ids);
+    expect(result.sizes).toEqual([0.322, 0.678]);
+    expect(result.children![1].sizes).toEqual([0.8, 0.2]);
+  });
+
   it("assigns undefined when ids array is exhausted", () => {
     const template = hSplit([leaf(), leaf()]);
     const ids = ["only-one"];

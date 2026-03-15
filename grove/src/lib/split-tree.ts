@@ -23,6 +23,7 @@ export function assignPtyIds(node: SplitNode, ids: string[]): SplitNode {
   }
   return {
     type: node.type,
+    sizes: node.sizes,
     children: node.children?.map((c) => assignPtyIds(c, ids)),
   };
 }
