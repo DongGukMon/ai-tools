@@ -28,10 +28,10 @@ export default function CommitListItem({ commit, isSelected, onClick }: Props) {
         <p className="truncate text-sm text-foreground">
           {commit.message.split("\n")[0]}
         </p>
-        <div className="mt-1 flex items-baseline gap-2 text-xs text-muted-foreground">
-          <span className="font-mono">{commit.shortHash}</span>
-          <span>{commit.author}</span>
-          <span>{formatCommitTime(commit.date)}</span>
+        <div className="mt-1 flex items-baseline gap-2 text-xs text-muted-foreground min-w-0">
+          <span className="font-mono shrink-0">{commit.shortHash}</span>
+          <span className="truncate">{commit.author}</span>
+          <span className="shrink-0">{formatCommitTime(commit.date)}</span>
         </div>
       </div>
     </div>

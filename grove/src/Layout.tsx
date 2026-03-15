@@ -26,7 +26,7 @@ function Layout() {
   if (!loaded) return null;
 
   return (
-    <div className="h-full w-full bg-background">
+    <div className="h-full w-full bg-background border-t border-border/50">
       <Allotment
         defaultSizes={main.map((r) => r * 1000)}
         onDragStart={() => { dragging.current = true; }}

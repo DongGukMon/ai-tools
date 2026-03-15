@@ -93,10 +93,14 @@ export default function ThemeSettings({ open, onClose }: Props) {
   }, [draft, loadTheme]);
 
   const handleReset = useCallback(() => {
-    const defaultTheme = terminalThemes[DEFAULT_THEME_KEY];
-    setDraft({ ...defaultTheme });
-    setActivePreset(DEFAULT_THEME_KEY);
-  }, []);
+    if (detectedTheme) {
+      setDraft({ ...detectedTheme });
+      setActivePreset("system");
+    } else {
+      setDraft({ ...terminalThemes[DEFAULT_THEME_KEY] });
+      setActivePreset(DEFAULT_THEME_KEY);
+    }
+  }, [detectedTheme]);
 
   const [visible, setVisible] = useState(false);
   const [closing, setClosing] = useState(false);
