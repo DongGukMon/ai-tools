@@ -4,7 +4,6 @@ import type {
   AppConfig,
   Project,
   Worktree,
-  PtySession,
   FileStatus,
   CommitInfo,
   FileDiff,
@@ -66,11 +65,16 @@ export async function listWorktrees(projectId: string): Promise<Worktree[]> {
 
 // === PTY COMMANDS (W3) ===
 
-export async function createPty(worktreePath: string): Promise<PtySession> {
-  return invoke<PtySession>("create_pty", { worktreePath });
+export async function createPty(
+  id: string,
+  cwd: string,
+  cols: number,
+  rows: number,
+): Promise<void> {
+  return invoke("create_pty", { id, cwd, cols, rows });
 }
 
-export async function writePty(id: string, data: string): Promise<void> {
+export async function writePty(id: string, data: number[]): Promise<void> {
   return invoke("write_pty", { id, data });
 }
 

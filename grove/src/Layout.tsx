@@ -1,6 +1,7 @@
 import { Allotment } from "allotment";
 import "allotment/dist/style.css";
 import Sidebar from "./components/sidebar/Sidebar";
+import TerminalPanel from "./components/terminal/TerminalPanel";
 
 function Layout() {
   return (
@@ -12,9 +13,7 @@ function Layout() {
           </div>
         </Allotment.Pane>
         <Allotment.Pane>
-          <div className="panel panel-terminal">
-            <div className="panel-placeholder">Terminal (W3)</div>
-          </div>
+          <TerminalPanel />
         </Allotment.Pane>
         <Allotment.Pane preferredSize={400} minSize={200}>
           <div className="panel panel-diff">

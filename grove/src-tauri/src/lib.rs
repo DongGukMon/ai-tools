@@ -1,5 +1,7 @@
 mod config;
+mod git_diff;
 mod git_project;
+mod pty;
 mod terminal_theme;
 
 use serde::{Deserialize, Serialize};
@@ -156,100 +158,105 @@ fn list_worktrees(project_id: String) -> Result<Vec<Worktree>, String> {
 // === PTY COMMANDS (W3) ===
 
 #[tauri::command]
-fn create_pty(_worktree_path: String) -> PtySession {
-    todo!()
+fn create_pty(app_handle: tauri::AppHandle, id: String, cwd: String, cols: u16, rows: u16) -> Result<(), String> {
+    pty::create(app_handle, id, cwd, cols, rows)
 }
 
 #[tauri::command]
-fn write_pty(_id: String, _data: String) {
-    todo!()
+fn write_pty(id: String, data: Vec<u8>) -> Result<(), String> {
+    pty::write(&id, &data)
 }
 
 #[tauri::command]
-fn resize_pty(_id: String, _cols: u32, _rows: u32) {
-    todo!()
+fn resize_pty(id: String, cols: u16, rows: u16) -> Result<(), String> {
+    pty::resize(&id, cols, rows)
 }
 
 #[tauri::command]
-fn close_pty(_id: String) {
-    todo!()
+fn close_pty(id: String) -> Result<(), String> {
+    pty::close(&id)
 }
 
 // === GIT DIFF COMMANDS (W4) ===
 
 #[tauri::command]
-fn get_status(_worktree_path: String) -> Vec<FileStatus> {
-    todo!()
+fn get_status(worktree_path: String) -> Result<Vec<FileStatus>, String> {
+    git_diff::get_status_impl(&worktree_path)
 }
 
 #[tauri::command]
-fn get_commits(_worktree_path: String, _limit: u32) -> Vec<CommitInfo> {
-    todo!()
+fn get_commits(worktree_path: String, limit: u32) -> Result<Vec<CommitInfo>, String> {
+    git_diff::get_commits_impl(&worktree_path, limit)
 }
 
 #[tauri::command]
-fn get_working_diff(_worktree_path: String, _path: String) -> FileDiff {
-    todo!()
+fn get_working_diff(worktree_path: String, path: String) -> Result<FileDiff, String> {
+    git_diff::get_working_diff_impl(&worktree_path, &path)
 }
 
 #[tauri::command]
-fn get_commit_diff(_worktree_path: String, _hash: String) -> Vec<FileDiff> {
-    todo!()
+fn get_commit_diff(worktree_path: String, hash: String) -> Result<Vec<FileDiff>, String> {
+    git_diff::get_commit_diff_impl(&worktree_path, &hash)
 }
 
 #[tauri::command]
-fn stage_file(_worktree_path: String, _path: String) {
-    todo!()
+fn stage_file(worktree_path: String, path: String) -> Result<(), String> {
+    git_diff::stage_file_impl(&worktree_path, &path)
 }
 
 #[tauri::command]
-fn unstage_file(_worktree_path: String, _path: String) {
-    todo!()
+fn unstage_file(worktree_path: String, path: String) -> Result<(), String> {
+    git_diff::unstage_file_impl(&worktree_path, &path)
 }
 
 #[tauri::command]
-fn discard_file(_worktree_path: String, _path: String) {
-    todo!()
+fn discard_file(worktree_path: String, path: String) -> Result<(), String> {
+    git_diff::discard_file_impl(&worktree_path, &path)
 }
 
 #[tauri::command]
-fn stage_hunk(_worktree_path: String, _path: String, _hunk_index: u32) {
-    todo!()
+fn stage_hunk(worktree_path: String, path: String, hunk_index: u32) -> Result<(), String> {
+    git_diff::stage_hunk_impl(&worktree_path, &path, hunk_index)
 }
 
 #[tauri::command]
-fn unstage_hunk(_worktree_path: String, _path: String, _hunk_index: u32) {
-    todo!()
+fn unstage_hunk(worktree_path: String, path: String, hunk_index: u32) -> Result<(), String> {
+    git_diff::unstage_hunk_impl(&worktree_path, &path, hunk_index)
 }
 
 #[tauri::command]
-fn discard_hunk(_worktree_path: String, _path: String, _hunk_index: u32) {
-    todo!()
+fn discard_hunk(worktree_path: String, path: String, hunk_index: u32) -> Result<(), String> {
+    git_diff::discard_hunk_impl(&worktree_path, &path, hunk_index)
 }
 
 #[tauri::command]
-fn stage_lines(_worktree_path: String, _path: String, _hunk_index: u32, _line_indices: Vec<u32>) {
-    todo!()
+fn stage_lines(
+    worktree_path: String,
+    path: String,
+    hunk_index: u32,
+    line_indices: Vec<u32>,
+) -> Result<(), String> {
+    git_diff::stage_lines_impl(&worktree_path, &path, hunk_index, &line_indices)
 }
 
 #[tauri::command]
 fn unstage_lines(
-    _worktree_path: String,
-    _path: String,
-    _hunk_index: u32,
-    _line_indices: Vec<u32>,
-) {
-    todo!()
+    worktree_path: String,
+    path: String,
+    hunk_index: u32,
+    line_indices: Vec<u32>,
+) -> Result<(), String> {
+    git_diff::unstage_lines_impl(&worktree_path, &path, hunk_index, &line_indices)
 }
 
 #[tauri::command]
 fn discard_lines(
-    _worktree_path: String,
-    _path: String,
-    _hunk_index: u32,
-    _line_indices: Vec<u32>,
-) {
-    todo!()
+    worktree_path: String,
+    path: String,
+    hunk_index: u32,
+    line_indices: Vec<u32>,
+) -> Result<(), String> {
+    git_diff::discard_lines_impl(&worktree_path, &path, hunk_index, &line_indices)
 }
 
 // === APP SETUP ===
