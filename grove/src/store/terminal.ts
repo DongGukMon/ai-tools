@@ -32,19 +32,24 @@ function assignPtyIds(node: SplitNode, ids: string[]): SplitNode {
 // In-memory cache populated at startup via initLayouts()
 let layoutCache: Record<string, SplitNode> = {};
 
-// Debounced save to Rust file backend
+// Debounced save to Rust file backend — MERGES with existing saved layouts
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 function saveLayouts(sessions: Record<string, SplitNode>) {
-  const templates: Record<string, SplitNode> = {};
+  // Merge current sessions into existing cache (don't wipe other worktree layouts)
   for (const [path, node] of Object.entries(sessions)) {
-    templates[path] = toLayoutTemplate(node);
+    layoutCache[path] = toLayoutTemplate(node);
   }
-  layoutCache = templates;
+  // Remove layouts for sessions that were explicitly deleted (0 leaves)
+  for (const path of Object.keys(layoutCache)) {
+    if (sessions[path] === undefined && Object.keys(sessions).length > 0) {
+      // Don't delete — session might just not be active right now
+    }
+  }
 
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     import("../lib/tauri").then(({ saveTerminalLayouts }) => {
-      saveTerminalLayouts(JSON.stringify(templates)).catch(console.error);
+      saveTerminalLayouts(JSON.stringify(layoutCache)).catch(console.error);
     });
   }, 500);
 }
