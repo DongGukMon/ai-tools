@@ -720,6 +720,70 @@ mod tests {
     }
 
     #[test]
+    fn list_projects_removes_config_only_entries_when_source_directory_is_missing() {
+        let _lock = env_lock();
+        let home = TestHome::new();
+        let base_dir = home.root.join("grove-data");
+        let base_dir_str = base_dir.to_string_lossy().to_string();
+        let stale_source = base_dir
+            .join("github.com")
+            .join("sendbird")
+            .join("missing")
+            .join("source");
+
+        save_test_config(
+            &base_dir,
+            vec![project_entry(
+                "stale-project",
+                "https://github.com/sendbird/missing.git",
+                &stale_source,
+            )],
+        );
+
+        let projects = list_projects_impl().unwrap();
+
+        assert!(projects.is_empty());
+
+        let saved = config::load_config();
+        assert_eq!(saved.base_dir.as_deref(), Some(base_dir_str.as_str()));
+        assert!(saved.projects.is_empty());
+    }
+
+    #[test]
+    fn list_projects_recovers_orphan_source_directory_into_config() {
+        let _lock = env_lock();
+        let home = TestHome::new();
+        let base_dir = home.root.join("grove-data");
+        let base_dir_str = base_dir.to_string_lossy().to_string();
+        let orphan_source = base_dir
+            .join("github.com")
+            .join("sendbird")
+            .join("grove")
+            .join("source");
+        let orphan_source_str = orphan_source.to_string_lossy().to_string();
+
+        init_repo_with_remote(&orphan_source, "https://github.com/sendbird/grove.git");
+        save_test_config(&base_dir, vec![]);
+
+        let projects = list_projects_impl().unwrap();
+
+        assert_eq!(projects.len(), 1);
+        assert_eq!(projects[0].url, "https://github.com/sendbird/grove.git");
+        assert_eq!(projects[0].org, "sendbird");
+        assert_eq!(projects[0].repo, "grove");
+        assert_eq!(projects[0].source_path, orphan_source_str);
+
+        let saved = config::load_config();
+        assert_eq!(saved.base_dir.as_deref(), Some(base_dir_str.as_str()));
+        assert_eq!(saved.projects.len(), 1);
+        assert_eq!(
+            saved.projects[0].url,
+            "https://github.com/sendbird/grove.git"
+        );
+        assert_eq!(saved.projects[0].source_path, orphan_source.to_string_lossy());
+    }
+
+    #[test]
     fn list_projects_deduplicates_duplicate_config_entries() {
         let _lock = env_lock();
         let home = TestHome::new();
@@ -755,6 +819,36 @@ mod tests {
         let saved = config::load_config();
         assert_eq!(saved.projects.len(), 1);
         assert_eq!(saved.projects[0].id, "project-1");
+    }
+
+    #[test]
+    fn add_project_returns_existing_registered_project() {
+        let _lock = env_lock();
+        let home = TestHome::new();
+        let base_dir = home.root.join("grove-data");
+        let source_dir = base_dir
+            .join("github.com")
+            .join("sendbird")
+            .join("grove")
+            .join("source");
+        let existing = project_entry(
+            "project-1",
+            "https://github.com/sendbird/grove.git",
+            &source_dir,
+        );
+
+        init_repo_with_remote(&source_dir, "https://github.com/sendbird/grove.git");
+        save_test_config(&base_dir, vec![existing.clone()]);
+
+        let project = add_project_impl("https://github.com/sendbird/grove.git").unwrap();
+
+        assert_eq!(project.id, existing.id);
+        assert_eq!(project.url, existing.url);
+        assert_eq!(project.source_path, existing.source_path);
+
+        let saved = config::load_config();
+        assert_eq!(saved.projects.len(), 1);
+        assert_eq!(saved.projects[0].id, existing.id);
     }
 
     #[test]
