@@ -29,6 +29,11 @@ export interface DiffHunk {
   newCount: number;
 }
 
+export interface BehindInfo {
+  behind: number;
+  defaultBranch: string;
+}
+
 export interface FileDiff {
   path: string;
   oldPath?: string;

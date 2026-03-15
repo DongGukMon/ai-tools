@@ -5,6 +5,7 @@ export type {
   SplitNode,
 } from "./terminal";
 export type {
+  BehindInfo,
   CommitInfo,
   FileStatus,
   DiffLine,

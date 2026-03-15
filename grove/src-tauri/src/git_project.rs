@@ -16,7 +16,7 @@ fn base_dir() -> PathBuf {
     PathBuf::from(config::load_app_config().base_dir)
 }
 
-fn git_command() -> Command {
+pub(crate) fn git_command() -> Command {
     let mut command = Command::new("git");
     if let Some(ssh_auth_sock) = preferred_ssh_auth_sock() {
         command.env("SSH_AUTH_SOCK", ssh_auth_sock);
@@ -752,7 +752,7 @@ fn run_git_output(cwd: &Path, args: &[&str]) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
-fn remote_default_branch(source: &Path) -> Result<String, String> {
+pub(crate) fn remote_default_branch(source: &Path) -> Result<String, String> {
     if let Ok(branch) = resolve_origin_head(source) {
         return Ok(branch);
     }

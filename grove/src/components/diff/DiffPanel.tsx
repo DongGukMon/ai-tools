@@ -48,6 +48,9 @@ export default function DiffPanel() {
             changeCount={store.fileStatuses.length}
             selectedView={store.selectedView}
             onSelectView={store.selectView}
+            behindCount={store.behindCount}
+            merging={store.merging}
+            onMerge={store.mergeDefaultBranch}
           />
         </Allotment.Pane>
         <Allotment.Pane minSize={60}>

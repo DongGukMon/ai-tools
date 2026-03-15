@@ -1,4 +1,4 @@
-use crate::{CommitInfo, DiffHunk, DiffLine, FileDiff, FileStatus};
+use crate::{BehindInfo, CommitInfo, DiffHunk, DiffLine, FileDiff, FileStatus};
 use git2::{DiffOptions, Repository, Sort, StatusOptions};
 use std::collections::HashSet;
 use std::io::Write;
@@ -554,6 +554,67 @@ fn apply_patch(worktree_path: &str, patch: &str, extra_args: &[&str]) -> Result<
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(format!("git apply failed: {}", stderr));
+    }
+
+    Ok(())
+}
+
+// === BEHIND COUNT / MERGE ===
+
+fn run_git_output_with_ssh(worktree_path: &str, args: &[&str]) -> Result<String, String> {
+    let output = crate::git_project::git_command()
+        .args(args)
+        .current_dir(worktree_path)
+        .output()
+        .map_err(|e| format!("Failed to run git {}: {e}", args.first().unwrap_or(&"")))?;
+
+    if !output.status.success() {
+        return Err(format!(
+            "git {} failed: {}",
+            args.first().unwrap_or(&""),
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+fn run_git_with_ssh(worktree_path: &str, args: &[&str]) -> Result<(), String> {
+    run_git_output_with_ssh(worktree_path, args).map(|_| ())
+}
+
+pub fn get_behind_count_impl(worktree_path: &str) -> Result<BehindInfo, String> {
+    let wt_path = Path::new(worktree_path);
+    let default_branch = crate::git_project::remote_default_branch(wt_path)?;
+    let remote_ref = format!("origin/{default_branch}");
+
+    let count_str =
+        run_git_output_with_ssh(worktree_path, &["rev-list", "--count", &format!("HEAD..{remote_ref}")])?;
+
+    let behind: u32 = count_str
+        .parse()
+        .map_err(|e| format!("Failed to parse behind count: {e}"))?;
+
+    Ok(BehindInfo {
+        behind,
+        default_branch,
+    })
+}
+
+pub fn merge_default_branch_impl(worktree_path: &str) -> Result<(), String> {
+    let wt_path = Path::new(worktree_path);
+    let default_branch = crate::git_project::remote_default_branch(wt_path)?;
+    let remote_ref = format!("origin/{default_branch}");
+
+    // Fetch latest
+    run_git_with_ssh(worktree_path, &["fetch", "origin"])?;
+
+    // Attempt merge
+    let merge_result = run_git_with_ssh(worktree_path, &["merge", &remote_ref, "--no-edit"]);
+
+    if let Err(err) = merge_result {
+        // Abort on conflict
+        let _ = run_git_with_ssh(worktree_path, &["merge", "--abort"]);
+        return Err(format!("Merge conflict — resolve in terminal. {err}"));
     }
 
     Ok(())

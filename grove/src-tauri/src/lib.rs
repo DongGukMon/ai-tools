@@ -269,6 +269,25 @@ fn discard_lines(
     git_diff::discard_lines_impl(&worktree_path, &path, hunk_index, &line_indices)
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BehindInfo {
+    pub behind: u32,
+    pub default_branch: String,
+}
+
+// === GIT MERGE COMMANDS ===
+
+#[tauri::command]
+fn get_behind_count(worktree_path: String) -> Result<BehindInfo, String> {
+    git_diff::get_behind_count_impl(&worktree_path)
+}
+
+#[tauri::command]
+fn merge_default_branch(worktree_path: String) -> Result<(), String> {
+    git_diff::merge_default_branch_impl(&worktree_path)
+}
+
 // === APP SETUP ===
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -312,6 +331,9 @@ pub fn run() {
             stage_lines,
             unstage_lines,
             discard_lines,
+            // Git Merge
+            get_behind_count,
+            merge_default_branch,
         ])
         .setup(|app| {
             eventbus::init(app.handle());

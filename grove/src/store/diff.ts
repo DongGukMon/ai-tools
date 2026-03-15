@@ -1,7 +1,8 @@
 import { create } from "zustand";
 import type { FileStatus, CommitInfo, FileDiff } from "../types";
 import * as tauri from "../lib/tauri";
-import { runCommandSafely } from "../lib/command";
+import { runCommandSafely, runCommand } from "../lib/command";
+import { useToastStore } from "../store/toast";
 
 interface DiffState {
   commits: CommitInfo[];
@@ -13,10 +14,14 @@ interface DiffState {
   isViewingStaged: boolean;
   selectedLines: Set<number>;
   worktreePath: string | null;
+  behindCount: number;
+  merging: boolean;
 
   setWorktreePath: (path: string | null) => void;
   loadStatus: () => Promise<void>;
   loadCommits: () => Promise<void>;
+  loadBehindCount: () => Promise<void>;
+  mergeDefaultBranch: () => Promise<void>;
   loadWorkingDiff: (path: string, staged?: boolean) => Promise<void>;
   loadCommitDiff: (hash: string) => Promise<void>;
   selectView: (view: "changes" | CommitInfo) => void;
@@ -58,6 +63,8 @@ export const useDiffStore = create<DiffState>((set, get) => ({
   isViewingStaged: false,
   selectedLines: new Set(),
   worktreePath: null,
+  behindCount: 0,
+  merging: false,
 
   setWorktreePath: (path) => set({ worktreePath: path }),
 
@@ -80,6 +87,36 @@ export const useDiffStore = create<DiffState>((set, get) => ({
     });
     if (commits) {
       set({ commits });
+    }
+  },
+
+  loadBehindCount: async () => {
+    const wp = get().worktreePath;
+    if (!wp) return;
+    const info = await runCommandSafely(() => tauri.getBehindCount(wp), {
+      errorToast: false,
+    });
+    if (info) {
+      set({ behindCount: info.behind });
+    }
+  },
+
+  mergeDefaultBranch: async () => {
+    const wp = get().worktreePath;
+    if (!wp) return;
+    set({ merging: true });
+    try {
+      await runCommand(() => tauri.mergeDefaultBranch(wp), {
+        errorToast: "Merge conflict — resolve in terminal",
+      });
+      useToastStore.getState().addToast("success", "Merged default branch");
+      await get().loadCommits();
+      await get().loadStatus();
+      await get().loadBehindCount();
+    } catch {
+      // Error toast already shown by runCommand
+    } finally {
+      set({ merging: false });
     }
   },
 

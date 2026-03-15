@@ -12,6 +12,7 @@ export function useDiff(worktreePath: string | null) {
     if (worktreePath) {
       store.loadStatus();
       store.loadCommits();
+      store.loadBehindCount();
     }
   }, [worktreePath]);
 
@@ -41,7 +42,11 @@ export function useDiff(worktreePath: string | null) {
 
     registerSyncJob(
       "commits",
-      () => useDiffStore.getState().loadCommits(),
+      async () => {
+        const state = useDiffStore.getState();
+        await state.loadCommits();
+        await state.loadBehindCount();
+      },
       10_000,
     );
 

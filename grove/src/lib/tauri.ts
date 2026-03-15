@@ -4,6 +4,7 @@ import type {
   AppConfig,
   Project,
   Worktree,
+  BehindInfo,
   FileStatus,
   CommitInfo,
   FileDiff,
@@ -243,4 +244,18 @@ export async function discardLines(
     hunkIndex,
     lineIndices,
   });
+}
+
+// === GIT MERGE COMMANDS ===
+
+export async function getBehindCount(
+  worktreePath: string,
+): Promise<BehindInfo> {
+  return invoke<BehindInfo>("get_behind_count", { worktreePath });
+}
+
+export async function mergeDefaultBranch(
+  worktreePath: string,
+): Promise<void> {
+  return invoke("merge_default_branch", { worktreePath });
 }
