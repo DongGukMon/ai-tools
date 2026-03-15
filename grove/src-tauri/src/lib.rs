@@ -1,6 +1,7 @@
 mod config;
 mod git_diff;
 mod git_project;
+mod process_env;
 mod pty;
 mod terminal_theme;
 

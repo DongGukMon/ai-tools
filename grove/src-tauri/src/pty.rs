@@ -1,3 +1,4 @@
+use crate::process_env::preferred_ssh_auth_sock;
 use base64::Engine;
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 use serde::Serialize;
@@ -46,6 +47,9 @@ pub fn create(
     cmd.env("TERM", "xterm-256color");
     cmd.env("LANG", "en_US.UTF-8");
     cmd.env("LC_ALL", "en_US.UTF-8");
+    if let Some(ssh_auth_sock) = preferred_ssh_auth_sock() {
+        cmd.env("SSH_AUTH_SOCK", &ssh_auth_sock);
+    }
 
     let reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
     let writer = pair.master.take_writer().map_err(|e| e.to_string())?;

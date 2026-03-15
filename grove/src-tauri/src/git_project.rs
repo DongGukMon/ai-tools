@@ -1,4 +1,5 @@
 use crate::config::{self, ProjectEntry};
+use crate::process_env::preferred_ssh_auth_sock;
 use crate::{Project, Worktree};
 use git2::Repository;
 use std::collections::HashSet;
@@ -9,6 +10,14 @@ use uuid::Uuid;
 
 fn base_dir() -> PathBuf {
     PathBuf::from(config::load_app_config().base_dir)
+}
+
+fn git_command() -> Command {
+    let mut command = Command::new("git");
+    if let Some(ssh_auth_sock) = preferred_ssh_auth_sock() {
+        command.env("SSH_AUTH_SOCK", ssh_auth_sock);
+    }
+    command
 }
 
 /// Parse a git URL into (host, org, repo).
@@ -373,7 +382,7 @@ fn get_worktrees_for_project(source_path: &str) -> Vec<Worktree> {
     let source = Path::new(source_path);
     let project_base = source.parent().unwrap_or(source);
 
-    let output = match Command::new("git")
+    let output = match git_command()
         .args(["worktree", "list", "--porcelain"])
         .current_dir(source)
         .output()
@@ -414,7 +423,7 @@ pub fn add_project_impl(url: &str) -> Result<Project, String> {
     std::fs::create_dir_all(proj_dir.join("worktrees"))
         .map_err(|e| format!("Failed to create worktrees directory: {e}"))?;
 
-    let output = Command::new("git")
+    let output = git_command()
         .args(["clone", url, &source_dir.to_string_lossy()])
         .output()
         .map_err(|e| format!("Failed to run git clone: {e}"))?;
@@ -565,7 +574,7 @@ pub fn list_worktrees_impl(project_id: &str) -> Result<Vec<Worktree>, String> {
 }
 
 fn run_git(cwd: &Path, args: &[&str]) -> Result<(), String> {
-    let output = Command::new("git")
+    let output = git_command()
         .args(args)
         .current_dir(cwd)
         .output()
@@ -651,7 +660,7 @@ mod tests {
     }
 
     fn run_git_ok(cwd: &Path, args: &[&str]) {
-        let output = Command::new("git")
+        let output = git_command()
             .args(args)
             .current_dir(cwd)
             .output()
