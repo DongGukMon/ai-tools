@@ -6,6 +6,12 @@ import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { listen } from "@tauri-apps/api/event";
 import { writePty, resizePty } from "../../lib/tauri";
 import { useTerminalStore } from "../../store/terminal";
+import {
+  getMacShortcutSequence,
+  isMacClearTerminalShortcut,
+  isTerminalCompositionEvent,
+  shouldEnableTerminalWebgl,
+} from "../../lib/terminal-input";
 import "@xterm/xterm/css/xterm.css";
 
 interface Props {
@@ -60,20 +66,29 @@ export default function TerminalInstance({ ptyId }: Props) {
     const fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
 
-    term.open(el);
-
     // Unicode11 for CJK character width
     const unicode11 = new Unicode11Addon();
     term.loadAddon(unicode11);
     term.unicode.activeVersion = "11";
 
-    // Try WebGL, fall back to canvas
-    try {
-      const webglAddon = new WebglAddon();
-      webglAddon.onContextLoss(() => webglAddon.dispose());
-      term.loadAddon(webglAddon);
-    } catch {
-      // Canvas renderer fallback
+    term.open(el);
+
+    const shouldLoadWebgl = shouldEnableTerminalWebgl(
+      navigator.platform,
+      navigator.userAgent,
+    );
+
+    // Keep Apple platforms on the default renderer.
+    // xterm IME composition relies on helper DOM elements/textarea positioning,
+    // and the WebGL path has been the least reliable inside the Tauri terminal.
+    if (shouldLoadWebgl) {
+      try {
+        const webglAddon = new WebglAddon();
+        webglAddon.onContextLoss(() => webglAddon.dispose());
+        term.loadAddon(webglAddon);
+      } catch {
+        // Canvas renderer fallback
+      }
     }
 
     // Fit after layout settles - delay ensures container has pixel dimensions
@@ -120,27 +135,23 @@ export default function TerminalInstance({ ptyId }: Props) {
     // macOS keyboard shortcuts
     term.attachCustomKeyEventHandler((e) => {
       if (e.type !== "keydown") return true;
+      // xterm invokes custom key handlers before its composition helper, so let
+      // IME-driven events reach xterm untouched until composition is committed.
+      if (isTerminalCompositionEvent(e)) return true;
 
       // Cmd+K → clear terminal
-      if (e.metaKey && e.key === "k") {
+      if (isMacClearTerminalShortcut(e)) {
         term.clear();
         return false;
       }
 
       // Option+Arrow/Delete → send escape sequences manually
       // (can't use macOptionIsMeta because it breaks CJK IME composition)
-      if (e.altKey && !e.metaKey && !e.ctrlKey) {
-        const seq: Record<string, string> = {
-          ArrowLeft: "\x1bb",     // ESC+b = word backward
-          ArrowRight: "\x1bf",    // ESC+f = word forward
-          Backspace: "\x1b\x7f", // ESC+DEL = delete word backward
-          Delete: "\x1bd",        // ESC+d = delete word forward
-        };
-        if (seq[e.key]) {
-          const bytes = Array.from(new TextEncoder().encode(seq[e.key]));
-          writePty(ptyId, bytes).catch(() => {});
-          return false;
-        }
+      const sequence = getMacShortcutSequence(e);
+      if (sequence) {
+        const bytes = Array.from(new TextEncoder().encode(sequence));
+        writePty(ptyId, bytes).catch(() => {});
+        return false;
       }
 
       return true;
@@ -219,12 +230,13 @@ export default function TerminalInstance({ ptyId }: Props) {
 
   return (
     <div
-      ref={termRef}
-      className="terminal-instance absolute inset-0 p-1"
+      className="absolute inset-0 p-1"
       onClick={() => {
         setFocusedPtyId(ptyId);
         terminalRef.current?.focus();
       }}
-    />
+    >
+      <div ref={termRef} className="terminal-instance h-full w-full" />
+    </div>
   );
 }

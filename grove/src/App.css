@@ -121,11 +121,8 @@ body,
   background-color: var(--color-primary);
 }
 
-/* ── Terminal xterm overrides ── */
-.terminal-instance .xterm {
-  padding: 4px 8px;
-}
-
+/* Keep terminal inset on the wrapper, not on .xterm itself.
+ * xterm positions its helper textarea/composition view from the root box. */
 .terminal-instance .xterm-viewport::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.15);
 }
