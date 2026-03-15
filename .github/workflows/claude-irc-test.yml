@@ -5,13 +5,13 @@ on:
     branches: [main]
     paths:
       - 'claude-irc/**'
-      - 'shared/agentirc/**'
+      - 'shared/irclib/**'
       - 'shared/upgrade/**'
   pull_request:
     branches: [main]
     paths:
       - 'claude-irc/**'
-      - 'shared/agentirc/**'
+      - 'shared/irclib/**'
       - 'shared/upgrade/**'
 
 concurrency:

@@ -23,10 +23,10 @@ jobs:
     strategy:
       matrix:
         include:
-          - module_name: shared/agentirc
-            workdir: shared/agentirc
-            go_version_file: shared/agentirc/go.mod
-            cache_dependency_path: shared/agentirc/go.mod
+          - module_name: shared/irclib
+            workdir: shared/irclib
+            go_version_file: shared/irclib/go.mod
+            cache_dependency_path: shared/irclib/go.mod
           - module_name: shared/upgrade
             workdir: shared/upgrade
             go_version_file: shared/upgrade/go.mod

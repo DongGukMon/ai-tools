@@ -1,7 +1,7 @@
 package whip
 
-import agentirc "github.com/bang9/ai-tools/shared/agentirc"
+import irclib "github.com/bang9/ai-tools/shared/irclib"
 
-func NewStoreWithBaseDir(dir string) (*agentirc.Store, error) {
-	return agentirc.NewStoreWithBaseDir(dir)
+func NewStoreWithBaseDir(dir string) (*irclib.Store, error) {
+	return irclib.NewStoreWithBaseDir(dir)
 }

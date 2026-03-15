@@ -5,13 +5,13 @@ on:
     branches: [main]
     paths:
       - 'whip/**'
-      - 'shared/agentirc/**'
+      - 'shared/irclib/**'
       - 'shared/upgrade/**'
   pull_request:
     branches: [main]
     paths:
       - 'whip/**'
-      - 'shared/agentirc/**'
+      - 'shared/irclib/**'
       - 'shared/upgrade/**'
 
 concurrency:

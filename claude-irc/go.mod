@@ -3,7 +3,7 @@ module github.com/bang9/ai-tools/claude-irc
 go 1.21
 
 require (
-	github.com/bang9/ai-tools/shared/agentirc v0.0.0
+	github.com/bang9/ai-tools/shared/irclib v0.0.0
 	github.com/bang9/ai-tools/shared/upgrade v0.0.0
 	github.com/spf13/cobra v1.10.2
 )
@@ -15,4 +15,4 @@ require (
 
 replace github.com/bang9/ai-tools/shared/upgrade => ../shared/upgrade
 
-replace github.com/bang9/ai-tools/shared/agentirc => ../shared/agentirc
+replace github.com/bang9/ai-tools/shared/irclib => ../shared/irclib

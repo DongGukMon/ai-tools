@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	agentirc "github.com/bang9/ai-tools/shared/agentirc"
+	irclib "github.com/bang9/ai-tools/shared/irclib"
 )
 
 const deviceChallengeLogPrefix = "Device challenge OTP:"
@@ -99,7 +99,7 @@ func (h *RemoteHandle) stopTunnel() error {
 func StartServe(ctx context.Context, cfg RemoteConfig, token string, _ bool, onServeNotice func(string)) (*RemoteHandle, ServeResult, error) {
 	authMode := NormalizeRemoteAuthMode(cfg.AuthMode)
 
-	ircStore, err := agentirc.NewStore()
+	ircStore, err := irclib.NewStore()
 	if err != nil {
 		return nil, ServeResult{}, fmt.Errorf("agent irc store: %w", err)
 	}

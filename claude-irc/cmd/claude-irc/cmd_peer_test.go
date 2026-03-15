@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	irc "github.com/bang9/ai-tools/shared/agentirc"
+	irc "github.com/bang9/ai-tools/shared/irclib"
 )
 
 func TestResolveMyName_NoFallbackToSinglePeer(t *testing.T) {

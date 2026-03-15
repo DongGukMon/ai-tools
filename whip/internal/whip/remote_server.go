@@ -15,15 +15,15 @@ import (
 	"sync"
 	"time"
 
-	agentirc "github.com/bang9/ai-tools/shared/agentirc"
+	irclib "github.com/bang9/ai-tools/shared/irclib"
 )
 
 // ServerConfig holds configuration for the HTTP API server.
 type ServerConfig struct {
 	Port                    int
 	BindHost                string
-	Store                   *agentirc.Store
-	IRCStore                *agentirc.Store
+	Store                   *irclib.Store
+	IRCStore                *irclib.Store
 	MasterTmux              string
 	Token                   string
 	AuthMode                string
@@ -336,7 +336,7 @@ func generateToken() (string, error) {
 }
 
 // buildHandler creates the HTTP handler with auth and CORS middleware.
-func buildHandler(store *agentirc.Store, authConfig serverAuthConfig, shortCode string, masterTmux string) http.Handler {
+func buildHandler(store *irclib.Store, authConfig serverAuthConfig, shortCode string, masterTmux string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/s/") {
 			code := strings.TrimPrefix(r.URL.Path, "/s/")
@@ -374,7 +374,7 @@ func buildHandler(store *agentirc.Store, authConfig serverAuthConfig, shortCode 
 	})
 }
 
-func route(w http.ResponseWriter, r *http.Request, store *agentirc.Store, masterTmux string, authConfig serverAuthConfig) {
+func route(w http.ResponseWriter, r *http.Request, store *irclib.Store, masterTmux string, authConfig serverAuthConfig) {
 	path := strings.TrimRight(r.URL.Path, "/")
 	segments := strings.Split(strings.TrimPrefix(path, "/"), "/")
 

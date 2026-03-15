@@ -12,17 +12,17 @@ import (
 	"testing"
 	"time"
 
-	agentirc "github.com/bang9/ai-tools/shared/agentirc"
+	irclib "github.com/bang9/ai-tools/shared/irclib"
 )
 
-type RemoteIRCStore = agentirc.Store
+type RemoteIRCStore = irclib.Store
 
 func setupTestServer(t *testing.T) (*httptest.Server, *RemoteIRCStore, string) {
 	t.Helper()
 	dir := t.TempDir()
-	store, err := agentirc.NewStoreWithBaseDir(dir)
+	store, err := irclib.NewStoreWithBaseDir(dir)
 	if err != nil {
-		t.Fatalf("agentirc.NewStoreWithBaseDir: %v", err)
+		t.Fatalf("irclib.NewStoreWithBaseDir: %v", err)
 	}
 
 	token := "test-token-abc123"
@@ -40,9 +40,9 @@ func setupTestServer(t *testing.T) (*httptest.Server, *RemoteIRCStore, string) {
 func setupTestServerWithMaster(t *testing.T, masterTmux string) (*httptest.Server, *RemoteIRCStore, string) {
 	t.Helper()
 	dir := t.TempDir()
-	store, err := agentirc.NewStoreWithBaseDir(dir)
+	store, err := irclib.NewStoreWithBaseDir(dir)
 	if err != nil {
-		t.Fatalf("agentirc.NewStoreWithBaseDir: %v", err)
+		t.Fatalf("irclib.NewStoreWithBaseDir: %v", err)
 	}
 
 	token := "test-token-abc123"
@@ -80,9 +80,9 @@ func setupDeviceTestServerWithCallbacks(
 	t.Setenv("WHIP_HOME", filepath.Join(tmpHome, whipDir))
 
 	dir := t.TempDir()
-	store, err := agentirc.NewStoreWithBaseDir(dir)
+	store, err := irclib.NewStoreWithBaseDir(dir)
 	if err != nil {
-		t.Fatalf("agentirc.NewStoreWithBaseDir: %v", err)
+		t.Fatalf("irclib.NewStoreWithBaseDir: %v", err)
 	}
 
 	authStore, err := NewRemoteAuthStore(workspace)

@@ -1,4 +1,4 @@
-package agentirc
+package irclib
 
 import (
 	"crypto/rand"
