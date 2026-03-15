@@ -39,7 +39,7 @@ export default function SplitContainer({ node, path = [] }: Props) {
   return (
     <Allotment
       vertical={node.type === "vertical"}
-      defaultSizes={node.sizes}
+      defaultSizes={node.sizes?.map((r) => r * 100)}
       onChange={handleChange}
     >
       {node.children?.map((child, i) => (

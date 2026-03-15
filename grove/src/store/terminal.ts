@@ -139,7 +139,10 @@ export const useTerminalStore = create<TerminalState>((set) => ({
     set((state) => {
       const root = state.sessions[worktreePath];
       if (!root) return state;
-      const updated = setSizesAtPath(root, nodePath, sizes);
+      // Convert pixel sizes to ratios (0-1) for resolution independence
+      const total = sizes.reduce((a, b) => a + b, 0);
+      const ratios = total > 0 ? sizes.map((s) => s / total) : sizes;
+      const updated = setSizesAtPath(root, nodePath, ratios);
       const newSessions = { ...state.sessions, [worktreePath]: updated };
       saveLayouts(newSessions);
       return { sessions: newSessions };
