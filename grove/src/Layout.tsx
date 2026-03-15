@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback } from "react";
 import { Allotment } from "allotment";
 import "allotment/dist/style.css";
 import { Command } from "lucide-react";
+import { cn } from "./lib/cn";
 import Sidebar from "./components/sidebar/Sidebar";
 import TerminalPanel from "./components/terminal/TerminalPanel";
 import DiffPanel from "./components/diff/DiffPanel";
@@ -19,13 +20,16 @@ function TitleBar() {
       style={{ height: TITLE_BAR_HEIGHT }}
       data-tauri-drag-region
     >
-      {/* Traffic light spacer (macOS) — hidden in fullscreen */}
+      {/* Traffic light spacer (macOS) / padding in fullscreen */}
       {!isFullscreen && (
         <div className="w-[86px] shrink-0" data-tauri-drag-region />
       )}
 
       {/* Logo */}
-      <div className="flex items-center gap-1" data-tauri-drag-region>
+      <div
+        className={cn("flex items-center gap-1", { "pl-4": isFullscreen })}
+        data-tauri-drag-region
+      >
         <div className="flex h-5 w-5 items-center justify-center rounded bg-accent">
           <Command className="h-3 w-3 text-white" />
         </div>
