@@ -103,6 +103,7 @@ func footerKey(k, desc string) string {
 }
 
 func truncate(s string, max int) string {
+	s = strings.NewReplacer("\r\n", " ", "\n", " ", "\r", " ").Replace(s)
 	if lipgloss.Width(s) <= max {
 		return s
 	}

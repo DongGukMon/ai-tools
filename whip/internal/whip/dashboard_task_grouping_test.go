@@ -75,6 +75,24 @@ func TestDashboardRenderTableShowsTreeGlyphs(t *testing.T) {
 	}
 }
 
+func TestDashboardRenderTableCollapsesMultilineCells(t *testing.T) {
+	task := NewTask("Line1\nLine2", "desc", "/tmp")
+	task.Note = "first\r\nsecond"
+
+	m := NewDashboardModel(tempStore(t), "test")
+	m.tasks = []*Task{task}
+
+	table := m.renderTable()
+	if strings.Count(table, "\n") != 2 {
+		t.Fatalf("renderTable should keep a single task row, got %d newlines:\n%s", strings.Count(table, "\n"), table)
+	}
+	for _, want := range []string{"Line1 Line2", "first second"} {
+		if !strings.Contains(table, want) {
+			t.Fatalf("renderTable missing collapsed cell content %q:\n%s", want, table)
+		}
+	}
+}
+
 func TestDashboardListExpandAndCollapseInteractions(t *testing.T) {
 	lead := NewTask("Lead", "desc", "/tmp")
 	lead.Workspace = "lane"
