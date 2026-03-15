@@ -130,6 +130,35 @@ export default function TerminalInstance({ ptyId }: Props) {
       writePty(ptyId, bytes).catch(() => {});
     });
 
+    // WKWebView trackpad fix: double-tap can leave xterm's selection in a
+    // stuck drag state where selection follows the cursor without any button
+    // held. Detect by checking if selection content changes between consecutive
+    // mousemoves while buttons === 0.
+    let prevMoveSelection = "";
+    const onTrackpadFix = (e: MouseEvent) => {
+      if (e.buttons !== 0) {
+        prevMoveSelection = "";
+        return;
+      }
+
+      const sel = term.getSelection();
+      if (sel && prevMoveSelection && sel !== prevMoveSelection) {
+        term.clearSelection();
+        el.dispatchEvent(
+          new MouseEvent("mouseup", {
+            bubbles: true,
+            clientX: e.clientX,
+            clientY: e.clientY,
+          }),
+        );
+        prevMoveSelection = "";
+        return;
+      }
+
+      prevMoveSelection = sel;
+    };
+    el.addEventListener("mousemove", onTrackpadFix);
+
     // Defer xterm open/fit until the host is visible and has real dimensions.
     const scheduleLayoutSync = () => {
       if (disposed || frameId !== null) return;
@@ -227,6 +256,7 @@ export default function TerminalInstance({ ptyId }: Props) {
         cancelAnimationFrame(frameId);
       }
       resizeObserver.disconnect();
+      el.removeEventListener("mousemove", onTrackpadFix);
       ime.dispose();
       dataDisposable.dispose();
       unlistenPromise.then((unlisten) => {
