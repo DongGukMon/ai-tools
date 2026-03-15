@@ -1,3 +1,4 @@
+import { GitCommit } from "lucide-react";
 import type { CommitInfo, FileStatus } from "../../types";
 
 interface Props {
@@ -17,21 +18,36 @@ export default function CommitList({
   const isChangesSelected = selectedView === "changes";
 
   return (
-    <div style={styles.container}>
-      <div style={styles.header}>Commits</div>
-      <div style={styles.list}>
+    <div className="border-b border-[var(--color-border)] shrink-0">
+      {/* Section header */}
+      <div className="text-[11px] uppercase tracking-wider font-medium text-[var(--color-text-tertiary)] px-3 h-[28px] flex items-center border-b border-[var(--color-border)] select-none">
+        Commits
+      </div>
+
+      <div className="max-h-[180px] overflow-y-auto">
         {/* Working changes entry */}
         <div
-          style={{
-            ...styles.item,
-            ...(isChangesSelected ? styles.selected : {}),
-          }}
+          className={`flex items-center gap-2.5 px-3 h-[32px] cursor-pointer select-none transition-colors duration-100 ${
+            isChangesSelected
+              ? "bg-[var(--color-primary-light)] border-l-[3px] border-l-[var(--color-primary)]"
+              : "hover:bg-[var(--color-bg-tertiary)] border-l-[3px] border-l-transparent"
+          }`}
           onClick={() => onSelectView("changes")}
         >
-          <span style={styles.badge}>
-            {hasChanges ? fileStatuses.length : 0}
+          {/* Blue dot indicator */}
+          <span
+            className={`w-[7px] h-[7px] rounded-full shrink-0 ${
+              hasChanges ? "bg-[var(--color-primary)]" : "bg-[var(--color-text-muted)]"
+            }`}
+          />
+          <span className={`flex-1 truncate text-[13px] ${isChangesSelected ? "font-medium text-[var(--color-text)]" : "text-[var(--color-text)]"}`}>
+            Working Changes
           </span>
-          <span style={styles.message}>Working Changes</span>
+          {hasChanges && (
+            <span className="text-[11px] font-mono text-[var(--color-text-tertiary)] tabular-nums">
+              {fileStatuses.length}
+            </span>
+          )}
         </div>
 
         {/* Commit list */}
@@ -41,17 +57,26 @@ export default function CommitList({
           return (
             <div
               key={commit.hash}
-              style={{
-                ...styles.item,
-                ...(isSelected ? styles.selected : {}),
-              }}
+              className={`flex items-center gap-2 px-3 h-[32px] cursor-pointer select-none transition-colors duration-100 ${
+                isSelected
+                  ? "bg-[var(--color-primary-light)] border-l-[3px] border-l-[var(--color-primary)]"
+                  : "hover:bg-[var(--color-bg-tertiary)] border-l-[3px] border-l-transparent"
+              }`}
               onClick={() => onSelectView(commit)}
             >
-              <span style={styles.hash}>{commit.shortHash}</span>
-              <span style={styles.message}>
+              <GitCommit
+                size={12}
+                className="shrink-0 text-[var(--color-text-tertiary)]"
+              />
+              <span className="font-mono text-[11px] shrink-0 text-[var(--color-text-tertiary)]">
+                {commit.shortHash}
+              </span>
+              <span className={`flex-1 truncate text-[12px] ${isSelected ? "text-[var(--color-text)] font-medium" : "text-[var(--color-text)]"}`}>
                 {commit.message.split("\n")[0]}
               </span>
-              <span style={styles.author}>{commit.author}</span>
+              <span className="text-[11px] shrink-0 text-[var(--color-text-tertiary)]">
+                {commit.author}
+              </span>
             </div>
           );
         })}
@@ -59,65 +84,3 @@ export default function CommitList({
     </div>
   );
 }
-
-const styles = {
-  container: {
-    borderBottom: "1px solid var(--border-color)",
-    flexShrink: 0,
-  },
-  header: {
-    fontSize: 11,
-    textTransform: "uppercase" as const,
-    letterSpacing: "0.5px",
-    color: "var(--text-secondary)",
-    fontWeight: 600,
-    padding: "8px 12px",
-    borderBottom: "1px solid var(--border-color)",
-    userSelect: "none" as const,
-  },
-  list: {
-    maxHeight: 180,
-    overflowY: "auto" as const,
-  },
-  item: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    padding: "4px 12px",
-    cursor: "pointer",
-    fontSize: 12,
-    userSelect: "none" as const,
-  },
-  selected: {
-    background: "var(--accent)",
-    color: "#fff",
-  },
-  hash: {
-    fontFamily: "monospace",
-    fontSize: 11,
-    color: "var(--text-secondary)",
-    flexShrink: 0,
-  },
-  message: {
-    flex: 1,
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap" as const,
-  },
-  author: {
-    fontSize: 11,
-    color: "var(--text-secondary)",
-    flexShrink: 0,
-  },
-  badge: {
-    background: "var(--accent)",
-    color: "#fff",
-    borderRadius: 8,
-    padding: "0 6px",
-    fontSize: 10,
-    fontWeight: 600,
-    flexShrink: 0,
-    minWidth: 18,
-    textAlign: "center" as const,
-  },
-};

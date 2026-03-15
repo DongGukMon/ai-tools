@@ -6,16 +6,8 @@ interface Props {
 }
 
 function ProjectTree({ projects }: Props) {
-  if (projects.length === 0) {
-    return (
-      <div className="project-tree-empty">
-        No projects yet. Add one with the + button above.
-      </div>
-    );
-  }
-
   return (
-    <div className="project-tree">
+    <div className="space-y-1">
       {projects.map((project) => (
         <ProjectItem key={project.id} project={project} />
       ))}

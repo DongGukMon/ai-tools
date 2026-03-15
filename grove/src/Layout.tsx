@@ -6,20 +6,16 @@ import DiffPanel from "./components/diff/DiffPanel";
 
 function Layout() {
   return (
-    <div className="app-layout">
+    <div className="h-full w-full bg-[var(--color-bg)]">
       <Allotment>
         <Allotment.Pane preferredSize={240} minSize={180}>
-          <div className="panel panel-sidebar">
-            <Sidebar />
-          </div>
+          <Sidebar />
         </Allotment.Pane>
         <Allotment.Pane>
           <TerminalPanel />
         </Allotment.Pane>
-        <Allotment.Pane preferredSize={400} minSize={200}>
-          <div className="panel panel-diff">
-            <DiffPanel />
-          </div>
+        <Allotment.Pane preferredSize={420} minSize={320}>
+          <DiffPanel />
         </Allotment.Pane>
       </Allotment>
     </div>

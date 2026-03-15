@@ -44,6 +44,8 @@ pub fn create(
     let mut cmd = CommandBuilder::new(&shell);
     cmd.cwd(&cwd);
     cmd.env("TERM", "xterm-256color");
+    cmd.env("LANG", "en_US.UTF-8");
+    cmd.env("LC_ALL", "en_US.UTF-8");
 
     let reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
     let writer = pair.master.take_writer().map_err(|e| e.to_string())?;

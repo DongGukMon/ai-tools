@@ -6,6 +6,7 @@ interface DiffState {
   commits: CommitInfo[];
   fileStatuses: FileStatus[];
   currentDiff: FileDiff | null;
+  commitDiffs: FileDiff[];
   selectedView: "changes" | CommitInfo;
   selectedFile: string | null;
   isViewingStaged: boolean;
@@ -50,6 +51,7 @@ export const useDiffStore = create<DiffState>((set, get) => ({
   commits: [],
   fileStatuses: [],
   currentDiff: null,
+  commitDiffs: [],
   selectedView: "changes",
   selectedFile: null,
   isViewingStaged: false,
@@ -97,9 +99,10 @@ export const useDiffStore = create<DiffState>((set, get) => ({
     if (!wp) return;
     try {
       const diffs = await tauri.getCommitDiff(wp, hash);
-      // Show first file by default
       set({
+        commitDiffs: diffs,
         currentDiff: diffs[0] ?? null,
+        selectedFile: diffs[0]?.path ?? null,
         selectedLines: new Set(),
       });
     } catch {
@@ -112,6 +115,7 @@ export const useDiffStore = create<DiffState>((set, get) => ({
       selectedView: view,
       selectedFile: null,
       currentDiff: null,
+      commitDiffs: [],
       selectedLines: new Set(),
     });
     if (view !== "changes") {
@@ -122,8 +126,13 @@ export const useDiffStore = create<DiffState>((set, get) => ({
   selectFile: (path, staged = false) => {
     set({ selectedFile: path, isViewingStaged: staged, selectedLines: new Set() });
     if (path) {
-      if (get().selectedView === "changes") {
-        get().loadWorkingDiff(path, staged);
+      const state = get();
+      if (state.selectedView === "changes") {
+        state.loadWorkingDiff(path, staged);
+      } else {
+        // For commit view, find the diff from commitDiffs
+        const diff = state.commitDiffs.find((d) => d.path === path);
+        set({ currentDiff: diff ?? null });
       }
     } else {
       set({ currentDiff: null });

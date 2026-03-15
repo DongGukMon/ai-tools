@@ -5,6 +5,7 @@ interface Props {
   diff: FileDiff | null;
   selectedFile: string | null;
   isViewingStaged: boolean;
+  readOnly?: boolean;
   selectedLines: Set<number>;
   onToggleLine: (index: number) => void;
   onClearSelection: () => void;
@@ -28,26 +29,15 @@ interface Props {
   ) => Promise<void>;
 }
 
-/** Find the first hunk containing any selected lines and return [hunkIndex, matchedIndices]. */
 function findSelectedHunk(
   hunks: DiffHunkType[],
   selectedLines: Set<number>,
 ): [number, number[]] | null {
-  const lineIndices = new Set<number>();
-  for (const hunk of hunks) {
-    for (const line of hunk.lines) {
-      lineIndices.add(line.index);
-    }
-  }
-
   for (let i = 0; i < hunks.length; i++) {
-    const hunk = hunks[i];
-    const matched = hunk.lines
+    const matched = hunks[i].lines
       .filter((l) => selectedLines.has(l.index))
       .map((l) => l.index);
-    if (matched.length > 0) {
-      return [i, matched];
-    }
+    if (matched.length > 0) return [i, matched];
   }
   return null;
 }
@@ -56,6 +46,7 @@ export default function DiffViewer({
   diff,
   selectedFile,
   isViewingStaged,
+  readOnly = false,
   selectedLines,
   onToggleLine,
   onClearSelection,
@@ -68,8 +59,8 @@ export default function DiffViewer({
 }: Props) {
   if (!diff || !selectedFile) {
     return (
-      <div style={styles.empty}>
-        <span style={{ color: "var(--text-secondary)", fontSize: 13 }}>
+      <div className="flex-1 flex items-center justify-center">
+        <span className="text-[13px] text-[var(--color-text-tertiary)]">
           Select a file to view diff
         </span>
       </div>
@@ -78,62 +69,60 @@ export default function DiffViewer({
 
   if (diff.hunks.length === 0) {
     return (
-      <div style={styles.empty}>
-        <span style={{ color: "var(--text-secondary)", fontSize: 13 }}>
+      <div className="flex-1 flex items-center justify-center">
+        <span className="text-[13px] text-[var(--color-text-tertiary)]">
           No changes
         </span>
       </div>
     );
   }
 
-  const hasSelection = selectedLines.size > 0;
+  const hasSelection = !readOnly && selectedLines.size > 0;
 
   const applyToSelectedLines = (
     action: (path: string, hunkIndex: number, lineIndices: number[]) => Promise<void>,
   ) => {
     const result = findSelectedHunk(diff.hunks, selectedLines);
     if (result) {
-      const [hunkIndex, lineIndices] = result;
-      action(selectedFile, hunkIndex, lineIndices);
+      action(selectedFile, result[0], result[1]);
     }
     onClearSelection();
   };
 
   return (
-    <div style={styles.container}>
-      {/* Floating action bar for line-level operations */}
+    <div className="flex-1 overflow-y-auto">
+      {/* Floating selection bar */}
       {hasSelection && (
-        <div style={styles.actionBar}>
-          <span style={styles.actionBarText}>
-            {selectedLines.size} line{selectedLines.size > 1 ? "s" : ""}{" "}
-            selected
+        <div className="sticky top-0 z-10 flex items-center gap-2 px-3 h-[32px] bg-[var(--color-bg-secondary)] border-b border-[var(--color-border)] shadow-sm">
+          <span className="text-[11px] text-[var(--color-text-secondary)] mr-auto font-medium">
+            {selectedLines.size} line{selectedLines.size > 1 ? "s" : ""} selected
           </span>
           {!isViewingStaged && (
-            <button
-              style={styles.actionBarBtn}
-              onClick={() => applyToSelectedLines(onStageLines)}
-            >
-              Stage Selected
-            </button>
+            <>
+              <button
+                className="px-2.5 py-1 text-[11px] font-medium rounded-full border border-[var(--color-border)] bg-white text-[var(--color-text)] hover:bg-[var(--color-bg-tertiary)] transition-colors"
+                onClick={() => applyToSelectedLines(onStageLines)}
+              >
+                Stage
+              </button>
+              <button
+                className="px-2.5 py-1 text-[11px] font-medium rounded-full border border-[var(--color-border)] bg-white text-[var(--color-danger)] hover:bg-[var(--color-danger-bg)] transition-colors"
+                onClick={() => applyToSelectedLines(onDiscardLines)}
+              >
+                Discard
+              </button>
+            </>
           )}
           {isViewingStaged && (
             <button
-              style={styles.actionBarBtn}
+              className="px-2.5 py-1 text-[11px] font-medium rounded-full border border-[var(--color-border)] bg-white text-[var(--color-text)] hover:bg-[var(--color-bg-tertiary)] transition-colors"
               onClick={() => applyToSelectedLines(onUnstageLines)}
             >
-              Unstage Selected
-            </button>
-          )}
-          {!isViewingStaged && (
-            <button
-              style={{ ...styles.actionBarBtn, color: "#e06c75" }}
-              onClick={() => applyToSelectedLines(onDiscardLines)}
-            >
-              Discard Selected
+              Unstage
             </button>
           )}
           <button
-            style={{ ...styles.actionBarBtn, color: "var(--text-secondary)" }}
+            className="px-2.5 py-1 text-[11px] font-medium rounded-full border border-[var(--color-border)] bg-white text-[var(--color-text-tertiary)] hover:bg-[var(--color-bg-tertiary)] transition-colors"
             onClick={onClearSelection}
           >
             Clear
@@ -141,61 +130,27 @@ export default function DiffViewer({
         </div>
       )}
 
-      {/* Hunks */}
-      {diff.hunks.map((hunk, i) => (
-        <DiffHunk
-          key={`${hunk.header}-${i}`}
-          hunk={hunk}
-          hunkIndex={i}
-          filePath={selectedFile}
-          isViewingStaged={isViewingStaged}
-          selectedLines={selectedLines}
-          onToggleLine={onToggleLine}
-          onStageHunk={() => onStageHunk(selectedFile, i)}
-          onUnstageHunk={() => onUnstageHunk(selectedFile, i)}
-          onDiscardHunk={() => onDiscardHunk(selectedFile, i)}
-        />
-      ))}
+      {/* Diff hunks */}
+      <div className="p-3">
+        <div className="border border-[var(--color-border)] rounded-lg overflow-hidden">
+          {diff.hunks.map((hunk, i) => (
+            <DiffHunk
+              key={`${hunk.header}-${i}`}
+              hunk={hunk}
+              hunkIndex={i}
+              filePath={selectedFile}
+              isViewingStaged={isViewingStaged}
+              isFirst={i === 0}
+              readOnly={readOnly}
+              selectedLines={selectedLines}
+              onToggleLine={onToggleLine}
+              onStageHunk={() => onStageHunk(selectedFile, i)}
+              onUnstageHunk={() => onUnstageHunk(selectedFile, i)}
+              onDiscardHunk={() => onDiscardHunk(selectedFile, i)}
+            />
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
-
-const styles = {
-  container: {
-    flex: 1,
-    overflowY: "auto" as const,
-    fontFamily: "monospace",
-    fontSize: 12,
-  },
-  empty: {
-    flex: 1,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  actionBar: {
-    position: "sticky" as const,
-    top: 0,
-    zIndex: 10,
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    padding: "6px 12px",
-    background: "var(--bg-tertiary)",
-    borderBottom: "1px solid var(--border-color)",
-  },
-  actionBarText: {
-    fontSize: 12,
-    color: "var(--text-secondary)",
-    marginRight: "auto",
-  },
-  actionBarBtn: {
-    background: "none",
-    border: "1px solid var(--border-color)",
-    color: "var(--text-primary)",
-    fontSize: 11,
-    padding: "3px 10px",
-    borderRadius: 3,
-    cursor: "pointer",
-  },
-};

@@ -1,120 +1,62 @@
-import { useState } from "react";
 import type { DiffLine as DiffLineType } from "../../types";
 
 interface Props {
   line: DiffLineType;
-  isSelected: boolean;
-  onToggle: () => void;
-  showCheckbox: boolean;
 }
 
-export default function DiffLine({
-  line,
-  isSelected,
-  onToggle,
-  showCheckbox,
-}: Props) {
-  const [hovered, setHovered] = useState(false);
+export default function DiffLine({ line }: Props) {
+  const isAdd = line.type === "add";
+  const isRemove = line.type === "remove";
 
-  const bgColor =
-    line.type === "add"
-      ? isSelected
-        ? "rgba(152, 195, 121, 0.3)"
-        : "rgba(152, 195, 121, 0.15)"
-      : line.type === "remove"
-        ? isSelected
-          ? "rgba(224, 108, 117, 0.3)"
-          : "rgba(224, 108, 117, 0.15)"
-        : "transparent";
+  // GitHub-style row backgrounds
+  const rowBg = isAdd
+    ? "bg-[var(--diff-add-bg)]"
+    : isRemove
+      ? "bg-[var(--diff-remove-bg)]"
+      : "";
 
-  const hoverBg =
-    line.type === "add"
-      ? "rgba(152, 195, 121, 0.25)"
-      : line.type === "remove"
-        ? "rgba(224, 108, 117, 0.25)"
-        : "rgba(255, 255, 255, 0.03)";
+  // Gutter backgrounds (slightly more saturated than row)
+  const gutterBg = isAdd
+    ? "bg-[var(--diff-add-gutter-bg)]"
+    : isRemove
+      ? "bg-[var(--diff-remove-gutter-bg)]"
+      : "";
+
+  const prefixColor = isAdd
+    ? "text-[var(--color-success)]"
+    : isRemove
+      ? "text-[var(--color-danger)]"
+      : "text-transparent";
 
   return (
     <div
-      style={{
-        ...styles.line,
-        background: hovered && !isSelected ? hoverBg : bgColor,
-      }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      className={`flex items-stretch min-h-[20px] leading-[20px] font-mono text-[12px] ${rowBg}`}
     >
-      {/* Line selection checkbox */}
-      <span style={styles.checkbox}>
-        {showCheckbox && (
-          <input
-            type="checkbox"
-            checked={isSelected}
-            onChange={onToggle}
-            style={styles.checkboxInput}
-          />
-        )}
-      </span>
-
-      {/* Line numbers */}
-      <span style={styles.lineNum}>
+      {/* Old line number gutter */}
+      <span
+        className={`w-[40px] text-right pr-2 text-[11px] text-[var(--color-text-tertiary)] shrink-0 select-none ${gutterBg}`}
+      >
         {line.oldLineNumber ?? ""}
       </span>
-      <span style={styles.lineNum}>
+
+      {/* New line number gutter */}
+      <span
+        className={`w-[40px] text-right pr-2 text-[11px] text-[var(--color-text-tertiary)] shrink-0 select-none ${gutterBg}`}
+      >
         {line.newLineNumber ?? ""}
       </span>
 
       {/* Prefix (+/-/space) */}
-      <span style={styles.prefix}>
-        {line.type === "add" ? "+" : line.type === "remove" ? "-" : " "}
+      <span
+        className={`w-[18px] text-center shrink-0 select-none font-medium ${prefixColor} ${gutterBg}`}
+      >
+        {isAdd ? "+" : isRemove ? "-" : " "}
       </span>
 
       {/* Content */}
-      <span style={styles.content}>{line.content}</span>
+      <span className="diff-line-content flex-1 pr-3 whitespace-pre overflow-x-auto">
+        {line.content}
+      </span>
     </div>
   );
 }
-
-const styles = {
-  line: {
-    display: "flex",
-    alignItems: "stretch",
-    minHeight: 20,
-    lineHeight: "20px",
-    whiteSpace: "pre" as const,
-    fontSize: 12,
-    fontFamily: "monospace",
-  },
-  checkbox: {
-    width: 20,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  },
-  checkboxInput: {
-    margin: 0,
-    cursor: "pointer",
-    accentColor: "var(--accent)",
-  },
-  lineNum: {
-    width: 45,
-    textAlign: "right" as const,
-    paddingRight: 8,
-    color: "var(--text-secondary)",
-    fontSize: 11,
-    flexShrink: 0,
-    userSelect: "none" as const,
-    opacity: 0.6,
-  },
-  prefix: {
-    width: 14,
-    textAlign: "center" as const,
-    flexShrink: 0,
-    fontWeight: 700,
-  },
-  content: {
-    flex: 1,
-    paddingRight: 12,
-    overflowX: "auto" as const,
-  },
-};

@@ -1,3 +1,4 @@
+import { Plus, Minus, Trash2 } from "lucide-react";
 import type { FileStatus } from "../../types";
 
 interface Props {
@@ -23,32 +24,29 @@ export default function FileList({
   const unstaged = fileStatuses.filter((f) => !f.staged);
 
   return (
-    <div style={styles.container}>
+    <div className="border-b border-[var(--color-border)] shrink-0 max-h-[200px] overflow-y-auto">
       {/* Staged section */}
       {staged.length > 0 && (
         <div>
-          <div style={styles.sectionHeader}>
+          <div className="text-[11px] uppercase tracking-wider font-medium text-[var(--color-text-tertiary)] px-3 pt-2.5 pb-1 select-none">
             Staged ({staged.length})
           </div>
           {staged.map((file) => (
             <FileItem
               key={`staged-${file.path}`}
               file={file}
-              isSelected={
-                selectedFile === file.path && isViewingStaged
-              }
+              isSelected={selectedFile === file.path && isViewingStaged}
               onClick={() => onSelectFile(file.path, true)}
               actions={
-                <button
-                  style={styles.actionBtn}
+                <ActionButton
+                  icon={<Minus size={12} strokeWidth={2} />}
                   title="Unstage"
+                  variant="warning"
                   onClick={(e) => {
                     e.stopPropagation();
                     onUnstageFile(file.path);
                   }}
-                >
-                  -
-                </button>
+                />
               }
             />
           ))}
@@ -58,39 +56,35 @@ export default function FileList({
       {/* Unstaged section */}
       {unstaged.length > 0 && (
         <div>
-          <div style={styles.sectionHeader}>
+          <div className="text-[11px] uppercase tracking-wider font-medium text-[var(--color-text-tertiary)] px-3 pt-2.5 pb-1 select-none">
             Unstaged ({unstaged.length})
           </div>
           {unstaged.map((file) => (
             <FileItem
               key={`unstaged-${file.path}`}
               file={file}
-              isSelected={
-                selectedFile === file.path && !isViewingStaged
-              }
+              isSelected={selectedFile === file.path && !isViewingStaged}
               onClick={() => onSelectFile(file.path, false)}
               actions={
                 <>
-                  <button
-                    style={styles.actionBtn}
+                  <ActionButton
+                    icon={<Plus size={12} strokeWidth={2} />}
                     title="Stage"
+                    variant="success"
                     onClick={(e) => {
                       e.stopPropagation();
                       onStageFile(file.path);
                     }}
-                  >
-                    +
-                  </button>
-                  <button
-                    style={{ ...styles.actionBtn, color: "#e06c75" }}
+                  />
+                  <ActionButton
+                    icon={<Trash2 size={11} strokeWidth={2} />}
                     title="Discard"
+                    variant="danger"
                     onClick={(e) => {
                       e.stopPropagation();
                       onDiscardFile(file.path);
                     }}
-                  >
-                    ×
-                  </button>
+                  />
                 </>
               }
             />
@@ -99,9 +93,47 @@ export default function FileList({
       )}
 
       {fileStatuses.length === 0 && (
-        <div style={styles.empty}>No changes</div>
+        <div className="py-4 text-[12px] text-[var(--color-text-tertiary)] text-center">
+          No changes
+        </div>
       )}
     </div>
+  );
+}
+
+const statusColors: Record<string, string> = {
+  modified: "var(--color-warning)",
+  added: "var(--color-success)",
+  deleted: "var(--color-danger)",
+  renamed: "var(--color-info)",
+  untracked: "var(--color-success)",
+};
+
+function ActionButton({
+  icon,
+  title,
+  variant,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  variant: "success" | "warning" | "danger";
+  onClick: (e: React.MouseEvent) => void;
+}) {
+  const variantClasses = {
+    success: "hover:text-[var(--color-success)] hover:bg-[var(--color-success-bg)]",
+    warning: "hover:text-[var(--color-warning)] hover:bg-[#fffbeb]",
+    danger: "hover:text-[var(--color-danger)] hover:bg-[var(--color-danger-bg)]",
+  };
+
+  return (
+    <button
+      className={`flex items-center justify-center w-[20px] h-[20px] rounded-[var(--radius-sm)] text-[var(--color-text-tertiary)] transition-colors duration-100 ${variantClasses[variant]}`}
+      title={title}
+      onClick={onClick}
+    >
+      {icon}
+    </button>
   );
 }
 
@@ -116,14 +148,7 @@ function FileItem({
   onClick: () => void;
   actions: React.ReactNode;
 }) {
-  const statusColor = {
-    modified: "#e5c07b",
-    added: "#98c379",
-    deleted: "#e06c75",
-    renamed: "#61afef",
-    untracked: "#98c379",
-  }[file.status] ?? "var(--text-secondary)";
-
+  const statusColor = statusColors[file.status] ?? "var(--color-text-tertiary)";
   const statusChar = file.status[0].toUpperCase();
   const fileName = file.path.split("/").pop() ?? file.path;
   const dirPath = file.path.includes("/")
@@ -132,97 +157,30 @@ function FileItem({
 
   return (
     <div
-      style={{
-        ...styles.fileItem,
-        ...(isSelected ? styles.fileSelected : {}),
-      }}
+      className={`group flex items-center gap-1.5 px-3 h-[28px] cursor-pointer text-[12px] select-none transition-colors duration-100 ${
+        isSelected
+          ? "bg-[var(--color-primary-light)] border-l-[3px] border-l-[var(--color-primary)]"
+          : "hover:bg-[var(--color-bg-tertiary)] border-l-[3px] border-l-transparent"
+      }`}
       onClick={onClick}
     >
       <span
-        style={{
-          ...styles.statusBadge,
-          color: statusColor,
-        }}
+        className="font-mono font-semibold text-[11px] w-3.5 text-center shrink-0"
+        style={{ color: statusColor }}
       >
         {statusChar}
       </span>
-      <span style={styles.fileName}>{fileName}</span>
-      {dirPath && <span style={styles.dirPath}>{dirPath}/</span>}
-      <span style={styles.fileActions}>{actions}</span>
+      <span className={`truncate ${isSelected ? "font-medium text-[var(--color-text)]" : "text-[var(--color-text)]"}`}>
+        {fileName}
+      </span>
+      {dirPath && (
+        <span className="text-[11px] truncate flex-1 text-[var(--color-text-tertiary)]">
+          {dirPath}/
+        </span>
+      )}
+      <span className="flex gap-0.5 ml-auto shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-100">
+        {actions}
+      </span>
     </div>
   );
 }
-
-const styles = {
-  container: {
-    borderBottom: "1px solid var(--border-color)",
-    flexShrink: 0,
-    maxHeight: 200,
-    overflowY: "auto" as const,
-  },
-  sectionHeader: {
-    fontSize: 11,
-    textTransform: "uppercase" as const,
-    letterSpacing: "0.5px",
-    color: "var(--text-secondary)",
-    fontWeight: 600,
-    padding: "6px 12px 2px",
-    userSelect: "none" as const,
-  },
-  fileItem: {
-    display: "flex",
-    alignItems: "center",
-    gap: 6,
-    padding: "3px 12px",
-    cursor: "pointer",
-    fontSize: 12,
-    userSelect: "none" as const,
-  },
-  fileSelected: {
-    background: "var(--accent)",
-    color: "#fff",
-  },
-  statusBadge: {
-    fontWeight: 700,
-    fontSize: 11,
-    width: 14,
-    textAlign: "center" as const,
-    flexShrink: 0,
-  },
-  fileName: {
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap" as const,
-  },
-  dirPath: {
-    fontSize: 11,
-    color: "var(--text-secondary)",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap" as const,
-    flex: 1,
-  },
-  fileActions: {
-    display: "flex",
-    gap: 2,
-    marginLeft: "auto",
-    flexShrink: 0,
-    opacity: 0.7,
-  },
-  actionBtn: {
-    background: "none",
-    border: "none",
-    color: "var(--text-secondary)",
-    fontSize: 14,
-    cursor: "pointer",
-    padding: "0 3px",
-    lineHeight: 1,
-    fontWeight: 700,
-  },
-  empty: {
-    padding: 12,
-    color: "var(--text-secondary)",
-    fontSize: 12,
-    textAlign: "center" as const,
-  },
-};

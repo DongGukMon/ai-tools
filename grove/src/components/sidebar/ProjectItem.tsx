@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ChevronRight, ChevronDown, X, Plus, GitFork } from "lucide-react";
 import type { Project } from "../../types";
 import { useProjectStore } from "../../store/project";
 import WorktreeItem from "./WorktreeItem";
@@ -8,8 +9,9 @@ interface Props {
 }
 
 function ProjectItem({ project }: Props) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const [adding, setAdding] = useState(false);
+  const [addingLoading, setAddingLoading] = useState(false);
   const [worktreeName, setWorktreeName] = useState("");
   const { addWorktree, removeProject } = useProjectStore();
 
@@ -17,12 +19,15 @@ function ProjectItem({ project }: Props) {
     e.preventDefault();
     const name = worktreeName.trim();
     if (!name) return;
+    setAddingLoading(true);
     try {
       await addWorktree(project.id, name);
       setWorktreeName("");
       setAdding(false);
     } catch (err) {
       console.error("Failed to add worktree:", err);
+    } finally {
+      setAddingLoading(false);
     }
   };
 
@@ -36,25 +41,31 @@ function ProjectItem({ project }: Props) {
   };
 
   return (
-    <div className="project-item">
+    <div className="mb-1">
+      {/* Project header */}
       <div
-        className="project-header"
+        className="group flex items-center gap-2 px-2 h-[34px] rounded-lg cursor-pointer select-none hover:bg-white/80 transition-all duration-100"
         onClick={() => setExpanded(!expanded)}
       >
-        <span className="project-chevron">{expanded ? "\u25BE" : "\u25B8"}</span>
-        <span className="project-name" title={project.url}>
+        <span className="flex items-center justify-center w-4 shrink-0 text-[#9ca3af]">
+          {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+        </span>
+        <GitFork size={14} className={expanded ? "text-[var(--color-primary)] shrink-0" : "text-[#9ca3af] shrink-0"} />
+        <span className="flex-1 text-[13px] truncate font-semibold text-[#374151]">
           {project.org}/{project.repo}
         </span>
         <button
-          className="project-remove"
+          className="flex items-center justify-center w-[20px] h-[20px] rounded-md opacity-0 group-hover:opacity-100 text-[#9ca3af] hover:text-[var(--color-danger)] hover:bg-[var(--color-danger-bg)] transition-all duration-100"
           onClick={handleRemoveProject}
           title="Remove project"
         >
-          ×
+          <X size={12} strokeWidth={2} />
         </button>
       </div>
+
+      {/* Worktree list */}
       {expanded && (
-        <div className="project-worktrees">
+        <div className="ml-5 mr-1 mt-0.5 space-y-0.5">
           {project.worktrees.map((wt) => (
             <WorktreeItem
               key={wt.path}
@@ -63,28 +74,38 @@ function ProjectItem({ project }: Props) {
             />
           ))}
           {adding ? (
-            <form className="add-worktree-form" onSubmit={handleAddWorktree}>
-              <input
-                className="add-worktree-input"
-                type="text"
-                placeholder="branch name"
-                value={worktreeName}
-                onChange={(e) => setWorktreeName(e.target.value)}
-                autoFocus
-                onBlur={() => {
-                  if (!worktreeName.trim()) setAdding(false);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Escape") setAdding(false);
-                }}
-              />
-            </form>
+            <div>
+              <form onSubmit={handleAddWorktree} className="px-1 py-1">
+                <input
+                  className="w-full px-2.5 py-1.5 text-[12px] rounded-lg border border-[var(--color-primary)] bg-white text-[var(--color-text)] outline-none focus:ring-2 focus:ring-[var(--color-primary-bg)] shadow-sm transition-all disabled:opacity-50"
+                  type="text"
+                  placeholder="branch name"
+                  value={worktreeName}
+                  onChange={(e) => setWorktreeName(e.target.value)}
+                  autoFocus
+                  disabled={addingLoading}
+                  onBlur={() => {
+                    if (!worktreeName.trim() && !addingLoading) setAdding(false);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape" && !addingLoading) setAdding(false);
+                  }}
+                />
+              </form>
+              {addingLoading && (
+                <div className="flex items-center gap-2 px-2.5 h-[30px]">
+                  <div className="skeleton w-3 h-3 rounded-full shrink-0" />
+                  <div className="skeleton flex-1 h-3" />
+                </div>
+              )}
+            </div>
           ) : (
             <button
-              className="add-worktree-btn"
+              className="flex items-center gap-1.5 w-full px-2.5 py-1.5 text-[11px] font-medium text-[#9ca3af] hover:text-[var(--color-primary)] rounded-lg hover:bg-white/80 transition-all duration-100"
               onClick={() => setAdding(true)}
             >
-              + worktree
+              <Plus size={12} strokeWidth={2} />
+              <span>Add worktree</span>
             </button>
           )}
         </div>

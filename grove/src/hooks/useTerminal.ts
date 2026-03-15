@@ -1,4 +1,4 @@
-import { useTerminalStore } from "../store/terminal";
+import { useTerminalStore, countLeaves, assignPtyIds } from "../store/terminal";
 import {
   createPty as ipcCreatePty,
   closePty as ipcClosePty,
@@ -8,6 +8,23 @@ export function useTerminal() {
   const store = useTerminalStore();
 
   const createTerminal = async (worktreePath: string) => {
+    // Check for saved layout
+    const savedLayout = store.getSavedLayout(worktreePath);
+    if (savedLayout) {
+      const leafCount = countLeaves(savedLayout);
+      const ptyIds: string[] = [];
+      // Create PTYs for each leaf
+      for (let i = 0; i < leafCount; i++) {
+        const ptyId = crypto.randomUUID();
+        await ipcCreatePty(ptyId, worktreePath, 80, 24);
+        ptyIds.push(ptyId);
+      }
+      const restored = assignPtyIds(structuredClone(savedLayout), [...ptyIds]);
+      store.restoreSession(worktreePath, restored);
+      return ptyIds[0];
+    }
+
+    // No saved layout — single terminal
     const ptyId = crypto.randomUUID();
     await ipcCreatePty(ptyId, worktreePath, 80, 24);
     store.createSession(worktreePath, ptyId);

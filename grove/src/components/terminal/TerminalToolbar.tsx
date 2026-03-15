@@ -1,34 +1,35 @@
+import { Columns2, Rows2, X } from "lucide-react";
 import { useTerminal } from "../../hooks/useTerminal";
 
 export default function TerminalToolbar() {
   const { splitCurrent, closeCurrent, focusedPtyId } = useTerminal();
 
   return (
-    <div className="terminal-toolbar">
-      <div className="terminal-toolbar-actions">
+    <div className="flex items-center justify-end px-2 h-[28px] shrink-0 border-b border-[var(--color-border)] bg-[var(--color-bg)]">
+      <div className="flex items-center gap-0.5">
         <button
-          className="terminal-toolbar-btn"
+          className="flex items-center justify-center w-[24px] h-[24px] rounded-[var(--radius-sm)] text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-tertiary)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors duration-100"
           onClick={() => splitCurrent("horizontal")}
           disabled={!focusedPtyId}
           title="Split Horizontal"
         >
-          &#x2502;&#x2502;
+          <Columns2 size={14} strokeWidth={1.5} />
         </button>
         <button
-          className="terminal-toolbar-btn"
+          className="flex items-center justify-center w-[24px] h-[24px] rounded-[var(--radius-sm)] text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-tertiary)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors duration-100"
           onClick={() => splitCurrent("vertical")}
           disabled={!focusedPtyId}
           title="Split Vertical"
         >
-          &#x2500;&#x2500;
+          <Rows2 size={14} strokeWidth={1.5} />
         </button>
         <button
-          className="terminal-toolbar-btn terminal-toolbar-btn-close"
+          className="flex items-center justify-center w-[24px] h-[24px] rounded-[var(--radius-sm)] text-[var(--color-text-tertiary)] hover:text-[var(--color-danger)] hover:bg-[var(--color-danger-bg)] disabled:opacity-20 disabled:cursor-not-allowed transition-colors duration-100"
           onClick={closeCurrent}
           disabled={!focusedPtyId}
           title="Close Terminal"
         >
-          &#x2715;
+          <X size={14} strokeWidth={1.5} />
         </button>
       </div>
     </div>

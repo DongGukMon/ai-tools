@@ -13,7 +13,11 @@ function getNodeKey(node: SplitNode): string {
 
 export default function SplitContainer({ node }: Props) {
   if (node.type === "leaf") {
-    return node.ptyId ? <TerminalInstance ptyId={node.ptyId} /> : null;
+    return node.ptyId ? (
+      <div className="relative w-full h-full">
+        <TerminalInstance ptyId={node.ptyId} />
+      </div>
+    ) : null;
   }
 
   return (
