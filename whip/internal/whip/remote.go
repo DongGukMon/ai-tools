@@ -2,6 +2,7 @@ package whip
 
 import (
 	"fmt"
+	"net/http"
 	"strings"
 )
 
@@ -40,12 +41,15 @@ type RemoteConfig struct {
 	Difficulty string
 	Tunnel     string
 	Port       int
+	BindHost   string
 	CWD        string
 	Workspace  string
 	AuthMode   string
+
+	testHandlerWrapper func(http.Handler) http.Handler
 }
 
-// ServeResult holds the parsed output from claude-irc serve.
+// ServeResult holds the remote access URLs for a running whip remote session.
 type ServeResult struct {
 	ConnectURL string
 	ShortURL   string

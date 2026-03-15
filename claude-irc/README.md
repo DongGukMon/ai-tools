@@ -1,6 +1,6 @@
 # claude-irc
 
-IRC-inspired inter-session communication for Claude Code agents. Enable multiple Claude Code sessions on the same machine to exchange messages, share context, and coordinate in real-time.
+IRC-inspired local agent bus for Claude Code agents. Enable multiple Claude Code sessions on the same machine to exchange messages, share context, and coordinate in real-time.
 
 ## The Problem
 
@@ -52,24 +52,14 @@ claude-irc msg server "Got it. Need avatarUrl in UserResponse"
 - **Hook integration**: `PreToolUse` hook auto-surfaces new messages to Claude
 - **Stale cleanup**: Dead sessions are automatically detected and cleaned up
 
-## Serve Mode
+## Scope
 
-`claude-irc serve` starts the HTTP API used by the whip web dashboard.
+`claude-irc` is intentionally local-only now. Remote dashboard access, device auth, tunnels, and tmux control live in `whip`.
 
-```bash
-# Default device auth
-claude-irc serve --port 8585 --master-tmux whip-master
+Breaking change:
 
-# Legacy token auth
-claude-irc serve --port 8585 --master-tmux whip-master --auth-mode token
-```
-
-Default auth mode is `device`. In that mode, the browser opens a `#mode=device` connect URL, requests pairing, and the terminal prints a one-time OTP that expires in 2 minutes.
-
-Authenticated endpoints accept either:
-
-- `Authorization: WhipSession <session_id>.<session_secret>` in device mode
-- `Authorization: Bearer <token>` in legacy token mode
+- `claude-irc serve` was removed.
+- Use `whip remote` for web dashboard access.
 
 ## Name Resolution
 
@@ -78,7 +68,7 @@ Commands that need identity (`whoami`, `msg`, `inbox`, `quit`) resolve the peer 
 2. **`--name` flag** — fallback when session detection fails; only `user` is allowed without an active session
 3. Error if neither resolves
 
-**Reserved name:** `user` is the remote dashboard operator identity (the whip TUI or web dashboard). Agents may reply with `claude-irc msg user "..."`. The `--name user` flag is the only no-session override allowed.
+**Reserved name:** `user` is the whip dashboard/operator identity. Agents may reply with `claude-irc msg user "..."`. The `--name user` flag is the only no-session override allowed.
 
 ## How It Works
 

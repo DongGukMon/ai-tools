@@ -1,10 +1,10 @@
 package whip
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
-	"os/exec"
-	"syscall"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -112,10 +112,10 @@ type DashboardModel struct {
 	ircSelectedPeer string
 	ircInput        string
 	ircTarget       string
-	ircLastSendErr error
-	ircLastSendAt  time.Time
+	ircLastSendErr  error
+	ircLastSendAt   time.Time
 
-	serveProcess    *exec.Cmd
+	remoteHandle    *RemoteHandle
 	serveURL        string
 	shortURL        string
 	webURL          string
@@ -151,18 +151,10 @@ func (m DashboardModel) PendingAttach() string {
 }
 
 func (m DashboardModel) Cleanup() {
-	if m.serveProcess == nil || m.serveProcess.Process == nil {
+	if m.remoteHandle == nil {
 		return
 	}
-	m.serveProcess.Process.Signal(syscall.SIGTERM)
-	done := make(chan error, 1)
-	go func() { done <- m.serveProcess.Wait() }()
-	select {
-	case <-done:
-	case <-time.After(5 * time.Second):
-		m.serveProcess.Process.Kill()
-		<-done
-	}
+	_ = m.remoteHandle.Stop(5 * time.Second)
 }
 
 func NewDashboardModel(store *Store, version string) DashboardModel {
@@ -312,7 +304,7 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.remoteErr = nil
-		m.serveProcess = msg.cmd
+		m.remoteHandle = msg.handle
 		m.serveURL = msg.url
 		m.shortURL = msg.shortURL
 		if msg.shortURL != "" {
@@ -333,7 +325,7 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case remoteStoppedMsg:
-		m.serveProcess = nil
+		m.remoteHandle = nil
 		m.serveURL = ""
 		m.shortURL = ""
 		m.webURL = ""
@@ -356,11 +348,16 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.msgHistoryLines = loadTaskMessages(m.store, m.selectedTask)
 			}
 		}
-		if m.serveProcess != nil {
+		if m.remoteHandle != nil {
 			m.masterAlive = IsMasterSessionAlive(m.remoteWorkspace)
-			if m.serveProcess.ProcessState != nil {
-				m.serveProcess = nil
+			if exited, err := m.remoteHandle.Exited(); exited {
+				if err != nil && !errors.Is(err, context.Canceled) {
+					m.remoteErr = err
+				}
+				m.remoteHandle = nil
 				m.serveURL = ""
+				m.shortURL = ""
+				m.webURL = ""
 				m.masterAlive = false
 			}
 		}

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/bang9/ai-tools/claude-irc/internal/irc"
+	irc "github.com/bang9/ai-tools/shared/agentbus"
 	"github.com/bang9/ai-tools/shared/upgrade"
 	"github.com/spf13/cobra"
 )

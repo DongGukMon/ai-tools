@@ -3,6 +3,7 @@ module github.com/bang9/ai-tools/whip
 go 1.24.0
 
 require (
+	github.com/bang9/ai-tools/shared/agentbus v0.0.0
 	github.com/bang9/ai-tools/shared/upgrade v0.0.0
 	github.com/charmbracelet/bubbletea v1.3.4
 	github.com/charmbracelet/lipgloss v1.1.0
@@ -13,6 +14,7 @@ require (
 )
 
 replace github.com/bang9/ai-tools/shared/upgrade => ../shared/upgrade
+replace github.com/bang9/ai-tools/shared/agentbus => ../shared/agentbus
 
 require (
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect

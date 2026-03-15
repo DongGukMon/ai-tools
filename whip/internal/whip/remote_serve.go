@@ -1,98 +1,222 @@
 package whip
 
 import (
-	"bufio"
 	"context"
+	"errors"
 	"fmt"
-	"os"
-	"os/exec"
-	"regexp"
-	"strconv"
 	"strings"
+	"sync"
 	"time"
+
+	agentbus "github.com/bang9/ai-tools/shared/agentbus"
 )
 
 const deviceChallengeLogPrefix = "Device challenge OTP:"
 const deviceChallengeResultLogPrefix = "Device challenge result:"
 
-var ansiEscapePattern = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)
+type RemoteHandle struct {
+	cancel context.CancelFunc
+	server *runningServer
+	tunnel *TunnelManager
+	done   chan struct{}
 
-// StartServe starts `claude-irc serve` as a subprocess and returns the
-// process handle, the parsed URLs, and any error.
-// When silent is true, stdout/stderr are suppressed and stdin is detached (for TUI embedding).
-func StartServe(ctx context.Context, cfg RemoteConfig, token string, silent bool, onServeNotice func(string)) (*exec.Cmd, ServeResult, error) {
-	authMode := NormalizeRemoteAuthMode(cfg.AuthMode)
-	args := []string{
-		"serve",
-		"--port", strconv.Itoa(cfg.Port),
-		"--master-tmux", WorkspaceMasterSessionName(cfg.Workspace),
-		"--workspace", cfg.Workspace,
-		"--auth-mode", authMode,
-	}
-	if cfg.Tunnel != "" {
-		args = append(args, "--tunnel", cfg.Tunnel)
-	}
-	if authMode == RemoteAuthModeToken && token != "" {
-		args = append(args, "--token", token)
-	}
+	finishOnce sync.Once
+	stopOnce   sync.Once
+	tunnelOnce sync.Once
 
-	cmd := exec.CommandContext(ctx, "claude-irc", args...)
-	if silent {
-		cmd.Stdin = nil
-	} else {
-		cmd.Stdout = os.Stdout
-	}
+	mu  sync.Mutex
+	err error
 
-	stderrPipe, err := cmd.StderrPipe()
-	if err != nil {
-		return nil, ServeResult{}, fmt.Errorf("stderr pipe: %w", err)
-	}
+	tunnelErr error
+}
 
-	if err := cmd.Start(); err != nil {
-		return nil, ServeResult{}, fmt.Errorf("start claude-irc serve: %w", err)
-	}
+func (h *RemoteHandle) finish(err error) {
+	h.finishOnce.Do(func() {
+		h.mu.Lock()
+		h.err = err
+		h.mu.Unlock()
+		close(h.done)
+	})
+}
 
-	var result ServeResult
-	readyCh := make(chan ServeResult, 1)
-	go func() {
-		scanner := bufio.NewScanner(stderrPipe)
-		readySent := false
-		for scanner.Scan() {
-			line := sanitizeServeStderrLine(scanner.Text())
-			if handleServeStderrLine(cfg, &result, line, silent, onServeNotice) && !readySent {
-				readyCh <- result
-				readySent = true
-			}
+func (h *RemoteHandle) Err() error {
+	if h == nil {
+		return nil
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.err
+}
+
+func (h *RemoteHandle) Exited() (bool, error) {
+	if h == nil {
+		return true, nil
+	}
+	select {
+	case <-h.done:
+		return true, h.Err()
+	default:
+		return false, nil
+	}
+}
+
+func (h *RemoteHandle) Stop(timeout time.Duration) error {
+	if h == nil {
+		return nil
+	}
+	if exited, err := h.Exited(); exited {
+		return err
+	}
+	h.stopOnce.Do(func() {
+		h.cancel()
+		h.finish(h.shutdown(timeout))
+	})
+	<-h.done
+	return h.Err()
+}
+
+func (h *RemoteHandle) shutdown(timeout time.Duration) error {
+	var err error
+	if h.server != nil {
+		err = errors.Join(err, h.server.Stop(timeout))
+	}
+	err = errors.Join(err, h.stopTunnel())
+	return err
+}
+
+func (h *RemoteHandle) stopTunnel() error {
+	if h == nil {
+		return nil
+	}
+	h.tunnelOnce.Do(func() {
+		if h.tunnel != nil {
+			h.tunnelErr = h.tunnel.Stop()
 		}
+	})
+	return h.tunnelErr
+}
+
+func StartServe(ctx context.Context, cfg RemoteConfig, token string, _ bool, onServeNotice func(string)) (*RemoteHandle, ServeResult, error) {
+	authMode := NormalizeRemoteAuthMode(cfg.AuthMode)
+
+	busStore, err := agentbus.NewStore()
+	if err != nil {
+		return nil, ServeResult{}, fmt.Errorf("agent bus store: %w", err)
+	}
+
+	runCtx, cancel := context.WithCancel(ctx)
+
+	var publicURL string
+	var tunnelMgr *TunnelManager
+	if cfg.Tunnel != "" {
+		tunnelMgr = NewTunnelManager(cfg.Tunnel, cfg.Port)
+		publicURL, err = tunnelMgr.Start(runCtx)
+		if err != nil {
+			cancel()
+			return nil, ServeResult{}, fmt.Errorf("tunnel: %w", err)
+		}
+	}
+
+	server, err := startRunningServer(ServerConfig{
+		Port:       cfg.Port,
+		BindHost:   cfg.BindHost,
+		BusStore:   busStore,
+		MasterTmux: WorkspaceMasterSessionName(cfg.Workspace),
+		Token:      token,
+		AuthMode:   authMode,
+		Workspace:  cfg.Workspace,
+		OnDeviceChallenge: func(info DeviceAuthChallengeInfo) {
+			if onServeNotice != nil {
+				onServeNotice(formatDeviceChallengeLogLine(info))
+			}
+		},
+		OnDeviceChallengeResult: func(info DeviceAuthChallengeResultInfo) {
+			if onServeNotice != nil {
+				onServeNotice(formatDeviceChallengeResultLogLine(info))
+			}
+		},
+		testHandlerWrapper: cfg.testHandlerWrapper,
+	})
+	if err != nil {
+		cancel()
+		if tunnelMgr != nil {
+			_ = tunnelMgr.Stop()
+		}
+		return nil, ServeResult{}, err
+	}
+
+	handle := &RemoteHandle{
+		cancel: cancel,
+		server: server,
+		tunnel: tunnelMgr,
+		done:   make(chan struct{}),
+	}
+
+	go func() {
+		err := server.Wait()
+		handle.cancel()
+		err = errors.Join(err, handle.stopTunnel())
+		handle.finish(err)
 	}()
 
-	select {
-	case result = <-readyCh:
-	case <-time.After(10 * time.Second):
-		return cmd, result, fmt.Errorf("timeout waiting for serve URLs")
+	if done := ctx.Done(); done != nil {
+		go func() {
+			<-done
+			_ = handle.Stop(defaultRemoteServerShutdownTimeout)
+		}()
 	}
 
-	return cmd, result, nil
+	connectURL, shortURL, _ := serveURLs(server.info, publicURL)
+	return handle, ServeResult{
+		ConnectURL: connectURL,
+		ShortURL:   shortURL,
+	}, nil
 }
 
-func sanitizeServeStderrLine(raw string) string {
-	line := strings.ReplaceAll(raw, "\r", "")
-	line = ansiEscapePattern.ReplaceAllString(line, "")
-	return strings.TrimSpace(line)
+func serveURLs(info ServerInfo, publicURL string) (connectURL string, shortURL string, webURL string) {
+	baseURL := info.LocalURL
+	if publicURL != "" {
+		baseURL = publicURL
+	}
+	if info.AuthMode == RemoteAuthModeDevice {
+		connectURL = DeviceConnectURL(baseURL)
+	} else {
+		connectURL = ConnectURL(baseURL, info.Token)
+	}
+	shortURL = fmt.Sprintf("%s/s/%s", strings.TrimRight(baseURL, "/"), info.ShortCode)
+	webURL = DashboardURL(connectURL)
+	return connectURL, shortURL, webURL
 }
 
-func handleServeStderrLine(cfg RemoteConfig, result *ServeResult, line string, silent bool, onServeNotice func(string)) bool {
-	if !silent {
-		fmt.Fprintln(os.Stderr, line)
+func formatDeviceChallengeLogLine(info DeviceAuthChallengeInfo) string {
+	parts := []string{info.OTP}
+	if ttl := formatChallengeTTL(info.CreatedAt, info.ExpiresAt); ttl != "" {
+		parts = append(parts, ttl)
 	}
-	if strings.Contains(line, "Connect URL:") {
-		result.ConnectURL = strings.TrimSpace(strings.TrimPrefix(line, "Connect URL:"))
+	return fmt.Sprintf("%s %s", deviceChallengeLogPrefix, strings.Join(parts, "  "))
+}
+
+func formatDeviceChallengeResultLogLine(info DeviceAuthChallengeResultInfo) string {
+	status := info.Result
+	if status == "error" && info.Error != "" {
+		status = fmt.Sprintf("failed (%s)", info.Error)
+	} else if status == "error" {
+		status = "failed"
 	}
-	if strings.Contains(line, "Short URL:") {
-		result.ShortURL = strings.TrimSpace(strings.TrimPrefix(line, "Short URL:"))
+	return fmt.Sprintf("%s %s", deviceChallengeResultLogPrefix, status)
+}
+
+func formatChallengeTTL(createdAt, expiresAt time.Time) string {
+	if createdAt.IsZero() || expiresAt.IsZero() {
+		return ""
 	}
-	if (strings.HasPrefix(line, deviceChallengeLogPrefix) || strings.HasPrefix(line, deviceChallengeResultLogPrefix)) && onServeNotice != nil {
-		onServeNotice(line)
+	remaining := expiresAt.Sub(createdAt)
+	if remaining <= 0 {
+		return ""
 	}
-	return result.ConnectURL != "" && result.ShortURL != ""
+	totalSeconds := int(remaining / time.Second)
+	if totalSeconds%60 == 0 {
+		return fmt.Sprintf("expires in %dm", totalSeconds/60)
+	}
+	return fmt.Sprintf("expires in %ds", totalSeconds)
 }

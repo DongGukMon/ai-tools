@@ -10,7 +10,7 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/bang9/ai-tools/claude-irc/internal/irc"
+	irc "github.com/bang9/ai-tools/shared/agentbus"
 	"github.com/spf13/cobra"
 )
 

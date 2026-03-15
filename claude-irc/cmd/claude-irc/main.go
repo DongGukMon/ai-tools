@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/bang9/ai-tools/claude-irc/internal/irc"
+	irc "github.com/bang9/ai-tools/shared/agentbus"
 	"github.com/spf13/cobra"
 )
 
@@ -41,7 +41,6 @@ func main() {
 		cleanCmd(),
 		daemonCmd(),
 		upgradeCmd(),
-		serveCmd(),
 	)
 
 	if err := root.Execute(); err != nil {

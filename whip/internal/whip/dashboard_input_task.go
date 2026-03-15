@@ -98,7 +98,7 @@ func (m DashboardModel) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 	case "R":
-		if m.serveProcess != nil {
+		if m.remoteHandle != nil {
 			m.view = viewRemoteStatus
 		} else {
 			cfg, _ := m.store.LoadConfig()

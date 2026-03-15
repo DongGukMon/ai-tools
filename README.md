@@ -44,7 +44,7 @@ curl -fsSL https://raw.githubusercontent.com/bang9/ai-tools/main/vaultkey/instal
 
 ### [claude-irc](./claude-irc)
 
-IRC-inspired inter-session communication for Claude Code agents. Enable multiple sessions working in the same repo to exchange messages, share context, and coordinate in real-time.
+IRC-inspired local agent bus for Claude Code agents. Use it when multiple sessions on the same machine need to exchange messages, share context, and coordinate in real-time.
 
 #### Installation
 
@@ -101,7 +101,7 @@ curl -fsSL https://raw.githubusercontent.com/bang9/ai-tools/main/rewind/install.
 
 ### [whip](./whip)
 
-Task orchestrator for Claude Code. Run single-task work in `global`, run stacked work in a named `workspace`, and manage multiple Claude Code sessions via tmux with inter-session communication through `claude-irc`. Includes a TUI dashboard, web dashboard with real-time terminal view, and remote mode for headless operation.
+Task orchestrator for Claude Code. Run single-task work in `global`, run stacked work in a named `workspace`, and manage multiple Claude Code sessions via tmux with inter-session communication through `claude-irc`. Whip owns the remote control plane: TUI dashboard, web dashboard, device auth, tmux terminal access, and `whip remote`.
 
 #### Installation
 

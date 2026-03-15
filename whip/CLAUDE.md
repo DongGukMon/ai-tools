@@ -121,8 +121,11 @@ Useful operational commands:
 
 ## Remote Mode
 
-- `whip remote` starts a master session plus HTTP access for the web dashboard.
+- `whip remote` is the only public CLI entrypoint for starting a remote session.
+- It starts a master session plus HTTP access for the web dashboard.
 - `tmux` is required.
+- `claude-irc serve` no longer exists.
+- The dashboard can still surface remote start/status/stop controls after the session exists.
 - Use `whip remote --help` and the printed URL/OTP flow instead of relying on stale prose.
 
 `~/.whip/home/` is persistent master context:

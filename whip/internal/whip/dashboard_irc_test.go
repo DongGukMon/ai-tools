@@ -458,10 +458,10 @@ func TestIRC_SortOrderWithinGroups(t *testing.T) {
 	store := tempStore(t)
 	m := NewDashboardModel(store, "test")
 	m.peers = []peerInfo{
-		{Name: "wp-worker-z", Online: true},  // worker, resolves to ws via task
-		{Name: "wp-lead-ws1", Online: true},   // lead
-		{Name: "wp-master-ws1", Online: true},  // master
-		{Name: "wp-worker-a", Online: false},  // offline worker
+		{Name: "wp-worker-z", Online: true},      // worker, resolves to ws via task
+		{Name: "wp-lead-ws1", Online: true},      // lead
+		{Name: "wp-master-ws1", Online: true},    // master
+		{Name: "wp-worker-a", Online: false},     // offline worker
 		{Name: "wp-lead-offline", Online: false}, // offline lead, resolves to ws via task
 	}
 	m.tasks = []*Task{
@@ -496,11 +496,11 @@ func TestIRC_GroupSortOrder_OnlineFirst(t *testing.T) {
 	store := tempStore(t)
 	m := NewDashboardModel(store, "test")
 	m.peers = []peerInfo{
-		{Name: "wp-master-zeta", Online: false},   // offline group
-		{Name: "wp-master-alpha", Online: true},    // online group
-		{Name: "wp-master-gamma", Online: true},    // online group
-		{Name: "wp-master-beta", Online: false},    // offline group
-		{Name: "whip-orphan", Online: true},        // global
+		{Name: "wp-master-zeta", Online: false}, // offline group
+		{Name: "wp-master-alpha", Online: true}, // online group
+		{Name: "wp-master-gamma", Online: true}, // online group
+		{Name: "wp-master-beta", Online: false}, // offline group
+		{Name: "whip-orphan", Online: true},     // global
 	}
 	m.tasks = nil
 
@@ -790,8 +790,8 @@ func TestIRC_RoleClassification(t *testing.T) {
 
 func TestIRC_ResolveWorkspaceFromName(t *testing.T) {
 	tests := []struct {
-		name    string
-		wantWs  string
+		name   string
+		wantWs string
 	}{
 		{"wp-master-alpha", "alpha"},
 		{"wp-master", GlobalWorkspaceName},

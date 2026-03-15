@@ -1,18 +1,14 @@
-name: "claude-irc: Test"
+name: "shared/agentbus: Test"
 
 on:
   push:
     branches: [main]
     paths:
-      - 'claude-irc/**'
       - 'shared/agentbus/**'
-      - 'shared/upgrade/**'
   pull_request:
     branches: [main]
     paths:
-      - 'claude-irc/**'
       - 'shared/agentbus/**'
-      - 'shared/upgrade/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -33,15 +29,10 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
-          go-version-file: claude-irc/go.mod
-          cache-dependency-path: claude-irc/go.sum
+          go-version-file: shared/agentbus/go.mod
+          cache-dependency-path: shared/agentbus/go.mod
 
       - name: Run tests
         run: |
-          cd claude-irc
+          cd shared/agentbus
           go test ./...
-
-      - name: Build release binaries
-        run: |
-          cd claude-irc
-          make cross VERSION=test

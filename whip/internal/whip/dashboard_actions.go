@@ -6,7 +6,6 @@ import (
 	"net/url"
 	"os/exec"
 	"strings"
-	"syscall"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -86,7 +85,7 @@ func (m DashboardModel) sendIRCMsg(target, message string) tea.Cmd {
 }
 
 type remoteStartedMsg struct {
-	cmd      *exec.Cmd
+	handle   *RemoteHandle
 	url      string
 	shortURL string
 	err      error
@@ -105,13 +104,13 @@ func (m DashboardModel) startRemote(cfg RemoteConfig) tea.Cmd {
 		storeCfg, _ := m.store.LoadConfig()
 		token := storeCfg.ServeToken
 
-		cmd, result, err := StartServe(context.Background(), cfg, token, true, func(line string) {
+		handle, result, err := StartServe(context.Background(), cfg, token, true, func(line string) {
 			if m.programRef != nil && m.programRef.p != nil {
 				m.programRef.p.Send(serveNoticeMsg(line))
 			}
 		})
 		if err != nil {
-			return remoteStartedMsg{err: fmt.Errorf("start serve: %w", err)}
+			return remoteStartedMsg{err: fmt.Errorf("start remote access: %w", err)}
 		}
 
 		if t := connectURLToken(result.ConnectURL); t != "" {
@@ -121,22 +120,14 @@ func (m DashboardModel) startRemote(cfg RemoteConfig) tea.Cmd {
 			})
 		}
 
-		return remoteStartedMsg{cmd: cmd, url: result.ConnectURL, shortURL: result.ShortURL}
+		return remoteStartedMsg{handle: handle, url: result.ConnectURL, shortURL: result.ShortURL}
 	}
 }
 
 func (m DashboardModel) stopRemote() tea.Cmd {
 	return func() tea.Msg {
-		if m.serveProcess != nil && m.serveProcess.Process != nil {
-			m.serveProcess.Process.Signal(syscall.SIGTERM)
-			done := make(chan error, 1)
-			go func() { done <- m.serveProcess.Wait() }()
-			select {
-			case <-done:
-			case <-time.After(5 * time.Second):
-				m.serveProcess.Process.Kill()
-				<-done
-			}
+		if m.remoteHandle != nil {
+			_ = m.remoteHandle.Stop(5 * time.Second)
 		}
 		StopMasterSession(m.remoteWorkspace)
 		return remoteStoppedMsg{}

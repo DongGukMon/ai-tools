@@ -358,7 +358,7 @@ func (m DashboardModel) renderListFooter() string {
 	refresh := lipgloss.NewStyle().Foreground(colorDim).Render("↻ 2s")
 
 	var remoteHint string
-	if m.serveProcess != nil {
+	if m.remoteHandle != nil {
 		remoteHint = footerKey("R", "remote status")
 	} else {
 		remoteHint = footerKey("R", "remote")

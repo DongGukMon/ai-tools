@@ -3,6 +3,7 @@ module github.com/bang9/ai-tools/claude-irc
 go 1.21
 
 require (
+	github.com/bang9/ai-tools/shared/agentbus v0.0.0
 	github.com/bang9/ai-tools/shared/upgrade v0.0.0
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/term v0.29.0
@@ -15,3 +16,4 @@ require (
 )
 
 replace github.com/bang9/ai-tools/shared/upgrade => ../shared/upgrade
+replace github.com/bang9/ai-tools/shared/agentbus => ../shared/agentbus

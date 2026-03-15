@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/bang9/ai-tools/claude-irc/internal/irc"
+	irc "github.com/bang9/ai-tools/shared/agentbus"
 )
 
 func noSessionDetect(pid int) (*irc.Store, string, error) {

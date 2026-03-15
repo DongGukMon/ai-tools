@@ -3,6 +3,7 @@
 ## Project Overview
 
 This repository contains tools for Claude Code to operate more efficiently. Each tool is a separate module under its own directory.
+Cross-tool shared code lives under `shared/` and should stay domain-neutral instead of absorbing tool-specific workflows.
 
 ## Release Policy
 

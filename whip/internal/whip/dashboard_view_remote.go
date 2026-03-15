@@ -19,7 +19,7 @@ func (m DashboardModel) renderRemoteStatusView(w int) string {
 	valStyle := lipgloss.NewStyle().Foreground(colorText)
 
 	var statusDot string
-	if m.serveProcess != nil {
+	if m.remoteHandle != nil {
 		statusDot = lipgloss.NewStyle().Foreground(colorSuccess).Render("●") + " " +
 			lipgloss.NewStyle().Foreground(colorSuccess).Render("running")
 	} else {
@@ -201,13 +201,13 @@ func (m DashboardModel) renderRemoteConfigView(w int) string {
 }
 
 func (m DashboardModel) renderServeStatus() string {
-	if m.serveProcess == nil {
+	if m.remoteHandle == nil {
 		hint := lipgloss.NewStyle().Foreground(colorSubtle).Render("[R] remote")
 		return lipgloss.NewStyle().MarginLeft(3).Render(hint)
 	}
 
 	label := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FFFFFF")).
-		Background(colorSuccess).Padding(0, 1).Render("SERVE")
+		Background(colorSuccess).Padding(0, 1).Render("REMOTE")
 	url := lipgloss.NewStyle().Foreground(colorText).Render(m.serveURL)
 
 	var masterDot string
