@@ -74,6 +74,254 @@ body,
   background: var(--border-color);
 }
 
+/* Sidebar */
+.sidebar {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-color);
+  user-select: none;
+}
+
+.sidebar-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.sidebar-add-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.sidebar-add-btn:hover {
+  color: var(--text-primary);
+}
+
+.sidebar-loading {
+  padding: 12px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+/* Project tree */
+.project-tree {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.project-tree-empty {
+  padding: 12px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* Project item */
+.project-header {
+  display: flex;
+  align-items: center;
+  padding: 4px 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.project-header:hover {
+  background: var(--bg-tertiary);
+}
+
+.project-chevron {
+  width: 16px;
+  font-size: 10px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.project-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-remove {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0 2px;
+  opacity: 0;
+  line-height: 1;
+}
+
+.project-header:hover .project-remove {
+  opacity: 1;
+}
+
+.project-remove:hover {
+  color: #e06c75;
+}
+
+/* Worktree list */
+.project-worktrees {
+  padding-left: 24px;
+}
+
+.worktree-item {
+  display: flex;
+  align-items: center;
+  padding: 3px 8px;
+  cursor: pointer;
+  user-select: none;
+  border-radius: 3px;
+}
+
+.worktree-item:hover {
+  background: var(--bg-tertiary);
+}
+
+.worktree-item.selected {
+  background: var(--accent);
+  color: #fff;
+}
+
+.worktree-branch {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.worktree-remove {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0 2px;
+  opacity: 0;
+  line-height: 1;
+}
+
+.worktree-item:hover .worktree-remove {
+  opacity: 1;
+}
+
+.worktree-item.selected .worktree-remove {
+  color: rgba(255, 255, 255, 0.7);
+  opacity: 1;
+}
+
+.worktree-remove:hover {
+  color: #e06c75;
+}
+
+/* Add worktree */
+.add-worktree-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 3px 8px;
+  text-align: left;
+}
+
+.add-worktree-btn:hover {
+  color: var(--text-primary);
+}
+
+.add-worktree-form {
+  padding: 2px 4px;
+}
+
+.add-worktree-input {
+  width: 100%;
+  background: var(--bg-primary);
+  border: 1px solid var(--accent);
+  color: var(--text-primary);
+  padding: 2px 6px;
+  font-size: 12px;
+  border-radius: 2px;
+  outline: none;
+}
+
+/* Add project dialog */
+.add-project-dialog {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.add-project-input {
+  width: 100%;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 6px 8px;
+  font-size: 12px;
+  border-radius: 3px;
+  outline: none;
+  margin-bottom: 6px;
+}
+
+.add-project-input:focus {
+  border-color: var(--accent);
+}
+
+.add-project-error {
+  color: #e06c75;
+  font-size: 11px;
+  margin-bottom: 6px;
+  word-break: break-all;
+}
+
+.add-project-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.btn-cancel,
+.btn-primary {
+  padding: 4px 12px;
+  font-size: 12px;
+  border-radius: 3px;
+  border: none;
+  cursor: pointer;
+}
+
+.btn-cancel {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Allotment sash styling */
 .sash-container .sash {
   background-color: var(--border-color);

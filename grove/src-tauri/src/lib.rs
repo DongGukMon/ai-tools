@@ -1,3 +1,5 @@
+mod config;
+mod git_project;
 mod terminal_theme;
 
 use serde::{Deserialize, Serialize};
@@ -117,38 +119,38 @@ fn save_app_config(_config: AppConfig) -> Result<(), String> {
 // === GIT PROJECT COMMANDS (W2) ===
 
 #[tauri::command]
-fn list_projects() -> Vec<Project> {
-    todo!()
+fn list_projects() -> Result<Vec<Project>, String> {
+    git_project::list_projects_impl()
 }
 
 #[tauri::command]
-fn add_project(_url: String) -> Project {
-    todo!()
+fn add_project(url: String) -> Result<Project, String> {
+    git_project::add_project_impl(&url)
 }
 
 #[tauri::command]
-fn create_project(_name: String, _path: String) -> Project {
-    todo!()
+fn create_project(name: String, path: String) -> Result<Project, String> {
+    git_project::create_project_impl(&name, &path)
 }
 
 #[tauri::command]
-fn remove_project(_id: String) {
-    todo!()
+fn remove_project(id: String) -> Result<(), String> {
+    git_project::remove_project_impl(&id)
 }
 
 #[tauri::command]
-fn add_worktree(_project_id: String, _name: String, _branch: String) -> Worktree {
-    todo!()
+fn add_worktree(project_id: String, name: String, _branch: String) -> Result<Worktree, String> {
+    git_project::add_worktree_impl(&project_id, &name)
 }
 
 #[tauri::command]
-fn remove_worktree(_project_id: String, _name: String) {
-    todo!()
+fn remove_worktree(project_id: String, name: String) -> Result<(), String> {
+    git_project::remove_worktree_impl(&project_id, &name)
 }
 
 #[tauri::command]
-fn list_worktrees(_project_id: String) -> Vec<Worktree> {
-    todo!()
+fn list_worktrees(project_id: String) -> Result<Vec<Worktree>, String> {
+    git_project::list_worktrees_impl(&project_id)
 }
 
 // === PTY COMMANDS (W3) ===

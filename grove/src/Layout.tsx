@@ -1,5 +1,6 @@
 import { Allotment } from "allotment";
 import "allotment/dist/style.css";
+import Sidebar from "./components/sidebar/Sidebar";
 
 function Layout() {
   return (
@@ -7,7 +8,7 @@ function Layout() {
       <Allotment>
         <Allotment.Pane preferredSize={240} minSize={180}>
           <div className="panel panel-sidebar">
-            <div className="panel-placeholder">Sidebar (W2)</div>
+            <Sidebar />
           </div>
         </Allotment.Pane>
         <Allotment.Pane>
