@@ -18,6 +18,7 @@ function getNodeKey(node: SplitNode): string {
 
 export default function SplitContainer({ node, path = [] }: Props) {
   const activeWorktree = useTerminalStore((s) => s.activeWorktree);
+  const focusedPtyId = useTerminalStore((s) => s.focusedPtyId);
   const updateSizes = useTerminalStore((s) => s.updateSizes);
   const isDragging = useRef(false);
   const defaultSizes =
@@ -45,14 +46,27 @@ export default function SplitContainer({ node, path = [] }: Props) {
 
   if (node.type === "leaf") {
     return node.ptyId ? (
-      <div className={cn("relative w-full h-full")}>
-        <TerminalInstance ptyId={node.ptyId} />
+      <div className={cn("h-full w-full min-h-0 min-w-0 p-1.5")}>
+        <div
+          className={cn(
+            "relative h-full w-full overflow-hidden rounded-[22px] border border-white/75 bg-white/72 shadow-[var(--shadow-sm)] ring-1 ring-black/5 transition-[border-color,box-shadow]",
+            {
+              "border-[var(--color-primary-border)] shadow-[0_0_0_1px_var(--color-primary-border),var(--shadow-md)]":
+                node.ptyId === focusedPtyId,
+            },
+          )}
+        >
+          <TerminalInstance ptyId={node.ptyId} />
+        </div>
       </div>
     ) : null;
   }
 
   return (
     <Allotment
+      className={cn(
+        "h-full w-full [&_.split-view-view]:min-h-0 [&_.split-view-view]:min-w-0",
+      )}
       vertical={node.type === "vertical"}
       defaultSizes={defaultSizes}
       onDragStart={handleDragStart}
@@ -61,7 +75,9 @@ export default function SplitContainer({ node, path = [] }: Props) {
     >
       {node.children?.map((child, i) => (
         <Allotment.Pane key={getNodeKey(child)}>
-          <SplitContainer node={child} path={[...path, i]} />
+          <div className={cn("h-full w-full min-h-0 min-w-0")}>
+            <SplitContainer node={child} path={[...path, i]} />
+          </div>
         </Allotment.Pane>
       ))}
     </Allotment>

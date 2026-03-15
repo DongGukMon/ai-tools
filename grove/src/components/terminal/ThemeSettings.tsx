@@ -1,5 +1,15 @@
-import { useState, useCallback, useRef, useEffect } from "react";
-import { X, ChevronDown, ChevronRight, RotateCcw } from "lucide-react";
+import { useState, useCallback, useEffect, type ReactNode } from "react";
+import {
+  ChevronDown,
+  ChevronRight,
+  Monitor,
+  Palette,
+  RotateCcw,
+  Settings,
+  Type,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import {
   terminalThemes,
   themeDisplayNames,
@@ -10,6 +20,17 @@ import { saveAppConfig, getAppConfig } from "../../lib/tauri";
 import { runCommandSafely } from "../../lib/command";
 import { cn } from "../../lib/cn";
 import type { TerminalTheme } from "../../types";
+import { Badge } from "../ui/badge";
+import { Button } from "../ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "../ui/dialog";
+import { Input } from "../ui/input";
+import { Separator } from "../ui/separator";
 
 interface Props {
   open: boolean;
@@ -42,7 +63,6 @@ export default function ThemeSettings({ open, onClose }: Props) {
   const [draft, setDraft] = useState<TerminalTheme | null>(null);
   const [activePreset, setActivePreset] = useState<string | null>(null);
   const [colorsOpen, setColorsOpen] = useState(false);
-  const panelRef = useRef<HTMLDivElement>(null);
 
   // Sync draft with current theme when panel opens
   useEffect(() => {
@@ -93,270 +113,446 @@ export default function ThemeSettings({ open, onClose }: Props) {
     setActivePreset(DEFAULT_THEME_KEY);
   }, []);
 
-  // Close on click outside
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open, onClose]);
-
   if (!open || !draft) return null;
 
+  const activePresetLabel = activePreset
+    ? (themeDisplayNames[activePreset] ?? "Custom")
+    : "Custom";
+
   return (
-    <div className={cn("fixed inset-0 z-50 flex justify-end")}>
-      {/* Backdrop */}
-      <div className={cn("absolute inset-0 bg-black/20")} />
-
-      {/* Panel */}
-      <div
-        ref={panelRef}
-        className={cn("relative w-[340px] h-full bg-[var(--color-bg)] border-l border-[var(--color-border)] shadow-lg overflow-y-auto")}
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) {
+          onClose();
+        }
+      }}
+    >
+      <DialogContent
+        showCloseButton={false}
+        className={cn(
+          "top-0 right-0 left-auto flex h-full w-full max-w-[440px] translate-x-0 translate-y-0 flex-col gap-0 rounded-none border-l border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(244,246,248,0.97))] p-0 shadow-[0_18px_48px_rgba(15,23,42,0.16)] sm:max-w-[440px]",
+          "data-[state=open]:slide-in-from-right-full data-[state=closed]:slide-out-to-right-full data-[state=open]:zoom-in-100 data-[state=closed]:zoom-out-100",
+        )}
       >
-        {/* Header */}
-        <div className={cn("sticky top-0 z-10 flex items-center justify-between px-4 py-3 bg-[var(--color-bg)] border-b border-[var(--color-border)]")}>
-          <span className={cn("text-[13px] font-semibold text-[var(--color-text)]")}>
-            Terminal Theme
-          </span>
-          <button
-            onClick={onClose}
-            className={cn("flex items-center justify-center w-6 h-6 rounded-[var(--radius-sm)] text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-tertiary)] transition-colors")}
+        <div className={cn("flex min-h-0 flex-1 flex-col")}>
+          <div
+            className={cn(
+              "border-b border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(249,250,251,0.9))] px-5 py-5",
+            )}
           >
-            <X size={14} strokeWidth={1.5} />
-          </button>
-        </div>
-
-        <div className={cn("p-4 flex flex-col gap-5")}>
-          {/* Preset Themes */}
-          <section>
-            <h3 className={cn("text-[11px] font-medium text-[var(--color-text-tertiary)] uppercase tracking-wider mb-2")}>
-              Presets
-            </h3>
-            <div className={cn("grid grid-cols-2 gap-1.5")}>
-              {Object.entries(themeDisplayNames).map(([key, name]) => {
-                const preset = terminalThemes[key];
-                return (
-                  <button
-                    key={key}
-                    onClick={() => selectPreset(key)}
+            <div className={cn("flex items-start gap-3")}>
+              <div
+                className={cn(
+                  "flex size-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--color-primary-light)] text-[var(--color-primary)] shadow-xs",
+                )}
+              >
+                <Settings size={18} strokeWidth={1.7} />
+              </div>
+              <div className={cn("min-w-0 flex-1")}>
+                <div className={cn("flex flex-wrap items-center gap-2")}>
+                  <DialogTitle className={cn("text-base font-semibold text-[var(--color-text)]")}>
+                    Terminal appearance
+                  </DialogTitle>
+                  <Badge
+                    variant="outline"
                     className={cn(
-                      "flex items-center gap-2 px-2.5 py-2 rounded-[var(--radius-md)] border text-left transition-colors",
-                      {
-                        "border-[var(--color-primary)] bg-[var(--color-primary-light)]":
-                          activePreset === key,
-                        "border-[var(--color-border)] hover:border-[var(--color-primary-border)] hover:bg-[var(--color-bg-secondary)]":
-                          activePreset !== key,
-                      },
+                      "rounded-full border-white/80 bg-white/85 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]",
                     )}
                   >
-                    <div
-                      className={cn("w-5 h-5 rounded-[3px] border border-[var(--color-border)] shrink-0")}
-                      style={{ backgroundColor: preset.background }}
+                    {activePresetLabel}
+                  </Badge>
+                </div>
+                <DialogDescription
+                  className={cn("mt-1 text-[12px] leading-5 text-[var(--color-text-secondary)]")}
+                >
+                  Tune the shell visuals while keeping the existing terminal store and
+                  persistence flow unchanged.
+                </DialogDescription>
+              </div>
+              <DialogClose asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className={cn(
+                    "size-8 rounded-xl text-[var(--color-text-tertiary)] hover:bg-white hover:text-[var(--color-text)]",
+                  )}
+                >
+                  <X size={15} strokeWidth={1.8} />
+                  <span className={cn("sr-only")}>Close terminal appearance</span>
+                </Button>
+              </DialogClose>
+            </div>
+          </div>
+
+          <div className={cn("min-h-0 flex-1 overflow-y-auto px-5 py-5")}>
+            <SettingsSection
+              icon={Palette}
+              title="Presets"
+              description="Start from a baseline, then fine-tune the shell colors and typography."
+            >
+              <div className={cn("grid grid-cols-2 gap-2")}>
+                {Object.entries(themeDisplayNames).map(([key, name]) => {
+                  const preset = terminalThemes[key];
+                  return (
+                    <Button
+                      key={key}
+                      type="button"
+                      variant="outline"
+                      onClick={() => selectPreset(key)}
+                      className={cn(
+                        "h-auto items-start justify-start gap-3 rounded-2xl border-white/80 bg-white/86 px-3 py-3 text-left shadow-xs hover:bg-white",
+                        {
+                          "border-[var(--color-primary-border)] bg-[var(--color-primary-light)]/75 text-[var(--color-text)]":
+                            activePreset === key,
+                        },
+                      )}
                     >
                       <span
-                        className={cn("block text-[8px] leading-[20px] text-center font-bold")}
-                        style={{ color: preset.foreground }}
+                        className={cn(
+                          "flex size-9 shrink-0 items-center justify-center rounded-xl border border-black/5 shadow-inner",
+                        )}
+                        style={{
+                          background: `linear-gradient(135deg, ${preset.background}, ${preset.black})`,
+                        }}
                       >
-                        A
+                        <span
+                          className={cn("font-mono text-[11px] font-semibold")}
+                          style={{ color: preset.foreground }}
+                        >
+                          &gt;_
+                        </span>
                       </span>
-                    </div>
-                    <span className={cn("text-[12px] text-[var(--color-text)] truncate")}>
-                      {name}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-
-          {/* Font Settings */}
-          <section>
-            <h3 className={cn("text-[11px] font-medium text-[var(--color-text-tertiary)] uppercase tracking-wider mb-2")}>
-              Font
-            </h3>
-            <div className={cn("flex flex-col gap-2.5")}>
-              <div>
-                <label className={cn("block text-[11px] text-[var(--color-text-secondary)] mb-1")}>
-                  Font Family
-                </label>
-                <input
-                  type="text"
-                  value={draft.fontFamily}
-                  onChange={(e) => updateDraft("fontFamily", e.target.value)}
-                  className={cn("w-full px-2.5 py-1.5 text-[12px] rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-text)] focus:outline-none focus:border-[var(--color-primary)] transition-colors")}
-                />
+                      <span className={cn("min-w-0")}>
+                        <span className={cn("block truncate text-[12px] font-medium")}>
+                          {name}
+                        </span>
+                        <span
+                          className={cn(
+                            "mt-1 block truncate text-[11px] text-[var(--color-text-tertiary)]",
+                          )}
+                        >
+                          {preset.background}
+                        </span>
+                      </span>
+                    </Button>
+                  );
+                })}
               </div>
-              <div>
-                <div className={cn("flex items-center justify-between mb-1")}>
-                  <label className={cn("text-[11px] text-[var(--color-text-secondary)]")}>
-                    Font Size
+            </SettingsSection>
+
+            <Separator className={cn("my-5 bg-white/70")} />
+
+            <SettingsSection
+              icon={Type}
+              title="Typography"
+              description="Font settings stay with you even when you switch presets."
+            >
+              <div className={cn("space-y-3")}>
+                <div className={cn("rounded-[22px] border border-white/80 bg-white/86 p-4 shadow-xs")}>
+                  <label
+                    htmlFor="terminal-theme-font-family"
+                    className={cn(
+                      "mb-2 block text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]",
+                    )}
+                  >
+                    Font family
                   </label>
-                  <span className={cn("text-[11px] text-[var(--color-text-tertiary)] tabular-nums")}>
-                    {draft.fontSize}px
-                  </span>
+                  <Input
+                    id="terminal-theme-font-family"
+                    type="text"
+                    value={draft.fontFamily}
+                    onChange={(e) => updateDraft("fontFamily", e.target.value)}
+                    className={cn(
+                      "h-10 rounded-xl border-white/80 bg-[var(--color-bg)] text-[12px] shadow-none",
+                    )}
+                  />
                 </div>
-                <input
-                  type="range"
-                  min={10}
-                  max={20}
-                  step={1}
-                  value={draft.fontSize}
-                  onChange={(e) =>
-                    updateDraft("fontSize", Number(e.target.value))
-                  }
-                  className={cn("w-full h-1 accent-[var(--color-primary)] cursor-pointer")}
+
+                <div className={cn("rounded-[22px] border border-white/80 bg-white/86 p-4 shadow-xs")}>
+                  <div className={cn("flex items-center justify-between gap-3")}>
+                    <label
+                      htmlFor="terminal-theme-font-size"
+                      className={cn(
+                        "text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]",
+                      )}
+                    >
+                      Font size
+                    </label>
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "rounded-full border-white/80 bg-white px-2 py-0.5 font-mono text-[10px] text-[var(--color-text-secondary)]",
+                      )}
+                    >
+                      {draft.fontSize}px
+                    </Badge>
+                  </div>
+                  <input
+                    id="terminal-theme-font-size"
+                    type="range"
+                    min={10}
+                    max={20}
+                    step={1}
+                    value={draft.fontSize}
+                    onChange={(e) => updateDraft("fontSize", Number(e.target.value))}
+                    className={cn(
+                      "mt-4 h-1.5 w-full cursor-pointer accent-[var(--color-primary)]",
+                    )}
+                  />
+                </div>
+              </div>
+            </SettingsSection>
+
+            <Separator className={cn("my-5 bg-white/70")} />
+
+            <SettingsSection
+              icon={Settings}
+              title="Core colors"
+              description="These colors define the main terminal surface and cursor."
+            >
+              <div className={cn("space-y-3")}>
+                <ColorField
+                  label="Background"
+                  value={draft.background}
+                  onChange={(v) => updateDraft("background", v)}
+                />
+                <ColorField
+                  label="Foreground"
+                  value={draft.foreground}
+                  onChange={(v) => updateDraft("foreground", v)}
+                />
+                <ColorField
+                  label="Cursor"
+                  value={draft.cursor}
+                  onChange={(v) => updateDraft("cursor", v)}
                 />
               </div>
-            </div>
-          </section>
+            </SettingsSection>
 
-          {/* Core Colors */}
-          <section>
-            <h3 className={cn("text-[11px] font-medium text-[var(--color-text-tertiary)] uppercase tracking-wider mb-2")}>
-              Colors
-            </h3>
-            <div className={cn("flex flex-col gap-2")}>
-              <ColorRow
-                label="Background"
-                value={draft.background}
-                onChange={(v) => updateDraft("background", v)}
-              />
-              <ColorRow
-                label="Foreground"
-                value={draft.foreground}
-                onChange={(v) => updateDraft("foreground", v)}
-              />
-              <ColorRow
-                label="Cursor"
-                value={draft.cursor}
-                onChange={(v) => updateDraft("cursor", v)}
-              />
-            </div>
-          </section>
+            <Separator className={cn("my-5 bg-white/70")} />
 
-          {/* ANSI Colors (collapsible) */}
-          <section>
-            <button
-              onClick={() => setColorsOpen((v) => !v)}
-              className={cn("flex items-center gap-1 text-[11px] font-medium text-[var(--color-text-tertiary)] uppercase tracking-wider hover:text-[var(--color-text-secondary)] transition-colors mb-2")}
+            <SettingsSection
+              icon={Settings}
+              title="ANSI colors"
+              description="Expand the palette only when you need exact per-color control."
             >
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setColorsOpen((value) => !value)}
+                className={cn(
+                  "flex h-auto w-full items-center justify-between rounded-[22px] border border-white/80 bg-white/82 px-4 py-3 text-left shadow-xs hover:bg-white",
+                )}
+              >
+                <span>
+                  <span
+                    className={cn(
+                      "block text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]",
+                    )}
+                  >
+                    Extended palette
+                  </span>
+                  <span className={cn("mt-1 block text-[12px] text-[var(--color-text-secondary)]")}>
+                    {colorsOpen ? "Hide ANSI colors" : "Show ANSI colors"}
+                  </span>
+                </span>
+                {colorsOpen ? (
+                  <ChevronDown size={16} strokeWidth={1.8} />
+                ) : (
+                  <ChevronRight size={16} strokeWidth={1.8} />
+                )}
+              </Button>
+
               {colorsOpen ? (
-                <ChevronDown size={12} strokeWidth={2} />
-              ) : (
-                <ChevronRight size={12} strokeWidth={2} />
-              )}
-              ANSI Colors
-            </button>
-            {colorsOpen && (
-              <div className={cn("flex flex-col gap-2")}>
-                {ANSI_LABELS.map(({ key, label }) => (
-                  <ColorRow
-                    key={key}
-                    label={label}
-                    value={draft[key] as string}
-                    onChange={(v) => updateDraft(key, v)}
-                  />
-                ))}
-              </div>
-            )}
-          </section>
+                <div className={cn("mt-3 grid grid-cols-2 gap-2")}>
+                  {ANSI_LABELS.map(({ key, label }) => (
+                    <ColorField
+                      key={key}
+                      label={label}
+                      value={draft[key] as string}
+                      onChange={(v) => updateDraft(key, v)}
+                      compact
+                    />
+                  ))}
+                </div>
+              ) : null}
+            </SettingsSection>
 
-          {/* Preview */}
-          <section>
-            <h3 className={cn("text-[11px] font-medium text-[var(--color-text-tertiary)] uppercase tracking-wider mb-2")}>
-              Preview
-            </h3>
-            <div
-              className={cn("rounded-[var(--radius-md)] border border-[var(--color-border)] p-3 text-[12px] leading-[1.6] overflow-hidden")}
-              style={{
-                backgroundColor: draft.background,
-                color: draft.foreground,
-                fontFamily: draft.fontFamily,
-                fontSize: `${draft.fontSize}px`,
-              }}
+            <Separator className={cn("my-5 bg-white/70")} />
+
+            <SettingsSection
+              icon={Monitor}
+              title="Preview"
+              description="Check contrast and typography before applying the theme."
             >
-              <div>
-                <span style={{ color: draft.green }}>user</span>
-                <span style={{ color: draft.foreground }}>@</span>
-                <span style={{ color: draft.blue }}>grove</span>
-                <span style={{ color: draft.foreground }}> ~ $ </span>
-                <span style={{ color: draft.foreground }}>echo </span>
-                <span style={{ color: draft.yellow }}>"Hello, World!"</span>
+              <div className={cn("rounded-[24px] border border-white/80 bg-white/82 p-2 shadow-xs")}>
+                <div
+                  className={cn(
+                    "overflow-hidden rounded-[18px] border border-black/5 p-4 text-[12px] leading-[1.7] shadow-inner",
+                  )}
+                  style={{
+                    backgroundColor: draft.background,
+                    color: draft.foreground,
+                    fontFamily: draft.fontFamily,
+                    fontSize: `${draft.fontSize}px`,
+                  }}
+                >
+                  <div>
+                    <span style={{ color: draft.green }}>airen</span>
+                    <span style={{ color: draft.foreground }}>@</span>
+                    <span style={{ color: draft.blue }}>grove</span>
+                    <span style={{ color: draft.foreground }}> ~/feature-shell $ </span>
+                    <span style={{ color: draft.foreground }}>git status</span>
+                  </div>
+                  <div style={{ color: draft.foreground }}>On branch feat/light-theme-shell</div>
+                  <div>
+                    <span style={{ color: draft.yellow }}>Changes not staged for commit:</span>
+                  </div>
+                  <div>
+                    <span style={{ color: draft.foreground }}>  modified: </span>
+                    <span style={{ color: draft.cyan }}>src/components/terminal/TerminalPanel.tsx</span>
+                  </div>
+                  <div>
+                    <span style={{ color: draft.red }}>hint:</span>
+                    <span style={{ color: draft.foreground }}> review before you apply</span>
+                  </div>
+                </div>
               </div>
-              <div style={{ color: draft.foreground }}>Hello, World!</div>
-              <div>
-                <span style={{ color: draft.red }}>error:</span>
-                <span style={{ color: draft.foreground }}>
-                  {" "}
-                  something went wrong
-                </span>
-              </div>
-              <div>
-                <span style={{ color: draft.cyan }}>info:</span>
-                <span style={{ color: draft.foreground }}>
-                  {" "}
-                  task completed
-                </span>
-              </div>
-            </div>
-          </section>
-        </div>
+            </SettingsSection>
+          </div>
 
-        {/* Footer actions */}
-        <div className={cn("sticky bottom-0 flex items-center justify-between gap-2 px-4 py-3 bg-[var(--color-bg)] border-t border-[var(--color-border)]")}>
-          <button
-            onClick={handleReset}
-            className={cn("flex items-center gap-1 px-2.5 py-1.5 text-[12px] text-[var(--color-text-secondary)] rounded-[var(--radius-md)] border border-[var(--color-border)] hover:bg-[var(--color-bg-tertiary)] transition-colors")}
-          >
-            <RotateCcw size={12} strokeWidth={1.5} />
-            Reset
-          </button>
-          <button
-            onClick={handleApply}
-            className={cn("px-4 py-1.5 text-[12px] font-medium text-white bg-[var(--color-primary)] rounded-[var(--radius-md)] hover:bg-[var(--color-primary-hover)] transition-colors")}
-          >
-            Apply
-          </button>
+          <div className={cn("border-t border-white/70 bg-white/82 px-5 py-4")}>
+            <div className={cn("flex items-center gap-3")}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleReset}
+                className={cn(
+                  "rounded-xl border-white/80 bg-white text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-secondary)]",
+                )}
+              >
+                <RotateCcw size={14} strokeWidth={1.8} />
+                Reset
+              </Button>
+              <Button
+                type="button"
+                onClick={() => {
+                  handleApply().catch(() => {});
+                }}
+                className={cn("ml-auto rounded-xl px-4")}
+              >
+                Apply theme
+              </Button>
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
-function ColorRow({
+function SettingsSection({
+  icon: Icon,
+  title,
+  description,
+  children,
+}: {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+  children: ReactNode;
+}) {
+  return (
+    <section>
+      <div className={cn("mb-3 flex items-start gap-3")}>
+        <div
+          className={cn(
+            "flex size-9 shrink-0 items-center justify-center rounded-2xl bg-white/88 text-[var(--color-primary)] shadow-xs",
+          )}
+        >
+          <Icon size={15} strokeWidth={1.8} />
+        </div>
+        <div className={cn("min-w-0")}>
+          <h3 className={cn("text-[13px] font-semibold text-[var(--color-text)]")}>
+            {title}
+          </h3>
+          <p className={cn("mt-1 text-[12px] leading-5 text-[var(--color-text-secondary)]")}>
+            {description}
+          </p>
+        </div>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function ColorField({
   label,
   value,
   onChange,
+  compact = false,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
+  compact?: boolean;
 }) {
   return (
-    <div className={cn("flex items-center justify-between gap-2")}>
-      <span className={cn("text-[11px] text-[var(--color-text-secondary)]")}>
-        {label}
-      </span>
-      <div className={cn("flex items-center gap-1.5")}>
-        <span className={cn("text-[10px] text-[var(--color-text-tertiary)] font-mono tabular-nums uppercase")}>
-          {value}
-        </span>
-        <label className={cn("relative w-5 h-5 rounded-[3px] border border-[var(--color-border)] cursor-pointer overflow-hidden shrink-0")}>
-          <div
-            className={cn("absolute inset-0")}
-            style={{ backgroundColor: value }}
-          />
-          <input
-            type="color"
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            className={cn("absolute inset-0 w-full h-full opacity-0 cursor-pointer")}
-          />
-        </label>
+    <div
+      className={cn(
+        "flex items-center gap-3 rounded-[22px] border border-white/80 bg-white/86 shadow-xs",
+        {
+          "px-3 py-2.5": compact,
+          "px-4 py-3": !compact,
+        },
+      )}
+    >
+      <label
+        className={cn(
+          "relative block shrink-0 overflow-hidden rounded-xl border border-black/5 shadow-inner",
+          {
+            "size-9": compact,
+            "size-10": !compact,
+          },
+        )}
+      >
+        <span className={cn("sr-only")}>{label}</span>
+        <span
+          className={cn("absolute inset-0")}
+          style={{ backgroundColor: value }}
+        />
+        <input
+          type="color"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={cn("absolute inset-0 h-full w-full cursor-pointer opacity-0")}
+        />
+      </label>
+      <div className={cn("min-w-0 flex-1")}>
+        <p
+          className={cn(
+            "truncate font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]",
+            {
+              "text-[10px]": compact,
+              "text-[11px]": !compact,
+            },
+          )}
+        >
+          {label}
+        </p>
+        <p
+          className={cn(
+            "mt-1 truncate font-mono text-[var(--color-text)]",
+            {
+              "text-[10px]": compact,
+              "text-[11px]": !compact,
+            },
+          )}
+        >
+          {value.toUpperCase()}
+        </p>
       </div>
     </div>
   );
