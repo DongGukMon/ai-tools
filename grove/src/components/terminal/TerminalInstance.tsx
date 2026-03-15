@@ -73,36 +73,77 @@ export default function TerminalInstance({ ptyId }: Props) {
     term.loadAddon(unicode11);
     term.unicode.activeVersion = "11";
 
-    term.open(el);
-
     const shouldLoadWebgl = shouldEnableTerminalWebgl(
       navigator.platform,
       navigator.userAgent,
     );
 
-    // Keep Apple platforms on the default renderer.
-    // xterm IME composition relies on helper DOM elements/textarea positioning,
-    // and the WebGL path has been the least reliable inside the Tauri terminal.
-    if (shouldLoadWebgl) {
+    let disposed = false;
+    let hasOpened = false;
+    let hasLoadedWebgl = false;
+    let frameId: number | null = null;
+    let lastCols = 0;
+    let lastRows = 0;
+
+    const hasLayoutDimensions = () => {
+      const { width, height } = el.getBoundingClientRect();
+      return width > 0 && height > 0;
+    };
+
+    const syncPtySize = () => {
+      const { cols, rows } = term;
+      if (!cols || !rows) return;
+      if (cols === lastCols && rows === lastRows) return;
+
+      lastCols = cols;
+      lastRows = rows;
+      resizePty(ptyId, cols, rows).catch(() => {});
+    };
+
+    const loadWebglAddon = () => {
+      if (!shouldLoadWebgl || hasLoadedWebgl) return;
+
       try {
         const webglAddon = new WebglAddon();
         webglAddon.onContextLoss(() => webglAddon.dispose());
         term.loadAddon(webglAddon);
+        hasLoadedWebgl = true;
       } catch {
         // Canvas renderer fallback
       }
-    }
+    };
 
-    // Fit after layout settles - delay ensures container has pixel dimensions
-    const fitTimer = setTimeout(() => {
+    const fitTerminal = () => {
+      if (!hasOpened || !hasLayoutDimensions()) return;
+
       try {
         fitAddon.fit();
+        syncPtySize();
       } catch {
         // ignore fit errors if container not ready
       }
-      // Send initial size to PTY
-      resizePty(ptyId, term.cols, term.rows).catch(() => {});
-    }, 100);
+    };
+
+    // Defer xterm open/fit until the host is visible and has real dimensions.
+    const scheduleLayoutSync = () => {
+      if (disposed || frameId !== null) return;
+
+      frameId = requestAnimationFrame(() => {
+        frameId = null;
+        if (disposed || !hasLayoutDimensions()) return;
+
+        if (!hasOpened) {
+          term.open(el);
+          hasOpened = true;
+          term.focus();
+          scheduleLayoutSync();
+          return;
+        }
+
+        loadWebglAddon();
+        fitTerminal();
+      });
+    };
 
     // Listen for PTY output
     const unlistenPromise = listen<{ id: string; data: string }>(
@@ -160,28 +201,17 @@ export default function TerminalInstance({ ptyId }: Props) {
     });
 
     // Handle resize
-    let lastCols = term.cols;
-    let lastRows = term.rows;
     const resizeObserver = new ResizeObserver(() => {
-      try {
-        fitAddon.fit();
-        const { cols, rows } = term;
-        if (cols !== lastCols || rows !== lastRows) {
-          lastCols = cols;
-          lastRows = rows;
-          resizePty(ptyId, cols, rows).catch(() => {});
-        }
-      } catch {
-        // ignore resize errors during cleanup
-      }
+      scheduleLayoutSync();
     });
     resizeObserver.observe(el);
-
-    // Focus terminal
-    term.focus();
+    scheduleLayoutSync();
 
     return () => {
-      clearTimeout(fitTimer);
+      disposed = true;
+      if (frameId !== null) {
+        cancelAnimationFrame(frameId);
+      }
       resizeObserver.disconnect();
       dataDisposable.dispose();
       unlistenPromise.then((unlisten) => {
