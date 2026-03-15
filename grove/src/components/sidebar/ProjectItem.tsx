@@ -3,15 +3,15 @@ import {
   ChevronRight,
   ChevronDown,
   X,
-  Plus,
   GitFork,
+  GitBranch,
   RotateCw,
 } from "lucide-react";
 import type { Project } from "../../types";
 import { useProjectStore } from "../../store/project";
 import { useToast } from "../../store/toast";
 import WorktreeItem from "./WorktreeItem";
-import { Button } from "../ui/button";
+import { Button, IconButton } from "../ui/button";
 import { Dialog } from "../ui/dialog";
 import { cn } from "../../lib/cn";
 
@@ -85,54 +85,49 @@ function ProjectItem({ project }: Props) {
   };
 
   return (
-    <div className="mb-1">
+    <div className="px-2">
       {/* Project header */}
       <div
-        className={cn("group flex items-center gap-2 px-2 h-[34px] rounded-lg cursor-pointer select-none hover:bg-white/80 transition-all duration-100")}
+        className={cn(
+          "group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-foreground hover:bg-secondary/50 transition-colors cursor-pointer select-none",
+        )}
         onClick={() => setExpanded(!expanded)}
       >
-        <span className={cn("flex items-center justify-center w-4 shrink-0 text-[#9ca3af]")}>
-          {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-        </span>
-        <GitFork
-          size={14}
-          className={cn("shrink-0", {
-            "text-[var(--color-primary)]": expanded,
-            "text-[#9ca3af]": !expanded,
-          })}
-        />
-        <span className={cn("min-w-0 flex-1 text-[13px] truncate font-semibold text-[#374151]")}>
+        {expanded ? (
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        ) : (
+          <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        )}
+        <GitFork className={cn("h-4 w-4 shrink-0", {
+          "text-accent": expanded,
+          "text-muted-foreground": !expanded,
+        })} />
+        <span className="truncate font-medium">
           {project.org}/{project.repo}
         </span>
-        <Button
-          variant="ghost"
-          size="icon"
-          className={cn("w-[20px] h-[20px] rounded-md opacity-0 group-hover:opacity-100 text-[#9ca3af] hover:text-[var(--color-primary)] hover:bg-white")}
-          onClick={handleRefreshProject}
-          title="Refresh project source"
-          disabled={refreshing || deleting}
-        >
-          <RotateCw
-            size={12}
-            strokeWidth={2}
-            className={cn({ "animate-spin": refreshing })}
-          />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className={cn("w-[20px] h-[20px] rounded-md opacity-0 group-hover:opacity-100 text-[#9ca3af] hover:text-[var(--color-danger)] hover:bg-[var(--color-danger-bg)]")}
-          onClick={handleRemoveProject}
-          title="Remove project"
-          disabled={refreshing}
-        >
-          <X size={12} strokeWidth={2} />
-        </Button>
+        <div className="ml-auto flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          <IconButton
+            onClick={handleRefreshProject}
+            title="Refresh project source"
+            disabled={refreshing || deleting}
+          >
+            <RotateCw
+              className={cn("h-4 w-4", { "animate-spin": refreshing })}
+            />
+          </IconButton>
+          <IconButton
+            onClick={handleRemoveProject}
+            title="Remove project"
+            disabled={refreshing}
+          >
+            <X className="h-4 w-4" />
+          </IconButton>
+        </div>
       </div>
 
       {/* Worktree list */}
       {expanded && (
-        <div className={cn("ml-5 mr-1 mt-0.5 space-y-0.5")}>
+        <div className="ml-5 mt-1 space-y-0.5 border-l border-border pl-3">
           {project.worktrees.map((wt) => (
             <WorktreeItem
               key={wt.path}
@@ -141,50 +136,44 @@ function ProjectItem({ project }: Props) {
             />
           ))}
           {adding ? (
-            <div>
-              <form onSubmit={handleAddWorktree} className={cn("px-1 py-1")}>
-                <div className="relative">
-                  <input
-                    className={cn("w-full px-2.5 py-1.5 text-[12px] rounded-lg border border-[var(--color-primary)] bg-white text-[var(--color-text)] outline-none focus:ring-2 focus:ring-[var(--color-primary-bg)] shadow-sm transition-all disabled:opacity-50")}
-                    type="text"
-                    placeholder="branch name"
-                    value={worktreeName}
-                    onChange={(e) => setWorktreeName(e.target.value)}
-                    autoFocus
-                    disabled={addingLoading}
-                    onBlur={() => {
-                      if (!worktreeName.trim() && !addingLoading) setAdding(false);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Escape" && !addingLoading) setAdding(false);
-                    }}
-                  />
-                  {addingLoading && (
-                    <div className={cn("absolute inset-0 flex items-center justify-center rounded-lg bg-white/70")}>
-                      <span className={cn("text-[11px] text-[var(--color-text-muted)] animate-pulse")}>
-                        Creating worktree...
-                      </span>
-                    </div>
+            <form onSubmit={handleAddWorktree}>
+              <div className="relative flex items-center gap-2 rounded-md px-2 py-1">
+                <GitBranch className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <input
+                  className={cn(
+                    "min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none",
+                    "placeholder:text-muted-foreground/50 disabled:opacity-50",
                   )}
-                </div>
-              </form>
-              {addingLoading && (
-                <div className={cn("flex items-center gap-2 px-2.5 h-[30px]")}>
-                  <div className={cn("skeleton w-3 h-3 rounded-full shrink-0")} />
-                  <div className={cn("skeleton flex-1 h-3")} />
-                </div>
-              )}
-            </div>
+                  type="text"
+                  placeholder="branch name"
+                  value={worktreeName}
+                  onChange={(e) => setWorktreeName(e.target.value)}
+                  autoFocus
+                  disabled={addingLoading}
+                  onBlur={() => {
+                    if (!worktreeName.trim() && !addingLoading) setAdding(false);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape" && !addingLoading) setAdding(false);
+                  }}
+                />
+                {addingLoading && (
+                  <span className="text-xs text-muted-foreground animate-pulse shrink-0">
+                    Creating...
+                  </span>
+                )}
+              </div>
+            </form>
           ) : (
-            <Button
-              variant="ghost"
-              size="sm"
-              className={cn("w-full justify-start gap-1.5 px-2.5 py-1.5 text-[11px] font-medium text-[#9ca3af] hover:text-[var(--color-primary)] rounded-lg hover:bg-white/80")}
+            <button
+              className={cn(
+                "flex w-full items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors",
+                "text-muted-foreground hover:bg-secondary/50 hover:text-foreground",
+              )}
               onClick={() => setAdding(true)}
             >
-              <Plus size={12} strokeWidth={2} />
               <span>Add worktree</span>
-            </Button>
+            </button>
           )}
         </div>
       )}
@@ -199,18 +188,18 @@ function ProjectItem({ project }: Props) {
         className="max-w-sm"
       >
         <div className="space-y-4">
-          <p className={cn("text-[13px] leading-relaxed text-[var(--color-text-secondary)]")}>
+          <p className="text-sm leading-relaxed text-muted-foreground">
             Refresh will hard-sync the hidden source repo for{" "}
-            <span className={cn("font-semibold text-[var(--color-text)]")}>
+            <span className="font-semibold text-foreground">
               {project.org}/{project.repo}
             </span>
             .
           </p>
-          <p className={cn("text-[12px] leading-relaxed text-[var(--color-text-tertiary)]")}>
+          <p className="text-xs leading-relaxed text-muted-foreground/70">
             Local changes and untracked files inside the internal source repo will
             be removed. Your visible worktrees are not deleted.
           </p>
-          <div className={cn("flex justify-end gap-2")}>
+          <div className="flex justify-end gap-2">
             <Button
               type="button"
               variant="outline"
@@ -244,17 +233,17 @@ function ProjectItem({ project }: Props) {
         className="max-w-sm"
       >
         <div className="space-y-4">
-          <p className={cn("text-[13px] leading-relaxed text-[var(--color-text-secondary)]")}>
-            <span className={cn("font-semibold text-[var(--color-text)]")}>
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            <span className="font-semibold text-foreground">
               {project.org}/{project.repo}
             </span>{" "}
             project folder and all worktrees will be deleted.
           </p>
-          <p className={cn("text-[12px] leading-relaxed text-[var(--color-text-tertiary)]")}>
+          <p className="text-xs leading-relaxed text-muted-foreground/70">
             This removes the hidden source repository too. Use refresh if you only
             want to sync the project.
           </p>
-          <div className={cn("flex justify-end gap-2")}>
+          <div className="flex justify-end gap-2">
             <Button
               type="button"
               variant="outline"

@@ -33,12 +33,12 @@
     "zustand": "^5"
   },
   "devDependencies": {
-    "@typescript-eslint/parser": "^8.28.0",
     "@tailwindcss/vite": "^4.2.1",
     "@tauri-apps/cli": "^2",
     "@types/node": "^25.5.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@typescript-eslint/parser": "^8.28.0",
     "@vitejs/plugin-react": "^4",
     "autoprefixer": "^10.4.27",
     "eslint": "^9.23.0",

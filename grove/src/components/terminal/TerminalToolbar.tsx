@@ -3,9 +3,7 @@ import { Columns2, Play, Rows2, Settings, X } from "lucide-react";
 import { useTerminalCommandPipeline } from "../../hooks/useTerminalCommandPipeline";
 import type { TerminalCommandDefinition } from "../../lib/terminal-command-pipeline";
 import ThemeSettings from "./ThemeSettings";
-import { Button } from "../ui/button";
-import { cn } from "../../lib/cn";
-
+import { IconButton } from "../ui/button";
 
 const terminalCommandIcons = {
   settings: Settings,
@@ -24,34 +22,22 @@ export default function TerminalToolbar() {
 
   return (
     <>
-      <div className={cn("flex items-center justify-end px-2 h-[28px] shrink-0 border-b border-[var(--color-border)] bg-[var(--color-bg)]")}>
-        <div className={cn("flex items-center gap-0.5")}>
+      <div className="flex items-center justify-end border-b border-border bg-card px-2 py-1 shrink-0">
+        <div className="flex items-center gap-1">
           {commands.map((command) => {
             const Icon = terminalCommandIcons[command.icon];
-            const destructive = command.id === "terminal-close";
-
             return (
-              <Button
+              <IconButton
                 key={command.id}
-                variant="ghost"
-                size="icon"
-                className={cn(
-                  "w-[24px] h-[24px] rounded-[var(--radius-sm)] text-[var(--color-text-tertiary)] disabled:opacity-20 disabled:cursor-not-allowed",
-                  {
-                    "hover:text-[var(--color-danger)] hover:bg-[var(--color-danger-bg)]":
-                      destructive,
-                    "hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-tertiary)]":
-                      !destructive,
-                  },
-                )}
+                className="h-7 w-7"
                 onClick={() => {
                   executeCommand(command).catch(() => {});
                 }}
                 disabled={!isCommandEnabled(command)}
                 title={command.title}
               >
-                <Icon size={14} strokeWidth={1.5} />
-              </Button>
+                <Icon className="h-3.5 w-3.5" />
+              </IconButton>
             );
           })}
         </div>

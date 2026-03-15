@@ -3,7 +3,6 @@ import { GitBranch, X } from "lucide-react";
 import type { Worktree } from "../../types";
 import { useProjectStore } from "../../store/project";
 import { useToast } from "../../store/toast";
-import { Button } from "../ui/button";
 import { cn } from "../../lib/cn";
 
 interface Props {
@@ -34,49 +33,31 @@ function WorktreeItem({ worktree, projectId }: Props) {
   return (
     <div
       className={cn(
-        "group flex items-center gap-2 px-2.5 h-[30px] rounded-lg cursor-pointer select-none transition-all duration-100",
+        "group flex w-full items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors cursor-pointer select-none",
         {
           "animate-fade-out pointer-events-none opacity-50": removing,
-          "bg-white shadow-sm text-[var(--color-primary)]": isSelected,
-          "text-[#6b7280] hover:bg-white/60 hover:text-[#374151]": !isSelected,
+          "bg-selected text-foreground": isSelected && !removing,
+          "text-muted-foreground hover:bg-secondary/50 hover:text-foreground": !isSelected && !removing,
         },
       )}
       onClick={() => !removing && selectWorktree(worktree)}
       title={worktree.path}
     >
-      <GitBranch
-        size={13}
-        strokeWidth={isSelected ? 2.5 : 2}
-        className={cn("shrink-0", {
-          "text-[var(--color-primary)]": isSelected,
-          "text-[#9ca3af]": !isSelected,
-        })}
-      />
-      <span
-        className={cn("min-w-0 flex-1 text-[13px] truncate", {
-          "font-semibold": isSelected,
-          "font-medium": !isSelected,
-        })}
-      >
-        {displayName}
-      </span>
-      <Button
-        variant="ghost"
-        size="icon"
+      <GitBranch className="h-3.5 w-3.5 shrink-0" />
+      <span className="min-w-0 flex-1 truncate">{displayName}</span>
+      <button
         className={cn(
-          "w-[18px] h-[18px] rounded-md",
+          "h-4 w-4 flex items-center justify-center rounded-sm transition-colors",
           {
-            "opacity-50 hover:opacity-100 text-[var(--color-primary)] hover:text-[var(--color-danger)] hover:bg-[var(--color-danger-bg)]":
-              isSelected,
-            "opacity-0 group-hover:opacity-100 text-[#9ca3af] hover:text-[var(--color-danger)] hover:bg-[var(--color-danger-bg)]":
-              !isSelected,
+            "opacity-50 hover:opacity-100 hover:text-foreground": isSelected,
+            "opacity-0 group-hover:opacity-100 hover:text-foreground": !isSelected,
           },
         )}
         onClick={handleRemove}
         title="Remove worktree"
       >
-        <X size={11} strokeWidth={2} />
-      </Button>
+        <X className="h-3 w-3" />
+      </button>
     </div>
   );
 }
