@@ -108,7 +108,9 @@ func connectURLToken(raw string) string {
 func lifecycleSpec(name string) whip.TaskLifecycleActionSpec {
 	spec, ok := whip.FindTaskLifecycleActionSpec(name)
 	if !ok {
-		panic("unknown lifecycle action: " + name)
+		fmt.Fprintf(os.Stderr, "fatal: unknown lifecycle action: %s\n", name)
+		os.Exit(1)
+		return spec
 	}
 	return spec
 }
