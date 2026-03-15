@@ -6,7 +6,6 @@ import { runCommand } from "../../lib/command";
 import { useTerminal } from "../../hooks/useTerminal";
 import SplitContainer from "./SplitContainer";
 import TerminalToolbar from "./TerminalToolbar";
-import { cn } from "../../lib/cn";
 
 
 export default function TerminalPanel() {
@@ -40,10 +39,7 @@ export default function TerminalPanel() {
           });
           loadTheme(t);
         }
-        if (!useTerminalStore.getState().activeWorktree) {
-          const home = config.baseDir.replace(/[/\\]\.grove$/, "");
-          setActiveWorktree(home || "/tmp");
-        }
+        // Don't auto-open a terminal — wait for worktree selection
       } catch (e) {
         setError(getCommandErrorMessage(e));
       }
@@ -67,20 +63,16 @@ export default function TerminalPanel() {
 
   if (error) {
     return (
-      <div className={cn("flex flex-col h-full bg-[var(--color-bg)]")}>
-        <div className={cn("flex items-center justify-center flex-1 text-[13px] text-[var(--color-danger)] px-4")}>
-          Error: {error}
-        </div>
+      <div className="flex items-center justify-center h-full bg-background">
+        <span className="text-sm text-destructive px-4">Error: {error}</span>
       </div>
     );
   }
 
   if (!theme) {
     return (
-      <div className={cn("flex flex-col h-full bg-[var(--color-bg)]")}>
-        <div className={cn("flex items-center justify-center flex-1 text-[13px] text-[var(--color-text-tertiary)]")}>
-          Loading...
-        </div>
+      <div className="flex items-center justify-center h-full bg-background">
+        <span className="text-sm text-muted-foreground">Loading...</span>
       </div>
     );
   }
@@ -88,19 +80,19 @@ export default function TerminalPanel() {
   const sessionEntries = Object.entries(sessions);
 
   return (
-    <div className={cn("flex flex-col h-full bg-[var(--color-bg)]")}>
+    <div className="flex flex-col h-full bg-background">
       <TerminalToolbar />
-      <div className={cn("flex-1 relative overflow-hidden")}>
+      <div className="flex-1 relative overflow-hidden">
         {!activeWorktree ? (
-          <div className={cn("flex items-center justify-center h-full text-[13px] text-[var(--color-text-tertiary)]")}>
-            Select a worktree to open terminal
+          <div className="flex items-center justify-center h-full">
+            <span className="text-sm text-muted-foreground">Select a worktree to open terminal</span>
           </div>
         ) : (
           // Render ALL sessions, show/hide via CSS - preserves xterm state
           sessionEntries.map(([path, node]) => (
             <div
               key={path}
-              className={cn("absolute inset-0")}
+              className="absolute inset-0"
               style={{ display: path === activeWorktree ? "block" : "none" }}
             >
               <SplitContainer node={node} />

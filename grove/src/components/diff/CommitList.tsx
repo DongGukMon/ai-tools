@@ -17,9 +17,9 @@ export default function CommitList({
   const isChangesSelected = selectedView === "changes";
 
   return (
-    <div className="border-b border-border shrink-0">
+    <div className="flex flex-col h-full overflow-hidden">
       <CommitListHeader />
-      <div className="max-h-[200px] overflow-y-auto">
+      <div className="flex-1 overflow-y-auto">
         <WorkingChanges
           isSelected={isChangesSelected}
           onClick={() => onSelectView("changes")}

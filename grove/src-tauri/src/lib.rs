@@ -273,6 +273,8 @@ pub fn run() {
             save_app_config,
             config::save_terminal_layouts,
             config::load_terminal_layouts,
+            config::save_panel_layouts,
+            config::load_panel_layouts,
             // Git Project (W2)
             list_projects,
             add_project,

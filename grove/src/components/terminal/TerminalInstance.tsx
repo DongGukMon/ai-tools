@@ -232,7 +232,8 @@ export default function TerminalInstance({ ptyId }: Props) {
 
   return (
     <div
-      className={cn("absolute inset-0 p-1")}
+      className={cn("absolute inset-0 p-4")}
+      style={{ backgroundColor: theme?.background ?? "#000" }}
       onClick={() => {
         setFocusedPtyId(ptyId);
         terminalRef.current?.focus();

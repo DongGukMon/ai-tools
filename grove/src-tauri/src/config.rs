@@ -98,6 +98,31 @@ fn save_app_config_to_path(path: &Path, app_config: &AppConfig) -> Result<(), St
     save_config_to_path(path, &config)
 }
 
+// ── Panel layout persistence ──
+
+#[tauri::command]
+pub fn save_panel_layouts(layouts: String) -> Result<(), String> {
+    let path = dirs::home_dir()
+        .ok_or("No home dir")?
+        .join(".grove")
+        .join("panel-layouts.json");
+    fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
+    fs::write(&path, layouts).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn load_panel_layouts() -> Result<String, String> {
+    let path = dirs::home_dir()
+        .ok_or("No home dir")?
+        .join(".grove")
+        .join("panel-layouts.json");
+    if path.exists() {
+        fs::read_to_string(&path).map_err(|e| e.to_string())
+    } else {
+        Ok("{}".to_string())
+    }
+}
+
 // ── Terminal layout persistence ──
 
 #[tauri::command]

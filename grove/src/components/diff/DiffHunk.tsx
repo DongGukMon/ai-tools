@@ -1,8 +1,7 @@
 import { useState } from "react";
-import { Plus, Minus, Trash2, ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import type { DiffHunk as DiffHunkType, DiffLine as DiffLineType } from "../../types";
 import DiffLine from "./DiffLine";
-import { Button } from "../ui/button";
 import { cn } from "../../lib/cn";
 
 type LineGroup = { type: "add" | "remove" | "context"; lines: DiffLineType[] };
@@ -25,24 +24,14 @@ interface Props {
   hunk: DiffHunkType;
   hunkIndex: number;
   filePath: string;
-  isViewingStaged: boolean;
   isFirst: boolean;
-  readOnly?: boolean;
   selectedLines: Set<number>;
   onToggleLine: (index: number) => void;
-  onStageHunk: () => void;
-  onUnstageHunk: () => void;
-  onDiscardHunk: () => void;
 }
 
 export default function DiffHunk({
   hunk,
-  isViewingStaged,
   isFirst,
-  readOnly = false,
-  onStageHunk,
-  onUnstageHunk,
-  onDiscardHunk,
 }: Props) {
   const [collapsed, setCollapsed] = useState(false);
 
@@ -64,43 +53,6 @@ export default function DiffHunk({
         <span className={cn("min-w-0 flex-1 truncate font-mono text-[11px] text-[#656d76]")}>
           {hunk.header}
         </span>
-        {!readOnly && (
-          <span className={cn("flex gap-1.5 shrink-0")}>
-            {!isViewingStaged && (
-              <>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className={cn("h-auto px-2 py-0.5 text-[10px] font-semibold text-[#656d76] border-[#d0d7de] bg-white hover:bg-[#f3f4f6] gap-1")}
-                  onClick={onStageHunk}
-                >
-                  <Plus size={11} strokeWidth={2.5} />
-                  Stage
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className={cn("h-auto px-2 py-0.5 text-[10px] font-semibold text-[#cf222e] border-[#cf222e]/20 bg-white hover:bg-[#ffebe9] gap-1")}
-                  onClick={onDiscardHunk}
-                >
-                  <Trash2 size={10} strokeWidth={2} />
-                  Discard
-                </Button>
-              </>
-            )}
-            {isViewingStaged && (
-              <Button
-                variant="outline"
-                size="sm"
-                className={cn("h-auto px-2 py-0.5 text-[10px] font-semibold text-[#656d76] border-[#d0d7de] bg-white hover:bg-[#f3f4f6] gap-1")}
-                onClick={onUnstageHunk}
-              >
-                <Minus size={11} strokeWidth={2.5} />
-                Unstage
-              </Button>
-            )}
-          </span>
-        )}
       </div>
 
       {/* Lines grouped by type: remove / add / context */}

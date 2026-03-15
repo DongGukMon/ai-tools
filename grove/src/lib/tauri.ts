@@ -57,6 +57,14 @@ export async function loadTerminalLayouts(): Promise<string> {
   return invoke<string>("load_terminal_layouts");
 }
 
+export async function savePanelLayouts(layouts: string): Promise<void> {
+  return invoke("save_panel_layouts", { layouts });
+}
+
+export async function loadPanelLayouts(): Promise<string> {
+  return invoke<string>("load_panel_layouts");
+}
+
 // === GIT PROJECT COMMANDS (W2) ===
 
 export async function listProjects(): Promise<Project[]> {

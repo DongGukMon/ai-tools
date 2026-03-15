@@ -1,5 +1,8 @@
+import { useRef, useCallback } from "react";
+import { Allotment } from "allotment";
 import { useProjectStore } from "../../store/project";
 import { useDiff } from "../../hooks/useDiff";
+import { usePanelLayoutStore } from "../../store/panel-layout";
 import type { FileStatus } from "../../types";
 import CommitList from "./CommitList";
 import FileList from "./FileList";
@@ -8,6 +11,17 @@ import DiffViewer from "./DiffViewer";
 export default function DiffPanel() {
   const selectedWorktree = useProjectStore((s) => s.selectedWorktree);
   const store = useDiff(selectedWorktree?.path ?? null);
+  const { diff: diffSizes, updateDiff } = usePanelLayoutStore();
+  const dragging = useRef(false);
+
+  const handleChange = useCallback(
+    (sizes: number[]) => {
+      if (dragging.current && sizes.length > 0) {
+        updateDiff(sizes);
+      }
+    },
+    [updateDiff],
+  );
 
   if (!selectedWorktree) {
     return (
@@ -21,39 +35,42 @@ export default function DiffPanel() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden border-l border-border bg-sidebar">
-      <CommitList
-        commits={store.commits}
-        selectedView={store.selectedView}
-        onSelectView={store.selectView}
-      />
-      <FileList
-        fileStatuses={
-          store.selectedView === "changes"
-            ? store.fileStatuses
-            : store.commitDiffs.map((d) => ({
-                path: d.path,
-                status: d.status as FileStatus["status"],
-                staged: false,
-              }))
-        }
-        selectedFile={store.selectedFile}
-        onSelectFile={store.selectFile}
-      />
-      <DiffViewer
-        diff={store.currentDiff}
-        selectedFile={store.selectedFile}
-        isViewingStaged={store.isViewingStaged}
-        readOnly={store.selectedView !== "changes"}
-        selectedLines={store.selectedLines}
-        onToggleLine={store.toggleLine}
-        onClearSelection={store.clearSelection}
-        onStageHunk={store.stageHunk}
-        onUnstageHunk={store.unstageHunk}
-        onDiscardHunk={store.discardHunk}
-        onStageLines={store.stageLines}
-        onUnstageLines={store.unstageLines}
-        onDiscardLines={store.discardLines}
-      />
+      <Allotment
+        vertical
+        defaultSizes={diffSizes.map((r) => r * 1000)}
+        onDragStart={() => { dragging.current = true; }}
+        onDragEnd={() => { dragging.current = false; }}
+        onChange={handleChange}
+      >
+        <Allotment.Pane minSize={80}>
+          <CommitList
+            commits={store.commits}
+            selectedView={store.selectedView}
+            onSelectView={store.selectView}
+          />
+        </Allotment.Pane>
+        <Allotment.Pane minSize={60}>
+          <FileList
+            fileStatuses={
+              store.selectedView === "changes"
+                ? store.fileStatuses
+                : store.commitDiffs.map((d) => ({
+                    path: d.path,
+                    status: d.status as FileStatus["status"],
+                    staged: false,
+                  }))
+            }
+            selectedFile={store.selectedFile}
+            onSelectFile={store.selectFile}
+          />
+        </Allotment.Pane>
+        <Allotment.Pane minSize={100}>
+          <DiffViewer
+            diff={store.currentDiff}
+            selectedFile={store.selectedFile}
+          />
+        </Allotment.Pane>
+      </Allotment>
     </div>
   );
 }
