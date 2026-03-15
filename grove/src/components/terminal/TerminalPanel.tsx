@@ -34,19 +34,23 @@ export default function TerminalPanel() {
         log("terminal", "config loaded", { hasTerminalTheme: !!config.terminalTheme });
 
         log("terminal", "detecting system theme...");
-        const detected = await runCommand(() => getTerminalTheme(), {
+        const result = await runCommand(() => getTerminalTheme(), {
           errorToast: false,
         });
-        log("terminal", "system theme detected", { bg: detected.background, fg: detected.foreground });
-        setDetectedTheme(detected);
+        log("terminal", "system theme result", { detected: result.detected, bg: result.theme.background, fg: result.theme.foreground });
+
+        // Only expose System preset if detection actually succeeded
+        if (result.detected) {
+          setDetectedTheme(result.theme);
+        }
 
         if (config.terminalTheme) {
-          const merged = { ...detected, ...config.terminalTheme };
+          const merged = { ...result.theme, ...config.terminalTheme };
           log("terminal", "using saved theme override", { bg: merged.background });
           loadTheme(merged);
         } else {
           log("terminal", "using detected theme");
-          loadTheme(detected);
+          loadTheme(result.theme);
         }
         log("terminal", "init complete");
       } catch (e) {

@@ -35,8 +35,8 @@ function sanitizeCommandErrorMessage(message: string): string {
 
 // === CONFIG/THEME COMMANDS (W1) ===
 
-export async function getTerminalTheme(): Promise<TerminalTheme> {
-  return invoke<TerminalTheme>("get_terminal_theme");
+export async function getTerminalTheme(): Promise<{ theme: TerminalTheme; detected: boolean }> {
+  return invoke<{ theme: TerminalTheme; detected: boolean }>("get_terminal_theme");
 }
 
 export async function getAppConfig(): Promise<AppConfig> {

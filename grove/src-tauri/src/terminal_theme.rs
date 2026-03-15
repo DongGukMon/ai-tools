@@ -1,8 +1,31 @@
+use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::process::Command;
 
 const DEFAULT_TERMINAL_FONT_FAMILY: &str =
     "\"SF Mono\", \"Monaco\", \"Menlo\", \"Consolas\", \"Liberation Mono\", \"DejaVu Sans Mono\", \"Noto Sans Mono CJK KR\", \"Noto Sans Mono CJK SC\", \"Noto Sans Mono CJK TC\", \"Noto Sans Mono CJK JP\", monospace";
+
+const FALLBACK_PROFILE: &str = "Basic";
+
+/// ANSI color key names in the plist, in standard ANSI order.
+const ANSI_KEYS: [&str; 16] = [
+    "ANSIBlackColor",
+    "ANSIRedColor",
+    "ANSIGreenColor",
+    "ANSIYellowColor",
+    "ANSIBlueColor",
+    "ANSIMagentaColor",
+    "ANSICyanColor",
+    "ANSIWhiteColor",
+    "ANSIBrightBlackColor",
+    "ANSIBrightRedColor",
+    "ANSIBrightGreenColor",
+    "ANSIBrightYellowColor",
+    "ANSIBrightBlueColor",
+    "ANSIBrightMagentaColor",
+    "ANSIBrightCyanColor",
+    "ANSIBrightWhiteColor",
+];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -58,106 +81,19 @@ impl Default for TerminalTheme {
     }
 }
 
-/// Detected Terminal.app colors (bg, fg, cursor as hex strings).
-struct TerminalColors {
-    bg: String,
-    fg: String,
-    cursor: String,
-    bg_opacity: f64,
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DetectedThemeResult {
+    pub theme: TerminalTheme,
+    pub detected: bool,
 }
 
-/// Use AppleScript to query Terminal.app's scripting interface for the current
-/// profile's colors. Terminal.app exposes colors as {r, g, b} lists with
-/// 16-bit values (0-65535). We divide by 257 to get 8-bit (0-255) values.
-fn detect_terminal_colors() -> Option<TerminalColors> {
-    let profile = match get_default_profile_name() {
-        Some(p) => {
-            crate::logger::grove_info!("theme", &format!("profile name: {}", p));
-            p
-        }
-        None => {
-            crate::logger::grove_warn!("theme", "failed to read default profile name");
-            return None;
-        }
-    };
+// ── Plist helpers ──
 
-    let script = format!(
-        r#"
-        tell application "Terminal"
-            set prof to settings set "{profile}"
-            set bgColor to background color of prof
-            set fgColor to normal text color of prof
-            set crColor to cursor color of prof
-            set bgR to (item 1 of bgColor) / 257
-            set bgG to (item 2 of bgColor) / 257
-            set bgB to (item 3 of bgColor) / 257
-            set fgR to (item 1 of fgColor) / 257
-            set fgG to (item 2 of fgColor) / 257
-            set fgB to (item 3 of fgColor) / 257
-            set crR to (item 1 of crColor) / 257
-            set crG to (item 2 of crColor) / 257
-            set crB to (item 3 of crColor) / 257
-            return (bgR as integer) & "," & (bgG as integer) & "," & (bgB as integer) & "|" & (fgR as integer) & "," & (fgG as integer) & "," & (fgB as integer) & "|" & (crR as integer) & "," & (crG as integer) & "," & (crB as integer)
-        end tell
-        "#
-    );
-
-    let output = Command::new("osascript")
-        .args(["-e", &script])
-        .output()
-        .ok()?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        crate::logger::grove_warn!("theme", &format!("color osascript failed: {}", stderr.trim()));
-        return None;
-    }
-
-    let result = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    crate::logger::grove_info!("theme", &format!("color osascript result: {}", result));
-    // Parse "r,g,b|r,g,b|r,g,b"
-    let parts: Vec<&str> = result.split('|').collect();
-    if parts.len() < 3 {
-        return None;
-    }
-
-    let bg = parse_rgb(parts[0])?;
-    let fg = parse_rgb(parts[1])?;
-    let cursor = parse_rgb(parts[2])?;
-    // Opacity is not available via AppleScript; default to 1.0
-    let bg_opacity = 1.0;
-
-    Some(TerminalColors { bg, fg, cursor, bg_opacity })
-}
-
-/// Try to read the 16-color ANSI palette from Terminal.app via AppleScript.
-/// Returns a Vec of 16 hex color strings in standard ANSI order, or None.
-fn detect_ansi_colors() -> Option<Vec<String>> {
-    let profile = get_default_profile_name()?;
-
-    // Terminal.app scripting dictionary exposes ANSI colors as individual
-    // properties on the settings set. We query all 16 in one script call.
-    let script = format!(
-        r#"
-        tell application "Terminal"
-            set prof to settings set "{profile}"
-            set colorNames to {{ANSI black color, ANSI red color, ANSI green color, ANSI yellow color, ANSI blue color, ANSI magenta color, ANSI cyan color, ANSI white color, ANSI bright black color, ANSI bright red color, ANSI bright green color, ANSI bright yellow color, ANSI bright blue color, ANSI bright magenta color, ANSI bright cyan color, ANSI bright white color}}
-            set out to ""
-            repeat with c in colorNames
-                set cv to c of prof
-                set r to (item 1 of cv) / 257
-                set g to (item 2 of cv) / 257
-                set b to (item 3 of cv) / 257
-                if out is not "" then set out to out & "|"
-                set out to out & (r as integer) & "," & (g as integer) & "," & (b as integer)
-            end repeat
-            return out
-        end tell
-        "#
-    );
-
-    let output = Command::new("osascript")
-        .args(["-e", &script])
+/// Export Terminal.app preferences as XML string.
+fn export_terminal_plist() -> Option<String> {
+    let output = Command::new("defaults")
+        .args(["export", "com.apple.Terminal", "-"])
         .output()
         .ok()?;
 
@@ -165,83 +101,10 @@ fn detect_ansi_colors() -> Option<Vec<String>> {
         return None;
     }
 
-    let result = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    let parts: Vec<&str> = result.split('|').collect();
-    if parts.len() < 16 {
-        return None;
-    }
-
-    let colors: Option<Vec<String>> = parts.iter().take(16).map(|p| parse_rgb(p)).collect();
-    colors
+    Some(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
-/// Parse a comma-separated "r,g,b" string (0-255 values) into a "#rrggbb" hex string.
-fn parse_rgb(s: &str) -> Option<String> {
-    let nums: Vec<u8> = s
-        .split(',')
-        .filter_map(|n| n.trim().parse::<u8>().ok())
-        .collect();
-    if nums.len() == 3 {
-        Some(format!("#{:02x}{:02x}{:02x}", nums[0], nums[1], nums[2]))
-    } else {
-        None
-    }
-}
-
-/// Blend a "#rrggbb" color toward white based on inverse opacity (0.0-1.0).
-/// Simulates what reduced terminal opacity looks like (lighter background).
-fn blend_with_opacity(hex: &str, opacity: f64) -> String {
-    let hex = hex.trim_start_matches('#');
-    if hex.len() < 6 {
-        return format!("#{}", hex);
-    }
-    let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(0) as f64;
-    let g = u8::from_str_radix(&hex[2..4], 16).unwrap_or(0) as f64;
-    let b = u8::from_str_radix(&hex[4..6], 16).unwrap_or(0) as f64;
-    let a = opacity.clamp(0.0, 1.0);
-    // Alpha composite: fg * alpha + white * (1 - alpha)
-    let br = (r * a + 255.0 * (1.0 - a)) as u8;
-    let bg = (g * a + 255.0 * (1.0 - a)) as u8;
-    let bb = (b * a + 255.0 * (1.0 - a)) as u8;
-    format!("#{:02x}{:02x}{:02x}", br, bg, bb)
-}
-
-/// Compute perceived luminance (0-255) from a "#rrggbb" hex color.
-/// Uses the standard BT.601 luma formula.
-fn hex_luminance(hex: &str) -> u8 {
-    let hex = hex.trim_start_matches('#');
-    if hex.len() < 6 {
-        return 128; // neutral fallback
-    }
-    let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(128) as f64;
-    let g = u8::from_str_radix(&hex[2..4], 16).unwrap_or(128) as f64;
-    let b = u8::from_str_radix(&hex[4..6], 16).unwrap_or(128) as f64;
-    (0.299 * r + 0.587 * g + 0.114 * b) as u8
-}
-
-/// Light-theme ANSI color palette. Used when the detected background is light.
-fn light_ansi_palette() -> [&'static str; 16] {
-    [
-        "#000000", // black
-        "#c91b00", // red
-        "#00a600", // green
-        "#c7c400", // yellow
-        "#0225c7", // blue
-        "#c930c7", // magenta
-        "#00a6b2", // cyan
-        "#c7c7c7", // white
-        "#686868", // bright black
-        "#ff6e67", // bright red
-        "#5ffa68", // bright green
-        "#fffc67", // bright yellow
-        "#6871ff", // bright blue
-        "#ff77ff", // bright magenta
-        "#60fdff", // bright cyan
-        "#ffffff", // bright white
-    ]
-}
-
-/// Get the default profile name from Terminal.app preferences.
+/// Get the default profile name.
 fn get_default_profile_name() -> Option<String> {
     let output = Command::new("defaults")
         .args(["read", "com.apple.Terminal", "Default Window Settings"])
@@ -253,16 +116,107 @@ fn get_default_profile_name() -> Option<String> {
     }
 
     let name = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if name.is_empty() {
-        None
+    if name.is_empty() { None } else { Some(name) }
+}
+
+/// Extract NSRGB float components from a plist NSColor <data> block.
+/// Returns (R, G, B) as 0.0-1.0 floats, and optional A (alpha).
+fn extract_nscolor(xml: &str, profile: &str, key: &str) -> Option<(f64, f64, f64, Option<f64>)> {
+    let profile_key = format!("<key>{}</key>", profile);
+    let profile_pos = xml.find(&profile_key)?;
+    let after_profile = &xml[profile_pos..];
+
+    let color_key = format!("<key>{}</key>", key);
+    let key_pos = after_profile.find(&color_key)?;
+    let after_key = &after_profile[key_pos..];
+
+    let data_start = after_key.find("<data>")? + 6;
+    let data_end = after_key.find("</data>")?;
+    let b64: String = after_key[data_start..data_end]
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .collect();
+
+    let bytes = base64::engine::general_purpose::STANDARD.decode(&b64).ok()?;
+
+    // Find NSRGB marker, then scan for the float string
+    let marker = b"NSRGB";
+    let marker_pos = bytes.windows(marker.len()).position(|w| w == marker)?;
+    let after_marker = &bytes[marker_pos + marker.len()..];
+
+    let float_str = after_marker.iter().enumerate().find_map(|(i, &b)| {
+        if b.is_ascii_digit() {
+            let rest = &after_marker[i..];
+            let end = rest
+                .iter()
+                .position(|&c| c == 0 || c < 0x20)
+                .unwrap_or(rest.len());
+            let s = std::str::from_utf8(&rest[..end]).ok()?;
+            let parts: Vec<&str> = s.split_whitespace().collect();
+            if parts.len() >= 3 && parts.iter().all(|p| p.parse::<f64>().is_ok()) {
+                Some(s.to_string())
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    })?;
+
+    let parts: Vec<f64> = float_str
+        .split_whitespace()
+        .filter_map(|p| p.parse::<f64>().ok())
+        .collect();
+
+    if parts.len() >= 3 {
+        let alpha = if parts.len() >= 4 { Some(parts[3]) } else { None };
+        Some((parts[0], parts[1], parts[2], alpha))
     } else {
-        Some(name)
+        None
     }
 }
 
-/// Read font settings from Terminal.app.
+/// Convert 0.0-1.0 RGB floats to "#rrggbb" hex.
+fn floats_to_hex(r: f64, g: f64, b: f64) -> String {
+    let ri = (r.clamp(0.0, 1.0) * 255.0).round() as u8;
+    let gi = (g.clamp(0.0, 1.0) * 255.0).round() as u8;
+    let bi = (b.clamp(0.0, 1.0) * 255.0).round() as u8;
+    format!("#{:02x}{:02x}{:02x}", ri, gi, bi)
+}
+
+/// Read a color from the profile, falling back to the Basic profile.
+fn read_color(xml: &str, profile: &str, key: &str) -> Option<(f64, f64, f64, Option<f64>)> {
+    extract_nscolor(xml, profile, key)
+        .or_else(|| extract_nscolor(xml, FALLBACK_PROFILE, key))
+}
+
+/// Read a color as hex, falling back to Basic profile.
+fn read_color_hex(xml: &str, profile: &str, key: &str) -> Option<String> {
+    read_color(xml, profile, key).map(|(r, g, b, _)| floats_to_hex(r, g, b))
+}
+
+// ── Blend ──
+
+/// Blend a "#rrggbb" color toward white using a softened alpha curve.
+fn blend_with_opacity(hex: &str, opacity: f64) -> String {
+    let hex = hex.trim_start_matches('#');
+    if hex.len() < 6 {
+        return format!("#{}", hex);
+    }
+    let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(0) as f64;
+    let g = u8::from_str_radix(&hex[2..4], 16).unwrap_or(0) as f64;
+    let b = u8::from_str_radix(&hex[4..6], 16).unwrap_or(0) as f64;
+    let a = opacity.clamp(0.0, 1.0).powf(0.3);
+    let br = (r * a + 255.0 * (1.0 - a)) as u8;
+    let bg = (g * a + 255.0 * (1.0 - a)) as u8;
+    let bb = (b * a + 255.0 * (1.0 - a)) as u8;
+    format!("#{:02x}{:02x}{:02x}", br, bg, bb)
+}
+
+// ── Font detection ──
+
+/// Read font settings from Terminal.app preferences.
 fn read_font_settings() -> (Option<String>, Option<f64>) {
-    // Try reading font name
     let font_name = Command::new("defaults")
         .args(["read", "com.apple.Terminal", "NSFont"])
         .output()
@@ -270,27 +224,19 @@ fn read_font_settings() -> (Option<String>, Option<f64>) {
         .and_then(|o| {
             if o.status.success() {
                 let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
-                if s.is_empty() {
-                    None
-                } else {
-                    Some(s)
-                }
+                if s.is_empty() { None } else { Some(s) }
             } else {
                 None
             }
         });
 
-    // Try reading font size
     let font_size = Command::new("defaults")
         .args(["read", "com.apple.Terminal", "NSFontSize"])
         .output()
         .ok()
         .and_then(|o| {
             if o.status.success() {
-                String::from_utf8_lossy(&o.stdout)
-                    .trim()
-                    .parse::<f64>()
-                    .ok()
+                String::from_utf8_lossy(&o.stdout).trim().parse::<f64>().ok()
             } else {
                 None
             }
@@ -299,75 +245,95 @@ fn read_font_settings() -> (Option<String>, Option<f64>) {
     (font_name, font_size)
 }
 
-/// Detect the Terminal.app theme. Returns defaults if detection fails.
-pub fn detect_terminal_theme() -> TerminalTheme {
+// ── Main detection ──
+
+pub fn detect_terminal_theme() -> DetectedThemeResult {
     let mut theme = TerminalTheme::default();
 
-    // 1. Try AppleScript color detection for bg/fg/cursor
-    crate::logger::grove_info!("theme", "detecting terminal colors...");
-    if let Some(colors) = detect_terminal_colors() {
-        crate::logger::grove_info!("theme", &format!("colors detected: bg={} fg={} cursor={} opacity={}", colors.bg, colors.fg, colors.cursor, colors.bg_opacity));
-        // Blend background with black if opacity < 1.0
-        if colors.bg_opacity < 1.0 {
-            theme.background = blend_with_opacity(&colors.bg, colors.bg_opacity);
-        } else {
-            theme.background = colors.bg.clone();
+    let profile = match get_default_profile_name() {
+        Some(p) => {
+            crate::logger::grove_info!("theme", &format!("profile: {}", p));
+            p
         }
-        theme.foreground = colors.fg;
-        theme.cursor = colors.cursor;
+        None => {
+            crate::logger::grove_warn!("theme", "failed to read default profile name");
+            return DetectedThemeResult { theme, detected: false };
+        }
+    };
 
-        // 2. Try reading the full ANSI palette via AppleScript
-        if let Some(ansi) = detect_ansi_colors() {
-            // ansi is ordered: black, red, green, yellow, blue, magenta, cyan, white,
-            //                  bright_black .. bright_white
-            if ansi.len() >= 16 {
-                theme.black = ansi[0].clone();
-                theme.red = ansi[1].clone();
-                theme.green = ansi[2].clone();
-                theme.yellow = ansi[3].clone();
-                theme.blue = ansi[4].clone();
-                theme.magenta = ansi[5].clone();
-                theme.cyan = ansi[6].clone();
-                theme.white = ansi[7].clone();
-                theme.bright_black = ansi[8].clone();
-                theme.bright_red = ansi[9].clone();
-                theme.bright_green = ansi[10].clone();
-                theme.bright_yellow = ansi[11].clone();
-                theme.bright_blue = ansi[12].clone();
-                theme.bright_magenta = ansi[13].clone();
-                theme.bright_cyan = ansi[14].clone();
-                theme.bright_white = ansi[15].clone();
-            }
-        } else {
-            // 3. ANSI detection failed — pick a palette based on background luminance
-            let lum = hex_luminance(&theme.background);
-            if lum >= 128 {
-                // Light background: use light-theme ANSI palette
-                let p = light_ansi_palette();
-                theme.black = p[0].to_string();
-                theme.red = p[1].to_string();
-                theme.green = p[2].to_string();
-                theme.yellow = p[3].to_string();
-                theme.blue = p[4].to_string();
-                theme.magenta = p[5].to_string();
-                theme.cyan = p[6].to_string();
-                theme.white = p[7].to_string();
-                theme.bright_black = p[8].to_string();
-                theme.bright_red = p[9].to_string();
-                theme.bright_green = p[10].to_string();
-                theme.bright_yellow = p[11].to_string();
-                theme.bright_blue = p[12].to_string();
-                theme.bright_magenta = p[13].to_string();
-                theme.bright_cyan = p[14].to_string();
-                theme.bright_white = p[15].to_string();
-            }
-            // Dark background: keep the grove-dark defaults from Default impl
+    let xml = match export_terminal_plist() {
+        Some(x) => x,
+        None => {
+            crate::logger::grove_warn!("theme", "failed to export Terminal.app plist");
+            return DetectedThemeResult { theme, detected: false };
         }
+    };
+
+    // Background (with alpha blending)
+    let bg_detected = if let Some((r, g, b, alpha)) = read_color(&xml, &profile, "BackgroundColor") {
+        let hex = floats_to_hex(r, g, b);
+        let a = alpha.unwrap_or(1.0);
+        crate::logger::grove_info!("theme", &format!("bg: {} alpha: {:.4}", hex, a));
+        if a < 1.0 {
+            theme.background = blend_with_opacity(&hex, a);
+        } else {
+            theme.background = hex;
+        }
+        true
     } else {
-        crate::logger::grove_warn!("theme", "color detection FAILED — using defaults");
+        crate::logger::grove_warn!("theme", "BackgroundColor not found in plist");
+        false
+    };
+
+    // Foreground
+    if let Some(hex) = read_color_hex(&xml, &profile, "TextColor") {
+        crate::logger::grove_info!("theme", &format!("fg: {}", hex));
+        theme.foreground = hex;
     }
 
-    // 4. Always try to detect font settings
+    // Cursor (use TextColor as fallback since CursorColor often doesn't exist)
+    if let Some(hex) = read_color_hex(&xml, &profile, "CursorColor") {
+        theme.cursor = hex;
+    }
+
+    // ANSI 16 colors: try profile first, fallback to Basic
+    let ansi_fields: [&mut String; 16] = {
+        let t = &mut theme;
+        // This unsafe-free pattern requires individual borrows
+        // Use a helper to collect mutable refs
+        unsafe {
+            let ptr = t as *mut TerminalTheme;
+            [
+                &mut (*ptr).black,
+                &mut (*ptr).red,
+                &mut (*ptr).green,
+                &mut (*ptr).yellow,
+                &mut (*ptr).blue,
+                &mut (*ptr).magenta,
+                &mut (*ptr).cyan,
+                &mut (*ptr).white,
+                &mut (*ptr).bright_black,
+                &mut (*ptr).bright_red,
+                &mut (*ptr).bright_green,
+                &mut (*ptr).bright_yellow,
+                &mut (*ptr).bright_blue,
+                &mut (*ptr).bright_magenta,
+                &mut (*ptr).bright_cyan,
+                &mut (*ptr).bright_white,
+            ]
+        }
+    };
+
+    let mut ansi_count = 0;
+    for (i, key) in ANSI_KEYS.iter().enumerate() {
+        if let Some(hex) = read_color_hex(&xml, &profile, key) {
+            *ansi_fields[i] = hex;
+            ansi_count += 1;
+        }
+    }
+    crate::logger::grove_info!("theme", &format!("ANSI colors: {}/16 from plist", ansi_count));
+
+    // Font settings
     let (font_name, font_size) = read_font_settings();
     if let Some(name) = font_name {
         theme.font_family = name;
@@ -376,5 +342,8 @@ pub fn detect_terminal_theme() -> TerminalTheme {
         theme.font_size = size;
     }
 
-    theme
+    DetectedThemeResult {
+        theme,
+        detected: bg_detected,
+    }
 }

@@ -91,7 +91,7 @@ pub struct FileDiff {
 // === CONFIG/THEME COMMANDS (W1) ===
 
 #[tauri::command]
-fn get_terminal_theme() -> terminal_theme::TerminalTheme {
+fn get_terminal_theme() -> terminal_theme::DetectedThemeResult {
     terminal_theme::detect_terminal_theme()
 }
 
@@ -102,7 +102,7 @@ fn get_app_config() -> AppConfig {
         base_dir: saved.base_dir,
         terminal_theme: saved
             .terminal_theme
-            .or_else(|| Some(terminal_theme::detect_terminal_theme())),
+            .or_else(|| Some(terminal_theme::detect_terminal_theme().theme)),
     }
 }
 
