@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Plus, Minus, Trash2, ChevronDown, ChevronRight } from "lucide-react";
 import type { DiffHunk as DiffHunkType, DiffLine as DiffLineType } from "../../types";
 import DiffLine from "./DiffLine";
+import { Button } from "../ui/button";
 
 function groupLines(lines: DiffLineType[]) {
   const groups: { type: "change" | "context"; lines: DiffLineType[] }[] = [];
@@ -65,21 +66,36 @@ export default function DiffHunk({
           <span className="flex gap-1.5 shrink-0">
             {!isViewingStaged && (
               <>
-                <ActionPill onClick={onStageHunk} variant="default">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-auto px-2 py-0.5 text-[10px] font-semibold text-[#656d76] border-[#d0d7de] bg-white hover:bg-[#f3f4f6] gap-1"
+                  onClick={onStageHunk}
+                >
                   <Plus size={11} strokeWidth={2.5} />
                   Stage
-                </ActionPill>
-                <ActionPill onClick={onDiscardHunk} variant="danger">
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-auto px-2 py-0.5 text-[10px] font-semibold text-[#cf222e] border-[#cf222e]/20 bg-white hover:bg-[#ffebe9] gap-1"
+                  onClick={onDiscardHunk}
+                >
                   <Trash2 size={10} strokeWidth={2} />
                   Discard
-                </ActionPill>
+                </Button>
               </>
             )}
             {isViewingStaged && (
-              <ActionPill onClick={onUnstageHunk} variant="default">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-auto px-2 py-0.5 text-[10px] font-semibold text-[#656d76] border-[#d0d7de] bg-white hover:bg-[#f3f4f6] gap-1"
+                onClick={onUnstageHunk}
+              >
                 <Minus size={11} strokeWidth={2.5} />
                 Unstage
-              </ActionPill>
+              </Button>
             )}
           </span>
         )}
@@ -102,28 +118,5 @@ export default function DiffHunk({
           </div>
         ))}
     </div>
-  );
-}
-
-function ActionPill({
-  children,
-  onClick,
-  variant,
-}: {
-  children: React.ReactNode;
-  onClick: () => void;
-  variant: "default" | "danger";
-}) {
-  const base =
-    "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border transition-colors duration-100 cursor-pointer";
-  const styles =
-    variant === "danger"
-      ? "text-[#cf222e] border-[#cf222e]/20 bg-white hover:bg-[#ffebe9]"
-      : "text-[#656d76] border-[#d0d7de] bg-white hover:bg-[#f3f4f6]";
-
-  return (
-    <button className={`${base} ${styles}`} onClick={onClick}>
-      {children}
-    </button>
   );
 }

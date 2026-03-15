@@ -2,6 +2,8 @@ import { useState } from "react";
 import { GitBranch, X } from "lucide-react";
 import type { Worktree } from "../../types";
 import { useProjectStore } from "../../store/project";
+import { Button } from "../ui/button";
+import { Badge } from "../ui/badge";
 
 interface Props {
   worktree: Worktree;
@@ -51,15 +53,22 @@ function WorktreeItem({ worktree, projectId }: Props) {
         {label}
       </span>
       {isSource && (
-        <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md ${
-          isSelected ? "bg-[var(--color-primary-bg)] text-[var(--color-primary)]" : "bg-[#f0f1f3] text-[#9ca3af]"
-        }`}>
+        <Badge
+          variant={isSelected ? "default" : "secondary"}
+          className={
+            isSelected
+              ? "bg-[var(--color-primary-light)] text-[var(--color-primary)]"
+              : "bg-[#f0f1f3] text-[#9ca3af]"
+          }
+        >
           src
-        </span>
+        </Badge>
       )}
       {!isSource && (
-        <button
-          className={`flex items-center justify-center w-[18px] h-[18px] rounded-md transition-all duration-100 ${
+        <Button
+          variant="ghost"
+          size="icon"
+          className={`w-[18px] h-[18px] rounded-md ${
             isSelected
               ? "opacity-50 hover:opacity-100 text-[var(--color-primary)] hover:text-[var(--color-danger)] hover:bg-[var(--color-danger-bg)]"
               : "opacity-0 group-hover:opacity-100 text-[#9ca3af] hover:text-[var(--color-danger)] hover:bg-[var(--color-danger-bg)]"
@@ -68,7 +77,7 @@ function WorktreeItem({ worktree, projectId }: Props) {
           title="Remove worktree"
         >
           <X size={11} strokeWidth={2} />
-        </button>
+        </Button>
       )}
     </div>
   );

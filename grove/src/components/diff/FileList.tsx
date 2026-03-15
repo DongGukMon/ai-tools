@@ -1,5 +1,7 @@
 import { Plus, Minus, Trash2 } from "lucide-react";
 import type { FileStatus } from "../../types";
+import { Button } from "../ui/button";
+import { Badge } from "../ui/badge";
 
 interface Props {
   fileStatuses: FileStatus[];
@@ -101,6 +103,14 @@ export default function FileList({
   );
 }
 
+const statusBadgeVariant: Record<string, "success" | "warning" | "danger" | "default"> = {
+  modified: "warning",
+  added: "success",
+  deleted: "danger",
+  renamed: "default",
+  untracked: "success",
+};
+
 const statusColors: Record<string, string> = {
   modified: "var(--color-warning)",
   added: "var(--color-success)",
@@ -127,13 +137,15 @@ function ActionButton({
   };
 
   return (
-    <button
-      className={`flex items-center justify-center w-[20px] h-[20px] rounded-[var(--radius-sm)] text-[var(--color-text-tertiary)] transition-colors duration-100 ${variantClasses[variant]}`}
+    <Button
+      variant="ghost"
+      size="icon"
+      className={`w-[20px] h-[20px] rounded-[var(--radius-sm)] text-[var(--color-text-tertiary)] ${variantClasses[variant]}`}
       title={title}
       onClick={onClick}
     >
       {icon}
-    </button>
+    </Button>
   );
 }
 
@@ -154,6 +166,7 @@ function FileItem({
   const dirPath = file.path.includes("/")
     ? file.path.substring(0, file.path.lastIndexOf("/"))
     : "";
+  const _badgeVariant = statusBadgeVariant[file.status] ?? "default";
 
   return (
     <div
@@ -164,12 +177,13 @@ function FileItem({
       }`}
       onClick={onClick}
     >
-      <span
-        className="font-mono font-semibold text-[11px] w-3.5 text-center shrink-0"
+      <Badge
+        variant={_badgeVariant}
+        className="font-mono font-semibold text-[11px] w-3.5 px-0 py-0 text-center justify-center bg-transparent"
         style={{ color: statusColor }}
       >
         {statusChar}
-      </span>
+      </Badge>
       <span className={`min-w-0 truncate ${isSelected ? "font-medium text-[var(--color-text)]" : "text-[var(--color-text)]"}`}>
         {fileName}
       </span>

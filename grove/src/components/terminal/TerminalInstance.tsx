@@ -179,6 +179,36 @@ export default function TerminalInstance({ ptyId }: Props) {
     };
   }, [ptyId]);
 
+  // Live theme updates
+  useEffect(() => {
+    const term = terminalRef.current;
+    if (!term || !theme) return;
+
+    term.options.theme = {
+      background: theme.background,
+      foreground: theme.foreground,
+      cursor: theme.cursor,
+      black: theme.black,
+      red: theme.red,
+      green: theme.green,
+      yellow: theme.yellow,
+      blue: theme.blue,
+      magenta: theme.magenta,
+      cyan: theme.cyan,
+      white: theme.white,
+      brightBlack: theme.brightBlack,
+      brightRed: theme.brightRed,
+      brightGreen: theme.brightGreen,
+      brightYellow: theme.brightYellow,
+      brightBlue: theme.brightBlue,
+      brightMagenta: theme.brightMagenta,
+      brightCyan: theme.brightCyan,
+      brightWhite: theme.brightWhite,
+    };
+    term.options.fontFamily = theme.fontFamily;
+    term.options.fontSize = theme.fontSize;
+  }, [theme]);
+
   if (error) {
     return (
       <div className="absolute inset-0 p-3 text-sm text-[var(--color-danger)]">

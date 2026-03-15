@@ -16,12 +16,14 @@ const variantStyles = {
 export interface BadgeProps {
   variant?: keyof typeof variantStyles;
   className?: string;
+  style?: React.CSSProperties;
   children: React.ReactNode;
 }
 
-function Badge({ variant = "default", className, children }: BadgeProps) {
+function Badge({ variant = "default", className, style, children }: BadgeProps) {
   return (
     <span
+      style={style}
       className={cn(
         "inline-flex items-center text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-[var(--radius-md)]",
         variantStyles[variant],

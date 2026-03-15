@@ -21,10 +21,17 @@ export default function TerminalPanel() {
     async function init() {
       try {
         await useTerminalStore.getState().initLayouts();
-        const t = await getTerminalTheme();
-        loadTheme(t);
+        const config = await getAppConfig();
+        // Use saved theme override if available, otherwise detect
+        if (config.terminalTheme) {
+          const detected = await getTerminalTheme();
+          // Merge: saved theme takes precedence, fill gaps from detected
+          loadTheme({ ...detected, ...config.terminalTheme });
+        } else {
+          const t = await getTerminalTheme();
+          loadTheme(t);
+        }
         if (!useTerminalStore.getState().activeWorktree) {
-          const config = await getAppConfig();
           const home = config.baseDir.replace(/[/\\]\.grove$/, "");
           setActiveWorktree(home || "/tmp");
         }
