@@ -24,7 +24,9 @@ function TitleBar() {
         <div className="flex h-5 w-5 items-center justify-center rounded bg-accent">
           <Command className="h-3 w-3 text-white" />
         </div>
-        <span className="text-xs font-semibold text-foreground">grove</span>
+        <span className="text-xs font-semibold text-foreground">
+          grove{import.meta.env.DEV && " (dev)"}
+        </span>
       </div>
     </div>
   );
