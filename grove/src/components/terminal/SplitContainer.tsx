@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import { Allotment } from "allotment";
 import type { SplitNode } from "../../types";
 import TerminalInstance from "./TerminalInstance";
@@ -18,9 +18,13 @@ function getNodeKey(node: SplitNode): string {
 export default function SplitContainer({ node, path = [] }: Props) {
   const activeWorktree = useTerminalStore((s) => s.activeWorktree);
   const updateSizes = useTerminalStore((s) => s.updateSizes);
+  // Skip initial onChange calls from allotment (fires during layout before user interaction)
+  const mountTime = useRef(Date.now());
 
   const handleChange = useCallback(
     (sizes: number[]) => {
+      // Ignore onChange during first 500ms (allotment initial layout)
+      if (Date.now() - mountTime.current < 500) return;
       if (activeWorktree) {
         updateSizes(activeWorktree, path, sizes);
       }
