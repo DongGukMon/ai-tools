@@ -10,7 +10,8 @@
     "lint:fix": "eslint \"src/**/*.{ts,tsx}\" --fix",
     "test": "vitest run",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "install-local": "./install-local.sh"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
