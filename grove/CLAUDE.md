@@ -49,3 +49,36 @@ Commands are registered in `lib.rs` with section markers (W1–W4). Each worker 
 - **W4 (Diff)**: `get_status`, `get_commits`, `get_working_diff`, `get_commit_diff`, `stage_file`, `unstage_file`, `discard_file`, `stage_hunk`, `unstage_hunk`, `discard_hunk`, `stage_lines`, `unstage_lines`, `discard_lines`
 
 Stub commands use `todo!()` — they compile but panic at runtime until implemented.
+
+## Code Style
+
+### className: use `cn()` utility, not ternary in template literals
+
+```tsx
+// ❌ Bad
+className={`flex ${isActive ? "bg-blue-500 text-white" : "text-gray-500"}`}
+
+// ✅ Good
+import { cn } from "../../lib/cn";
+className={cn("flex", isActive && "bg-blue-500 text-white", !isActive && "text-gray-500")}
+```
+
+### UI components: use `src/components/ui/` primitives
+
+```tsx
+// ❌ Bad — raw button
+<button className="px-3 py-1 ...">Save</button>
+
+// ✅ Good — design system component
+import { Button } from "../ui/button";
+<Button variant="default" size="sm">Save</Button>
+```
+
+Available: `Button`, `Input`, `Badge`, `Dialog`, `Toast` (via `useToast()`)
+
+### Layout ratios: store as 0-1 proportions, not pixels
+
+```json
+{ "sizes": [0.3, 0.7] }  // ✅ 30:70 ratio
+{ "sizes": [300, 700] }   // ❌ pixel values — resolution dependent
+```
