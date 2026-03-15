@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 
 	"github.com/bang9/ai-tools/shared/upgrade"
 	"github.com/bang9/ai-tools/webform/internal/schema"
@@ -46,7 +47,12 @@ func main() {
 	// Parse --timeout flag
 	for i := 1; i < len(os.Args); i++ {
 		if os.Args[i] == "--timeout" && i+1 < len(os.Args) {
-			fmt.Sscanf(os.Args[i+1], "%d", &timeout)
+			n, err := strconv.Atoi(os.Args[i+1])
+			if err != nil || n <= 0 {
+				fmt.Fprintf(os.Stderr, "error: invalid --timeout value: %s\n", os.Args[i+1])
+				os.Exit(1)
+			}
+			timeout = n
 		}
 	}
 
@@ -90,7 +96,12 @@ func runView(args []string) {
 		case "--timeout":
 			if i+1 < len(args) {
 				i++
-				fmt.Sscanf(args[i], "%d", &timeout)
+				n, err := strconv.Atoi(args[i])
+				if err != nil || n <= 0 {
+					fmt.Fprintf(os.Stderr, "error: invalid --timeout value: %s\n", args[i])
+					os.Exit(1)
+				}
+				timeout = n
 			}
 		}
 	}
