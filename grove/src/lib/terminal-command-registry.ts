@@ -45,7 +45,7 @@ export const TERMINAL_TOOLBAR_COMMANDS = [
     label: "Close terminal",
     title: "Close Terminal",
     icon: "close",
-    when: "focused-pty",
+    when: "focused-pty-multiple",
     steps: [{ type: "session", action: "close" }],
   },
 ] as const satisfies readonly TerminalCommandDefinition[];

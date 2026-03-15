@@ -5,7 +5,10 @@ export type TerminalCommandIcon =
   | "close"
   | "play";
 
-export type TerminalCommandAvailability = "always" | "focused-pty";
+export type TerminalCommandAvailability =
+  | "always"
+  | "focused-pty"
+  | "focused-pty-multiple";
 
 export type TerminalCommandStep =
   | { type: "ui"; action: "open-theme-settings" }
@@ -34,6 +37,7 @@ export interface TerminalCommandDefinition {
 export interface TerminalCommandContext {
   activeWorktree: string | null;
   focusedPtyId: string | null;
+  terminalCount: number;
   openThemeSettings: () => void;
   splitTerminal: (
     direction: "horizontal" | "vertical",
@@ -47,11 +51,13 @@ export interface TerminalCommandContext {
 
 export function isTerminalCommandEnabled(
   command: TerminalCommandDefinition,
-  context: Pick<TerminalCommandContext, "focusedPtyId">,
+  context: Pick<TerminalCommandContext, "focusedPtyId" | "terminalCount">,
 ): boolean {
   switch (command.when ?? "always") {
     case "focused-pty":
       return Boolean(context.focusedPtyId);
+    case "focused-pty-multiple":
+      return Boolean(context.focusedPtyId) && context.terminalCount > 1;
     case "always":
       return true;
   }

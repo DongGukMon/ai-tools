@@ -8,14 +8,21 @@ import {
 } from "../lib/terminal-command-pipeline";
 import { TERMINAL_TOOLBAR_COMMANDS } from "../lib/terminal-command-registry";
 import { useTerminal } from "./useTerminal";
+import { countLeaves } from "../lib/split-tree";
 
 interface Options {
   openThemeSettings: () => void;
 }
 
 export function useTerminalCommandPipeline({ openThemeSettings }: Options) {
-  const { activeWorktree, focusedPtyId, splitCurrent, closeCurrent } =
+  const { activeWorktree, focusedPtyId, sessions, splitCurrent, closeCurrent } =
     useTerminal();
+
+  const terminalCount = useMemo(() => {
+    if (!activeWorktree) return 0;
+    const root = sessions[activeWorktree];
+    return root ? countLeaves(root) : 0;
+  }, [activeWorktree, sessions]);
 
   const sendText = useCallback(
     async (text: string, options?: { addNewline?: boolean }) => {
@@ -38,6 +45,7 @@ export function useTerminalCommandPipeline({ openThemeSettings }: Options) {
     () => ({
       activeWorktree,
       focusedPtyId,
+      terminalCount,
       openThemeSettings,
       splitTerminal: splitCurrent,
       closeTerminal: closeCurrent,
@@ -47,6 +55,7 @@ export function useTerminalCommandPipeline({ openThemeSettings }: Options) {
       activeWorktree,
       closeCurrent,
       focusedPtyId,
+      terminalCount,
       openThemeSettings,
       sendText,
       splitCurrent,

@@ -12,6 +12,7 @@ function makeContext(
   return {
     activeWorktree: "/tmp/worktree",
     focusedPtyId: "pty-1",
+    terminalCount: 2,
     openThemeSettings: vi.fn(),
     splitTerminal: vi.fn(),
     closeTerminal: vi.fn(),
@@ -32,7 +33,7 @@ describe("terminal command pipeline", () => {
     };
 
     expect(
-      isTerminalCommandEnabled(command, { focusedPtyId: null }),
+      isTerminalCommandEnabled(command, { focusedPtyId: null, terminalCount: 1 }),
     ).toBe(false);
   });
 
