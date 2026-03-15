@@ -137,6 +137,15 @@ export function createTerminalIME(
         discard();
         return true;
       }
+      if (
+        key === "Shift" ||
+        key === "Control" ||
+        key === "Alt" ||
+        key === "Meta" ||
+        key === "CapsLock"
+      ) {
+        return false;
+      }
       flush();
       return false;
     },
