@@ -272,8 +272,9 @@ function DispatchSection() {
           Companion agents, in motion
         </h2>
         <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-[#667085] dark:text-white/62">
-          Each companion agent owns a lane. They coordinate through IRC, report
-          progress, and surface review points — without flooding your terminal.
+          Each companion agent owns a lane. whip coordinates them through IRC,
+          routes progress, and surfaces review points — without flooding your
+          terminal.
         </p>
       </motion.div>
 
@@ -293,7 +294,7 @@ function DispatchSection() {
               <div className="space-y-1.5 border-t border-white/6 pt-3">
                 <p><span className="text-[#34d399]">→</span> Launched: index-pipeline <span className="text-white/36">(whip-a3f2)</span></p>
                 <p><span className="text-[#34d399]">→</span> Launched: search-api <span className="text-white/36">(whip-b8c1)</span></p>
-                <p><span className="text-[#60a5fa]">ℹ</span> claude-irc routing active</p>
+                <p><span className="text-[#60a5fa]">ℹ</span> IRC routing active</p>
               </div>
             </div>
           </Terminal>
@@ -511,7 +512,7 @@ function ClosingCTA() {
 const seoSteps = [
   { name: 'Define the outcome', text: 'Describe what you want to ship, set boundaries, and let whip structure the run.' },
   { name: 'Shape the run', text: 'whip turns intent into parallel lanes with clear dependencies and stack order.' },
-  { name: 'Dispatch companion agents', text: 'Each agent owns a lane, coordinates through IRC, and surfaces review points.' },
+  { name: 'Dispatch companion agents', text: 'Each agent owns a lane. whip coordinates them through IRC and surfaces review points.' },
   { name: 'Review when it counts', text: 'Step in for design tradeoffs and edge cases, not routine progress.' },
   { name: 'Close the loop', text: 'Merge PRs, close every lane, and leave nothing dangling.' },
 ]

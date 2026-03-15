@@ -28,7 +28,7 @@ export function ToolsPage() {
       <MarketingShell
         eyebrow="Product Catalog"
         title="Tools that make the run work"
-        subtitle="whip orchestrates. The rest of the stack handles coordination, secrets, remote editing, and input collection — so the run stays smooth."
+        subtitle="whip orchestrates. The rest of the stack handles messaging, secrets, remote editing, and input collection — so the run stays smooth."
       >
         <ToolCatalog tools={toolCatalog} />
       </MarketingShell>

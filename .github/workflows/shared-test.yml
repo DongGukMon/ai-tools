@@ -1,0 +1,58 @@
+name: "shared: Test"
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'shared/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'shared/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - module_name: shared/agentbus
+            workdir: shared/agentbus
+            go_version_file: shared/agentbus/go.mod
+            cache_dependency_path: shared/agentbus/go.mod
+          - module_name: shared/upgrade
+            workdir: shared/upgrade
+            go_version_file: shared/upgrade/go.mod
+            cache_dependency_path: shared/upgrade/go.mod
+          - module_name: claude-irc
+            workdir: claude-irc
+            go_version_file: claude-irc/go.mod
+            cache_dependency_path: claude-irc/go.sum
+          - module_name: whip
+            workdir: whip
+            go_version_file: whip/go.mod
+            cache_dependency_path: whip/go.sum
+    name: ${{ matrix.module_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: ${{ matrix.go_version_file }}
+          cache-dependency-path: ${{ matrix.cache_dependency_path }}
+
+      - name: Run tests
+        run: |
+          cd "${{ matrix.workdir }}"
+          go test ./...

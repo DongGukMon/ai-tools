@@ -5,14 +5,10 @@ on:
     branches: [main]
     paths:
       - 'claude-irc/**'
-      - 'shared/agentbus/**'
-      - 'shared/upgrade/**'
   pull_request:
     branches: [main]
     paths:
       - 'claude-irc/**'
-      - 'shared/agentbus/**'
-      - 'shared/upgrade/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

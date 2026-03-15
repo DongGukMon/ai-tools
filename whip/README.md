@@ -1,6 +1,6 @@
 # whip
 
-Task orchestrator for Claude Code. Use `whip task ...` for task lifecycle, `whip workspace ...` for named workspaces, and the dashboard or remote mode for monitoring. Whip owns the remote control plane for the web dashboard.
+Task orchestrator for Claude Code. Use `whip task ...` for task lifecycle, `whip workspace ...` for named workspaces, and the dashboard or remote mode for monitoring.
 
 ## Install
 
@@ -189,7 +189,7 @@ The lead session receives a specialized prompt that enables it to:
 
 ## Remote Mode
 
-`whip remote` is the only public CLI entrypoint for starting a remote session. It starts a master agent session plus web dashboard access.
+Use `whip remote` to start a remote session. It launches a master agent session plus web dashboard access.
 
 ```bash
 # requires tmux
@@ -205,12 +205,7 @@ Highlights:
 - `whip remote` prints the URL and OTP flow at runtime
 - the web dashboard provides task views, IRC chat, and master terminal access
 - the dashboard can surface remote start/status/stop controls after the session exists
-- remote access is built into whip; there is no public `whip serve`
-
-Breaking change:
-
-- `claude-irc serve` was removed
-- use `whip remote` anywhere you previously depended on the remote HTTP server
+- use `whip remote --help` for the current runtime URL and pairing flow
 
 ## Skills
 

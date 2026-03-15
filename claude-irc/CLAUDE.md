@@ -31,13 +31,6 @@ claude-irc inbox
 
 Run `claude-irc --help` for the full command list.
 
-## Scope
-
-`claude-irc` is the local messaging layer only.
-
-- Use `whip remote` for remote dashboard access, device auth, tunnels, and master tmux control.
-- `claude-irc serve` no longer exists.
-
 ## Code Conventions
 
 - Prefer responsibility-based file splits with consistent prefixes such as `cmd_*`, `daemon_*`, and `store_*`.
@@ -47,3 +40,5 @@ Run `claude-irc --help` for the full command list.
 ## Notes
 
 - Prefer short role-like names such as `backend`, `frontend`, `infra`, `auth`.
+- `user` is the reserved dashboard/operator identity; `--name user` is the only no-session override.
+- Use `whip remote` for dashboard access. `claude-irc` itself is for peer messaging and presence.

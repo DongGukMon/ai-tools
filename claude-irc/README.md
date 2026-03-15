@@ -1,6 +1,6 @@
 # claude-irc
 
-IRC-inspired local agent bus for Claude Code agents. Enable multiple Claude Code sessions on the same machine to exchange messages, share context, and coordinate in real-time.
+IRC-inspired inter-session communication for Claude Code agents. Enable multiple Claude Code sessions on the same machine to exchange messages, share context, and coordinate in real-time.
 
 ## The Problem
 
@@ -51,15 +51,6 @@ claude-irc msg server "Got it. Need avatarUrl in UserResponse"
 - **Machine-wide**: All sessions on the same machine share a single channel
 - **Hook integration**: `PreToolUse` hook auto-surfaces new messages to Claude
 - **Stale cleanup**: Dead sessions are automatically detected and cleaned up
-
-## Scope
-
-`claude-irc` is intentionally local-only now. Remote dashboard access, device auth, tunnels, and tmux control live in `whip`.
-
-Breaking change:
-
-- `claude-irc serve` was removed.
-- Use `whip remote` for web dashboard access.
 
 ## Name Resolution
 

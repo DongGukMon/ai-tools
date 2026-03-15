@@ -11,7 +11,7 @@ export function LandingPage() {
     <>
       <Seo
         title="Task Orchestrator for AI Agents"
-        description="Task Orchestrator for AI Agents. One lead. Many agents. Ship faster. Split complex tasks across parallel AI Agent sessions. Wire dependencies. Watch them converge."
+        description={siteMeta.defaultDescription}
         path="/"
         keywords={['whip', 'task orchestrator', 'ai-tools', 'agent workflow', 'stacked workspace', 'claude-irc']}
         jsonLd={[
@@ -33,7 +33,7 @@ export function LandingPage() {
               name: 'ai-tools',
               codeRepository: siteMeta.repoURL,
             },
-            description: 'Task Orchestrator for AI Agents. One lead. Many agents. Ship faster. Split complex tasks across parallel AI Agent sessions. Wire dependencies. Watch them converge.',
+            description: siteMeta.defaultDescription,
           },
         ]}
       />

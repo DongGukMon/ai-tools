@@ -45,9 +45,9 @@ export const toolCatalog: ToolEntry[] = [
   {
     id: 'claude-irc',
     name: 'claude-irc',
-    category: 'Coordination',
-    tagline: 'A shared bus for agent-to-agent communication.',
-    description: 'Presence, inbox, and direct messaging for multiple AI agent sessions working in the same repo.',
+    category: 'Messaging',
+    tagline: 'Inter-session messaging for coordinating AI agents.',
+    description: 'Presence, inbox, and direct messaging for multiple AI agent sessions on the same machine.',
     install: '/plugin install claude-irc',
     href: 'https://github.com/bang9/ai-tools/tree/main/claude-irc',
     accent: '#22C55E',

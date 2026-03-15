@@ -130,7 +130,7 @@ export function MarketingShell({ children, eyebrow, title, subtitle }: Marketing
           <div>
             <span className="font-semibold text-[#10131a] dark:text-white">ai-tools</span>
             <span className="mx-2 text-[#c2c8d3] dark:text-white/18">/</span>
-            <span>Orchestration, coordination, secrets, forms, and remote editing for AI agent work.</span>
+            <span>Orchestration, messaging, secrets, forms, and remote editing for AI agent work.</span>
           </div>
           <a
             href={siteMeta.repoURL}
