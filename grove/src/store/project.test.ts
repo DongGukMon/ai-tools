@@ -40,6 +40,7 @@ function makeProject(worktrees: Worktree[]): Project {
     repo: "grove",
     sourcePath: "/tmp/source",
     worktrees,
+    sourceDirty: false,
   };
 }
 

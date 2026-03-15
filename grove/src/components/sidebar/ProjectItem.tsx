@@ -59,12 +59,19 @@ function ProjectItem({ project }: Props) {
             project folder and all worktrees will be deleted.
           </p>
           <p className="text-xs leading-relaxed text-muted-foreground/70">
-            This removes the hidden source repository too. Use refresh if you only
-            want to sync the project.
+            This removes the hidden source repository too. Use sync source if
+            you only want to reset the source repo to the remote default
+            branch.
           </p>
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" size="sm" onClick={close}>Cancel</Button>
-            <Button variant="destructive" size="sm" onClick={() => resolve(true)}>
+            <Button variant="ghost" size="sm" onClick={close}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => resolve(true)}
+            >
               Delete project
             </Button>
           </div>
@@ -85,18 +92,26 @@ function ProjectItem({ project }: Props) {
   const handleRefreshProject = async (e: React.MouseEvent) => {
     e.stopPropagation();
     const confirmed = await overlay.open<boolean>(({ resolve, close }) => (
-      <Dialog open onClose={close} title="Refresh project source?" className="max-w-sm">
+      <Dialog open onClose={close} title="Sync source repo?" className="max-w-sm">
         <div className="space-y-4">
           <p className="text-sm leading-relaxed text-muted-foreground">
-            This will hard-sync the source repo for{" "}
+            This will fetch and hard-reset the hidden source repo for{" "}
             <span className="font-semibold text-foreground">
               {project.org}/{project.repo}
-            </span>
-            . Local changes will be removed.
+            </span>{" "}
+            to the remote default branch. Any local source-repo changes will be
+            discarded.
+          </p>
+          <p className="text-xs leading-relaxed text-muted-foreground/70">
+            Worktree changes are not modified directly.
           </p>
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" size="sm" onClick={close}>Cancel</Button>
-            <Button size="sm" onClick={() => resolve(true)}>Refresh</Button>
+            <Button variant="ghost" size="sm" onClick={close}>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={() => resolve(true)}>
+              Sync source
+            </Button>
           </div>
         </div>
       </Dialog>
@@ -107,7 +122,7 @@ function ProjectItem({ project }: Props) {
     setRefreshing(true);
     try {
       await refreshProject(project.id);
-      toast("success", `Project '${project.repo}' refreshed`);
+      toast("success", `Project '${project.repo}' source synced`);
     } catch {
       // Toasts are handled by the command layer.
     } finally {
@@ -140,7 +155,7 @@ function ProjectItem({ project }: Props) {
           {project.sourceDirty && (
             <IconButton
               onClick={handleRefreshProject}
-              title="Refresh project source"
+              title="Sync source repo"
               disabled={refreshing}
             >
               <RotateCw

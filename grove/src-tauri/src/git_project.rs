@@ -6,9 +6,11 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::{Duration, SystemTime};
 use uuid::Uuid;
 
 const SOURCE_WORKTREE_NAME: &str = "source";
+const SOURCE_REMOTE_REFRESH_INTERVAL: Duration = Duration::from_secs(60);
 
 fn base_dir() -> PathBuf {
     PathBuf::from(config::load_app_config().base_dir)
@@ -323,7 +325,7 @@ fn project_from_entry(entry: ProjectEntry) -> Project {
         &entry.source_path,
     );
 
-    let source_dirty = check_source_dirty(&entry.source_path);
+    let source_dirty = check_source_refresh_needed(&entry.source_path);
 
     Project {
         id: entry.id,
@@ -337,24 +339,89 @@ fn project_from_entry(entry: ProjectEntry) -> Project {
     }
 }
 
-fn check_source_dirty(source_path: &str) -> bool {
+fn check_source_refresh_needed(source_path: &str) -> bool {
     let path = std::path::Path::new(source_path);
     if !path.exists() {
         return false;
     }
-    let repo = match git2::Repository::open(path) {
+
+    if has_local_source_changes(path) {
+        return true;
+    }
+
+    let _ = maybe_fetch_source_remote(path);
+    source_head_differs_from_default_remote(path)
+}
+
+fn has_local_source_changes(source: &Path) -> bool {
+    let repo = match git2::Repository::open(source) {
         Ok(r) => r,
         Err(_) => return false,
     };
     let statuses = match repo.statuses(Some(
         git2::StatusOptions::new()
             .include_untracked(true)
-            .recurse_untracked_dirs(false),
+            .recurse_untracked_dirs(true),
     )) {
         Ok(s) => s,
         Err(_) => return false,
     };
     !statuses.is_empty()
+}
+
+fn maybe_fetch_source_remote(source: &Path) -> Result<(), String> {
+    if !source_remote_refresh_due(source) {
+        return Ok(());
+    }
+
+    run_git(source, &["fetch", "origin", "--prune", "--quiet"])
+}
+
+fn source_remote_refresh_due(source: &Path) -> bool {
+    let repo = match Repository::open(source) {
+        Ok(repo) => repo,
+        Err(_) => return false,
+    };
+    let fetch_head = repo.path().join("FETCH_HEAD");
+
+    let last_fetch = fs::metadata(fetch_head)
+        .and_then(|metadata| metadata.modified())
+        .ok();
+
+    match last_fetch {
+        Some(last_fetch) => match SystemTime::now().duration_since(last_fetch) {
+            Ok(elapsed) => elapsed >= SOURCE_REMOTE_REFRESH_INTERVAL,
+            Err(_) => true,
+        },
+        None => true,
+    }
+}
+
+fn source_head_differs_from_default_remote(source: &Path) -> bool {
+    let repo = match Repository::open(source) {
+        Ok(repo) => repo,
+        Err(_) => return false,
+    };
+
+    let default_branch = match remote_default_branch(source) {
+        Ok(branch) => branch,
+        Err(_) => return false,
+    };
+    let remote_ref = format!("refs/remotes/origin/{default_branch}");
+
+    let head = match repo.head().and_then(|head| head.peel_to_commit()) {
+        Ok(commit) => commit,
+        Err(_) => return false,
+    };
+    let remote_head = match repo
+        .find_reference(&remote_ref)
+        .and_then(|reference| reference.peel_to_commit())
+    {
+        Ok(commit) => commit,
+        Err(_) => return false,
+    };
+
+    head.id() != remote_head.id()
 }
 
 fn normalized_path(path: &Path) -> PathBuf {
@@ -648,16 +715,7 @@ pub fn is_source_dirty_impl(project_id: &str) -> Result<bool, String> {
         return Ok(false);
     }
 
-    let repo = git2::Repository::open(&source_dir).map_err(|e| e.to_string())?;
-    let statuses = repo
-        .statuses(Some(
-            git2::StatusOptions::new()
-                .include_untracked(true)
-                .recurse_untracked_dirs(true),
-        ))
-        .map_err(|e| e.to_string())?;
-
-    Ok(!statuses.is_empty())
+    Ok(has_local_source_changes(&source_dir))
 }
 
 pub fn refresh_project_impl(project_id: &str) -> Result<Project, String> {
@@ -932,6 +990,14 @@ mod tests {
         run_git_ok(repo_dir, &["push", "-u", "origin", branch]);
     }
 
+    fn remove_fetch_head(source_dir: &Path) {
+        let fetch_head = Repository::open(source_dir)
+            .unwrap()
+            .path()
+            .join("FETCH_HEAD");
+        let _ = fs::remove_file(fetch_head);
+    }
+
     #[test]
     fn visible_worktrees_hides_only_actual_source_path() {
         let source_path = "/tmp/grove/source";
@@ -1053,10 +1119,7 @@ mod tests {
         let saved = config::load_config();
         assert_eq!(saved.base_dir.as_deref(), Some(base_dir_str.as_str()));
         assert_eq!(saved.projects.len(), 1);
-        assert_eq!(
-            saved.projects[0].url,
-            "https://github.com/bang9/grove.git"
-        );
+        assert_eq!(saved.projects[0].url, "https://github.com/bang9/grove.git");
         assert_eq!(
             saved.projects[0].source_path,
             orphan_source.to_string_lossy()
@@ -1120,10 +1183,7 @@ mod tests {
         let saved = config::load_config();
         assert_eq!(saved.base_dir.as_deref(), Some(base_dir_str.as_str()));
         assert_eq!(saved.projects.len(), 1);
-        assert_eq!(
-            saved.projects[0].url,
-            "https://github.com/bang9/grove.git"
-        );
+        assert_eq!(saved.projects[0].url, "https://github.com/bang9/grove.git");
         assert_eq!(
             saved.projects[0].source_path,
             orphan_source.to_string_lossy()
@@ -1311,6 +1371,68 @@ mod tests {
     }
 
     #[test]
+    fn list_projects_marks_source_dirty_when_remote_default_branch_advances() {
+        let _lock = env_lock();
+        let home = TestHome::new();
+        let base_dir = home.root.join("grove-data");
+        let source_dir = base_dir
+            .join("github.com")
+            .join("bang9")
+            .join("grove")
+            .join("source");
+        let remotes_dir = home.root.join("remotes");
+        let (remote_dir, seed_dir) =
+            create_bare_remote(&remotes_dir, "grove-remote-ahead", "trunk");
+
+        commit_and_push(
+            &seed_dir,
+            &remote_dir,
+            "trunk",
+            "README.md",
+            "# Grove v1\n",
+            "Initial commit",
+        );
+
+        fs::create_dir_all(source_dir.parent().unwrap()).unwrap();
+        let remote_dir_str = remote_dir.to_string_lossy().to_string();
+        let source_dir_str = source_dir.to_string_lossy().to_string();
+        run_git_ok(
+            source_dir.parent().unwrap(),
+            &["clone", &remote_dir_str, &source_dir_str],
+        );
+
+        save_test_config(
+            &base_dir,
+            vec![project_entry(
+                "project-1",
+                "https://github.com/bang9/grove.git",
+                &source_dir,
+            )],
+        );
+
+        let initial_project = list_projects_impl().unwrap().pop().unwrap();
+        assert!(!initial_project.source_dirty);
+
+        commit_and_push(
+            &seed_dir,
+            &remote_dir,
+            "trunk",
+            "README.md",
+            "# Grove v2\n",
+            "Remote ahead",
+        );
+        remove_fetch_head(&source_dir);
+
+        let project = list_projects_impl().unwrap().pop().unwrap();
+
+        assert!(project.source_dirty);
+        assert_ne!(
+            run_git_output(&source_dir, &["rev-parse", "HEAD"]).unwrap(),
+            run_git_output(&source_dir, &["rev-parse", "origin/trunk"]).unwrap()
+        );
+    }
+
+    #[test]
     fn refresh_project_resets_source_to_remote_default_branch() {
         let _lock = env_lock();
         let home = TestHome::new();
@@ -1364,6 +1486,7 @@ mod tests {
         let project = refresh_project_impl("project-1").unwrap();
 
         assert!(project.worktrees.is_empty());
+        assert!(!project.source_dirty);
         assert_eq!(
             fs::read_to_string(source_dir.join("README.md")).unwrap(),
             "# Grove v2\n"
