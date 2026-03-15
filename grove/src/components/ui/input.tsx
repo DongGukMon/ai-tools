@@ -1,19 +1,19 @@
-import { forwardRef } from "react";
-import { cn } from "../../lib/cn";
+import * as React from "react";
+import { cn } from "../../lib/utils";
 
-export interface InputProps
-  extends React.InputHTMLAttributes<HTMLInputElement> {}
+export interface InputProps extends React.ComponentProps<"input"> {}
 
-const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ className, ...props }, ref) => {
+const Input = React.forwardRef<HTMLInputElement, InputProps>(
+  ({ className, type, ...props }, ref) => {
     return (
       <input
         ref={ref}
+        type={type}
+        data-slot="input"
         className={cn(
-          "w-full px-3 py-[7px] text-[13px] rounded-[var(--radius-md)] border border-[var(--color-border)] bg-white text-[var(--color-text)] outline-none transition-all duration-150",
-          "focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary-light)]",
-          "placeholder:text-[var(--color-text-muted)]",
-          "disabled:opacity-50 disabled:cursor-not-allowed",
+          "file:text-foreground placeholder:text-muted-foreground selection:bg-accent selection:text-accent-foreground border-input bg-background/80 flex h-9 w-full min-w-0 rounded-md border px-3 py-1 text-base shadow-xs outline-none transition-[color,box-shadow,border-color] file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
+          "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/30",
+          "aria-invalid:border-destructive aria-invalid:ring-[3px] aria-invalid:ring-destructive/20",
           className,
         )}
         {...props}
@@ -21,6 +21,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
     );
   },
 );
+
 Input.displayName = "Input";
 
 export { Input };

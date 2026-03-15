@@ -1,38 +1,56 @@
-import { cn } from "../../lib/cn";
+import * as React from "react";
+import { Slot } from "@radix-ui/react-slot";
+import { cva, type VariantProps } from "class-variance-authority";
+import { cn } from "../../lib/utils";
 
-const variantStyles = {
-  default:
-    "bg-[var(--color-bg-tertiary)] text-[var(--color-text-secondary)]",
-  secondary:
-    "bg-[var(--color-border)] text-[var(--color-text-secondary)]",
-  success:
-    "bg-[var(--color-success-bg)] text-[var(--color-success)]",
-  warning:
-    "bg-[#fffbeb] text-[var(--color-warning)]",
-  danger:
-    "bg-[var(--color-danger-bg)] text-[var(--color-danger)]",
-} as const;
+const badgeVariants = cva(
+  "inline-flex w-fit shrink-0 items-center justify-center gap-1 overflow-hidden rounded-md border px-2 py-0.5 text-xs font-medium whitespace-nowrap transition-[color,box-shadow] [&>svg]:pointer-events-none [&>svg]:size-3",
+  {
+    variants: {
+      variant: {
+        default: "border-transparent bg-primary text-primary-foreground",
+        secondary:
+          "border-transparent bg-secondary text-secondary-foreground",
+        destructive:
+          "border-transparent bg-destructive/12 text-destructive dark:bg-destructive/24",
+        outline: "text-foreground",
+        success:
+          "border-transparent bg-success/15 text-success dark:bg-success/24",
+        warning:
+          "border-transparent bg-warning/20 text-warning-foreground dark:bg-warning/28",
+        danger:
+          "border-transparent bg-destructive/12 text-destructive dark:bg-destructive/24",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+    },
+  },
+);
 
-export interface BadgeProps {
-  variant?: keyof typeof variantStyles;
-  className?: string;
-  style?: React.CSSProperties;
-  children: React.ReactNode;
+type BadgeVariantProps = VariantProps<typeof badgeVariants>;
+
+export interface BadgeProps
+  extends React.ComponentProps<"span">,
+    BadgeVariantProps {
+  asChild?: boolean;
 }
 
-function Badge({ variant = "default", className, style, children }: BadgeProps) {
+function Badge({
+  className,
+  variant,
+  asChild = false,
+  ...props
+}: BadgeProps) {
+  const Comp = asChild ? Slot : "span";
+
   return (
-    <span
-      style={style}
-      className={cn(
-        "inline-flex items-center text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-[var(--radius-md)]",
-        variantStyles[variant],
-        className,
-      )}
-    >
-      {children}
-    </span>
+    <Comp
+      data-slot="badge"
+      className={cn(badgeVariants({ variant }), className)}
+      {...props}
+    />
   );
 }
 
-export { Badge };
+export { Badge, badgeVariants };
