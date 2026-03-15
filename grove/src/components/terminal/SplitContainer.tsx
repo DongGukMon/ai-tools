@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback } from "react";
 import { Allotment } from "allotment";
 import type { SplitNode } from "../../types";
 import TerminalInstance from "./TerminalInstance";
@@ -6,7 +6,6 @@ import { useTerminalStore } from "../../store/terminal";
 
 interface Props {
   node: SplitNode;
-  /** Path from root to this node (array of child indices) */
   path?: number[];
 }
 
@@ -18,13 +17,10 @@ function getNodeKey(node: SplitNode): string {
 export default function SplitContainer({ node, path = [] }: Props) {
   const activeWorktree = useTerminalStore((s) => s.activeWorktree);
   const updateSizes = useTerminalStore((s) => s.updateSizes);
-  // Skip initial onChange calls from allotment (fires during layout before user interaction)
-  const mountTime = useRef(Date.now());
 
-  const handleChange = useCallback(
+  // Only save sizes when user FINISHES dragging (not on every frame)
+  const handleDragEnd = useCallback(
     (sizes: number[]) => {
-      // Ignore onChange during first 500ms (allotment initial layout)
-      if (Date.now() - mountTime.current < 500) return;
       if (activeWorktree) {
         updateSizes(activeWorktree, path, sizes);
       }
@@ -43,8 +39,8 @@ export default function SplitContainer({ node, path = [] }: Props) {
   return (
     <Allotment
       vertical={node.type === "vertical"}
-      defaultSizes={node.sizes?.map((r) => r * 100)}
-      onChange={handleChange}
+      defaultSizes={node.sizes?.map((r) => r * 1000)}
+      onDragEnd={handleDragEnd}
     >
       {node.children?.map((child, i) => (
         <Allotment.Pane key={getNodeKey(child)}>
