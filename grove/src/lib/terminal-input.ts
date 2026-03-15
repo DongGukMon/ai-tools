@@ -64,3 +64,18 @@ export function getMacShortcutSequence(
 
   return MAC_SHORTCUT_SEQUENCES[event.key] ?? null;
 }
+
+/**
+ * Check if the first character of `text` is Korean (Hangul).
+ * Covers Jamo, Compatibility Jamo, Syllables, and Extended ranges.
+ */
+export function isKoreanChar(text: string): boolean {
+  const cp = text.codePointAt(0) ?? 0;
+  return (
+    (cp >= 0x1100 && cp <= 0x11ff) ||
+    (cp >= 0x3131 && cp <= 0x318e) ||
+    (cp >= 0xa960 && cp <= 0xa97f) ||
+    (cp >= 0xac00 && cp <= 0xd7af) ||
+    (cp >= 0xd7b0 && cp <= 0xd7ff)
+  );
+}

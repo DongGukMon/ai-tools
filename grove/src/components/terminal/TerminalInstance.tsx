@@ -12,9 +12,9 @@ import {
   isTerminalCompositionEvent,
   shouldEnableTerminalWebgl,
 } from "../../lib/terminal-input";
+import { createTerminalIME } from "../../lib/terminal-ime";
 import "@xterm/xterm/css/xterm.css";
 import { cn } from "../../lib/cn";
-
 
 interface Props {
   ptyId: string;
@@ -124,6 +124,12 @@ export default function TerminalInstance({ ptyId }: Props) {
       }
     };
 
+    // WKWebView IME workaround (Korean / CJK composition)
+    const ime = createTerminalIME(term, el, (text) => {
+      const bytes = Array.from(new TextEncoder().encode(text));
+      writePty(ptyId, bytes).catch(() => {});
+    });
+
     // Defer xterm open/fit until the host is visible and has real dimensions.
     const scheduleLayoutSync = () => {
       if (disposed || frameId !== null) return;
@@ -135,6 +141,7 @@ export default function TerminalInstance({ ptyId }: Props) {
         if (!hasOpened) {
           term.open(el);
           hasOpened = true;
+          ime.attach();
           term.focus();
           scheduleLayoutSync();
           return;
@@ -156,6 +163,7 @@ export default function TerminalInstance({ ptyId }: Props) {
             for (let i = 0; i < binary.length; i++) {
               bytes[i] = binary.charCodeAt(i);
             }
+            if (ime.active) ime.clearPreview();
             term.write(bytes);
           } catch (e) {
             console.error("pty-output decode error:", e);
@@ -167,8 +175,9 @@ export default function TerminalInstance({ ptyId }: Props) {
       return () => {};
     });
 
-    // Send keyboard input to PTY
+    // Send keyboard input to PTY (suppressed during IME composition)
     const dataDisposable = term.onData((data) => {
+      if (ime.active) return;
       const bytes = Array.from(new TextEncoder().encode(data));
       writePty(ptyId, bytes).catch((e) =>
         console.error("writePty failed:", e),
@@ -181,6 +190,11 @@ export default function TerminalInstance({ ptyId }: Props) {
       // xterm invokes custom key handlers before its composition helper, so let
       // IME-driven events reach xterm untouched until composition is committed.
       if (isTerminalCompositionEvent(e)) return true;
+
+      // Non-IME keydown while composing → flush or discard
+      if (ime.active) {
+        if (ime.handleCommitKey(e.key)) return false;
+      }
 
       // Cmd+K → clear terminal
       if (isMacClearTerminalShortcut(e)) {
@@ -213,6 +227,7 @@ export default function TerminalInstance({ ptyId }: Props) {
         cancelAnimationFrame(frameId);
       }
       resizeObserver.disconnect();
+      ime.dispose();
       dataDisposable.dispose();
       unlistenPromise.then((unlisten) => {
         if (typeof unlisten === "function") unlisten();
