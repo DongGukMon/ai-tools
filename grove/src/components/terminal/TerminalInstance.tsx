@@ -24,8 +24,10 @@ export default function TerminalInstance({ ptyId }: Props) {
   const termRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const theme = useTerminalStore((s) => s.theme);
+  const focusedPtyId = useTerminalStore((s) => s.focusedPtyId);
   const setFocusedPtyId = useTerminalStore((s) => s.setFocusedPtyId);
   const [error, setError] = useState<string | null>(null);
+  const isFocused = focusedPtyId === ptyId;
 
   useEffect(() => {
     const el = termRef.current;
@@ -212,6 +214,10 @@ export default function TerminalInstance({ ptyId }: Props) {
         console.error("writePty failed:", e),
       );
     });
+    const handleFocusIn = () => {
+      setFocusedPtyId(ptyId);
+    };
+    el.addEventListener("focusin", handleFocusIn);
 
     // macOS keyboard shortcuts
     term.attachCustomKeyEventHandler((e) => {
@@ -257,6 +263,7 @@ export default function TerminalInstance({ ptyId }: Props) {
       }
       resizeObserver.disconnect();
       el.removeEventListener("mousemove", onTrackpadFix);
+      el.removeEventListener("focusin", handleFocusIn);
       ime.dispose();
       dataDisposable.dispose();
       unlistenPromise.then((unlisten) => {
@@ -265,7 +272,7 @@ export default function TerminalInstance({ ptyId }: Props) {
       term.dispose();
       terminalRef.current = null;
     };
-  }, [ptyId]);
+  }, [ptyId, setFocusedPtyId]);
 
   // Live theme updates
   useEffect(() => {
@@ -307,7 +314,9 @@ export default function TerminalInstance({ ptyId }: Props) {
 
   return (
     <div
-      className={cn("absolute inset-0 p-4")}
+      className={cn("terminal-pane absolute inset-0 p-4", {
+        "terminal-pane-focused": isFocused,
+      })}
       style={{ backgroundColor: theme?.background ?? "#000" }}
       onClick={() => {
         setFocusedPtyId(ptyId);
