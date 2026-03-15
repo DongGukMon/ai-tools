@@ -33,7 +33,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
-		fmt.Fprintf(os.Stderr, "Removed %d stale viewer director", removed)
+		fmt.Fprintf(os.Stderr, "Removed %d stale viewer directory", removed)
 		if removed == 1 {
 			fmt.Fprintln(os.Stderr, "y")
 		} else {
