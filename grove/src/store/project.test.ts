@@ -39,6 +39,7 @@ function makeProject(worktrees: Worktree[]): Project {
     org: "bang9",
     repo: "grove",
     sourcePath: "/tmp/source",
+    sourceDirty: false,
     worktrees,
   };
 }

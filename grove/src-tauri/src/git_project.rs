@@ -407,9 +407,17 @@ fn make_worktree(path_str: &str, branch: &str, project_base: &Path) -> Worktree 
     let name = if path == project_base.join(SOURCE_WORKTREE_NAME) {
         SOURCE_WORKTREE_NAME.to_string()
     } else {
-        path.file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_else(|| path_str.to_string())
+        // Derive name from relative path under worktrees/ to preserve slashes
+        // e.g. <project>/worktrees/feat/new-feature → feat/new-feature
+        let worktrees_dir = project_base.join("worktrees");
+        path.strip_prefix(&worktrees_dir)
+            .ok()
+            .map(|rel| rel.to_string_lossy().to_string())
+            .unwrap_or_else(|| {
+                path.file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_else(|| path_str.to_string())
+            })
     };
     Worktree {
         name,
@@ -564,6 +572,8 @@ pub fn remove_project_impl(project_id: &str) -> Result<(), String> {
 }
 
 pub fn add_worktree_impl(project_id: &str, name: &str) -> Result<Worktree, String> {
+    validate_branch_name(name)?;
+
     let entry = find_project_entry(project_id)?;
     let source_dir = managed_source_dir(&entry)?;
     let source = source_dir.as_path();
@@ -576,9 +586,7 @@ pub fn add_worktree_impl(project_id: &str, name: &str) -> Result<Worktree, Strin
     let _ = run_git(source, &["fetch", "origin"]);
 
     let default_branch = remote_default_branch(source)?;
-    let remote_ref = format!("origin/{default_branch}");
 
-    // git worktree add ../worktrees/<name> -b <name> origin/<default_branch>
     let worktree_path = source
         .parent()
         .unwrap_or(source)
@@ -587,17 +595,35 @@ pub fn add_worktree_impl(project_id: &str, name: &str) -> Result<Worktree, Strin
 
     let worktree_path_str = worktree_path.to_string_lossy().to_string();
 
-    run_git(
+    let local_exists = run_git_output(
         source,
-        &[
-            "worktree",
-            "add",
-            &worktree_path_str,
-            "-b",
-            name,
-            &remote_ref,
-        ],
-    )?;
+        &["rev-parse", "--verify", &format!("refs/heads/{name}")],
+    )
+    .is_ok();
+
+    if local_exists {
+        // Branch already exists locally — just check it out in a new worktree
+        run_git(source, &["worktree", "add", &worktree_path_str, name])?;
+    } else {
+        let remote_branch = format!("origin/{name}");
+        let remote_exists =
+            run_git_output(source, &["rev-parse", "--verify", &remote_branch]).is_ok();
+
+        if remote_exists {
+            // Track existing remote branch
+            run_git(
+                source,
+                &["worktree", "add", &worktree_path_str, "-b", name, &remote_branch],
+            )?;
+        } else {
+            // Create new branch from default branch
+            let base_ref = format!("origin/{default_branch}");
+            run_git(
+                source,
+                &["worktree", "add", &worktree_path_str, "-b", name, &base_ref],
+            )?;
+        }
+    }
 
     Ok(Worktree {
         name: name.to_string(),
@@ -671,6 +697,26 @@ pub fn refresh_project_impl(project_id: &str) -> Result<Project, String> {
 
     refresh_source_repo(source)?;
     Ok(project_from_entry(entry))
+}
+
+fn validate_branch_name(name: &str) -> Result<(), String> {
+    if name.is_empty() {
+        return Err("Branch name cannot be empty".to_string());
+    }
+    if name.starts_with('/') || name.ends_with('/') || name.contains("//") {
+        return Err(format!("Invalid branch name: {name}"));
+    }
+    if name.starts_with('-') || name.starts_with('.') {
+        return Err(format!("Invalid branch name: {name}"));
+    }
+    if name.contains("..") || name.contains(" ") || name.contains("~")
+        || name.contains("^") || name.contains(":") || name.contains("\\")
+        || name.contains("*") || name.contains("?") || name.contains("[")
+        || name.ends_with('.')  || name.ends_with(".lock")
+    {
+        return Err(format!("Invalid branch name: {name}"));
+    }
+    Ok(())
 }
 
 fn run_git(cwd: &Path, args: &[&str]) -> Result<(), String> {
