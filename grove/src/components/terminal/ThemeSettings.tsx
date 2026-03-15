@@ -8,6 +8,7 @@ import {
 import { useTerminalStore } from "../../store/terminal";
 import { saveAppConfig, getAppConfig } from "../../lib/tauri";
 import { runCommandSafely } from "../../lib/command";
+import { Button } from "../ui/button";
 import { cn } from "../../lib/cn";
 import type { TerminalTheme } from "../../types";
 
@@ -37,6 +38,7 @@ const ANSI_LABELS: { key: keyof TerminalTheme; label: string }[] = [
 
 export default function ThemeSettings({ open, onClose }: Props) {
   const theme = useTerminalStore((s) => s.theme);
+  const detectedTheme = useTerminalStore((s) => s.detectedTheme);
   const loadTheme = useTerminalStore((s) => s.loadTheme);
 
   const [draft, setDraft] = useState<TerminalTheme | null>(null);
@@ -49,7 +51,11 @@ export default function ThemeSettings({ open, onClose }: Props) {
     if (open && theme) {
       setDraft({ ...theme });
       // Detect which preset matches current theme
-      const match = Object.entries(terminalThemes).find(
+      const allPresets: [string, TerminalTheme][] = [
+        ...Object.entries(terminalThemes),
+        ...(detectedTheme ? [["system", detectedTheme] as [string, TerminalTheme]] : []),
+      ];
+      const match = allPresets.find(
         ([, preset]) => preset.background === theme.background && preset.foreground === theme.foreground,
       );
       setActivePreset(match ? match[0] : null);
@@ -65,16 +71,15 @@ export default function ThemeSettings({ open, onClose }: Props) {
   );
 
   const selectPreset = useCallback((key: string) => {
-    const preset = terminalThemes[key];
+    const preset = key === "system" ? detectedTheme : terminalThemes[key];
     if (!preset) return;
-    // Preserve current font settings when switching presets
     setDraft((prev) => ({
       ...preset,
       fontFamily: prev?.fontFamily ?? preset.fontFamily,
       fontSize: prev?.fontSize ?? preset.fontSize,
     }));
     setActivePreset(key);
-  }, []);
+  }, [detectedTheme]);
 
   const handleApply = useCallback(async () => {
     if (!draft) return;
@@ -93,29 +98,64 @@ export default function ThemeSettings({ open, onClose }: Props) {
     setActivePreset(DEFAULT_THEME_KEY);
   }, []);
 
+  const [visible, setVisible] = useState(false);
+  const [closing, setClosing] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setVisible(true);
+      setClosing(false);
+    } else if (visible) {
+      setClosing(true);
+    }
+  }, [open]);
+
+  const handleAnimationEnd = useCallback(() => {
+    if (closing) {
+      setVisible(false);
+      setClosing(false);
+    }
+  }, [closing]);
+
+  const handleClose = useCallback(() => {
+    onClose();
+  }, [onClose]);
+
   // Close on click outside
   useEffect(() => {
-    if (!open) return;
+    if (!visible || closing) return;
     const handler = (e: MouseEvent) => {
       if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
-        onClose();
+        handleClose();
       }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [open, onClose]);
+  }, [visible, closing, handleClose]);
 
-  if (!open || !draft) return null;
+  if (!visible || !draft) return null;
 
   return (
     <div className={cn("fixed inset-0 z-50 flex justify-end")}>
       {/* Backdrop */}
-      <div className={cn("absolute inset-0 bg-black/20")} />
+      <div
+        className={cn(
+          "absolute inset-0 bg-black/20",
+          closing ? "animate-out fade-out-0 duration-200" : "animate-in fade-in-0 duration-200",
+        )}
+      />
 
       {/* Panel */}
       <div
         ref={panelRef}
-        className={cn("relative w-[340px] h-full bg-[var(--color-bg)] border-l border-[var(--color-border)] shadow-lg overflow-y-auto")}
+        className={cn(
+          "relative w-[340px] h-full bg-background border-l border-border shadow-lg",
+          closing
+            ? "animate-out slide-out-to-right duration-200"
+            : "animate-in slide-in-from-right duration-200",
+        )}
+        style={{ overflowY: "overlay" as never, overscrollBehavior: "none" }}
+        onAnimationEnd={handleAnimationEnd}
       >
         {/* Header */}
         <div className={cn("sticky top-0 z-10 flex items-center justify-between px-4 py-3 bg-[var(--color-bg)] border-b border-[var(--color-border)]")}>
@@ -137,8 +177,12 @@ export default function ThemeSettings({ open, onClose }: Props) {
               Presets
             </h3>
             <div className={cn("grid grid-cols-2 gap-1.5")}>
-              {Object.entries(themeDisplayNames).map(([key, name]) => {
-                const preset = terminalThemes[key];
+              {[
+                ...(detectedTheme ? [["system", "System"] as const] : []),
+                ...Object.entries(themeDisplayNames),
+              ].map(([key, name]) => {
+                const preset = key === "system" ? detectedTheme : terminalThemes[key];
+                if (!preset) return null;
                 return (
                   <button
                     key={key}
@@ -307,20 +351,14 @@ export default function ThemeSettings({ open, onClose }: Props) {
         </div>
 
         {/* Footer actions */}
-        <div className={cn("sticky bottom-0 flex items-center justify-between gap-2 px-4 py-3 bg-[var(--color-bg)] border-t border-[var(--color-border)]")}>
-          <button
-            onClick={handleReset}
-            className={cn("flex items-center gap-1 px-2.5 py-1.5 text-[12px] text-[var(--color-text-secondary)] rounded-[var(--radius-md)] border border-[var(--color-border)] hover:bg-[var(--color-bg-tertiary)] transition-colors")}
-          >
+        <div className="sticky bottom-0 flex items-center justify-between gap-2 px-4 py-3 bg-background border-t border-border">
+          <Button variant="ghost" size="sm" onClick={handleReset}>
             <RotateCcw size={12} strokeWidth={1.5} />
             Reset
-          </button>
-          <button
-            onClick={handleApply}
-            className={cn("px-4 py-1.5 text-[12px] font-medium text-white bg-[var(--color-primary)] rounded-[var(--radius-md)] hover:bg-[var(--color-primary-hover)] transition-colors")}
-          >
+          </Button>
+          <Button size="sm" onClick={handleApply}>
             Apply
-          </button>
+          </Button>
         </div>
       </div>
     </div>

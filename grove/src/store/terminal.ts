@@ -41,6 +41,7 @@ interface TerminalState {
   activeWorktree: string | null;
   focusedPtyId: string | null;
   theme: TerminalTheme | null;
+  detectedTheme: TerminalTheme | null;
   createSession: (worktreePath: string, ptyId: string) => void;
   restoreSession: (worktreePath: string, node: SplitNode) => void;
   splitTerminal: (
@@ -52,6 +53,7 @@ interface TerminalState {
   closeTerminal: (worktreePath: string, ptyId: string) => void;
   setActiveWorktree: (worktreePath: string | null) => void;
   setFocusedPtyId: (ptyId: string | null) => void;
+  setDetectedTheme: (theme: TerminalTheme) => void;
   loadTheme: (theme: TerminalTheme) => void;
   updateSizes: (worktreePath: string, nodePath: number[], sizes: number[]) => void;
   getSavedLayout: (worktreePath: string) => SplitNode | null;
@@ -63,6 +65,7 @@ export const useTerminalStore = create<TerminalState>((set) => ({
   activeWorktree: null,
   focusedPtyId: null,
   theme: null,
+  detectedTheme: null,
 
   getSavedLayout: (worktreePath) => {
     const template = layoutCache[worktreePath];
@@ -148,6 +151,7 @@ export const useTerminalStore = create<TerminalState>((set) => ({
       return { sessions: newSessions };
     }),
 
+  setDetectedTheme: (theme) => set({ detectedTheme: theme }),
   loadTheme: (theme) => set({ theme }),
 
   initLayouts: async () => {

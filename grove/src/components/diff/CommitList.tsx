@@ -5,12 +5,14 @@ import WorkingChanges from "./WorkingChanges";
 
 interface Props {
   commits: CommitInfo[];
+  changeCount: number;
   selectedView: "changes" | CommitInfo;
   onSelectView: (view: "changes" | CommitInfo) => void;
 }
 
 export default function CommitList({
   commits,
+  changeCount,
   selectedView,
   onSelectView,
 }: Props) {
@@ -21,6 +23,7 @@ export default function CommitList({
       <CommitListHeader />
       <div className="flex-1 overflow-y-auto">
         <WorkingChanges
+          changeCount={changeCount}
           isSelected={isChangesSelected}
           onClick={() => onSelectView("changes")}
         />

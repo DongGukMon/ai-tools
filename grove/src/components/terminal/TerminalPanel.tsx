@@ -6,6 +6,7 @@ import { runCommand } from "../../lib/command";
 import { useTerminal } from "../../hooks/useTerminal";
 import SplitContainer from "./SplitContainer";
 import TerminalToolbar from "./TerminalToolbar";
+import { log, error as logError } from "../../lib/logger";
 
 
 export default function TerminalPanel() {
@@ -13,6 +14,7 @@ export default function TerminalPanel() {
   const activeWorktree = useTerminalStore((s) => s.activeWorktree);
   const theme = useTerminalStore((s) => s.theme);
   const loadTheme = useTerminalStore((s) => s.loadTheme);
+  const setDetectedTheme = useTerminalStore((s) => s.setDetectedTheme);
   const setActiveWorktree = useTerminalStore((s) => s.setActiveWorktree);
   const selectedWorktree = useProjectStore((s) => s.selectedWorktree);
   const { createTerminal } = useTerminal();
@@ -22,25 +24,33 @@ export default function TerminalPanel() {
   useEffect(() => {
     async function init() {
       try {
+        log("terminal", "init start");
         await useTerminalStore.getState().initLayouts();
+        log("terminal", "layouts loaded");
+
         const config = await runCommand(() => getAppConfig(), {
           errorToast: false,
         });
-        // Use saved theme override if available, otherwise detect
+        log("terminal", "config loaded", { hasTerminalTheme: !!config.terminalTheme });
+
+        log("terminal", "detecting system theme...");
+        const detected = await runCommand(() => getTerminalTheme(), {
+          errorToast: false,
+        });
+        log("terminal", "system theme detected", { bg: detected.background, fg: detected.foreground });
+        setDetectedTheme(detected);
+
         if (config.terminalTheme) {
-          const detected = await runCommand(() => getTerminalTheme(), {
-            errorToast: false,
-          });
-          // Merge: saved theme takes precedence, fill gaps from detected
-          loadTheme({ ...detected, ...config.terminalTheme });
+          const merged = { ...detected, ...config.terminalTheme };
+          log("terminal", "using saved theme override", { bg: merged.background });
+          loadTheme(merged);
         } else {
-          const t = await runCommand(() => getTerminalTheme(), {
-            errorToast: false,
-          });
-          loadTheme(t);
+          log("terminal", "using detected theme");
+          loadTheme(detected);
         }
-        // Don't auto-open a terminal — wait for worktree selection
+        log("terminal", "init complete");
       } catch (e) {
+        logError("terminal", "init failed", e);
         setError(getCommandErrorMessage(e));
       }
     }
@@ -54,9 +64,17 @@ export default function TerminalPanel() {
 
   // Create session for new worktree
   useEffect(() => {
-    if (!activeWorktree || !theme) return;
-    if (sessions[activeWorktree]) return;
+    if (!activeWorktree || !theme) {
+      log("terminal", "skip session create", { activeWorktree, hasTheme: !!theme });
+      return;
+    }
+    if (sessions[activeWorktree]) {
+      log("terminal", "session exists", activeWorktree);
+      return;
+    }
+    log("terminal", "creating session", activeWorktree);
     createTerminal(activeWorktree).catch((e) => {
+      logError("terminal", "session create failed", e);
       setError(getCommandErrorMessage(e));
     });
   }, [activeWorktree, theme]);

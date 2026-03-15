@@ -63,6 +63,7 @@ struct TerminalColors {
     bg: String,
     fg: String,
     cursor: String,
+    bg_opacity: f64,
 }
 
 /// Use AppleScript to query Terminal.app's scripting interface for the current
@@ -87,7 +88,8 @@ fn detect_terminal_colors() -> Option<TerminalColors> {
             set crR to (item 1 of crColor) / 257
             set crG to (item 2 of crColor) / 257
             set crB to (item 3 of crColor) / 257
-            return (bgR as integer) & "," & (bgG as integer) & "," & (bgB as integer) & "|" & (fgR as integer) & "," & (fgG as integer) & "," & (fgB as integer) & "|" & (crR as integer) & "," & (crG as integer) & "," & (crB as integer)
+            set bgOpacity to background color opacity of prof
+            return (bgR as integer) & "," & (bgG as integer) & "," & (bgB as integer) & "|" & (fgR as integer) & "," & (fgG as integer) & "," & (fgB as integer) & "|" & (crR as integer) & "," & (crG as integer) & "," & (crB as integer) & "|" & bgOpacity
         end tell
         "#
     );
@@ -102,7 +104,7 @@ fn detect_terminal_colors() -> Option<TerminalColors> {
     }
 
     let result = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    // Parse "r,g,b|r,g,b|r,g,b"
+    // Parse "r,g,b|r,g,b|r,g,b|opacity"
     let parts: Vec<&str> = result.split('|').collect();
     if parts.len() < 3 {
         return None;
@@ -111,8 +113,12 @@ fn detect_terminal_colors() -> Option<TerminalColors> {
     let bg = parse_rgb(parts[0])?;
     let fg = parse_rgb(parts[1])?;
     let cursor = parse_rgb(parts[2])?;
+    let bg_opacity = parts
+        .get(3)
+        .and_then(|s| s.trim().parse::<f64>().ok())
+        .unwrap_or(1.0);
 
-    Some(TerminalColors { bg, fg, cursor })
+    Some(TerminalColors { bg, fg, cursor, bg_opacity })
 }
 
 /// Try to read the 16-color ANSI palette from Terminal.app via AppleScript.
@@ -171,6 +177,24 @@ fn parse_rgb(s: &str) -> Option<String> {
     } else {
         None
     }
+}
+
+/// Blend a "#rrggbb" color toward white based on inverse opacity (0.0-1.0).
+/// Simulates what reduced terminal opacity looks like (lighter background).
+fn blend_with_opacity(hex: &str, opacity: f64) -> String {
+    let hex = hex.trim_start_matches('#');
+    if hex.len() < 6 {
+        return format!("#{}", hex);
+    }
+    let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(0) as f64;
+    let g = u8::from_str_radix(&hex[2..4], 16).unwrap_or(0) as f64;
+    let b = u8::from_str_radix(&hex[4..6], 16).unwrap_or(0) as f64;
+    let a = opacity.clamp(0.0, 1.0);
+    // Alpha composite: fg * alpha + white * (1 - alpha)
+    let br = (r * a + 255.0 * (1.0 - a)) as u8;
+    let bg = (g * a + 255.0 * (1.0 - a)) as u8;
+    let bb = (b * a + 255.0 * (1.0 - a)) as u8;
+    format!("#{:02x}{:02x}{:02x}", br, bg, bb)
 }
 
 /// Compute perceived luminance (0-255) from a "#rrggbb" hex color.
@@ -271,8 +295,15 @@ pub fn detect_terminal_theme() -> TerminalTheme {
     let mut theme = TerminalTheme::default();
 
     // 1. Try AppleScript color detection for bg/fg/cursor
+    crate::logger::grove_info!("theme", "detecting terminal colors...");
     if let Some(colors) = detect_terminal_colors() {
-        theme.background = colors.bg.clone();
+        crate::logger::grove_info!("theme", &format!("colors detected: bg={} fg={} cursor={} opacity={}", colors.bg, colors.fg, colors.cursor, colors.bg_opacity));
+        // Blend background with black if opacity < 1.0
+        if colors.bg_opacity < 1.0 {
+            theme.background = blend_with_opacity(&colors.bg, colors.bg_opacity);
+        } else {
+            theme.background = colors.bg.clone();
+        }
         theme.foreground = colors.fg;
         theme.cursor = colors.cursor;
 
@@ -300,7 +331,7 @@ pub fn detect_terminal_theme() -> TerminalTheme {
             }
         } else {
             // 3. ANSI detection failed — pick a palette based on background luminance
-            let lum = hex_luminance(&colors.bg);
+            let lum = hex_luminance(&theme.background);
             if lum >= 128 {
                 // Light background: use light-theme ANSI palette
                 let p = light_ansi_palette();
@@ -323,6 +354,8 @@ pub fn detect_terminal_theme() -> TerminalTheme {
             }
             // Dark background: keep the grove-dark defaults from Default impl
         }
+    } else {
+        crate::logger::grove_warn!("theme", "color detection FAILED — using defaults");
     }
 
     // 4. Always try to detect font settings

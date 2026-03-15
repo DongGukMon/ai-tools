@@ -1,6 +1,8 @@
 mod config;
+mod eventbus;
 mod git_diff;
 mod git_project;
+mod logger;
 mod process_env;
 mod pty;
 mod terminal_theme;
@@ -304,6 +306,10 @@ pub fn run() {
             unstage_lines,
             discard_lines,
         ])
+        .setup(|app| {
+            eventbus::init(app.handle());
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

@@ -45,6 +45,7 @@ export default function DiffPanel() {
         <Allotment.Pane minSize={80}>
           <CommitList
             commits={store.commits}
+            changeCount={store.fileStatuses.length}
             selectedView={store.selectedView}
             onSelectView={store.selectView}
           />
