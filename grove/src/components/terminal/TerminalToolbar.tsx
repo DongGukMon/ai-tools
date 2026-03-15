@@ -22,7 +22,7 @@ export default function TerminalToolbar() {
 
   return (
     <>
-      <div className="flex items-center justify-end border-b border-border bg-card px-2 py-1 shrink-0">
+      <div className="flex items-center justify-end border-b border-border bg-sidebar px-2 h-9 shrink-0">
         <div className="flex items-center gap-1">
           {commands.map((command) => {
             const Icon = terminalCommandIcons[command.icon];

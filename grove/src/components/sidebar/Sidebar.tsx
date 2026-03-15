@@ -14,12 +14,12 @@ function Sidebar() {
   return (
     <div className={cn("flex flex-col h-full border-r border-border bg-sidebar")}>
       {/* Header */}
-      <div className={cn("flex items-center justify-between border-b border-border px-4 py-3")}>
+      <div className={cn("flex items-center justify-between border-b border-border px-4 h-9")}>
         <span className={cn("text-xs font-medium uppercase tracking-wider text-muted-foreground")}>
           Projects
         </span>
         <IconButton onClick={() => setShowAddDialog(true)} title="Add project">
-          <Plus className="h-4 w-4" />
+          <Plus className="h-3.5 w-3.5" />
         </IconButton>
       </div>
 

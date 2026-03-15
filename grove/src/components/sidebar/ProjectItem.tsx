@@ -144,7 +144,7 @@ function ProjectItem({ project }: Props) {
               disabled={refreshing}
             >
               <RotateCw
-                className={cn("h-4 w-4", { "animate-spin": refreshing })}
+                className={cn("h-3.5 w-3.5", { "animate-spin": refreshing })}
               />
             </IconButton>
           )}
@@ -153,7 +153,7 @@ function ProjectItem({ project }: Props) {
             title="Remove project"
             disabled={refreshing}
           >
-            <X className="h-4 w-4" />
+            <X className="h-3.5 w-3.5" />
           </IconButton>
         </div>
       </div>

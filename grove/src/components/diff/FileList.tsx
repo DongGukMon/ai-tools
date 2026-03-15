@@ -23,7 +23,7 @@ export default function FileList({
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="flex items-center gap-2 px-4 py-2 shrink-0">
+      <div className="flex items-center gap-2 px-4 h-9 shrink-0 border-b border-border">
         <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
           Files
         </span>
