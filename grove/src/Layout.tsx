@@ -2,6 +2,7 @@ import { Allotment } from "allotment";
 import "allotment/dist/style.css";
 import Sidebar from "./components/sidebar/Sidebar";
 import TerminalPanel from "./components/terminal/TerminalPanel";
+import DiffPanel from "./components/diff/DiffPanel";
 
 function Layout() {
   return (
@@ -17,7 +18,7 @@ function Layout() {
         </Allotment.Pane>
         <Allotment.Pane preferredSize={400} minSize={200}>
           <div className="panel panel-diff">
-            <div className="panel-placeholder">Diff Panel (W4)</div>
+            <DiffPanel />
           </div>
         </Allotment.Pane>
       </Allotment>
