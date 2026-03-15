@@ -18,7 +18,7 @@ permissions:
   contents: read
 
 jobs:
-  integration:
+  test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -31,14 +31,6 @@ jobs:
             workdir: shared/upgrade
             go_version_file: shared/upgrade/go.mod
             cache_dependency_path: shared/upgrade/go.mod
-          - module_name: claude-irc
-            workdir: claude-irc
-            go_version_file: claude-irc/go.mod
-            cache_dependency_path: claude-irc/go.sum
-          - module_name: whip
-            workdir: whip
-            go_version_file: whip/go.mod
-            cache_dependency_path: whip/go.sum
     name: ${{ matrix.module_name }}
     steps:
       - name: Checkout
