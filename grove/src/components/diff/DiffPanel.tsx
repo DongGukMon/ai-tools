@@ -25,7 +25,7 @@ export default function DiffPanel() {
 
   if (!selectedWorktree) {
     return (
-      <div className="flex items-center justify-center h-full border-l border-border bg-sidebar">
+      <div className="flex items-center justify-center h-full bg-sidebar">
         <span className="text-sm text-muted-foreground">
           Select a worktree to view changes
         </span>
@@ -34,7 +34,7 @@ export default function DiffPanel() {
   }
 
   return (
-    <div className="flex flex-col h-full overflow-hidden border-l border-border bg-sidebar">
+    <div className="flex flex-col h-full overflow-hidden bg-sidebar">
       <Allotment
         vertical
         defaultSizes={diffSizes.map((r) => r * 1000)}

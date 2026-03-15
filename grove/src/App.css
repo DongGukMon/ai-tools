@@ -272,12 +272,17 @@
 }
 
 .sash-container .sash {
-  background-color: var(--color-border);
-  transition: background-color 150ms;
+  background-color: transparent;
 }
 
 .sash-container .sash:hover {
-  background-color: var(--color-primary);
+  background-image: linear-gradient(
+    to right,
+    transparent calc(50% - 0.5px),
+    var(--color-border) calc(50% - 0.5px),
+    var(--color-border) calc(50% + 0.5px),
+    transparent calc(50% + 0.5px)
+  );
 }
 
 .terminal-instance .xterm-viewport::-webkit-scrollbar-thumb {

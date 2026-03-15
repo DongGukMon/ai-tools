@@ -12,7 +12,7 @@ function Sidebar() {
   const [showAddDialog, setShowAddDialog] = useState(false);
 
   return (
-    <div className={cn("flex flex-col h-full border-r border-border bg-sidebar")}>
+    <div className={cn("flex flex-col h-full bg-sidebar")}>
       {/* Header */}
       <div className={cn("flex items-center justify-between border-b border-border px-4 h-9")}>
         <span className={cn("text-xs font-medium uppercase tracking-wider text-muted-foreground")}>
