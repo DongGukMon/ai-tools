@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useTerminalStore } from "../../store/terminal";
 import { useProjectStore } from "../../store/project";
 import {
@@ -33,6 +32,8 @@ export default function TerminalPanel() {
   const previousSessionSignaturesRef = useRef(new Map<string, string>());
 
   useEffect(() => {
+    // tmux session continuity is the primary restore path. Persist snapshots only
+    // as fallback metadata when the live Grove-managed tmux session is missing.
     const structureSignature = (node: (typeof sessions)[string] | undefined) =>
       node
         ? collectTerminalPanes(node)
@@ -81,7 +82,10 @@ export default function TerminalPanel() {
             ),
           ),
         ).catch((cause) => {
-          logError("terminal", "snapshot save failed", { worktreePath, cause });
+          logError("terminal", "fallback snapshot save failed", {
+            worktreePath,
+            cause,
+          });
         }),
       ),
     );
@@ -126,48 +130,6 @@ export default function TerminalPanel() {
       }
     }
     init();
-  }, []);
-
-  useEffect(() => {
-    const appWindow = getCurrentWindow();
-    let closing = false;
-
-    const unlistenPromise = appWindow.onCloseRequested(async (event) => {
-      if (closing) {
-        return;
-      }
-
-      closing = true;
-      event.preventDefault();
-
-      try {
-        const currentSessions = useTerminalStore.getState().sessions;
-        await Promise.all(
-          Object.entries(currentSessions).map(([worktreePath, node]) =>
-            saveTerminalSessionSnapshot(
-              buildTerminalSnapshotRequest(
-                worktreePath,
-                node,
-                new Map(
-                  collectTerminalPanes(node).map((pane) => [
-                    pane.paneId,
-                    getTerminalPaneLaunchCwd(pane.paneId) ?? worktreePath,
-                  ]),
-                ),
-              ),
-            ),
-          ),
-        );
-      } catch (cause) {
-        logError("terminal", "snapshot save on close failed", cause);
-      } finally {
-        await appWindow.close();
-      }
-    });
-
-    return () => {
-      unlistenPromise.then((unlisten) => unlisten());
-    };
   }, []);
 
   // Sync sidebar -> terminal

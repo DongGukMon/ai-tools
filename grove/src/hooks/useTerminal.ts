@@ -33,6 +33,8 @@ export function useTerminal() {
     // Check for saved layout
     const savedLayout = store.getSavedLayout(worktreePath);
     if (savedLayout) {
+      // Snapshot data seeds cwd/scrollback only when a Grove-managed tmux session
+      // is missing. Existing tmux sessions remain the primary restore path.
       const snapshot = await runCommandSafely(
         () => loadTerminalSessionSnapshot(worktreePath),
         { errorToast: false },
