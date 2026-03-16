@@ -1,6 +1,7 @@
 ---
 name: whip-debug
-description: Drive a disciplined root-cause debugging loop with whip: gather facts, force reproduction, apply a fix, and challenge it with a fresh verification pass so you can distinguish a fundamental fix from a workaround.
+description: Systematic debugging loop — reproduce, analyze root cause, fix, then challenge with a fresh verification pass to distinguish fundamental fixes from workarounds. Use when debugging issues or when unexpected behavior needs a methodical approach.
+argument-hint: "[<bug description>] [--agent]"
 user_invocable: true
 ---
 

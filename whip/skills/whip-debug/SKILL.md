@@ -1,6 +1,7 @@
 ---
 name: whip-debug
-description: Systematic problem-solving workflow for bug fixes and feature implementations. Use when debugging issues, fixing bugs, implementing features, or when the user describes unexpected behavior, errors, or needs a methodical approach to code changes. Ensures reproducible verification and validates solutions are fundamental fixes rather than workarounds.
+description: Systematic debugging loop — reproduce, analyze root cause, fix, then challenge with a fresh verification pass to distinguish fundamental fixes from workarounds. Use when debugging issues or when unexpected behavior needs a methodical approach.
+argument-hint: "[<bug description>] [--agent]"
 user_invocable: true
 ---
 

@@ -1,6 +1,7 @@
 ---
 name: whip-lgtm
-description: Get LGTM from a picky codex fresh-eye reviewer. Iterative review-fix loop that spawns a fresh agent each round until zero blocking issues remain.
+description: Iterative review-fix loop — dispatch a fresh codex reviewer each round, apply fixes, repeat until LGTM. Use when you want rigorous code quality validation before merge.
+argument-hint: "[<scope>] [--focus <area>] [--agent]"
 user_invocable: true
 ---
 

@@ -1,11 +1,11 @@
 ---
 name: whip-simulate
-description: Run multi-agent simulations to measure consistency of non-deterministic behavior. Use when the user wants to A/B test, validate behavioral equivalence, or stress-test outputs at scale.
-argument-hint: "<scenario> [--runs N]"
+description: Run multi-agent simulations to measure output consistency. Use when you want to A/B test, validate behavioral equivalence, or stress-test non-deterministic behavior at scale.
+argument-hint: "<scenario> [--runs N] [--agent]"
 user_invocable: true
 ---
 
-Run multi-agent simulations from a user-provided scenario. Concretize the scenario into test cases, spawn agents via `whip task create`, and analyze output patterns for consistency.
+Run multi-agent simulations from a user-provided scenario. Concretize the scenario into test cases, spawn agents, and analyze output patterns for consistency.
 
 ## Input
 
@@ -21,8 +21,8 @@ Extract from `$ARGUMENTS`:
 **Default (whip mode):** Each simulation run is a `whip task create` task. Gives you tracked execution, backend/difficulty control, and workspace integration.
 
 **`--agent` flag:** Each run uses the Agent tool directly. Faster, no task overhead, good for quick consistency checks.
-- Use `model: sonnet` unless the scenario requires higher reasoning
 - Batching: ≤10 spawn all at once with `run_in_background: true`, >10 in groups of 10
+- Cross-backend A/B comparisons require whip mode (Agent tool can only spawn its own backend's models)
 
 ## Workspace Context
 

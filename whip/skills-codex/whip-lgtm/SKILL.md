@@ -1,6 +1,7 @@
 ---
 name: whip-lgtm
-description: Create tracked Codex review tasks, collect findings through whip task output and IRC, apply fixes in the current repo or workspace worktree, and repeat until a fresh reviewer reports LGTM.
+description: Iterative review-fix loop — dispatch a fresh codex reviewer each round, apply fixes, repeat until LGTM. Use when you want rigorous code quality validation before merge.
+argument-hint: "[<scope>] [--focus <area>] [--agent]"
 user_invocable: true
 ---
 
