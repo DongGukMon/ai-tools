@@ -12,7 +12,6 @@ import {
   isTerminalCompositionEvent,
   shouldEnableTerminalWebgl,
 } from "../../lib/terminal-input";
-import { createTerminalIME } from "../../lib/terminal-ime";
 import "@xterm/xterm/css/xterm.css";
 import { cn } from "../../lib/cn";
 
@@ -126,40 +125,35 @@ export default function TerminalInstance({ ptyId }: Props) {
       }
     };
 
-    // WKWebView IME workaround (Korean / CJK composition)
-    const ime = createTerminalIME(term, el, (text) => {
-      const bytes = Array.from(new TextEncoder().encode(text));
-      writePty(ptyId, bytes).catch(() => {});
-    });
-
-    // WKWebView trackpad fix: double-tap can leave xterm's selection in a
-    // stuck drag state where selection follows the cursor without any button
-    // held. Detect by checking if selection content changes between consecutive
-    // mousemoves while buttons === 0.
-    let prevMoveSelection = "";
-    const onTrackpadFix = (e: MouseEvent) => {
-      if (e.buttons !== 0) {
-        prevMoveSelection = "";
-        return;
-      }
-
-      const sel = term.getSelection();
-      if (sel && prevMoveSelection && sel !== prevMoveSelection) {
-        term.clearSelection();
-        el.dispatchEvent(
-          new MouseEvent("mouseup", {
-            bubbles: true,
-            clientX: e.clientX,
-            clientY: e.clientY,
-          }),
-        );
-        prevMoveSelection = "";
-        return;
-      }
-
-      prevMoveSelection = sel;
+    // Trackpad soft-tap selection can occasionally miss mouseup, leaving
+    // xterm's document-level drag listeners active. End the drag on the first
+    // mousemove without pressed buttons, preserving the existing selection.
+    let awaitingPointerRelease = false;
+    const ownerDocument = el.ownerDocument;
+    const onTrackpadMouseDown = () => {
+      awaitingPointerRelease = true;
     };
-    el.addEventListener("mousemove", onTrackpadFix);
+    const onTrackpadMouseUp = () => {
+      awaitingPointerRelease = false;
+    };
+    const onTrackpadMouseMoveCapture = (e: MouseEvent) => {
+      if (!awaitingPointerRelease || e.buttons !== 0) return;
+      awaitingPointerRelease = false;
+      e.stopImmediatePropagation();
+      el.dispatchEvent(
+        new MouseEvent("mouseup", {
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+          buttons: 0,
+          clientX: e.clientX,
+          clientY: e.clientY,
+        }),
+      );
+    };
+    el.addEventListener("mousedown", onTrackpadMouseDown, true);
+    ownerDocument.addEventListener("mouseup", onTrackpadMouseUp, true);
+    ownerDocument.addEventListener("mousemove", onTrackpadMouseMoveCapture, true);
 
     // Defer xterm open/fit until the host is visible and has real dimensions.
     const scheduleLayoutSync = () => {
@@ -172,7 +166,6 @@ export default function TerminalInstance({ ptyId }: Props) {
         if (!hasOpened) {
           term.open(el);
           hasOpened = true;
-          ime.attach();
           term.focus();
           scheduleLayoutSync();
           return;
@@ -194,7 +187,6 @@ export default function TerminalInstance({ ptyId }: Props) {
             for (let i = 0; i < binary.length; i++) {
               bytes[i] = binary.charCodeAt(i);
             }
-            if (ime.active) ime.clearPreview();
             term.write(bytes);
           } catch (e) {
             console.error("pty-output decode error:", e);
@@ -206,9 +198,7 @@ export default function TerminalInstance({ ptyId }: Props) {
       return () => {};
     });
 
-    // Send keyboard input to PTY (suppressed during IME composition)
     const dataDisposable = term.onData((data) => {
-      if (ime.active) return;
       const bytes = Array.from(new TextEncoder().encode(data));
       writePty(ptyId, bytes).catch((e) =>
         console.error("writePty failed:", e),
@@ -225,11 +215,6 @@ export default function TerminalInstance({ ptyId }: Props) {
       // xterm invokes custom key handlers before its composition helper, so let
       // IME-driven events reach xterm untouched until composition is committed.
       if (isTerminalCompositionEvent(e)) return true;
-
-      // Non-IME keydown while composing → flush or discard
-      if (ime.active) {
-        if (ime.handleCommitKey(e.key)) return false;
-      }
 
       // Cmd+K → clear terminal
       if (isMacClearTerminalShortcut(e)) {
@@ -262,9 +247,10 @@ export default function TerminalInstance({ ptyId }: Props) {
         cancelAnimationFrame(frameId);
       }
       resizeObserver.disconnect();
-      el.removeEventListener("mousemove", onTrackpadFix);
+      el.removeEventListener("mousedown", onTrackpadMouseDown, true);
+      ownerDocument.removeEventListener("mouseup", onTrackpadMouseUp, true);
+      ownerDocument.removeEventListener("mousemove", onTrackpadMouseMoveCapture, true);
       el.removeEventListener("focusin", handleFocusIn);
-      ime.dispose();
       dataDisposable.dispose();
       unlistenPromise.then((unlisten) => {
         if (typeof unlisten === "function") unlisten();

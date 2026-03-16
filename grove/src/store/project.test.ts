@@ -41,7 +41,6 @@ function makeProject(worktrees: Worktree[]): Project {
     sourcePath: "/tmp/source",
     sourceDirty: false,
     worktrees,
-    sourceDirty: false,
   };
 }
 
