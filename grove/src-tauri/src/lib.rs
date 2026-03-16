@@ -197,80 +197,95 @@ pub struct FileDiff {
     pub hunks: Vec<DiffHunk>,
 }
 
+// === Async helper ===
+
+async fn blocking<T, F>(f: F) -> Result<T, String>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T, String> + Send + 'static,
+{
+    tokio::task::spawn_blocking(f)
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 // === CONFIG/THEME COMMANDS (W1) ===
 
 #[tauri::command]
-fn get_terminal_theme() -> terminal_theme::DetectedThemeResult {
-    terminal_theme::detect_terminal_theme()
+async fn get_terminal_theme() -> Result<terminal_theme::DetectedThemeResult, String> {
+    blocking(|| Ok(terminal_theme::detect_terminal_theme())).await
 }
 
 #[tauri::command]
-fn get_app_config() -> AppConfig {
-    let saved = config::load_app_config();
-    AppConfig {
-        base_dir: saved.base_dir,
-        terminal_theme: saved
-            .terminal_theme
-            .or_else(|| Some(terminal_theme::detect_terminal_theme().theme)),
-    }
+async fn get_app_config() -> Result<AppConfig, String> {
+    blocking(|| {
+        let saved = config::load_app_config();
+        Ok(AppConfig {
+            base_dir: saved.base_dir,
+            terminal_theme: saved
+                .terminal_theme
+                .or_else(|| Some(terminal_theme::detect_terminal_theme().theme)),
+        })
+    })
+    .await
 }
 
 #[tauri::command]
-fn save_app_config(config: AppConfig) -> Result<(), String> {
-    config::save_app_config(&config)
+async fn save_app_config(config: AppConfig) -> Result<(), String> {
+    blocking(move || config::save_app_config(&config)).await
 }
 
 // === GIT PROJECT COMMANDS (W2) ===
 
 #[tauri::command]
-fn list_projects() -> Result<Vec<Project>, String> {
-    git_project::list_projects_impl()
+async fn list_projects() -> Result<Vec<Project>, String> {
+    blocking(git_project::list_projects_impl).await
 }
 
 #[tauri::command]
-fn add_project(url: String) -> Result<Project, String> {
-    git_project::add_project_impl(&url)
+async fn add_project(url: String) -> Result<Project, String> {
+    blocking(move || git_project::add_project_impl(&url)).await
 }
 
 #[tauri::command]
-fn create_project(name: String, path: String) -> Result<Project, String> {
-    git_project::create_project_impl(&name, &path)
+async fn create_project(name: String, path: String) -> Result<Project, String> {
+    blocking(move || git_project::create_project_impl(&name, &path)).await
 }
 
 #[tauri::command]
-fn remove_project(id: String) -> Result<(), String> {
-    git_project::remove_project_impl(&id)
+async fn remove_project(id: String) -> Result<(), String> {
+    blocking(move || git_project::remove_project_impl(&id)).await
 }
 
 #[tauri::command]
-fn is_source_dirty(project_id: String) -> Result<bool, String> {
-    git_project::is_source_dirty_impl(&project_id)
+async fn is_source_dirty(project_id: String) -> Result<bool, String> {
+    blocking(move || git_project::is_source_dirty_impl(&project_id)).await
 }
 
 #[tauri::command]
-fn refresh_project(project_id: String) -> Result<Project, String> {
-    git_project::refresh_project_impl(&project_id)
+async fn refresh_project(project_id: String) -> Result<Project, String> {
+    blocking(move || git_project::refresh_project_impl(&project_id)).await
 }
 
 #[tauri::command]
-fn add_worktree(project_id: String, name: String, _branch: String) -> Result<Worktree, String> {
-    git_project::add_worktree_impl(&project_id, &name)
+async fn add_worktree(project_id: String, name: String, _branch: String) -> Result<Worktree, String> {
+    blocking(move || git_project::add_worktree_impl(&project_id, &name)).await
 }
 
 #[tauri::command]
-fn remove_worktree(project_id: String, name: String) -> Result<(), String> {
-    git_project::remove_worktree_impl(&project_id, &name)
+async fn remove_worktree(project_id: String, name: String) -> Result<(), String> {
+    blocking(move || git_project::remove_worktree_impl(&project_id, &name)).await
 }
 
 #[tauri::command]
-fn list_worktrees(project_id: String) -> Result<Vec<Worktree>, String> {
-    git_project::list_worktrees_impl(&project_id)
+async fn list_worktrees(project_id: String) -> Result<Vec<Worktree>, String> {
+    blocking(move || git_project::list_worktrees_impl(&project_id)).await
 }
 
 // === PTY COMMANDS (W3) ===
 
 #[tauri::command]
-fn create_pty(
+async fn create_pty(
     app_handle: tauri::AppHandle,
     pty_id: String,
     pane_id: String,
@@ -280,127 +295,137 @@ fn create_pty(
     rows: u16,
     restore: Option<CreatePtyRestore>,
 ) -> Result<CreatePtyResult, String> {
-    pty::create(
-        app_handle,
-        pty_id,
-        pane_id,
-        worktree_path,
-        cwd,
-        cols,
-        rows,
-        restore,
-    )
+    blocking(move || {
+        pty::create(
+            app_handle,
+            pty_id,
+            pane_id,
+            worktree_path,
+            cwd,
+            cols,
+            rows,
+            restore,
+        )
+    })
+    .await
 }
 
 #[tauri::command]
-fn write_pty(id: String, data: Vec<u8>) -> Result<(), String> {
-    pty::write(&id, &data)
+async fn write_pty(id: String, data: Vec<u8>) -> Result<(), String> {
+    blocking(move || pty::write(&id, &data)).await
 }
 
 #[tauri::command]
-fn resize_pty(id: String, cols: u16, rows: u16) -> Result<(), String> {
-    pty::resize(&id, cols, rows)
+async fn resize_pty(id: String, cols: u16, rows: u16) -> Result<(), String> {
+    blocking(move || pty::resize(&id, cols, rows)).await
 }
 
 #[tauri::command]
-fn close_pty(pty_id: String) -> Result<(), String> {
-    pty::close(&pty_id)
+async fn close_pty(pty_id: String) -> Result<(), String> {
+    blocking(move || pty::close(&pty_id)).await
 }
 
 #[tauri::command]
-fn save_terminal_session_snapshot(
+async fn save_terminal_session_snapshot(
     snapshot: SaveTerminalSessionSnapshotRequest,
 ) -> Result<TerminalSessionSnapshot, String> {
-    pty::save_terminal_session_snapshot(snapshot)
+    blocking(move || pty::save_terminal_session_snapshot(snapshot)).await
 }
 
 #[tauri::command]
-fn load_terminal_session_snapshot(
+async fn load_terminal_session_snapshot(
     worktree_path: String,
 ) -> Result<Option<TerminalSessionSnapshot>, String> {
-    pty::load_terminal_session_snapshot(&worktree_path)
+    blocking(move || pty::load_terminal_session_snapshot(&worktree_path)).await
 }
 
 // === GIT DIFF COMMANDS (W4) ===
 
 #[tauri::command]
-fn get_status(worktree_path: String) -> Result<Vec<FileStatus>, String> {
-    git_diff::get_status_impl(&worktree_path)
+async fn get_status(worktree_path: String) -> Result<Vec<FileStatus>, String> {
+    blocking(move || git_diff::get_status_impl(&worktree_path)).await
 }
 
 #[tauri::command]
-fn get_commits(worktree_path: String, limit: u32) -> Result<Vec<CommitInfo>, String> {
-    git_diff::get_commits_impl(&worktree_path, limit)
+async fn get_commits(worktree_path: String, limit: u32) -> Result<Vec<CommitInfo>, String> {
+    blocking(move || git_diff::get_commits_impl(&worktree_path, limit)).await
 }
 
 #[tauri::command]
-fn get_working_diff(worktree_path: String, path: String) -> Result<FileDiff, String> {
-    git_diff::get_working_diff_impl(&worktree_path, &path)
+async fn get_working_diff(worktree_path: String, path: String) -> Result<FileDiff, String> {
+    blocking(move || git_diff::get_working_diff_impl(&worktree_path, &path)).await
 }
 
 #[tauri::command]
-fn get_commit_diff(worktree_path: String, hash: String) -> Result<Vec<FileDiff>, String> {
-    git_diff::get_commit_diff_impl(&worktree_path, &hash)
+async fn get_commit_diff(worktree_path: String, hash: String) -> Result<Vec<FileDiff>, String> {
+    blocking(move || git_diff::get_commit_diff_impl(&worktree_path, &hash)).await
 }
 
 #[tauri::command]
-fn stage_file(worktree_path: String, path: String) -> Result<(), String> {
-    git_diff::stage_file_impl(&worktree_path, &path)
+async fn stage_file(worktree_path: String, path: String) -> Result<(), String> {
+    blocking(move || git_diff::stage_file_impl(&worktree_path, &path)).await
 }
 
 #[tauri::command]
-fn unstage_file(worktree_path: String, path: String) -> Result<(), String> {
-    git_diff::unstage_file_impl(&worktree_path, &path)
+async fn unstage_file(worktree_path: String, path: String) -> Result<(), String> {
+    blocking(move || git_diff::unstage_file_impl(&worktree_path, &path)).await
 }
 
 #[tauri::command]
-fn discard_file(worktree_path: String, path: String) -> Result<(), String> {
-    git_diff::discard_file_impl(&worktree_path, &path)
+async fn discard_file(worktree_path: String, path: String) -> Result<(), String> {
+    blocking(move || git_diff::discard_file_impl(&worktree_path, &path)).await
 }
 
 #[tauri::command]
-fn stage_hunk(worktree_path: String, path: String, hunk_index: u32) -> Result<(), String> {
-    git_diff::stage_hunk_impl(&worktree_path, &path, hunk_index)
+async fn stage_hunk(worktree_path: String, path: String, hunk_index: u32) -> Result<(), String> {
+    blocking(move || git_diff::stage_hunk_impl(&worktree_path, &path, hunk_index)).await
 }
 
 #[tauri::command]
-fn unstage_hunk(worktree_path: String, path: String, hunk_index: u32) -> Result<(), String> {
-    git_diff::unstage_hunk_impl(&worktree_path, &path, hunk_index)
+async fn unstage_hunk(worktree_path: String, path: String, hunk_index: u32) -> Result<(), String> {
+    blocking(move || git_diff::unstage_hunk_impl(&worktree_path, &path, hunk_index)).await
 }
 
 #[tauri::command]
-fn discard_hunk(worktree_path: String, path: String, hunk_index: u32) -> Result<(), String> {
-    git_diff::discard_hunk_impl(&worktree_path, &path, hunk_index)
+async fn discard_hunk(worktree_path: String, path: String, hunk_index: u32) -> Result<(), String> {
+    blocking(move || git_diff::discard_hunk_impl(&worktree_path, &path, hunk_index)).await
 }
 
 #[tauri::command]
-fn stage_lines(
+async fn stage_lines(
     worktree_path: String,
     path: String,
     hunk_index: u32,
     line_indices: Vec<u32>,
 ) -> Result<(), String> {
-    git_diff::stage_lines_impl(&worktree_path, &path, hunk_index, &line_indices)
+    blocking(move || git_diff::stage_lines_impl(&worktree_path, &path, hunk_index, &line_indices))
+        .await
 }
 
 #[tauri::command]
-fn unstage_lines(
+async fn unstage_lines(
     worktree_path: String,
     path: String,
     hunk_index: u32,
     line_indices: Vec<u32>,
 ) -> Result<(), String> {
-    git_diff::unstage_lines_impl(&worktree_path, &path, hunk_index, &line_indices)
+    blocking(move || {
+        git_diff::unstage_lines_impl(&worktree_path, &path, hunk_index, &line_indices)
+    })
+    .await
 }
 
 #[tauri::command]
-fn discard_lines(
+async fn discard_lines(
     worktree_path: String,
     path: String,
     hunk_index: u32,
     line_indices: Vec<u32>,
 ) -> Result<(), String> {
-    git_diff::discard_lines_impl(&worktree_path, &path, hunk_index, &line_indices)
+    blocking(move || {
+        git_diff::discard_lines_impl(&worktree_path, &path, hunk_index, &line_indices)
+    })
+    .await
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -413,13 +438,13 @@ pub struct BehindInfo {
 // === GIT MERGE COMMANDS ===
 
 #[tauri::command]
-fn get_behind_count(worktree_path: String) -> Result<BehindInfo, String> {
-    git_diff::get_behind_count_impl(&worktree_path)
+async fn get_behind_count(worktree_path: String) -> Result<BehindInfo, String> {
+    blocking(move || git_diff::get_behind_count_impl(&worktree_path)).await
 }
 
 #[tauri::command]
-fn merge_default_branch(worktree_path: String) -> Result<(), String> {
-    git_diff::merge_default_branch_impl(&worktree_path)
+async fn merge_default_branch(worktree_path: String) -> Result<(), String> {
+    blocking(move || git_diff::merge_default_branch_impl(&worktree_path)).await
 }
 
 // === APP SETUP ===
