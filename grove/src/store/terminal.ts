@@ -43,12 +43,13 @@ interface TerminalState {
   focusedPtyId: string | null;
   theme: TerminalTheme | null;
   detectedTheme: TerminalTheme | null;
-  createSession: (worktreePath: string, ptyId: string) => void;
+  createSession: (worktreePath: string, paneId: string, ptyId: string) => void;
   restoreSession: (worktreePath: string, node: SplitNode) => void;
   splitTerminal: (
     worktreePath: string,
     ptyId: string,
     direction: "horizontal" | "vertical",
+    newPaneId: string,
     newPtyId: string,
   ) => void;
   closeTerminal: (worktreePath: string, ptyId: string) => void;
@@ -74,11 +75,11 @@ export const useTerminalStore = create<TerminalState>((set) => ({
     return template;
   },
 
-  createSession: (worktreePath, ptyId) =>
+  createSession: (worktreePath, paneId, ptyId) =>
     set((state) => {
       const newSessions = {
         ...state.sessions,
-        [worktreePath]: { id: crypto.randomUUID(), type: "leaf" as const, ptyId },
+        [worktreePath]: { id: paneId, type: "leaf" as const, ptyId },
       };
       saveLayouts(newSessions);
       return { sessions: newSessions, focusedPtyId: ptyId };
@@ -95,7 +96,7 @@ export const useTerminalStore = create<TerminalState>((set) => ({
       };
     }),
 
-  splitTerminal: (worktreePath, ptyId, direction, newPtyId) =>
+  splitTerminal: (worktreePath, ptyId, direction, newPaneId, newPtyId) =>
     set((state) => {
       const root = state.sessions[worktreePath];
       if (!root) return state;
@@ -103,7 +104,7 @@ export const useTerminalStore = create<TerminalState>((set) => ({
         ...state.sessions,
         [worktreePath]: splitNode(root, ptyId, direction, {
           branchId: crypto.randomUUID(),
-          leafId: crypto.randomUUID(),
+          leafId: newPaneId,
           ptyId: newPtyId,
         }),
       };

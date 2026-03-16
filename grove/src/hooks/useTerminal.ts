@@ -3,6 +3,7 @@ import {
   createPty as ipcCreatePty,
   closePty as ipcClosePty,
   loadTerminalSessionSnapshot,
+  type CreatePtyRequest,
   type CreatePtyRestore,
 } from "../lib/tauri";
 import { runCommand, runCommandSafely } from "../lib/command";
@@ -17,11 +18,15 @@ export function useTerminal() {
 
   const createTerminal = async (worktreePath: string) => {
     const createPty = (
-      ptyId: string,
-      cwd: string,
+      request: Omit<CreatePtyRequest, "cols" | "rows" | "restore">,
       restore?: CreatePtyRestore,
     ) =>
-      runCommand(() => ipcCreatePty(ptyId, cwd, 80, 24, restore), {
+      runCommand(() => ipcCreatePty({
+        ...request,
+        cols: 80,
+        rows: 24,
+        restore,
+      }), {
         errorToast: false,
       });
 
@@ -41,7 +46,12 @@ export function useTerminal() {
 
       for (const pane of restorePlan) {
         const ptyId = crypto.randomUUID();
-        await createPty(ptyId, pane.restoreCwd, {
+        const { sessionState } = await createPty({
+          ptyId,
+          paneId: pane.paneId,
+          worktreePath,
+          cwd: pane.restoreCwd,
+        }, {
           lastKnownCwd:
             pane.restoreCwdSource === "lastKnownCwd"
               ? pane.lastKnownCwd
@@ -53,7 +63,8 @@ export function useTerminal() {
         primeTerminalPane(pane.paneId, {
           ptyId,
           launchCwd: pane.launchCwd,
-          initialScrollback: pane.scrollback,
+          initialScrollback:
+            sessionState === "created" ? pane.scrollback : undefined,
         });
       }
 
@@ -68,24 +79,39 @@ export function useTerminal() {
     }
 
     // No saved layout — single terminal
+    const paneId = crypto.randomUUID();
     const ptyId = crypto.randomUUID();
-    await createPty(ptyId, worktreePath);
-    store.createSession(worktreePath, ptyId);
+    await createPty({ ptyId, paneId, worktreePath, cwd: worktreePath });
+    store.createSession(worktreePath, paneId, ptyId);
     return ptyId;
   };
 
   const splitCurrent = async (direction: "horizontal" | "vertical") => {
     const { activeWorktree, focusedPtyId } = useTerminalStore.getState();
     if (!activeWorktree || !focusedPtyId) return;
+    const newPaneId = crypto.randomUUID();
     const newPtyId = crypto.randomUUID();
     const created = await runCommandSafely(async () => {
-      await ipcCreatePty(newPtyId, activeWorktree, 80, 24);
+      await ipcCreatePty({
+        ptyId: newPtyId,
+        paneId: newPaneId,
+        worktreePath: activeWorktree,
+        cwd: activeWorktree,
+        cols: 80,
+        rows: 24,
+      });
       return true;
     }, {
       errorToast: "Failed to split terminal",
     });
     if (created) {
-      store.splitTerminal(activeWorktree, focusedPtyId, direction, newPtyId);
+      store.splitTerminal(
+        activeWorktree,
+        focusedPtyId,
+        direction,
+        newPaneId,
+        newPtyId,
+      );
     }
   };
 

@@ -20,6 +20,22 @@ export interface CreatePtyRestore {
   scrollbackTruncated?: boolean | null;
 }
 
+export interface CreatePtyRequest {
+  ptyId: string;
+  paneId: string;
+  worktreePath: string;
+  cwd: string;
+  cols: number;
+  rows: number;
+  restore?: CreatePtyRestore | null;
+}
+
+export type CreatePtySessionState = "attached" | "created";
+
+export interface CreatePtyResult {
+  sessionState: CreatePtySessionState;
+}
+
 export interface TerminalPaneSnapshotInput {
   paneId: string;
   ptyId?: string | null;
@@ -149,13 +165,9 @@ export async function listWorktrees(projectId: string): Promise<Worktree[]> {
 // === PTY COMMANDS (W3) ===
 
 export async function createPty(
-  id: string,
-  cwd: string,
-  cols: number,
-  rows: number,
-  restore?: CreatePtyRestore | null,
-): Promise<void> {
-  return invoke("create_pty", { id, cwd, cols, rows, restore });
+  request: CreatePtyRequest,
+): Promise<CreatePtyResult> {
+  return invoke<CreatePtyResult>("create_pty", { ...request });
 }
 
 export async function writePty(id: string, data: number[]): Promise<void> {
@@ -170,8 +182,8 @@ export async function resizePty(
   return invoke("resize_pty", { id, cols, rows });
 }
 
-export async function closePty(id: string): Promise<void> {
-  return invoke("close_pty", { id });
+export async function closePty(ptyId: string): Promise<void> {
+  return invoke("close_pty", { ptyId });
 }
 
 export async function saveTerminalSessionSnapshot(
