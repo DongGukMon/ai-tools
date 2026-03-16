@@ -60,6 +60,9 @@ function reconcileSelectedWorktree(
   }
 
   for (const project of projects) {
+    if (project.sourcePath === selectedWorktree.path) {
+      return selectedWorktree;
+    }
     const match = project.worktrees.find(
       (worktree) => worktree.path === selectedWorktree.path,
     );
