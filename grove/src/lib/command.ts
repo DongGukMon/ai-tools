@@ -1,5 +1,5 @@
 import { useToastStore } from "../store/toast";
-import { getCommandErrorMessage } from "./tauri";
+import { getCommandErrorMessage } from "./platform";
 
 export interface CommandOptions {
   errorToast?: string | false;

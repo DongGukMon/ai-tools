@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from "react";
-import { writePty } from "../lib/tauri";
+import { writePty } from "../lib/platform";
 import { runCommandSafely } from "../lib/command";
 import {
   executeTerminalCommand,

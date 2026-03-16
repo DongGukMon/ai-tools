@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useProjectStore } from "../../store/project";
 import { useToast } from "../../store/toast";
-import { getCommandErrorMessage } from "../../lib/tauri";
+import { getCommandErrorMessage } from "../../lib/platform";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
 import { cn } from "../../lib/cn";

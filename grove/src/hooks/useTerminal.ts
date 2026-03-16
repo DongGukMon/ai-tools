@@ -5,7 +5,7 @@ import {
   loadTerminalSessionSnapshot,
   type CreatePtyRequest,
   type CreatePtyRestore,
-} from "../lib/tauri";
+} from "../lib/platform";
 import { runCommand, runCommandSafely } from "../lib/command";
 import {
   buildTerminalRestorePlan,

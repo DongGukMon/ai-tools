@@ -1,16 +1,15 @@
-import { listen } from "@tauri-apps/api/event";
 import { FitAddon } from "@xterm/addon-fit";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal } from "@xterm/xterm";
 import type { TerminalTheme } from "../types";
+import { platform, resizePty, writePty } from "./platform";
 import {
   getMacShortcutSequence,
   isMacClearTerminalShortcut,
   isTerminalCompositionEvent,
   shouldEnableTerminalWebgl,
 } from "./terminal-input";
-import { resizePty, writePty } from "./tauri";
 
 export type TerminalInitialContentSource = "snapshotFallback" | "tmuxCapture";
 
@@ -217,15 +216,15 @@ class TerminalPaneRuntime {
       return false;
     });
 
-    this.unlistenPromise = listen<{ id: string; data: string }>(
+    this.unlistenPromise = platform.listen<{ id: string; data: string }>(
       "pty-output",
-      (event) => {
-        if (event.payload.id !== this.ptyId) {
+      (payload) => {
+        if (payload.id !== this.ptyId) {
           return;
         }
 
         try {
-          const binary = atob(event.payload.data);
+          const binary = atob(payload.data);
           const bytes = new Uint8Array(binary.length);
           for (let i = 0; i < binary.length; i++) {
             bytes[i] = binary.charCodeAt(i);

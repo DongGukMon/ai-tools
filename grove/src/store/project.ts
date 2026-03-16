@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { Project, Worktree } from "../types";
-import * as tauri from "../lib/tauri";
+import * as tauri from "../lib/platform";
 import { runCommand, runCommandSafely } from "../lib/command";
 
 interface ProjectState {

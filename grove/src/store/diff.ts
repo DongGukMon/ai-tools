@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { FileStatus, CommitInfo, FileDiff } from "../types";
-import * as tauri from "../lib/tauri";
+import * as tauri from "../lib/platform";
 import { runCommandSafely, runCommand } from "../lib/command";
 import { useToastStore } from "../store/toast";
 

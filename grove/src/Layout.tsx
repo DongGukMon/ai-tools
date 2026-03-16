@@ -6,6 +6,7 @@ import { cn } from "./lib/cn";
 import Sidebar from "./components/sidebar/Sidebar";
 import TerminalPanel from "./components/terminal/TerminalPanel";
 import DiffPanel from "./components/diff/DiffPanel";
+import { windowDragRegionProps } from "./lib/platform";
 import { usePanelLayoutStore } from "./store/panel-layout";
 import { useFullscreen } from "./hooks/useFullscreen";
 
@@ -18,17 +19,17 @@ function TitleBar() {
     <div
       className="flex items-center shrink-0 bg-sidebar select-none border-b border-border"
       style={{ height: TITLE_BAR_HEIGHT }}
-      data-tauri-drag-region
+      {...windowDragRegionProps}
     >
       {/* Traffic light spacer (macOS) / padding in fullscreen */}
       {!isFullscreen && (
-        <div className="w-[86px] shrink-0" data-tauri-drag-region />
+        <div className="w-[86px] shrink-0" {...windowDragRegionProps} />
       )}
 
       {/* Logo */}
       <div
         className={cn("flex items-center gap-1", { "pl-4": isFullscreen })}
-        data-tauri-drag-region
+        {...windowDragRegionProps}
       >
         <div className="flex h-5 w-5 items-center justify-center rounded bg-accent">
           <Command className="h-3 w-3 text-white" />

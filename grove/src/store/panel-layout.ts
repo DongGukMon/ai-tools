@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { savePanelLayouts, loadPanelLayouts } from "../lib/tauri";
+import { savePanelLayouts, loadPanelLayouts } from "../lib/platform";
 
 interface PanelLayouts {
   main: number[];

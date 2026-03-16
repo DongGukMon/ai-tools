@@ -1,3 +1,5 @@
+import { platform } from "./platform";
+
 const DEBUG = import.meta.env.DEV;
 
 export function log(tag: string, ...args: unknown[]) {
@@ -19,9 +21,11 @@ export function error(tag: string, ...args: unknown[]) {
 /** Listen for backend log events and pipe to console. Returns cleanup function. */
 export async function initBackendLogPipe(): Promise<(() => void) | undefined> {
   if (!DEBUG) return;
-  const { listen } = await import("@tauri-apps/api/event");
-  const unlisten = await listen<{ level: string; tag: string; message: string }>("grove:log", (event) => {
-    const { level, tag, message } = event.payload;
+  const unlisten = await platform.listen<{
+    level: string;
+    tag: string;
+    message: string;
+  }>("grove:log", ({ level, tag, message }) => {
     const prefix = `[grove:backend:${tag}]`;
     if (level === "error") console.error(prefix, message);
     else if (level === "warn") console.warn(prefix, message);

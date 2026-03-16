@@ -1,4 +1,6 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke as tauriInvoke } from "@tauri-apps/api/core";
+import { listen as tauriListen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import type {
   TerminalTheme,
   AppConfig,
@@ -8,7 +10,29 @@ import type {
   FileStatus,
   CommitInfo,
   FileDiff,
-} from "../types";
+} from "../../types";
+import type { Platform } from "./types";
+
+export const windowDragRegionProps = {
+  "data-tauri-drag-region": "",
+} as const;
+
+export const platform: Platform = {
+  invoke<T>(cmd: string, args?: Record<string, unknown>) {
+    return tauriInvoke<T>(cmd, args);
+  },
+  listen<T = unknown>(event: string, handler: (payload: T) => void) {
+    return tauriListen<T>(event, ({ payload }) => handler(payload));
+  },
+  isFullscreen() {
+    return getCurrentWindow().isFullscreen();
+  },
+  onResized(handler: () => void) {
+    return getCurrentWindow().onResized(() => {
+      handler();
+    });
+  },
+};
 
 // Terminal session snapshots are keyed by stable paneId. ptyId is only an
 // optional runtime lookup handle for backend-enriched scrollback/cwd capture.
@@ -80,7 +104,7 @@ export function getCommandErrorMessage(error: unknown): string {
   return message || "Unknown error";
 }
 
-function sanitizeCommandErrorMessage(message: string): string {
+export function sanitizeCommandErrorMessage(message: string): string {
   return message
     .replace(/^Error invoking command '[^']+':\s*/i, "")
     .replace(/^Error:\s*/i, "")
@@ -96,58 +120,58 @@ function sanitizeCommandErrorMessage(message: string): string {
 // === CONFIG/THEME COMMANDS (W1) ===
 
 export async function getTerminalTheme(): Promise<{ theme: TerminalTheme; detected: boolean }> {
-  return invoke<{ theme: TerminalTheme; detected: boolean }>("get_terminal_theme");
+  return platform.invoke<{ theme: TerminalTheme; detected: boolean }>("get_terminal_theme");
 }
 
 export async function getAppConfig(): Promise<AppConfig> {
-  return invoke<AppConfig>("get_app_config");
+  return platform.invoke<AppConfig>("get_app_config");
 }
 
 export async function saveAppConfig(config: AppConfig): Promise<void> {
-  return invoke("save_app_config", { config });
+  return platform.invoke("save_app_config", { config });
 }
 
 // === TERMINAL LAYOUT PERSISTENCE ===
 
 export async function saveTerminalLayouts(layouts: string): Promise<void> {
-  return invoke("save_terminal_layouts", { layouts });
+  return platform.invoke("save_terminal_layouts", { layouts });
 }
 
 export async function loadTerminalLayouts(): Promise<string> {
-  return invoke<string>("load_terminal_layouts");
+  return platform.invoke<string>("load_terminal_layouts");
 }
 
 export async function savePanelLayouts(layouts: string): Promise<void> {
-  return invoke("save_panel_layouts", { layouts });
+  return platform.invoke("save_panel_layouts", { layouts });
 }
 
 export async function loadPanelLayouts(): Promise<string> {
-  return invoke<string>("load_panel_layouts");
+  return platform.invoke<string>("load_panel_layouts");
 }
 
 // === GIT PROJECT COMMANDS (W2) ===
 
 export async function listProjects(): Promise<Project[]> {
-  return invoke<Project[]>("list_projects");
+  return platform.invoke<Project[]>("list_projects");
 }
 
 export async function addProject(url: string): Promise<Project> {
-  return invoke<Project>("add_project", { url });
+  return platform.invoke<Project>("add_project", { url });
 }
 
 export async function createProject(
   name: string,
   path: string,
 ): Promise<Project> {
-  return invoke<Project>("create_project", { name, path });
+  return platform.invoke<Project>("create_project", { name, path });
 }
 
 export async function removeProject(id: string): Promise<void> {
-  return invoke("remove_project", { id });
+  return platform.invoke("remove_project", { id });
 }
 
 export async function refreshProject(projectId: string): Promise<Project> {
-  return invoke<Project>("refresh_project", { projectId });
+  return platform.invoke<Project>("refresh_project", { projectId });
 }
 
 export async function addWorktree(
@@ -155,18 +179,18 @@ export async function addWorktree(
   name: string,
   branch: string,
 ): Promise<Worktree> {
-  return invoke<Worktree>("add_worktree", { projectId, name, branch });
+  return platform.invoke<Worktree>("add_worktree", { projectId, name, branch });
 }
 
 export async function removeWorktree(
   projectId: string,
   name: string,
 ): Promise<void> {
-  return invoke("remove_worktree", { projectId, name });
+  return platform.invoke("remove_worktree", { projectId, name });
 }
 
 export async function listWorktrees(projectId: string): Promise<Worktree[]> {
-  return invoke<Worktree[]>("list_worktrees", { projectId });
+  return platform.invoke<Worktree[]>("list_worktrees", { projectId });
 }
 
 // === PTY COMMANDS (W3) ===
@@ -174,11 +198,11 @@ export async function listWorktrees(projectId: string): Promise<Worktree[]> {
 export async function createPty(
   request: CreatePtyRequest,
 ): Promise<CreatePtyResult> {
-  return invoke<CreatePtyResult>("create_pty", { ...request });
+  return platform.invoke<CreatePtyResult>("create_pty", { ...request });
 }
 
 export async function writePty(id: string, data: number[]): Promise<void> {
-  return invoke("write_pty", { id, data });
+  return platform.invoke("write_pty", { id, data });
 }
 
 export async function resizePty(
@@ -186,17 +210,17 @@ export async function resizePty(
   cols: number,
   rows: number,
 ): Promise<void> {
-  return invoke("resize_pty", { id, cols, rows });
+  return platform.invoke("resize_pty", { id, cols, rows });
 }
 
 export async function closePty(ptyId: string): Promise<void> {
-  return invoke("close_pty", { ptyId });
+  return platform.invoke("close_pty", { ptyId });
 }
 
 export async function saveTerminalSessionSnapshot(
   snapshot: SaveTerminalSessionSnapshotRequest,
 ): Promise<TerminalSessionSnapshot> {
-  return invoke<TerminalSessionSnapshot>("save_terminal_session_snapshot", {
+  return platform.invoke<TerminalSessionSnapshot>("save_terminal_session_snapshot", {
     snapshot,
   });
 }
@@ -204,7 +228,7 @@ export async function saveTerminalSessionSnapshot(
 export async function loadTerminalSessionSnapshot(
   worktreePath: string,
 ): Promise<TerminalSessionSnapshot | null> {
-  return invoke<TerminalSessionSnapshot | null>("load_terminal_session_snapshot", {
+  return platform.invoke<TerminalSessionSnapshot | null>("load_terminal_session_snapshot", {
     worktreePath,
   });
 }
@@ -212,49 +236,49 @@ export async function loadTerminalSessionSnapshot(
 // === GIT DIFF COMMANDS (W4) ===
 
 export async function getStatus(worktreePath: string): Promise<FileStatus[]> {
-  return invoke<FileStatus[]>("get_status", { worktreePath });
+  return platform.invoke<FileStatus[]>("get_status", { worktreePath });
 }
 
 export async function getCommits(
   worktreePath: string,
   limit: number,
 ): Promise<CommitInfo[]> {
-  return invoke<CommitInfo[]>("get_commits", { worktreePath, limit });
+  return platform.invoke<CommitInfo[]>("get_commits", { worktreePath, limit });
 }
 
 export async function getWorkingDiff(
   worktreePath: string,
   path: string,
 ): Promise<FileDiff> {
-  return invoke<FileDiff>("get_working_diff", { worktreePath, path });
+  return platform.invoke<FileDiff>("get_working_diff", { worktreePath, path });
 }
 
 export async function getCommitDiff(
   worktreePath: string,
   hash: string,
 ): Promise<FileDiff[]> {
-  return invoke<FileDiff[]>("get_commit_diff", { worktreePath, hash });
+  return platform.invoke<FileDiff[]>("get_commit_diff", { worktreePath, hash });
 }
 
 export async function stageFile(
   worktreePath: string,
   path: string,
 ): Promise<void> {
-  return invoke("stage_file", { worktreePath, path });
+  return platform.invoke("stage_file", { worktreePath, path });
 }
 
 export async function unstageFile(
   worktreePath: string,
   path: string,
 ): Promise<void> {
-  return invoke("unstage_file", { worktreePath, path });
+  return platform.invoke("unstage_file", { worktreePath, path });
 }
 
 export async function discardFile(
   worktreePath: string,
   path: string,
 ): Promise<void> {
-  return invoke("discard_file", { worktreePath, path });
+  return platform.invoke("discard_file", { worktreePath, path });
 }
 
 export async function stageHunk(
@@ -262,7 +286,7 @@ export async function stageHunk(
   path: string,
   hunkIndex: number,
 ): Promise<void> {
-  return invoke("stage_hunk", { worktreePath, path, hunkIndex });
+  return platform.invoke("stage_hunk", { worktreePath, path, hunkIndex });
 }
 
 export async function unstageHunk(
@@ -270,7 +294,7 @@ export async function unstageHunk(
   path: string,
   hunkIndex: number,
 ): Promise<void> {
-  return invoke("unstage_hunk", { worktreePath, path, hunkIndex });
+  return platform.invoke("unstage_hunk", { worktreePath, path, hunkIndex });
 }
 
 export async function discardHunk(
@@ -278,7 +302,7 @@ export async function discardHunk(
   path: string,
   hunkIndex: number,
 ): Promise<void> {
-  return invoke("discard_hunk", { worktreePath, path, hunkIndex });
+  return platform.invoke("discard_hunk", { worktreePath, path, hunkIndex });
 }
 
 export async function stageLines(
@@ -287,7 +311,7 @@ export async function stageLines(
   hunkIndex: number,
   lineIndices: number[],
 ): Promise<void> {
-  return invoke("stage_lines", { worktreePath, path, hunkIndex, lineIndices });
+  return platform.invoke("stage_lines", { worktreePath, path, hunkIndex, lineIndices });
 }
 
 export async function unstageLines(
@@ -296,7 +320,7 @@ export async function unstageLines(
   hunkIndex: number,
   lineIndices: number[],
 ): Promise<void> {
-  return invoke("unstage_lines", {
+  return platform.invoke("unstage_lines", {
     worktreePath,
     path,
     hunkIndex,
@@ -310,7 +334,7 @@ export async function discardLines(
   hunkIndex: number,
   lineIndices: number[],
 ): Promise<void> {
-  return invoke("discard_lines", {
+  return platform.invoke("discard_lines", {
     worktreePath,
     path,
     hunkIndex,
@@ -323,11 +347,11 @@ export async function discardLines(
 export async function getBehindCount(
   worktreePath: string,
 ): Promise<BehindInfo> {
-  return invoke<BehindInfo>("get_behind_count", { worktreePath });
+  return platform.invoke<BehindInfo>("get_behind_count", { worktreePath });
 }
 
 export async function mergeDefaultBranch(
   worktreePath: string,
 ): Promise<void> {
-  return invoke("merge_default_branch", { worktreePath });
+  return platform.invoke("merge_default_branch", { worktreePath });
 }
