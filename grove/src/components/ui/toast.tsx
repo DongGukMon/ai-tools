@@ -33,17 +33,16 @@ const ToastViewport = React.forwardRef<
 ToastViewport.displayName = ToastPrimitives.Viewport.displayName;
 
 const toastVariants = cva(
-  "group pointer-events-auto relative flex w-full items-start gap-3 overflow-hidden rounded-lg border px-4 py-3 shadow-lg transition-all",
+  "group pointer-events-auto relative flex w-full items-center gap-3 overflow-hidden rounded-lg border px-4 py-3 shadow-lg transition-all",
   {
     variants: {
       variant: {
         default: "border-border bg-card text-card-foreground",
-        destructive:
-          "border-destructive bg-destructive text-card-foreground",
-        success: "border-success bg-success text-card-foreground",
-        warning: "border-warning bg-warning text-card-foreground",
-        info: "border-border bg-background text-card-foreground",
-        error: "border-destructive bg-destructive text-card-foreground",
+        destructive: "border-destructive/15 bg-card text-card-foreground",
+        success: "border-success/15 bg-card text-card-foreground",
+        warning: "border-warning/15 bg-card text-card-foreground",
+        info: "border-border bg-card text-card-foreground",
+        error: "border-destructive/15 bg-card text-card-foreground",
       },
     },
     defaultVariants: {
@@ -144,75 +143,129 @@ const toastCardConfig: Record<
   ToastItem["variant"],
   {
     icon: typeof CheckCircle2;
-    iconClassName: string;
-    variant: NonNullable<VariantProps<typeof toastVariants>["variant"]>;
+    accentColor: string;
+    iconBg: string;
+    borderColor: string;
+    glowShadow: string;
   }
 > = {
   success: {
     icon: CheckCircle2,
-    iconClassName: "text-success",
-    variant: "success",
+    accentColor: "oklch(0.72 0.19 145)",
+    iconBg: "oklch(0.72 0.19 145 / 0.10)",
+    borderColor: "oklch(0.72 0.19 145 / 0.15)",
+    glowShadow: "0 0 24px oklch(0.72 0.19 145 / 0.06)",
   },
   error: {
     icon: XCircle,
-    iconClassName: "text-destructive",
-    variant: "error",
+    accentColor: "oklch(0.65 0.22 25)",
+    iconBg: "oklch(0.65 0.22 25 / 0.10)",
+    borderColor: "oklch(0.65 0.22 25 / 0.15)",
+    glowShadow: "0 0 24px oklch(0.65 0.22 25 / 0.06)",
   },
   info: {
     icon: Info,
-    iconClassName: "text-accent",
-    variant: "info",
+    accentColor: "oklch(0.7 0.15 240)",
+    iconBg: "oklch(0.7 0.15 240 / 0.10)",
+    borderColor: "oklch(0.7 0.15 240 / 0.15)",
+    glowShadow: "0 0 24px oklch(0.7 0.15 240 / 0.06)",
   },
   warning: {
     icon: AlertCircle,
-    iconClassName: "text-warning",
-    variant: "warning",
+    accentColor: "oklch(0.8 0.16 80)",
+    iconBg: "oklch(0.8 0.16 80 / 0.10)",
+    borderColor: "oklch(0.8 0.16 80 / 0.15)",
+    glowShadow: "0 0 24px oklch(0.8 0.16 80 / 0.06)",
   },
 };
 
 function ToastCard({ toast }: { toast: ToastItem }) {
   const removeToast = useToastStore((state) => state.removeToast);
   const [exiting, setExiting] = React.useState(false);
+  const [progressStarted, setProgressStarted] = React.useState(false);
   const config = toastCardConfig[toast.variant];
   const Icon = config.icon;
 
   React.useEffect(() => {
+    const frame = requestAnimationFrame(() => setProgressStarted(true));
     const exitTimer = window.setTimeout(() => setExiting(true), 2600);
-    return () => window.clearTimeout(exitTimer);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.clearTimeout(exitTimer);
+    };
   }, []);
 
   React.useEffect(() => {
-    if (!exiting) {
-      return;
-    }
-
-    const removeTimer = window.setTimeout(() => removeToast(toast.id), 200);
+    if (!exiting) return;
+    const removeTimer = window.setTimeout(() => removeToast(toast.id), 300);
     return () => window.clearTimeout(removeTimer);
   }, [exiting, removeToast, toast.id]);
 
   return (
     <div
-      className={cn(toastVariants({ variant: config.variant }), {
-        "animate-in fade-in-0 slide-in-from-right-full": !exiting,
-        "animate-out fade-out-80 slide-out-to-right-full fill-mode-forwards": exiting,
-      })}
+      className={cn(
+        "group pointer-events-auto relative flex w-full items-center gap-3 overflow-hidden rounded-lg py-3 pr-3 pl-4",
+        {
+          "animate-in fade-in-0 slide-in-from-right-full zoom-in-95 duration-300": !exiting,
+          "animate-out fade-out-0 slide-out-to-right-full zoom-out-95 duration-200 fill-mode-forwards": exiting,
+        },
+      )}
+      style={{
+        backgroundColor: "oklch(0.14 0 0)",
+        border: `1px solid ${config.borderColor}`,
+        boxShadow: `0 8px 32px oklch(0 0 0 / 0.45), 0 0 0 1px oklch(1 0 0 / 0.04), ${config.glowShadow}`,
+      }}
     >
-      <Icon className={cn("mt-0.5 size-4 shrink-0", config.iconClassName)} />
-      <div className={cn("min-w-0 flex-1")}>
-        <p className={cn("text-sm font-medium leading-snug")}>{toast.message}</p>
+      {/* Left accent bar */}
+      <div
+        className={cn("absolute inset-y-0 left-0 w-[2.5px]")}
+        style={{ backgroundColor: config.accentColor }}
+      />
+
+      {/* Icon */}
+      <div
+        className={cn(
+          "flex size-7 shrink-0 items-center justify-center rounded-full",
+        )}
+        style={{ backgroundColor: config.iconBg }}
+      >
+        <Icon
+          className={cn("size-3.5")}
+          style={{ color: config.accentColor }}
+        />
       </div>
+
+      {/* Message */}
+      <p className={cn("min-w-0 flex-1 text-sm font-medium leading-snug text-foreground")}>
+        {toast.message}
+      </p>
+
+      {/* Close button */}
       <Button
         type="button"
         variant="ghost"
         size="icon-sm"
         className={cn(
-          "mt-[-2px] text-muted-foreground hover:text-foreground",
+          "shrink-0 text-muted-foreground opacity-0 transition-opacity duration-150 hover:text-foreground group-hover:opacity-100",
         )}
         onClick={() => setExiting(true)}
       >
         <X className={cn("size-3.5")} />
         <span className={cn("sr-only")}>Dismiss</span>
       </Button>
+
+      {/* Progress bar */}
+      <div className={cn("absolute inset-x-0 bottom-0 h-[1.5px]")}>
+        <div
+          className={cn("h-full origin-left transition-transform ease-linear")}
+          style={{
+            backgroundColor: config.accentColor,
+            opacity: 0.35,
+            transform: progressStarted ? "scaleX(0)" : "scaleX(1)",
+            transitionDuration: "2600ms",
+          }}
+        />
+      </div>
     </div>
   );
 }
