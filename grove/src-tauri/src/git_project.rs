@@ -1,5 +1,5 @@
 use crate::config::{self, ProjectEntry};
-use crate::process_env::preferred_ssh_auth_sock;
+use crate::process_env::{enriched_path, preferred_ssh_auth_sock};
 use crate::{Project, Worktree};
 use git2::Repository;
 use std::collections::HashSet;
@@ -18,6 +18,7 @@ fn base_dir() -> PathBuf {
 
 pub(crate) fn git_command() -> Command {
     let mut command = Command::new("git");
+    command.env("PATH", enriched_path());
     if let Some(ssh_auth_sock) = preferred_ssh_auth_sock() {
         command.env("SSH_AUTH_SOCK", ssh_auth_sock);
     }

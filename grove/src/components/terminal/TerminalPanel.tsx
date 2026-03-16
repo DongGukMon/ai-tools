@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { TerminalSquare } from "lucide-react";
 import { useTerminalStore } from "../../store/terminal";
 import { useProjectStore } from "../../store/project";
 import {
@@ -212,7 +213,8 @@ export default function TerminalPanel() {
       <TerminalToolbar />
       <div className="flex-1 relative overflow-hidden">
         {!activeWorktree ? (
-          <div className="flex items-center justify-center h-full">
+          <div className="flex flex-col items-center justify-center h-full gap-3">
+            <TerminalSquare className="size-10 text-muted-foreground/50" />
             <span className="text-sm text-muted-foreground">Select a worktree to open terminal</span>
           </div>
         ) : (

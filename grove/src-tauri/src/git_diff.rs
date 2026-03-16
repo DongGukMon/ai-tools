@@ -1,3 +1,4 @@
+use crate::process_env::enriched_path;
 use crate::{BehindInfo, CommitInfo, DiffHunk, DiffLine, FileDiff, FileStatus};
 use git2::{DiffOptions, Repository, Sort, StatusOptions};
 use std::collections::HashSet;
@@ -518,6 +519,7 @@ fn run_git(worktree_path: &str, args: &[&str]) -> Result<(), String> {
     let output = Command::new("git")
         .args(args)
         .current_dir(worktree_path)
+        .env("PATH", enriched_path())
         .output()
         .map_err(|e| format!("Failed to run git: {}", e))?;
 
@@ -536,6 +538,7 @@ fn apply_patch(worktree_path: &str, patch: &str, extra_args: &[&str]) -> Result<
         cmd.arg(arg);
     }
     cmd.current_dir(worktree_path);
+    cmd.env("PATH", enriched_path());
     cmd.stdin(std::process::Stdio::piped());
 
     let mut child = cmd

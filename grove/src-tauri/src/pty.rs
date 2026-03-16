@@ -1,5 +1,7 @@
 use crate::{
-    config, process_env::preferred_ssh_auth_sock, CreatePtyInitialHydration,
+    config,
+    process_env::{enriched_path, preferred_ssh_auth_sock},
+    CreatePtyInitialHydration,
     CreatePtyInitialHydrationSource, CreatePtyRestore, CreatePtyResult, CreatePtySessionState,
     SaveTerminalSessionSnapshotRequest, TerminalPaneSnapshot, TerminalPaneSnapshotInput,
     TerminalRestoreCwdSource, TerminalSessionSnapshot,
@@ -565,6 +567,7 @@ fn required_arg(name: &str, value: &str) -> Result<String, String> {
 }
 
 fn apply_portable_terminal_env(cmd: &mut CommandBuilder) {
+    cmd.env("PATH", enriched_path());
     cmd.env("TERM", "xterm-256color");
     let locale = preferred_utf8_locale();
     cmd.env("LC_ALL", &locale);
@@ -576,6 +579,7 @@ fn apply_portable_terminal_env(cmd: &mut CommandBuilder) {
 }
 
 fn apply_tmux_command_env(cmd: &mut Command) {
+    cmd.env("PATH", enriched_path());
     let locale = preferred_utf8_locale();
     cmd.env("LC_ALL", &locale);
     cmd.env("LANG", &locale);
@@ -778,6 +782,7 @@ fn kill_tmux_session_if_exists(session_name: &str) -> Result<(), String> {
 fn tmux_output<const N: usize>(args: [&str; N]) -> Result<Output, String> {
     Command::new("tmux")
         .args(args)
+        .env("PATH", enriched_path())
         .output()
         .map_err(tmux_command_error)
 }

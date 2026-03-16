@@ -1,6 +1,8 @@
 use std::env;
-use std::process::Command;
+use std::io::Read as _;
+use std::process::{Command, Stdio};
 use std::sync::OnceLock;
+use std::time::{Duration, Instant};
 
 fn normalize_env_value(value: Option<String>) -> Option<String> {
     value.and_then(|value| {
@@ -50,6 +52,88 @@ fn cached_launchctl_ssh_auth_sock() -> Option<String> {
     None
 }
 
+const LOGIN_SHELL_TIMEOUT: Duration = Duration::from_secs(2);
+const PATH_MARKER: &str = "__GROVE_PATH__";
+
+pub fn enriched_path() -> &'static str {
+    static PATH: OnceLock<String> = OnceLock::new();
+    PATH.get_or_init(|| {
+        resolve_login_shell_path().unwrap_or_else(|| env::var("PATH").unwrap_or_default())
+    })
+    .as_str()
+}
+
+#[cfg(target_os = "macos")]
+fn resolve_login_shell_path() -> Option<String> {
+    let shell = env::var("SHELL").ok()?;
+    if !is_posix_like_shell(&shell) {
+        return None;
+    }
+
+    let mut child = Command::new(&shell)
+        .args([
+            "-l",
+            "-c",
+            &format!(
+                "printf '\\n{m}\\n%s\\n{m}' \"$(/usr/bin/printenv PATH)\"",
+                m = PATH_MARKER
+            ),
+        ])
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .stdout(Stdio::piped())
+        .spawn()
+        .ok()?;
+
+    let start = Instant::now();
+    loop {
+        match child.try_wait().ok()? {
+            Some(_) => break,
+            None if start.elapsed() >= LOGIN_SHELL_TIMEOUT => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+            None => std::thread::sleep(Duration::from_millis(50)),
+        }
+    }
+
+    let mut stdout = String::new();
+    child.stdout.take()?.read_to_string(&mut stdout).ok()?;
+    parse_path_marker(&stdout)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn resolve_login_shell_path() -> Option<String> {
+    None
+}
+
+fn is_posix_like_shell(shell: &str) -> bool {
+    let basename = std::path::Path::new(shell)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("");
+    matches!(basename, "bash" | "zsh" | "sh" | "dash" | "ksh")
+}
+
+fn parse_path_marker(output: &str) -> Option<String> {
+    let start_tag = format!("{PATH_MARKER}\n");
+    let end_tag = format!("\n{PATH_MARKER}");
+
+    let start = output.find(&start_tag)? + start_tag.len();
+    let end = output.rfind(&end_tag)?;
+    if start >= end {
+        return None;
+    }
+
+    let path = output[start..end].trim();
+    if path.is_empty() {
+        None
+    } else {
+        Some(path.to_string())
+    }
+}
+
 pub fn preferred_ssh_auth_sock() -> Option<String> {
     resolve_with(normalize_env_value(env::var("SSH_AUTH_SOCK").ok()), || {
         cached_launchctl_ssh_auth_sock()
@@ -58,7 +142,10 @@ pub fn preferred_ssh_auth_sock() -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{normalize_env_value, preferred_ssh_auth_sock, resolve_with};
+    use super::{
+        enriched_path, is_posix_like_shell, normalize_env_value, parse_path_marker,
+        preferred_ssh_auth_sock, resolve_with,
+    };
     use std::sync::{Mutex, OnceLock};
 
     fn env_lock() -> std::sync::MutexGuard<'static, ()> {
@@ -103,5 +190,40 @@ mod tests {
             Some("/private/tmp/agent.sock".to_string())
         );
         assert_eq!(normalize_env_value(Some("   ".to_string())), None);
+    }
+
+    #[test]
+    fn parse_path_marker_extracts_path_between_markers() {
+        let output = "Welcome!\n\n__GROVE_PATH__\n/usr/bin:/opt/homebrew/bin\n__GROVE_PATH__";
+        assert_eq!(
+            parse_path_marker(output),
+            Some("/usr/bin:/opt/homebrew/bin".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_path_marker_returns_none_on_missing_markers() {
+        assert_eq!(parse_path_marker("no markers here"), None);
+        assert_eq!(parse_path_marker(""), None);
+    }
+
+    #[test]
+    fn parse_path_marker_returns_none_on_empty_path() {
+        let output = "__GROVE_PATH__\n\n__GROVE_PATH__";
+        assert_eq!(parse_path_marker(output), None);
+    }
+
+    #[test]
+    fn is_posix_like_shell_recognizes_common_shells() {
+        assert!(is_posix_like_shell("/bin/zsh"));
+        assert!(is_posix_like_shell("/bin/bash"));
+        assert!(is_posix_like_shell("/usr/bin/dash"));
+        assert!(!is_posix_like_shell("/usr/bin/fish"));
+        assert!(!is_posix_like_shell("/usr/bin/nu"));
+    }
+
+    #[test]
+    fn enriched_path_returns_non_empty() {
+        assert!(!enriched_path().is_empty());
     }
 }
