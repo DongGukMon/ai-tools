@@ -25,6 +25,8 @@ const TMUX_GROVE_WORKTREE_OPTION: &str = "@grove_worktree";
 const TMUX_GROVE_PANE_ID_OPTION: &str = "@grove_pane_id";
 const TMUX_STATUS_OPTION: &str = "status";
 const TMUX_STATUS_OFF_VALUE: &str = "off";
+const TMUX_MOUSE_OPTION: &str = "mouse";
+const TMUX_MOUSE_ON_VALUE: &str = "on";
 const WORKTREE_HASH_LEN: usize = 12;
 const PANE_PREFIX_LEN: usize = 8;
 const PANE_HASH_LEN: usize = 4;
@@ -677,6 +679,7 @@ fn set_grove_tmux_metadata(
     tmux_set_option(session_name, TMUX_GROVE_WORKTREE_OPTION, worktree_path)?;
     tmux_set_option(session_name, TMUX_GROVE_PANE_ID_OPTION, pane_id)?;
     tmux_set_option(session_name, TMUX_STATUS_OPTION, TMUX_STATUS_OFF_VALUE)?;
+    tmux_set_option(session_name, TMUX_MOUSE_OPTION, TMUX_MOUSE_ON_VALUE)?;
     Ok(())
 }
 
@@ -1139,6 +1142,12 @@ mod tests {
                 .as_deref(),
             Some(TMUX_STATUS_OFF_VALUE)
         );
+        assert_eq!(
+            tmux_session_option(&session_name, TMUX_MOUSE_OPTION)
+                .unwrap()
+                .as_deref(),
+            Some(TMUX_MOUSE_ON_VALUE)
+        );
 
         tmux_set_option(&session_name, TMUX_STATUS_OPTION, "on").unwrap();
 
@@ -1151,6 +1160,12 @@ mod tests {
                 .unwrap()
                 .as_deref(),
             Some(TMUX_STATUS_OFF_VALUE)
+        );
+        assert_eq!(
+            tmux_session_option(&session_name, TMUX_MOUSE_OPTION)
+                .unwrap()
+                .as_deref(),
+            Some(TMUX_MOUSE_ON_VALUE)
         );
 
         kill_tmux_session_if_exists(&session_name).unwrap();
