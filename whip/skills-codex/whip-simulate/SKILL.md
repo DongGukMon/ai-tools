@@ -64,15 +64,11 @@ For A/B comparisons, choose a strategy:
 | Sequential | Outputs are structured (code, configs) — one run executes A then B | N |
 | Isolated | Outputs involve judgment or prose — separate runs per version | 2N |
 
-For **cross-backend A/B** comparisons (for example `claude` vs `codex` on the same scenario), use isolated strategy and force whip mode even if the user asked for `--agent`. Run N whip tasks on backend A and N whip tasks on backend B, then compare consistency within and across backends.
-
 Present the test plan including:
 - Test cases with output contracts
 - Execution mode (`whip` or `agent`)
-- Backend and difficulty settings
 - A/B strategy if applicable
 - Total run count
-- Expected report format
 
 **DO NOT execute anything before the user approves the test plan.**
 
@@ -86,13 +82,10 @@ Resolve one master IRC identity and reuse it for every simulation task. Reuse `c
 claude-irc whoami 2>/dev/null || claude-irc join wp-master-sim-<slug>
 ```
 
-Create one task per simulation run in the `global` workspace. In this mode, `--backend` and `--difficulty` map directly to `whip task create`. Even when using the default backend, pass `--backend codex` explicitly:
+Create one task per simulation run in the `global` workspace:
 
 ```bash
 whip task create "sim-{test-case}-{run}" \
-  --workspace global \
-  --backend <backend> \
-  --difficulty <difficulty> \
   --desc "You are a simulation task. Execute the task and produce structured output.
 
 ## Context
@@ -110,8 +103,6 @@ Then assign each created task to the same master IRC identity:
 ```bash
 whip task assign <task-id> --master-irc <resolved-master-irc>
 ```
-
-For cross-backend A/B, create separate groups with different `--backend` values.
 
 Monitor progress with:
 - `whip task list`
@@ -144,9 +135,6 @@ Concrete dispatch recipe:
 5. After launching a batch, use `wait` on the outstanding ids with a long timeout. Each time an agent finishes, collect its final message as that run's output, remove it from the outstanding set, and continue waiting until the batch is done.
 6. Do not send follow-up context with `send_input`. If a run fails or times out, rerun that run once with the same self-contained prompt. If it fails again, mark it `unclassifiable` and include the failure in the report.
 
-Cross-backend note:
-- Agent mode is Codex-only. If the scenario requires `claude` runs or direct `claude` vs `codex` A/B, switch to whip mode before executing.
-
 ### 3. Analyze
 
 Classify outputs into patterns:
@@ -156,8 +144,6 @@ Classify outputs into patterns:
 3. Label each group (`A`, `B`, `C`, ...).
 4. Identify the **root cause** of each divergent pattern.
 5. Flag malformed outputs as `unclassifiable`.
-
-For cross-backend A/B: analyze consistency within each backend first, then compare across backends.
 
 ### 4. Report
 
@@ -181,16 +167,8 @@ For each non-dominant pattern:
 - Severity: cosmetic | functional | breaking
 - Diff from dominant: [key differences]
 
-### Cross-Backend Comparison (if A/B)
-| Metric | Backend A | Backend B |
-|--------|-----------|-----------|
-| Consistency | X/N (Y%) | X/N (Y%) |
-| Dominant pattern | [label] | [label] |
-| Pattern match | [same/different] | — |
-
 ### Summary
 - Total: N runs across M test cases
-- Backend: <backend> | Difficulty: <difficulty>
 - Dominant pattern: A (X%)
 - Key findings: ...
 - Recommendation: [if applicable]

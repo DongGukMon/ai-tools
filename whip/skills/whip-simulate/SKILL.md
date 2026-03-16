@@ -12,17 +12,14 @@ Run multi-agent simulations from a user-provided scenario. Concretize the scenar
 Extract from `$ARGUMENTS`:
 - **Scenario**: what to simulate, compare, or verify
 - **`--runs N`**: number of simulation runs (default: 5)
-- **`--backend`**: backend for simulation agents — `claude` or `codex` (default: `codex`)
-- **`--difficulty`**: difficulty level for simulation agents — `easy`, `medium`, or `hard` (default: `hard`)
 - **`--agent`**: use Agent tool directly instead of `whip task create` (lightweight, faster, good for quick sims)
 
 ## Execution Modes
 
-**Default (whip mode):** Each simulation run is a `whip task create` task. Gives you tracked execution, backend/difficulty control, and workspace integration.
+**Default (whip mode):** Each simulation run is a `whip task create` task. Gives you tracked execution and workspace integration.
 
 **`--agent` flag:** Each run uses the Agent tool directly. Faster, no task overhead, good for quick consistency checks.
 - Batching: ≤10 spawn all at once with `run_in_background: true`, >10 in groups of 10
-- Cross-backend A/B comparisons require whip mode (Agent tool can only spawn its own backend's models)
 
 ## Workspace Context
 
@@ -63,12 +60,9 @@ For A/B comparisons, choose a strategy:
 | Sequential | Outputs are structured (code, configs) — one agent runs A then B | N |
 | Isolated | Outputs involve judgment or prose — separate agents per version | 2N |
 
-For **cross-backend A/B** comparisons (e.g., claude vs codex on the same scenario), use isolated strategy with `--backend` set per group. Run N agents on backend A and N agents on backend B, then compare consistency within and across backends.
-
 Present the test plan including:
 - Test cases with output contracts
 - Execution mode (whip or agent)
-- Backend and difficulty settings
 - A/B strategy if applicable
 - Total agent count
 
@@ -82,8 +76,6 @@ Create one task per simulation run:
 
 ```bash
 whip task create "sim-{test-case}-{run}" \
-  --backend <backend> \
-  --difficulty <difficulty> \
   --desc "You are a simulation agent. Execute the task and produce structured output.
 
 ## Context
@@ -96,9 +88,7 @@ whip task create "sim-{test-case}-{run}" \
 <the exact format to produce — copy verbatim from the test plan>"
 ```
 
-Then assign all tasks. For cross-backend A/B, create separate groups with different `--backend` values.
-
-Monitor progress with `whip task list`. Collect outputs from completed tasks.
+Then assign all tasks. Monitor progress with `whip task list`. Collect outputs from completed tasks.
 
 #### Agent mode (`--agent`)
 
@@ -115,8 +105,6 @@ Batching:
 - ≤ 10 agents: spawn all at once with `run_in_background: true`
 - \> 10 agents: groups of 10, next batch after previous completes
 
-Use `model: sonnet` unless the scenario requires higher reasoning.
-
 ### 3. Analyze
 
 Classify outputs into patterns:
@@ -126,8 +114,6 @@ Classify outputs into patterns:
 3. Label each group (A, B, C...)
 4. Identify **root cause** of each divergent pattern
 5. Flag agents with malformed output as "unclassifiable"
-
-For cross-backend A/B: analyze consistency within each backend first, then compare across backends.
 
 ### 4. Report
 
@@ -149,16 +135,8 @@ For each non-dominant pattern:
 - Severity: cosmetic | functional | breaking
 - Diff from dominant: [key differences]
 
-### Cross-Backend Comparison (if A/B)
-| Metric | Backend A | Backend B |
-|--------|-----------|-----------|
-| Consistency | X/N (Y%) | X/N (Y%) |
-| Dominant pattern | [label] | [label] |
-| Pattern match | [same/different] | — |
-
 ### Summary
 - Total: N runs across M test cases
-- Backend: <backend> | Difficulty: <difficulty>
 - Dominant pattern: A (X%)
 - Key findings: ...
 - Recommendation: [if applicable]
