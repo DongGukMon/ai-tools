@@ -66,7 +66,21 @@ export const useDiffStore = create<DiffState>((set, get) => ({
   behindCount: 0,
   merging: false,
 
-  setWorktreePath: (path) => set({ worktreePath: path }),
+  setWorktreePath: (path) => {
+    if (path === get().worktreePath) return;
+    set({
+      worktreePath: path,
+      fileStatuses: [],
+      commits: [],
+      currentDiff: null,
+      commitDiffs: [],
+      selectedView: "changes",
+      selectedFile: null,
+      isViewingStaged: false,
+      selectedLines: new Set(),
+      behindCount: 0,
+    });
+  },
 
   loadStatus: async () => {
     const wp = get().worktreePath;
