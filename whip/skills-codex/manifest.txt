@@ -1,4 +1,7 @@
+whip-debug/SKILL.md
 whip-lesson-learn/SKILL.md
 whip-lesson-learn/agents/openai.yaml
+whip-lgtm/SKILL.md
 whip-plan/SKILL.md
+whip-simulate/SKILL.md
 whip-start/SKILL.md
