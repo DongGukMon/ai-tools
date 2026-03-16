@@ -2,29 +2,40 @@ import { useEffect, useRef, useCallback } from "react";
 import { Allotment } from "allotment";
 import "allotment/dist/style.css";
 import { Command } from "lucide-react";
+import { cn } from "./lib/cn";
 import Sidebar from "./components/sidebar/Sidebar";
 import TerminalPanel from "./components/terminal/TerminalPanel";
 import DiffPanel from "./components/diff/DiffPanel";
 import { usePanelLayoutStore } from "./store/panel-layout";
+import { useFullscreen } from "./hooks/useFullscreen";
 
 const TITLE_BAR_HEIGHT = 38;
 
 function TitleBar() {
+  const isFullscreen = useFullscreen();
+
   return (
     <div
       className="flex items-center shrink-0 bg-sidebar select-none border-b border-border"
       style={{ height: TITLE_BAR_HEIGHT }}
       data-tauri-drag-region
     >
-      {/* Traffic light spacer (macOS) */}
-      <div className="w-[86px] shrink-0" data-tauri-drag-region />
+      {/* Traffic light spacer (macOS) / padding in fullscreen */}
+      {!isFullscreen && (
+        <div className="w-[86px] shrink-0" data-tauri-drag-region />
+      )}
 
       {/* Logo */}
-      <div className="flex items-center gap-1" data-tauri-drag-region>
+      <div
+        className={cn("flex items-center gap-1", { "pl-4": isFullscreen })}
+        data-tauri-drag-region
+      >
         <div className="flex h-5 w-5 items-center justify-center rounded bg-accent">
           <Command className="h-3 w-3 text-white" />
         </div>
-        <span className="text-xs font-semibold text-foreground">grove</span>
+        <span className="text-xs font-semibold text-foreground">
+          grove{import.meta.env.DEV && " (dev)"}
+        </span>
       </div>
     </div>
   );

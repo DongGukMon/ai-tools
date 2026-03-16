@@ -1,5 +1,6 @@
 use crate::terminal_theme::TerminalTheme;
-use serde::{Deserialize, Serialize};
+use crate::TerminalSessionSnapshotStore;
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -44,6 +45,39 @@ fn config_path() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("."))
         .join(".grove")
         .join("config.json")
+}
+
+fn grove_data_path(filename: &str) -> Result<PathBuf, String> {
+    Ok(dirs::home_dir()
+        .ok_or("No home dir")?
+        .join(".grove")
+        .join(filename))
+}
+
+fn load_json_file_or_default<T>(path: &Path) -> Result<T, String>
+where
+    T: DeserializeOwned + Default,
+{
+    if !path.exists() {
+        return Ok(T::default());
+    }
+
+    let content =
+        fs::read_to_string(path).map_err(|e| format!("Failed to read {}: {e}", path.display()))?;
+    serde_json::from_str(&content).map_err(|e| format!("Failed to parse {}: {e}", path.display()))
+}
+
+fn save_json_file<T>(path: &Path, value: &T) -> Result<(), String>
+where
+    T: Serialize,
+{
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("Failed to create dir: {e}"))?;
+    }
+
+    let content = serde_json::to_string_pretty(value)
+        .map_err(|e| format!("Failed to serialize {}: {e}", path.display()))?;
+    fs::write(path, content).map_err(|e| format!("Failed to write {}: {e}", path.display()))
 }
 
 pub fn load_config() -> GroveConfig {
@@ -98,24 +132,45 @@ fn save_app_config_to_path(path: &Path, app_config: &AppConfig) -> Result<(), St
     save_config_to_path(path, &config)
 }
 
+fn terminal_session_snapshots_path() -> Result<PathBuf, String> {
+    grove_data_path("terminal-session-snapshots.json")
+}
+
+pub fn load_terminal_session_snapshot_store() -> Result<TerminalSessionSnapshotStore, String> {
+    load_terminal_session_snapshot_store_from_path(&terminal_session_snapshots_path()?)
+}
+
+fn load_terminal_session_snapshot_store_from_path(
+    path: &Path,
+) -> Result<TerminalSessionSnapshotStore, String> {
+    load_json_file_or_default(path)
+}
+
+pub fn save_terminal_session_snapshot_store(
+    store: &TerminalSessionSnapshotStore,
+) -> Result<(), String> {
+    save_terminal_session_snapshot_store_to_path(&terminal_session_snapshots_path()?, store)
+}
+
+fn save_terminal_session_snapshot_store_to_path(
+    path: &Path,
+    store: &TerminalSessionSnapshotStore,
+) -> Result<(), String> {
+    save_json_file(path, store)
+}
+
 // ── Panel layout persistence ──
 
 #[tauri::command]
 pub fn save_panel_layouts(layouts: String) -> Result<(), String> {
-    let path = dirs::home_dir()
-        .ok_or("No home dir")?
-        .join(".grove")
-        .join("panel-layouts.json");
+    let path = grove_data_path("panel-layouts.json")?;
     fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
     fs::write(&path, layouts).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn load_panel_layouts() -> Result<String, String> {
-    let path = dirs::home_dir()
-        .ok_or("No home dir")?
-        .join(".grove")
-        .join("panel-layouts.json");
+    let path = grove_data_path("panel-layouts.json")?;
     if path.exists() {
         fs::read_to_string(&path).map_err(|e| e.to_string())
     } else {
@@ -127,20 +182,14 @@ pub fn load_panel_layouts() -> Result<String, String> {
 
 #[tauri::command]
 pub fn save_terminal_layouts(layouts: String) -> Result<(), String> {
-    let path = dirs::home_dir()
-        .ok_or("No home dir")?
-        .join(".grove")
-        .join("terminal-layouts.json");
+    let path = grove_data_path("terminal-layouts.json")?;
     fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
     fs::write(&path, layouts).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn load_terminal_layouts() -> Result<String, String> {
-    let path = dirs::home_dir()
-        .ok_or("No home dir")?
-        .join(".grove")
-        .join("terminal-layouts.json");
+    let path = grove_data_path("terminal-layouts.json")?;
     if path.exists() {
         fs::read_to_string(&path).map_err(|e| e.to_string())
     } else {
@@ -151,12 +200,22 @@ pub fn load_terminal_layouts() -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{
+        TerminalPaneSnapshot, TerminalRestoreCwdSource, TerminalSessionSnapshot,
+        TerminalSessionSnapshotStore,
+    };
     use uuid::Uuid;
 
     fn temp_config_path() -> PathBuf {
         std::env::temp_dir()
             .join(format!("grove-config-tests-{}", Uuid::new_v4()))
             .join("config.json")
+    }
+
+    fn temp_snapshot_store_path() -> PathBuf {
+        std::env::temp_dir()
+            .join(format!("grove-snapshot-tests-{}", Uuid::new_v4()))
+            .join("terminal-session-snapshots.json")
     }
 
     fn write_fixture(path: &Path, content: &str) {
@@ -201,6 +260,26 @@ mod tests {
             repo: "grove".into(),
             source_path: "/tmp/grove/source".into(),
         }
+    }
+
+    fn sample_snapshot_store() -> TerminalSessionSnapshotStore {
+        let mut store = TerminalSessionSnapshotStore::default();
+        store.worktrees.insert(
+            "/tmp/grove/worktree".into(),
+            TerminalSessionSnapshot {
+                worktree_path: "/tmp/grove/worktree".into(),
+                panes: vec![TerminalPaneSnapshot {
+                    pane_id: "pane-1".into(),
+                    scrollback: "ls -la\n".into(),
+                    scrollback_truncated: false,
+                    launch_cwd: "/tmp/grove/worktree".into(),
+                    last_known_cwd: Some("/tmp/grove/worktree/src".into()),
+                    restore_cwd: "/tmp/grove/worktree/src".into(),
+                    restore_cwd_source: TerminalRestoreCwdSource::LastKnownCwd,
+                }],
+            },
+        );
+        store
     }
 
     #[test]
@@ -376,6 +455,36 @@ mod tests {
                 .as_ref()
                 .map(|saved_theme| saved_theme.background.as_str()),
             Some(theme.background.as_str())
+        );
+
+        let _ = fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn load_terminal_session_snapshot_store_defaults_when_missing() {
+        let path = temp_snapshot_store_path();
+
+        let store = load_terminal_session_snapshot_store_from_path(&path).unwrap();
+
+        assert_eq!(store.version, 1);
+        assert!(store.worktrees.is_empty());
+    }
+
+    #[test]
+    fn save_terminal_session_snapshot_store_round_trips() {
+        let path = temp_snapshot_store_path();
+        let store = sample_snapshot_store();
+
+        save_terminal_session_snapshot_store_to_path(&path, &store).unwrap();
+        let loaded = load_terminal_session_snapshot_store_from_path(&path).unwrap();
+
+        assert_eq!(loaded.version, 1);
+        let snapshot = loaded.worktrees.get("/tmp/grove/worktree").unwrap();
+        assert_eq!(snapshot.panes.len(), 1);
+        assert_eq!(snapshot.panes[0].pane_id, "pane-1");
+        assert_eq!(
+            snapshot.panes[0].restore_cwd_source,
+            TerminalRestoreCwdSource::LastKnownCwd
         );
 
         let _ = fs::remove_dir_all(path.parent().unwrap());

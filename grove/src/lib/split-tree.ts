@@ -1,12 +1,81 @@
 import type { SplitNode } from "../types";
 
-/** Strip ptyIds from a SplitNode tree, keeping structure + sizes. */
-export function toLayoutTemplate(node: SplitNode): SplitNode {
-  if (node.type === "leaf") return { type: "leaf" };
+interface PersistedSplitNode {
+  id?: string;
+  type?: SplitNode["type"];
+  ptyId?: string;
+  children?: PersistedSplitNode[];
+  sizes?: number[];
+}
+
+interface SplitInsertion {
+  branchId: string;
+  leafId: string;
+  ptyId: string;
+}
+
+function normalizeRatios(sizes: number[]): number[] | undefined {
+  const clamped = sizes.map((size) => Math.max(size, 0));
+  const total = clamped.reduce((sum, size) => sum + size, 0);
+  return total > 0 ? clamped.map((size) => size / total) : undefined;
+}
+
+function evenRatios(count: number): number[] | undefined {
+  return count > 1 ? Array.from({ length: count }, () => 1 / count) : undefined;
+}
+
+function normalizeBranchSizes(sizes: number[] | undefined, childCount: number): number[] | undefined {
+  if (childCount <= 1) return undefined;
+  if (!sizes || sizes.length !== childCount) {
+    return evenRatios(childCount);
+  }
+  return normalizeRatios(sizes) ?? evenRatios(childCount);
+}
+
+function rebalanceBranchSizes(
+  sizes: number[] | undefined,
+  retainedIndices: number[],
+): number[] | undefined {
+  if (retainedIndices.length <= 1) return undefined;
+  if (!sizes || sizes.length === 0) {
+    return evenRatios(retainedIndices.length);
+  }
+
+  const retainedSizes = retainedIndices.map((index) => sizes[index] ?? 0);
+  return normalizeRatios(retainedSizes) ?? evenRatios(retainedIndices.length);
+}
+
+export function normalizeSplitTree(node: PersistedSplitNode, createId: () => string): SplitNode {
+  const id = node.id ?? createId();
+
+  if (node.type === "leaf" || (node.type !== "horizontal" && node.type !== "vertical")) {
+    return {
+      id,
+      type: "leaf",
+      ptyId: node.ptyId,
+    };
+  }
+
+  const children = (node.children ?? []).map((child) => normalizeSplitTree(child, createId));
+
   return {
+    id,
     type: node.type,
-    sizes: node.sizes,
-    children: node.children?.map(toLayoutTemplate),
+    children,
+    sizes: normalizeBranchSizes(node.sizes, children.length),
+  };
+}
+
+/** Strip ptyIds from a SplitNode tree, keeping stable ids + canonical ratios. */
+export function toLayoutTemplate(node: SplitNode): SplitNode {
+  if (node.type === "leaf") return { id: node.id, type: "leaf" };
+
+  const children = (node.children ?? []).map(toLayoutTemplate);
+  return {
+    id: node.id,
+    type: node.type,
+    sizes: normalizeBranchSizes(node.sizes, children.length),
+    children,
   };
 }
 
@@ -19,12 +88,15 @@ export function countLeaves(node: SplitNode): number {
 /** Assign ptyIds from an array into a layout template's leaf nodes. */
 export function assignPtyIds(node: SplitNode, ids: string[]): SplitNode {
   if (node.type === "leaf") {
-    return { type: "leaf", ptyId: ids.shift() };
+    return { id: node.id, type: "leaf", ptyId: ids.shift() };
   }
+
+  const children = (node.children ?? []).map((child) => assignPtyIds(child, ids));
   return {
+    id: node.id,
     type: node.type,
-    sizes: node.sizes,
-    children: node.children?.map((c) => assignPtyIds(c, ids)),
+    sizes: normalizeBranchSizes(node.sizes, children.length),
+    children,
   };
 }
 
@@ -32,20 +104,22 @@ export function splitNode(
   node: SplitNode,
   targetPtyId: string,
   direction: "horizontal" | "vertical",
-  newPtyId: string,
+  insertion: SplitInsertion,
 ): SplitNode {
   if (node.type === "leaf" && node.ptyId === targetPtyId) {
     return {
+      id: insertion.branchId,
       type: direction,
+      sizes: [0.5, 0.5],
       children: [
-        { type: "leaf", ptyId: targetPtyId },
-        { type: "leaf", ptyId: newPtyId },
+        { ...node },
+        { id: insertion.leafId, type: "leaf", ptyId: insertion.ptyId },
       ],
     };
   }
   if (node.children) {
     const newChildren = node.children.map((child) =>
-      splitNode(child, targetPtyId, direction, newPtyId),
+      splitNode(child, targetPtyId, direction, insertion),
     );
     if (newChildren.some((c, i) => c !== node.children![i])) {
       return { ...node, children: newChildren };
@@ -60,13 +134,35 @@ export function removeNode(node: SplitNode, targetPtyId: string): SplitNode | nu
   }
   if (!node.children) return node;
 
+  const retainedIndices: number[] = [];
+  let changed = false;
   const filtered = node.children
-    .map((child) => removeNode(child, targetPtyId))
+    .map((child, index) => {
+      const nextChild = removeNode(child, targetPtyId);
+      if (nextChild !== child) {
+        changed = true;
+      }
+      if (nextChild) {
+        retainedIndices.push(index);
+      }
+      return nextChild;
+    })
     .filter((child): child is SplitNode => child !== null);
+
+  if (!changed) return node;
 
   if (filtered.length === 0) return null;
   if (filtered.length === 1) return filtered[0];
-  return { ...node, children: filtered };
+
+  if (filtered.length === node.children.length) {
+    return { ...node, children: filtered };
+  }
+
+  return {
+    ...node,
+    children: filtered,
+    sizes: rebalanceBranchSizes(node.sizes, retainedIndices),
+  };
 }
 
 /** Set sizes at a specific path in the tree. nodePath = [childIndex, childIndex, ...] */

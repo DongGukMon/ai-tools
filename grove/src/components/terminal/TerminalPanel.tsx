@@ -1,13 +1,29 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTerminalStore } from "../../store/terminal";
 import { useProjectStore } from "../../store/project";
-import { getTerminalTheme, getAppConfig, getCommandErrorMessage } from "../../lib/tauri";
+import {
+  getTerminalTheme,
+  getAppConfig,
+  getCommandErrorMessage,
+  saveTerminalSessionSnapshot,
+} from "../../lib/tauri";
 import { runCommand } from "../../lib/command";
 import { useTerminal } from "../../hooks/useTerminal";
 import SplitContainer from "./SplitContainer";
 import TerminalToolbar from "./TerminalToolbar";
 import { log, error as logError } from "../../lib/logger";
+import {
+  buildTerminalPaneTopologySignature,
+  buildTerminalSnapshotRequest,
+  collectTerminalPanes,
+  findWorktreePathForPtyId,
+} from "../../lib/terminal-session";
+import {
+  getTerminalPaneLaunchCwd,
+  subscribeTerminalPaneActivity,
+} from "../../lib/terminal-runtime";
 
+const SNAPSHOT_SAVE_DEBOUNCE_MS = 750;
 
 export default function TerminalPanel() {
   const sessions = useTerminalStore((s) => s.sessions);
@@ -19,6 +35,96 @@ export default function TerminalPanel() {
   const selectedWorktree = useProjectStore((s) => s.selectedWorktree);
   const { createTerminal } = useTerminal();
   const [error, setError] = useState<string | null>(null);
+  const previousPaneTopologyRef = useRef(new Map<string, string>());
+  const snapshotSaveTimersRef = useRef(
+    new Map<string, ReturnType<typeof setTimeout>>(),
+  );
+  const sessionsRef = useRef(sessions);
+
+  sessionsRef.current = sessions;
+
+  const persistSnapshot = (worktreePath: string) => {
+    const node = sessionsRef.current[worktreePath];
+    void saveTerminalSessionSnapshot(
+      buildTerminalSnapshotRequest(
+        worktreePath,
+        node,
+        new Map(
+          (node ? collectTerminalPanes(node) : []).map((pane) => [
+            pane.paneId,
+            getTerminalPaneLaunchCwd(pane.paneId) ?? worktreePath,
+          ]),
+        ),
+      ),
+    ).catch((cause) => {
+      logError("terminal", "fallback snapshot save failed", {
+        worktreePath,
+        cause,
+      });
+    });
+  };
+
+  const scheduleSnapshotSave = (worktreePath: string) => {
+    const timers = snapshotSaveTimersRef.current;
+    const existing = timers.get(worktreePath);
+    if (existing) {
+      clearTimeout(existing);
+    }
+
+    timers.set(
+      worktreePath,
+      setTimeout(() => {
+        timers.delete(worktreePath);
+        persistSnapshot(worktreePath);
+      }, SNAPSHOT_SAVE_DEBOUNCE_MS),
+    );
+  };
+
+  useEffect(() => {
+    const previous = previousPaneTopologyRef.current;
+    const changedPaths = new Set<string>([
+      ...previous.keys(),
+      ...Object.keys(sessions),
+    ]);
+
+    const nextSignatures = new Map<string, string>();
+    for (const worktreePath of changedPaths) {
+      const nextSignature = buildTerminalPaneTopologySignature(
+        sessions[worktreePath],
+      );
+      if (nextSignature) {
+        nextSignatures.set(worktreePath, nextSignature);
+      }
+      if (
+        previous.has(worktreePath) &&
+        previous.get(worktreePath) !== nextSignature
+      ) {
+        scheduleSnapshotSave(worktreePath);
+      }
+    }
+
+    previousPaneTopologyRef.current = nextSignatures;
+  }, [sessions]);
+
+  useEffect(
+    () => subscribeTerminalPaneActivity(({ ptyId }) => {
+      const worktreePath = findWorktreePathForPtyId(sessionsRef.current, ptyId);
+      if (!worktreePath) {
+        return;
+      }
+
+      scheduleSnapshotSave(worktreePath);
+    }),
+    [],
+  );
+
+  useEffect(() => () => {
+    for (const [worktreePath, timer] of snapshotSaveTimersRef.current.entries()) {
+      clearTimeout(timer);
+      persistSnapshot(worktreePath);
+    }
+    snapshotSaveTimersRef.current.clear();
+  }, []);
 
   // Load theme + default worktree
   useEffect(() => {

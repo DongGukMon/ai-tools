@@ -7,6 +7,7 @@ import {
   removeNode,
   setSizesAtPath,
   findFirstLeaf,
+  normalizeSplitTree,
 } from "../lib/split-tree";
 
 // In-memory cache populated at startup via initLayouts()
@@ -42,12 +43,13 @@ interface TerminalState {
   focusedPtyId: string | null;
   theme: TerminalTheme | null;
   detectedTheme: TerminalTheme | null;
-  createSession: (worktreePath: string, ptyId: string) => void;
+  createSession: (worktreePath: string, paneId: string, ptyId: string) => void;
   restoreSession: (worktreePath: string, node: SplitNode) => void;
   splitTerminal: (
     worktreePath: string,
     ptyId: string,
     direction: "horizontal" | "vertical",
+    newPaneId: string,
     newPtyId: string,
   ) => void;
   closeTerminal: (worktreePath: string, ptyId: string) => void;
@@ -69,15 +71,15 @@ export const useTerminalStore = create<TerminalState>((set) => ({
 
   getSavedLayout: (worktreePath) => {
     const template = layoutCache[worktreePath];
-    if (!template || countLeaves(template) <= 1) return null;
+    if (!template || countLeaves(template) === 0) return null;
     return template;
   },
 
-  createSession: (worktreePath, ptyId) =>
+  createSession: (worktreePath, paneId, ptyId) =>
     set((state) => {
       const newSessions = {
         ...state.sessions,
-        [worktreePath]: { type: "leaf" as const, ptyId },
+        [worktreePath]: { id: paneId, type: "leaf" as const, ptyId },
       };
       saveLayouts(newSessions);
       return { sessions: newSessions, focusedPtyId: ptyId };
@@ -85,21 +87,26 @@ export const useTerminalStore = create<TerminalState>((set) => ({
 
   restoreSession: (worktreePath, node) =>
     set((state) => {
-      const newSessions = { ...state.sessions, [worktreePath]: node };
+      const restored = normalizeSplitTree(node, () => crypto.randomUUID());
+      const newSessions = { ...state.sessions, [worktreePath]: restored };
       saveLayouts(newSessions);
       return {
         sessions: newSessions,
-        focusedPtyId: findFirstLeaf(node),
+        focusedPtyId: findFirstLeaf(restored),
       };
     }),
 
-  splitTerminal: (worktreePath, ptyId, direction, newPtyId) =>
+  splitTerminal: (worktreePath, ptyId, direction, newPaneId, newPtyId) =>
     set((state) => {
       const root = state.sessions[worktreePath];
       if (!root) return state;
       const newSessions = {
         ...state.sessions,
-        [worktreePath]: splitNode(root, ptyId, direction, newPtyId),
+        [worktreePath]: splitNode(root, ptyId, direction, {
+          branchId: crypto.randomUUID(),
+          leafId: newPaneId,
+          ptyId: newPtyId,
+        }),
       };
       saveLayouts(newSessions);
       return { sessions: newSessions, focusedPtyId: newPtyId };
@@ -158,7 +165,13 @@ export const useTerminalStore = create<TerminalState>((set) => ({
     try {
       const { loadTerminalLayouts } = await import("../lib/tauri");
       const raw = await loadTerminalLayouts();
-      layoutCache = JSON.parse(raw);
+      const parsed = JSON.parse(raw) as Record<string, SplitNode>;
+      layoutCache = Object.fromEntries(
+        Object.entries(parsed).map(([worktreePath, node]) => [
+          worktreePath,
+          normalizeSplitTree(node, () => crypto.randomUUID()),
+        ]),
+      );
     } catch {
       layoutCache = {};
     }

@@ -4,10 +4,70 @@ import type {
   AppConfig,
   Project,
   Worktree,
+  BehindInfo,
   FileStatus,
   CommitInfo,
   FileDiff,
 } from "../types";
+
+// Terminal session snapshots are keyed by stable paneId. ptyId is only an
+// optional runtime lookup handle for backend-enriched scrollback/cwd capture.
+export type TerminalRestoreCwdSource = "launchCwd" | "lastKnownCwd";
+
+export interface CreatePtyRestore {
+  lastKnownCwd?: string | null;
+  scrollback?: string | null;
+  scrollbackTruncated?: boolean | null;
+}
+
+export interface CreatePtyRequest {
+  ptyId: string;
+  paneId: string;
+  worktreePath: string;
+  cwd: string;
+  cols: number;
+  rows: number;
+  restore?: CreatePtyRestore | null;
+}
+
+export type CreatePtySessionState = "attached" | "created";
+
+export interface CreatePtyInitialHydration {
+  text: string;
+  truncated: boolean;
+  source: "tmuxCapture";
+}
+
+export interface CreatePtyResult {
+  sessionState: CreatePtySessionState;
+  initialHydration?: CreatePtyInitialHydration | null;
+}
+
+export interface TerminalPaneSnapshotInput {
+  paneId: string;
+  ptyId?: string | null;
+  launchCwd?: string | null;
+}
+
+export interface SaveTerminalSessionSnapshotRequest {
+  worktreePath: string;
+  panes: TerminalPaneSnapshotInput[];
+}
+
+export interface TerminalPaneSnapshot {
+  paneId: string;
+  scrollback: string;
+  scrollbackTruncated: boolean;
+  launchCwd: string;
+  lastKnownCwd: string | null;
+  restoreCwd: string;
+  restoreCwdSource: TerminalRestoreCwdSource;
+}
+
+export interface TerminalSessionSnapshot {
+  worktreePath: string;
+  panes: TerminalPaneSnapshot[];
+}
 
 export function getCommandErrorMessage(error: unknown): string {
   const raw =
@@ -112,12 +172,9 @@ export async function listWorktrees(projectId: string): Promise<Worktree[]> {
 // === PTY COMMANDS (W3) ===
 
 export async function createPty(
-  id: string,
-  cwd: string,
-  cols: number,
-  rows: number,
-): Promise<void> {
-  return invoke("create_pty", { id, cwd, cols, rows });
+  request: CreatePtyRequest,
+): Promise<CreatePtyResult> {
+  return invoke<CreatePtyResult>("create_pty", { ...request });
 }
 
 export async function writePty(id: string, data: number[]): Promise<void> {
@@ -132,8 +189,24 @@ export async function resizePty(
   return invoke("resize_pty", { id, cols, rows });
 }
 
-export async function closePty(id: string): Promise<void> {
-  return invoke("close_pty", { id });
+export async function closePty(ptyId: string): Promise<void> {
+  return invoke("close_pty", { ptyId });
+}
+
+export async function saveTerminalSessionSnapshot(
+  snapshot: SaveTerminalSessionSnapshotRequest,
+): Promise<TerminalSessionSnapshot> {
+  return invoke<TerminalSessionSnapshot>("save_terminal_session_snapshot", {
+    snapshot,
+  });
+}
+
+export async function loadTerminalSessionSnapshot(
+  worktreePath: string,
+): Promise<TerminalSessionSnapshot | null> {
+  return invoke<TerminalSessionSnapshot | null>("load_terminal_session_snapshot", {
+    worktreePath,
+  });
 }
 
 // === GIT DIFF COMMANDS (W4) ===
@@ -243,4 +316,18 @@ export async function discardLines(
     hunkIndex,
     lineIndices,
   });
+}
+
+// === GIT MERGE COMMANDS ===
+
+export async function getBehindCount(
+  worktreePath: string,
+): Promise<BehindInfo> {
+  return invoke<BehindInfo>("get_behind_count", { worktreePath });
+}
+
+export async function mergeDefaultBranch(
+  worktreePath: string,
+): Promise<void> {
+  return invoke("merge_default_branch", { worktreePath });
 }

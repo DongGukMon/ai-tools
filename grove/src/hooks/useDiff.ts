@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useDiffStore } from "../store/diff";
+import { registerSyncJob, unregisterSyncJob } from "../lib/sync-manager";
 
 export function useDiff(worktreePath: string | null) {
   const store = useDiffStore();
@@ -11,6 +12,7 @@ export function useDiff(worktreePath: string | null) {
     if (worktreePath) {
       store.loadStatus();
       store.loadCommits();
+      store.loadBehindCount();
     }
   }, [worktreePath]);
 
@@ -32,6 +34,25 @@ export function useDiff(worktreePath: string | null) {
     }, 2000);
 
     return () => clearInterval(interval);
+  }, [worktreePath]);
+
+  // Sync commits via sync manager
+  useEffect(() => {
+    if (!worktreePath) return;
+
+    registerSyncJob(
+      "commits",
+      async () => {
+        const state = useDiffStore.getState();
+        await state.loadCommits();
+        await state.loadBehindCount();
+      },
+      10_000,
+    );
+
+    return () => {
+      unregisterSyncJob("commits");
+    };
   }, [worktreePath]);
 
   return store;

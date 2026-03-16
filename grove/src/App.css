@@ -293,6 +293,18 @@
   background: oklch(1 0 0 / 0.24);
 }
 
+.terminal-pane {
+  overflow: hidden;
+  transition: box-shadow 120ms ease;
+  box-shadow: inset 0 0 0 1px transparent;
+}
+
+.terminal-pane-focused {
+  box-shadow:
+    inset 0 0 0 2px oklch(1 0 0 / 0.34),
+    0 0 0 5px oklch(1 0 0 / 0.08);
+}
+
 .focus-ring:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: -2px;
