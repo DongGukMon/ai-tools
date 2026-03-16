@@ -9,6 +9,7 @@ mod terminal_theme;
 
 use config::AppConfig;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 // === TYPES ===
 
@@ -38,6 +39,73 @@ pub struct Worktree {
 pub struct PtySession {
     pub id: String,
     pub worktree_path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalPaneSnapshotInput {
+    pub pane_id: String,
+    #[serde(default)]
+    pub pty_id: Option<String>,
+    #[serde(default)]
+    pub launch_cwd: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum TerminalRestoreCwdSource {
+    LaunchCwd,
+    LastKnownCwd,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalPaneSnapshot {
+    pub pane_id: String,
+    pub scrollback: String,
+    pub scrollback_truncated: bool,
+    pub launch_cwd: String,
+    pub last_known_cwd: Option<String>,
+    pub restore_cwd: String,
+    pub restore_cwd_source: TerminalRestoreCwdSource,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalSessionSnapshot {
+    pub worktree_path: String,
+    #[serde(default)]
+    pub panes: Vec<TerminalPaneSnapshot>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveTerminalSessionSnapshotRequest {
+    pub worktree_path: String,
+    #[serde(default)]
+    pub panes: Vec<TerminalPaneSnapshotInput>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalSessionSnapshotStore {
+    #[serde(default = "default_terminal_session_snapshot_version")]
+    pub version: u32,
+    #[serde(default)]
+    pub worktrees: HashMap<String, TerminalSessionSnapshot>,
+}
+
+fn default_terminal_session_snapshot_version() -> u32 {
+    1
+}
+
+impl Default for TerminalSessionSnapshotStore {
+    fn default() -> Self {
+        Self {
+            version: default_terminal_session_snapshot_version(),
+            worktrees: HashMap::new(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -187,6 +255,20 @@ fn close_pty(id: String) -> Result<(), String> {
     pty::close(&id)
 }
 
+#[tauri::command]
+fn save_terminal_session_snapshot(
+    snapshot: SaveTerminalSessionSnapshotRequest,
+) -> Result<TerminalSessionSnapshot, String> {
+    pty::save_terminal_session_snapshot(snapshot)
+}
+
+#[tauri::command]
+fn load_terminal_session_snapshot(
+    worktree_path: String,
+) -> Result<Option<TerminalSessionSnapshot>, String> {
+    pty::load_terminal_session_snapshot(&worktree_path)
+}
+
 // === GIT DIFF COMMANDS (W4) ===
 
 #[tauri::command]
@@ -317,6 +399,8 @@ pub fn run() {
             write_pty,
             resize_pty,
             close_pty,
+            save_terminal_session_snapshot,
+            load_terminal_session_snapshot,
             // Git Diff (W4)
             get_status,
             get_commits,

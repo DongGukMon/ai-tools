@@ -10,6 +10,36 @@ import type {
   FileDiff,
 } from "../types";
 
+// Terminal session snapshots are keyed by stable paneId. ptyId is only an
+// optional runtime lookup handle for backend-enriched scrollback/cwd capture.
+export type TerminalRestoreCwdSource = "launchCwd" | "lastKnownCwd";
+
+export interface TerminalPaneSnapshotInput {
+  paneId: string;
+  ptyId?: string | null;
+  launchCwd?: string | null;
+}
+
+export interface SaveTerminalSessionSnapshotRequest {
+  worktreePath: string;
+  panes: TerminalPaneSnapshotInput[];
+}
+
+export interface TerminalPaneSnapshot {
+  paneId: string;
+  scrollback: string;
+  scrollbackTruncated: boolean;
+  launchCwd: string;
+  lastKnownCwd: string | null;
+  restoreCwd: string;
+  restoreCwdSource: TerminalRestoreCwdSource;
+}
+
+export interface TerminalSessionSnapshot {
+  worktreePath: string;
+  panes: TerminalPaneSnapshot[];
+}
+
 export function getCommandErrorMessage(error: unknown): string {
   const raw =
     typeof error === "string"
@@ -135,6 +165,22 @@ export async function resizePty(
 
 export async function closePty(id: string): Promise<void> {
   return invoke("close_pty", { id });
+}
+
+export async function saveTerminalSessionSnapshot(
+  snapshot: SaveTerminalSessionSnapshotRequest,
+): Promise<TerminalSessionSnapshot> {
+  return invoke<TerminalSessionSnapshot>("save_terminal_session_snapshot", {
+    snapshot,
+  });
+}
+
+export async function loadTerminalSessionSnapshot(
+  worktreePath: string,
+): Promise<TerminalSessionSnapshot | null> {
+  return invoke<TerminalSessionSnapshot | null>("load_terminal_session_snapshot", {
+    worktreePath,
+  });
 }
 
 // === GIT DIFF COMMANDS (W4) ===
