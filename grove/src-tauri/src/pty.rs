@@ -27,6 +27,8 @@ const TMUX_STATUS_OPTION: &str = "status";
 const TMUX_STATUS_OFF_VALUE: &str = "off";
 const TMUX_MOUSE_OPTION: &str = "mouse";
 const TMUX_MOUSE_ON_VALUE: &str = "on";
+const TMUX_ESCAPE_TIME_OPTION: &str = "escape-time";
+const TMUX_ESCAPE_TIME_VALUE: &str = "100";
 const WORKTREE_HASH_LEN: usize = 12;
 const PANE_PREFIX_LEN: usize = 8;
 const PANE_HASH_LEN: usize = 4;
@@ -688,6 +690,7 @@ fn set_grove_tmux_metadata(
 fn enforce_grove_tmux_options(session_name: &str) -> Result<(), String> {
     tmux_set_option(session_name, TMUX_STATUS_OPTION, TMUX_STATUS_OFF_VALUE)?;
     tmux_set_option(session_name, TMUX_MOUSE_OPTION, TMUX_MOUSE_ON_VALUE)?;
+    tmux_set_server_option(TMUX_ESCAPE_TIME_OPTION, TMUX_ESCAPE_TIME_VALUE)?;
     Ok(())
 }
 
@@ -732,6 +735,18 @@ fn tmux_session_exists(session_name: &str) -> Result<bool, String> {
             tmux_output_message(&output)
         )),
     }
+}
+
+fn tmux_set_server_option(option: &str, value: &str) -> Result<(), String> {
+    let output = tmux_output(["set-option", "-sg", option, value])?;
+    if output.status.success() {
+        return Ok(());
+    }
+
+    Err(format!(
+        "failed to set tmux server option {option}: {}",
+        tmux_output_message(&output)
+    ))
 }
 
 fn tmux_set_option(session_name: &str, option: &str, value: &str) -> Result<(), String> {
