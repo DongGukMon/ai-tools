@@ -102,19 +102,44 @@ func (m DashboardModel) renderPeers() string {
 	} else if len(m.peers) == 0 {
 		content = lipgloss.NewStyle().Foreground(colorSubtle).Render("no peers online")
 	} else {
-		var parts []string
-		for _, p := range m.ircPeers() {
-			if p.Online {
-				dot := lipgloss.NewStyle().Foreground(colorSuccess).Render("●")
-				name := lipgloss.NewStyle().Foreground(colorText).Render(p.Name)
-				parts = append(parts, dot+" "+name)
-			} else {
-				dot := lipgloss.NewStyle().Foreground(colorDim).Render("○")
-				name := lipgloss.NewStyle().Foreground(colorSubtle).Render(p.Name)
-				parts = append(parts, dot+" "+name)
+		rows := m.ircRows()
+		sep := lipgloss.NewStyle().Foreground(colorDim).Render("   ")
+		wsStyle := lipgloss.NewStyle().Foreground(colorMuted).Bold(true)
+
+		var groups []string
+		var peerParts []string
+		var curWs string
+		for _, r := range rows {
+			if r.kind == ircRowHeader {
+				// flush previous group
+				if len(peerParts) > 0 {
+					groups = append(groups, wsStyle.Render(curWs)+sep+strings.Join(peerParts, sep))
+				}
+				curWs = r.workspace
+				peerParts = nil
+				continue
 			}
+			var dot, name string
+			if r.peer.Online {
+				dot = lipgloss.NewStyle().Foreground(colorSuccess).Render("●")
+				name = lipgloss.NewStyle().Foreground(colorText).Render(r.peer.Name)
+			} else {
+				dot = lipgloss.NewStyle().Foreground(colorDim).Render("○")
+				name = lipgloss.NewStyle().Foreground(colorSubtle).Render(r.peer.Name)
+			}
+			peerParts = append(peerParts, dot+" "+name)
 		}
-		content = strings.Join(parts, lipgloss.NewStyle().Foreground(colorDim).Render("   "))
+		// flush last group
+		if len(peerParts) > 0 {
+			groups = append(groups, wsStyle.Render(curWs)+sep+strings.Join(peerParts, sep))
+		}
+
+		if len(groups) == 0 {
+			content = lipgloss.NewStyle().Foreground(colorSubtle).Render("no peers online")
+		} else {
+			groupSep := lipgloss.NewStyle().Foreground(colorDim).Render("  │  ")
+			content = strings.Join(groups, groupSep)
+		}
 	}
 
 	box := lipgloss.NewStyle().
