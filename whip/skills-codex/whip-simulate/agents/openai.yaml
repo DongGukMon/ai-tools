@@ -1,0 +1,4 @@
+interface:
+  display_name: "Whip Simulate"
+  short_description: "Run multi-agent simulations to measure output consistency"
+  default_prompt: "Use $whip-simulate to run a multi-agent simulation and analyze output patterns."

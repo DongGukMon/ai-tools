@@ -1,0 +1,4 @@
+interface:
+  display_name: "Whip Debug"
+  short_description: "Systematic debugging with reproduction gate and fresh-eye verification"
+  default_prompt: "Use $whip-debug to debug the issue with a structured repro-first workflow."

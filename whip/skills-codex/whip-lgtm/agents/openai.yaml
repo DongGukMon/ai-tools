@@ -1,0 +1,4 @@
+interface:
+  display_name: "Whip LGTM"
+  short_description: "Iterative code review loop until a fresh codex reviewer says LGTM"
+  default_prompt: "Use $whip-lgtm to review the current branch changes and iterate fixes until a fresh reviewer reports LGTM."
