@@ -28,20 +28,7 @@
       ],
       "category": "collaboration"
     },
-    {
-      "name": "grove",
-      "source": "./grove",
-      "description": "Git-aware terminal with sidebar navigation and inline diff viewer",
-      "version": "v2.8.0",
-      "author": {
-        "name": null
-      },
-      "repository": null,
-      "license": null,
-      "keywords": null,
-      "category": "productivity"
-    },
-    {
+{
       "name": "redit",
       "source": "./redit",
       "description": "Remote Edit Layer - Local cache for efficiently editing remote documents",

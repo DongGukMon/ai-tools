@@ -53,6 +53,12 @@ for plugin_json in "$REPO_ROOT"/*/.claude-plugin/plugin.json; do
         category: $category
     }' "$plugin_json")
 
+    # Skip plugins with null required fields (non-marketplace entries)
+    has_nulls=$(echo "$entry" | jq '[.author.name, .repository, .license, .keywords] | any(. == null)')
+    if [ "$has_nulls" = "true" ]; then
+        continue
+    fi
+
     plugins=$(echo "$plugins" | jq --argjson entry "$entry" '. + [$entry]')
 done
 
