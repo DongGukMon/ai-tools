@@ -32,14 +32,12 @@ function Sidebar() {
           <div className="space-y-3 px-2">
             {[1, 2, 3].map((i) => (
               <div key={i} className="space-y-1.5">
-                <div className="flex items-center gap-2 px-2 py-1.5">
-                  <div className="skeleton w-4 h-4 rounded shrink-0" />
-                  <div className="skeleton flex-1 h-3.5" />
+                <div className="px-2 py-1.5">
+                  <div className="skeleton h-4" style={{ width: "100%" }} />
                 </div>
-                <div className="ml-8 border-l border-border pl-3 space-y-1">
-                  <div className="flex items-center gap-2 px-2 py-1">
-                    <div className="skeleton w-3.5 h-3.5 rounded-full shrink-0" />
-                    <div className="skeleton h-3" style={{ width: `${60 + i * 10}%` }} />
+                <div className="ml-5 border-l border-border pl-3 space-y-1">
+                  <div className="px-2 py-1">
+                    <div className="skeleton h-3.5" style={{ width: "100%" }} />
                   </div>
                 </div>
               </div>
