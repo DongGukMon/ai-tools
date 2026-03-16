@@ -3,9 +3,6 @@ import { GitBranch, Loader2, RotateCw } from "lucide-react";
 import type { Project } from "../../types";
 import { useProjectStore } from "../../store/project";
 import { useToast } from "../../store/toast";
-import { overlay } from "../../lib/overlay";
-import { Button } from "../ui/button";
-import { Dialog } from "../ui/dialog";
 import { cn } from "../../lib/cn";
 
 interface Props {
@@ -27,39 +24,6 @@ function DefaultBranchItem({ project }: Props) {
 
   const handleRefresh = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    const confirmed = await overlay.open<boolean>(({ resolve, close }) => (
-      <Dialog
-        open
-        onClose={close}
-        title="Sync source repo?"
-        className="max-w-sm"
-      >
-        <div className="space-y-4">
-          <p className="text-sm leading-relaxed text-muted-foreground">
-            This will fetch and hard-reset the source repo for{" "}
-            <span className="font-semibold text-foreground">
-              {project.org}/{project.repo}
-            </span>{" "}
-            to the remote default branch. Any local source-repo changes will be
-            discarded.
-          </p>
-          <p className="text-xs leading-relaxed text-muted-foreground/70">
-            Worktree changes are not modified directly.
-          </p>
-          <div className="flex justify-end gap-2">
-            <Button variant="ghost" size="sm" onClick={close}>
-              Cancel
-            </Button>
-            <Button size="sm" onClick={() => resolve(true)}>
-              Sync source
-            </Button>
-          </div>
-        </div>
-      </Dialog>
-    ));
-
-    if (!confirmed) return;
-
     setRefreshing(true);
     try {
       await refreshProject(project.id);
