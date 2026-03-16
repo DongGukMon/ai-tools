@@ -5,12 +5,12 @@ import {
   X,
   GitFork,
   GitBranch,
-  RotateCw,
 } from "lucide-react";
 import type { Project } from "../../types";
 import { useProjectStore } from "../../store/project";
 import { useToast } from "../../store/toast";
 import { overlay } from "../../lib/overlay";
+import DefaultBranchItem from "./DefaultBranchItem";
 import WorktreeItem from "./WorktreeItem";
 import { Button, IconButton } from "../ui/button";
 import { Dialog } from "../ui/dialog";
@@ -25,9 +25,8 @@ function ProjectItem({ project }: Props) {
   const [expanded, setExpanded] = useState(true);
   const [adding, setAdding] = useState(false);
   const [addingLoading, setAddingLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
   const [worktreeName, setWorktreeName] = useState("");
-  const { addWorktree, removeProject, refreshProject } = useProjectStore();
+  const { addWorktree, removeProject } = useProjectStore();
   const { toast } = useToast();
 
   const handleAddWorktree = async (e: React.FormEvent) => {
@@ -89,47 +88,6 @@ function ProjectItem({ project }: Props) {
     }
   };
 
-  const handleRefreshProject = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    const confirmed = await overlay.open<boolean>(({ resolve, close }) => (
-      <Dialog open onClose={close} title="Sync source repo?" className="max-w-sm">
-        <div className="space-y-4">
-          <p className="text-sm leading-relaxed text-muted-foreground">
-            This will fetch and hard-reset the hidden source repo for{" "}
-            <span className="font-semibold text-foreground">
-              {project.org}/{project.repo}
-            </span>{" "}
-            to the remote default branch. Any local source-repo changes will be
-            discarded.
-          </p>
-          <p className="text-xs leading-relaxed text-muted-foreground/70">
-            Worktree changes are not modified directly.
-          </p>
-          <div className="flex justify-end gap-2">
-            <Button variant="ghost" size="sm" onClick={close}>
-              Cancel
-            </Button>
-            <Button size="sm" onClick={() => resolve(true)}>
-              Sync source
-            </Button>
-          </div>
-        </div>
-      </Dialog>
-    ));
-
-    if (!confirmed) return;
-
-    setRefreshing(true);
-    try {
-      await refreshProject(project.id);
-      toast("success", `Project '${project.repo}' source synced`);
-    } catch {
-      // Toasts are handled by the command layer.
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
   return (
     <div className="px-2">
       {/* Project header */}
@@ -152,21 +110,9 @@ function ProjectItem({ project }: Props) {
           {project.org}/{project.repo}
         </span>
         <div className="ml-auto flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-          {project.sourceDirty && (
-            <IconButton
-              onClick={handleRefreshProject}
-              title="Sync source repo"
-              disabled={refreshing}
-            >
-              <RotateCw
-                className={cn("h-3.5 w-3.5", { "animate-spin": refreshing })}
-              />
-            </IconButton>
-          )}
           <IconButton
             onClick={handleRemoveProject}
             title="Remove project"
-            disabled={refreshing}
           >
             <X className="h-3.5 w-3.5" />
           </IconButton>
@@ -176,6 +122,7 @@ function ProjectItem({ project }: Props) {
       {/* Worktree list */}
       {expanded && (
         <div className="ml-5 mt-1 space-y-0.5 border-l border-border pl-3">
+          <DefaultBranchItem project={project} />
           {project.worktrees.map((wt) => (
             <WorktreeItem
               key={wt.path}

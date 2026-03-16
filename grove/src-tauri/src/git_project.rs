@@ -899,16 +899,12 @@ fn resolve_origin_head(source: &Path) -> Result<String, String> {
 }
 
 fn refresh_source_repo(source: &Path) -> Result<(), String> {
-    run_git(source, &["fetch", "origin", "--prune"])?;
-
     let default_branch = remote_default_branch(source)?;
     let remote_ref = format!("origin/{default_branch}");
-    let checkout_args = ["checkout", "--force", "--detach", remote_ref.as_str()];
-    let reset_args = ["reset", "--hard", remote_ref.as_str()];
 
-    run_git(source, &checkout_args)?;
-    run_git(source, &reset_args)?;
-    run_git(source, &["clean", "-fd"])?;
+    run_git(source, &["checkout", &default_branch])?;
+    run_git(source, &["pull", "--prune"])?;
+    run_git(source, &["reset", "--hard", remote_ref.as_str()])?;
     Ok(())
 }
 
