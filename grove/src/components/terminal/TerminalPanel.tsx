@@ -1,12 +1,23 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useTerminalStore } from "../../store/terminal";
 import { useProjectStore } from "../../store/project";
-import { getTerminalTheme, getAppConfig, getCommandErrorMessage } from "../../lib/tauri";
+import {
+  getTerminalTheme,
+  getAppConfig,
+  getCommandErrorMessage,
+  saveTerminalSessionSnapshot,
+} from "../../lib/tauri";
 import { runCommand } from "../../lib/command";
 import { useTerminal } from "../../hooks/useTerminal";
 import SplitContainer from "./SplitContainer";
 import TerminalToolbar from "./TerminalToolbar";
 import { log, error as logError } from "../../lib/logger";
+import {
+  buildTerminalSnapshotRequest,
+  collectTerminalPanes,
+} from "../../lib/terminal-session";
+import { getTerminalPaneLaunchCwd } from "../../lib/terminal-runtime";
 
 
 export default function TerminalPanel() {
@@ -19,6 +30,62 @@ export default function TerminalPanel() {
   const selectedWorktree = useProjectStore((s) => s.selectedWorktree);
   const { createTerminal } = useTerminal();
   const [error, setError] = useState<string | null>(null);
+  const previousSessionSignaturesRef = useRef(new Map<string, string>());
+
+  useEffect(() => {
+    const structureSignature = (node: (typeof sessions)[string] | undefined) =>
+      node
+        ? collectTerminalPanes(node)
+            .map((pane) => `${pane.paneId}:${pane.ptyId ?? ""}`)
+            .join("|")
+        : "";
+
+    const previous = previousSessionSignaturesRef.current;
+    const changedPaths = new Set<string>([
+      ...previous.keys(),
+      ...Object.keys(sessions),
+    ]);
+
+    const nextSignatures = new Map<string, string>();
+    const pathsToPersist: string[] = [];
+    for (const worktreePath of changedPaths) {
+      const nextSignature = structureSignature(sessions[worktreePath]);
+      if (nextSignature) {
+        nextSignatures.set(worktreePath, nextSignature);
+      }
+      if (previous.get(worktreePath) !== nextSignature) {
+        pathsToPersist.push(worktreePath);
+      }
+    }
+
+    previousSessionSignaturesRef.current = nextSignatures;
+
+    if (pathsToPersist.length === 0) {
+      return;
+    }
+
+    void Promise.all(
+      pathsToPersist.map((worktreePath) =>
+        saveTerminalSessionSnapshot(
+          buildTerminalSnapshotRequest(
+            worktreePath,
+            sessions[worktreePath],
+            new Map(
+              (sessions[worktreePath]
+                ? collectTerminalPanes(sessions[worktreePath])
+                : []
+              ).map((pane) => [
+                pane.paneId,
+                getTerminalPaneLaunchCwd(pane.paneId) ?? worktreePath,
+              ]),
+            ),
+          ),
+        ).catch((cause) => {
+          logError("terminal", "snapshot save failed", { worktreePath, cause });
+        }),
+      ),
+    );
+  }, [sessions]);
 
   // Load theme + default worktree
   useEffect(() => {
@@ -59,6 +126,48 @@ export default function TerminalPanel() {
       }
     }
     init();
+  }, []);
+
+  useEffect(() => {
+    const appWindow = getCurrentWindow();
+    let closing = false;
+
+    const unlistenPromise = appWindow.onCloseRequested(async (event) => {
+      if (closing) {
+        return;
+      }
+
+      closing = true;
+      event.preventDefault();
+
+      try {
+        const currentSessions = useTerminalStore.getState().sessions;
+        await Promise.all(
+          Object.entries(currentSessions).map(([worktreePath, node]) =>
+            saveTerminalSessionSnapshot(
+              buildTerminalSnapshotRequest(
+                worktreePath,
+                node,
+                new Map(
+                  collectTerminalPanes(node).map((pane) => [
+                    pane.paneId,
+                    getTerminalPaneLaunchCwd(pane.paneId) ?? worktreePath,
+                  ]),
+                ),
+              ),
+            ),
+          ),
+        );
+      } catch (cause) {
+        logError("terminal", "snapshot save on close failed", cause);
+      } finally {
+        await appWindow.close();
+      }
+    });
+
+    return () => {
+      unlistenPromise.then((unlisten) => unlisten());
+    };
   }, []);
 
   // Sync sidebar -> terminal

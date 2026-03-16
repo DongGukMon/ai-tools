@@ -1,36 +1,75 @@
 import { useTerminalStore } from "../store/terminal";
-import { countLeaves, assignPtyIds } from "../lib/split-tree";
-import { createPty as ipcCreatePty, closePty as ipcClosePty } from "../lib/tauri";
+import {
+  createPty as ipcCreatePty,
+  closePty as ipcClosePty,
+  loadTerminalSessionSnapshot,
+  type CreatePtyRestore,
+} from "../lib/tauri";
 import { runCommand, runCommandSafely } from "../lib/command";
+import {
+  buildTerminalRestorePlan,
+  restoreLayoutWithPtyIds,
+} from "../lib/terminal-session";
+import { primeTerminalPane } from "../lib/terminal-runtime";
 
 export function useTerminal() {
   const store = useTerminalStore();
 
   const createTerminal = async (worktreePath: string) => {
-    const createPty = (ptyId: string) =>
-      runCommand(() => ipcCreatePty(ptyId, worktreePath, 80, 24), {
+    const createPty = (
+      ptyId: string,
+      cwd: string,
+      restore?: CreatePtyRestore,
+    ) =>
+      runCommand(() => ipcCreatePty(ptyId, cwd, 80, 24, restore), {
         errorToast: false,
       });
 
     // Check for saved layout
     const savedLayout = store.getSavedLayout(worktreePath);
     if (savedLayout) {
-      const leafCount = countLeaves(savedLayout);
-      const ptyIds: string[] = [];
-      // Create PTYs for each leaf
-      for (let i = 0; i < leafCount; i++) {
+      const snapshot = await runCommandSafely(
+        () => loadTerminalSessionSnapshot(worktreePath),
+        { errorToast: false },
+      );
+      const restorePlan = buildTerminalRestorePlan(
+        structuredClone(savedLayout),
+        snapshot,
+        worktreePath,
+      );
+      const panePtyIds = new Map<string, string>();
+
+      for (const pane of restorePlan) {
         const ptyId = crypto.randomUUID();
-        await createPty(ptyId);
-        ptyIds.push(ptyId);
+        await createPty(ptyId, pane.restoreCwd, {
+          lastKnownCwd:
+            pane.restoreCwdSource === "lastKnownCwd"
+              ? pane.lastKnownCwd
+              : undefined,
+          scrollback: pane.scrollback,
+          scrollbackTruncated: pane.scrollbackTruncated,
+        });
+        panePtyIds.set(pane.paneId, ptyId);
+        primeTerminalPane(pane.paneId, {
+          ptyId,
+          launchCwd: pane.launchCwd,
+          initialScrollback: pane.scrollback,
+        });
       }
-      const restored = assignPtyIds(structuredClone(savedLayout), [...ptyIds]);
+
+      const restored = restoreLayoutWithPtyIds(
+        structuredClone(savedLayout),
+        panePtyIds,
+      );
       store.restoreSession(worktreePath, restored);
-      return ptyIds[0];
+      return restorePlan[0]
+        ? panePtyIds.get(restorePlan[0].paneId) ?? null
+        : null;
     }
 
     // No saved layout — single terminal
     const ptyId = crypto.randomUUID();
-    await createPty(ptyId);
+    await createPty(ptyId, worktreePath);
     store.createSession(worktreePath, ptyId);
     return ptyId;
   };

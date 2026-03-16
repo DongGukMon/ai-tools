@@ -14,6 +14,12 @@ import type {
 // optional runtime lookup handle for backend-enriched scrollback/cwd capture.
 export type TerminalRestoreCwdSource = "launchCwd" | "lastKnownCwd";
 
+export interface CreatePtyRestore {
+  lastKnownCwd?: string | null;
+  scrollback?: string | null;
+  scrollbackTruncated?: boolean | null;
+}
+
 export interface TerminalPaneSnapshotInput {
   paneId: string;
   ptyId?: string | null;
@@ -147,8 +153,9 @@ export async function createPty(
   cwd: string,
   cols: number,
   rows: number,
+  restore?: CreatePtyRestore | null,
 ): Promise<void> {
-  return invoke("create_pty", { id, cwd, cols, rows });
+  return invoke("create_pty", { id, cwd, cols, rows, restore });
 }
 
 export async function writePty(id: string, data: number[]): Promise<void> {

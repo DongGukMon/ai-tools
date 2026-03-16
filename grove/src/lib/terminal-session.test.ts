@@ -1,0 +1,183 @@
+import { describe, expect, it } from "vitest";
+import type { SplitNode } from "../types";
+import {
+  buildTerminalRestorePlan,
+  buildTerminalSnapshotRequest,
+  collectTerminalPanes,
+  findWorktreePathForPtyId,
+  restoreLayoutWithPtyIds,
+} from "./terminal-session";
+
+const layout: SplitNode = {
+  id: "root",
+  type: "horizontal",
+  sizes: [0.4, 0.6],
+  children: [
+    { id: "pane-a", type: "leaf" },
+    {
+      id: "branch-b",
+      type: "vertical",
+      sizes: [0.5, 0.5],
+      children: [
+        { id: "pane-b", type: "leaf" },
+        { id: "pane-c", type: "leaf" },
+      ],
+    },
+  ],
+};
+
+describe("collectTerminalPanes", () => {
+  it("returns leaf panes in layout order", () => {
+    expect(collectTerminalPanes(layout)).toEqual([
+      { paneId: "pane-a", ptyId: undefined },
+      { paneId: "pane-b", ptyId: undefined },
+      { paneId: "pane-c", ptyId: undefined },
+    ]);
+  });
+});
+
+describe("restoreLayoutWithPtyIds", () => {
+  it("maps runtime PTY ids onto stable pane ids", () => {
+    const restored = restoreLayoutWithPtyIds(
+      layout,
+      new Map([
+        ["pane-a", "pty-1"],
+        ["pane-b", "pty-2"],
+        ["pane-c", "pty-3"],
+      ]),
+    );
+
+    expect(restored.children?.[0]).toEqual({
+      id: "pane-a",
+      type: "leaf",
+      ptyId: "pty-1",
+    });
+    expect(restored.children?.[1].children?.[0]).toEqual({
+      id: "pane-b",
+      type: "leaf",
+      ptyId: "pty-2",
+    });
+    expect(restored.children?.[1].children?.[1]).toEqual({
+      id: "pane-c",
+      type: "leaf",
+      ptyId: "pty-3",
+    });
+  });
+});
+
+describe("buildTerminalRestorePlan", () => {
+  it("uses per-pane snapshot cwd and scrollback when available", () => {
+    const plan = buildTerminalRestorePlan(
+      layout,
+      {
+        worktreePath: "/tmp/project",
+        panes: [
+          {
+            paneId: "pane-c",
+            scrollback: "git status\r\n",
+            scrollbackTruncated: false,
+            launchCwd: "/tmp/project",
+            lastKnownCwd: "/tmp/project/src",
+            restoreCwd: "/tmp/project/src",
+            restoreCwdSource: "lastKnownCwd",
+          },
+          {
+            paneId: "pane-a",
+            scrollback: "pnpm test\r\n",
+            scrollbackTruncated: true,
+            launchCwd: "/tmp/project",
+            lastKnownCwd: null,
+            restoreCwd: "/tmp/project",
+            restoreCwdSource: "launchCwd",
+          },
+        ],
+      },
+      "/tmp/project",
+    );
+
+    expect(plan).toEqual([
+      {
+        paneId: "pane-a",
+        launchCwd: "/tmp/project",
+        lastKnownCwd: null,
+        restoreCwd: "/tmp/project",
+        restoreCwdSource: "launchCwd",
+        scrollback: "pnpm test\r\n",
+        scrollbackTruncated: true,
+      },
+      {
+        paneId: "pane-b",
+        launchCwd: "/tmp/project",
+        lastKnownCwd: null,
+        restoreCwd: "/tmp/project",
+        restoreCwdSource: "fallback",
+        scrollback: "",
+        scrollbackTruncated: false,
+      },
+      {
+        paneId: "pane-c",
+        launchCwd: "/tmp/project",
+        lastKnownCwd: "/tmp/project/src",
+        restoreCwd: "/tmp/project/src",
+        restoreCwdSource: "lastKnownCwd",
+        scrollback: "git status\r\n",
+        scrollbackTruncated: false,
+      },
+    ]);
+  });
+});
+
+describe("buildTerminalSnapshotRequest", () => {
+  it("includes pane ids, runtime PTY ids, and known launch cwd metadata", () => {
+    const liveLayout = restoreLayoutWithPtyIds(
+      layout,
+      new Map([
+        ["pane-a", "pty-1"],
+        ["pane-b", "pty-2"],
+      ]),
+    );
+
+    expect(
+      buildTerminalSnapshotRequest(
+        "/tmp/project",
+        liveLayout,
+        new Map([
+          ["pane-a", "/tmp/project"],
+          ["pane-b", "/tmp/project/src"],
+        ]),
+      ),
+    ).toEqual({
+      worktreePath: "/tmp/project",
+      panes: [
+        { paneId: "pane-a", ptyId: "pty-1", launchCwd: "/tmp/project" },
+        { paneId: "pane-b", ptyId: "pty-2", launchCwd: "/tmp/project/src" },
+        { paneId: "pane-c", ptyId: undefined, launchCwd: undefined },
+      ],
+    });
+  });
+
+  it("can clear a saved snapshot for a removed worktree", () => {
+    expect(buildTerminalSnapshotRequest("/tmp/project", undefined)).toEqual({
+      worktreePath: "/tmp/project",
+      panes: [],
+    });
+  });
+});
+
+describe("findWorktreePathForPtyId", () => {
+  it("returns the owning worktree for a live PTY id", () => {
+    const sessions = {
+      "/tmp/project-a": restoreLayoutWithPtyIds(
+        layout,
+        new Map([["pane-a", "pty-a"]]),
+      ),
+      "/tmp/project-b": restoreLayoutWithPtyIds(
+        layout,
+        new Map([["pane-b", "pty-b"]]),
+      ),
+    };
+
+    expect(findWorktreePathForPtyId(sessions, "pty-b")).toBe("/tmp/project-b");
+    expect(findWorktreePathForPtyId(sessions, "missing")).toBeNull();
+  });
+});

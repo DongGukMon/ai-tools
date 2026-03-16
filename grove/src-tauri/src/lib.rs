@@ -51,6 +51,17 @@ pub struct TerminalPaneSnapshotInput {
     pub launch_cwd: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreatePtyRestore {
+    #[serde(default)]
+    pub last_known_cwd: Option<String>,
+    #[serde(default)]
+    pub scrollback: Option<String>,
+    #[serde(default)]
+    pub scrollback_truncated: Option<bool>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum TerminalRestoreCwdSource {
@@ -236,8 +247,9 @@ fn create_pty(
     cwd: String,
     cols: u16,
     rows: u16,
+    restore: Option<CreatePtyRestore>,
 ) -> Result<(), String> {
-    pty::create(app_handle, id, cwd, cols, rows)
+    pty::create(app_handle, id, cwd, cols, rows, restore)
 }
 
 #[tauri::command]

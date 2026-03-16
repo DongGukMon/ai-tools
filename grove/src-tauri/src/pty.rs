@@ -1,7 +1,7 @@
 use crate::{
-    config, process_env::preferred_ssh_auth_sock, SaveTerminalSessionSnapshotRequest,
-    TerminalPaneSnapshot, TerminalPaneSnapshotInput, TerminalRestoreCwdSource,
-    TerminalSessionSnapshot,
+    config, process_env::preferred_ssh_auth_sock, CreatePtyRestore,
+    SaveTerminalSessionSnapshotRequest, TerminalPaneSnapshot, TerminalPaneSnapshotInput,
+    TerminalRestoreCwdSource, TerminalSessionSnapshot,
 };
 use base64::Engine;
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
@@ -32,14 +32,33 @@ struct PtyRuntimeState {
 }
 
 impl PtyRuntimeState {
-    fn new(launch_cwd: String, process_id: Option<u32>) -> Self {
-        Self {
+    fn new(
+        launch_cwd: String,
+        process_id: Option<u32>,
+        restore: Option<&CreatePtyRestore>,
+    ) -> Self {
+        let mut state = Self {
             launch_cwd,
             process_id,
             last_known_cwd: None,
             scrollback: Vec::new(),
             scrollback_truncated: false,
+        };
+
+        if let Some(restore) = restore {
+            state.last_known_cwd = restore
+                .last_known_cwd
+                .as_deref()
+                .map(str::trim)
+                .filter(|cwd| !cwd.is_empty())
+                .map(str::to_string);
+            state.scrollback_truncated = restore.scrollback_truncated.unwrap_or(false);
+            if let Some(scrollback) = restore.scrollback.as_deref() {
+                state.append_scrollback(scrollback.as_bytes());
+            }
         }
+
+        state
     }
 
     fn append_scrollback(&mut self, chunk: &[u8]) {
@@ -97,6 +116,7 @@ pub fn create(
     cwd: String,
     cols: u16,
     rows: u16,
+    restore: Option<CreatePtyRestore>,
 ) -> Result<(), String> {
     let pty_system = native_pty_system();
     let pair = pty_system
@@ -128,6 +148,7 @@ pub fn create(
     let tracked = Arc::new(Mutex::new(PtyRuntimeState::new(
         cwd.clone(),
         child.process_id(),
+        restore.as_ref(),
     )));
     drop(pair.slave);
 
@@ -450,5 +471,65 @@ mod tests {
         assert!(snapshot.last_known_cwd.is_none());
         assert!(snapshot.scrollback.is_empty());
         assert!(!snapshot.scrollback_truncated);
+    }
+
+    #[test]
+    fn runtime_state_seeds_restore_scrollback_before_live_output() {
+        let restore = CreatePtyRestore {
+            last_known_cwd: None,
+            scrollback: Some("abc".into()),
+            scrollback_truncated: Some(false),
+        };
+        let mut state = PtyRuntimeState::new("/tmp/grove/worktree".into(), None, Some(&restore));
+
+        state.append_scrollback(b"def");
+
+        assert_eq!(state.scrollback, b"abcdef");
+        assert!(!state.scrollback_truncated);
+    }
+
+    #[test]
+    fn runtime_state_preserves_restore_seed_truncation_metadata() {
+        let restore = CreatePtyRestore {
+            last_known_cwd: None,
+            scrollback: Some("abc".into()),
+            scrollback_truncated: Some(true),
+        };
+        let state = PtyRuntimeState::new("/tmp/grove/worktree".into(), None, Some(&restore));
+
+        assert_eq!(state.scrollback, b"abc");
+        assert!(state.scrollback_truncated);
+    }
+
+    #[test]
+    fn runtime_state_applies_cap_after_seeded_and_live_output_combine() {
+        let restore = CreatePtyRestore {
+            last_known_cwd: None,
+            scrollback: Some(format!("0123{}", "a".repeat(MAX_SCROLLBACK_BYTES - 6))),
+            scrollback_truncated: Some(false),
+        };
+        let mut state = PtyRuntimeState::new("/tmp/grove/worktree".into(), None, Some(&restore));
+
+        state.append_scrollback(b"bcde");
+
+        let scrollback = String::from_utf8_lossy(&state.scrollback);
+        assert_eq!(state.scrollback.len(), MAX_SCROLLBACK_BYTES);
+        assert!(scrollback.starts_with("23"));
+        assert!(scrollback.ends_with("bcde"));
+        assert!(state.scrollback_truncated);
+    }
+
+    #[test]
+    fn runtime_state_seeds_last_known_cwd_from_restore_metadata() {
+        let restore = CreatePtyRestore {
+            last_known_cwd: Some("/tmp/grove/restored".into()),
+            scrollback: None,
+            scrollback_truncated: None,
+        };
+        let state = PtyRuntimeState::new("/tmp/grove/worktree".into(), None, Some(&restore));
+
+        assert_eq!(state.last_known_cwd.as_deref(), Some("/tmp/grove/restored"));
+        assert!(state.scrollback.is_empty());
+        assert!(!state.scrollback_truncated);
     }
 }

@@ -65,7 +65,7 @@ export default function SplitContainer({ node, path = [] }: Props) {
   if (node.type === "leaf") {
     return node.ptyId ? (
       <div className={cn("relative w-full h-full")}>
-        <TerminalInstance ptyId={node.ptyId} />
+        <TerminalInstance paneId={node.id} ptyId={node.ptyId} />
       </div>
     ) : null;
   }
