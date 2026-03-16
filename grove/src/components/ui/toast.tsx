@@ -204,14 +204,13 @@ function ToastCard({ toast }: { toast: ToastItem }) {
   return (
     <div
       className={cn(
-        "group pointer-events-auto relative flex w-full items-center gap-3 overflow-hidden rounded-lg py-3 pr-3 pl-4",
+        "group pointer-events-auto relative flex w-full items-center gap-3 overflow-hidden rounded-lg bg-card text-card-foreground py-3 pr-3 pl-4",
         {
           "animate-in fade-in-0 slide-in-from-right-full zoom-in-95 duration-300": !exiting,
           "animate-out fade-out-0 slide-out-to-right-full zoom-out-95 duration-200 fill-mode-forwards": exiting,
         },
       )}
       style={{
-        backgroundColor: "oklch(0.14 0 0)",
         border: `1px solid ${config.borderColor}`,
         boxShadow: `0 8px 32px oklch(0 0 0 / 0.45), 0 0 0 1px oklch(1 0 0 / 0.04), ${config.glowShadow}`,
       }}
