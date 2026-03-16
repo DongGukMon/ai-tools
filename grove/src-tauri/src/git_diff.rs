@@ -130,6 +130,7 @@ pub fn get_working_diff_impl(worktree_path: &str, path: &str) -> Result<FileDiff
         let mut opts = DiffOptions::new();
         opts.pathspec(actual_path);
         opts.include_untracked(true);
+        opts.show_untracked_content(true);
         repo.diff_index_to_workdir(None, Some(&mut opts))
             .map_err(|e| e.to_string())?
     };
@@ -273,6 +274,7 @@ fn get_unstaged_diff(worktree_path: &str, file_path: &str) -> Result<FileDiff, S
     let mut opts = DiffOptions::new();
     opts.pathspec(file_path);
     opts.include_untracked(true);
+    opts.show_untracked_content(true);
     let diff = repo
         .diff_index_to_workdir(None, Some(&mut opts))
         .map_err(|e| e.to_string())?;
