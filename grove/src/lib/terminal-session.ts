@@ -36,6 +36,16 @@ export function collectTerminalPanes(node: SplitNode): TerminalPaneEntry[] {
   return (node.children ?? []).flatMap(collectTerminalPanes);
 }
 
+export function buildTerminalPaneTopologySignature(
+  node: SplitNode | undefined,
+): string {
+  return node
+    ? collectTerminalPanes(node)
+        .map((pane) => pane.paneId)
+        .join("|")
+    : "";
+}
+
 export function restoreLayoutWithPtyIds(
   node: SplitNode,
   panePtyIds: ReadonlyMap<string, string>,

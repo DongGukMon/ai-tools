@@ -12,14 +12,24 @@ import {
 } from "./terminal-input";
 import { resizePty, writePty } from "./tauri";
 
-interface TerminalPaneSeed {
+export type TerminalInitialContentSource = "snapshotFallback" | "tmuxCapture";
+
+export interface TerminalPaneSeed {
   initialScrollback?: string;
+  initialScrollbackSource?: TerminalInitialContentSource;
   launchCwd?: string;
   ptyId?: string;
 }
 
 type FocusHandler = (ptyId: string) => void;
 type ErrorHandler = (message: string | null) => void;
+type ActivitySource = "output" | "tmuxCapture";
+
+export interface TerminalPaneActivity {
+  paneId: string;
+  ptyId: string;
+  source: ActivitySource;
+}
 
 function toXtermTheme(theme: TerminalTheme | null) {
   if (!theme) {
@@ -51,6 +61,22 @@ function toXtermTheme(theme: TerminalTheme | null) {
 
 const paneSeeds = new Map<string, TerminalPaneSeed>();
 const runtimes = new Map<string, TerminalPaneRuntime>();
+const activityListeners = new Set<(activity: TerminalPaneActivity) => void>();
+
+function emitTerminalPaneActivity(activity: TerminalPaneActivity) {
+  for (const listener of activityListeners) {
+    listener(activity);
+  }
+}
+
+export function subscribeTerminalPaneActivity(
+  listener: (activity: TerminalPaneActivity) => void,
+) {
+  activityListeners.add(listener);
+  return () => {
+    activityListeners.delete(listener);
+  };
+}
 
 export function primeTerminalPane(
   paneId: string,
@@ -67,6 +93,10 @@ export function primeTerminalPane(
     ...existing,
     ...seed,
     initialScrollback: seed.initialScrollback ?? existing?.initialScrollback,
+    initialScrollbackSource:
+      seed.initialScrollback !== undefined
+        ? seed.initialScrollbackSource
+        : existing?.initialScrollbackSource,
   });
 }
 
@@ -109,6 +139,7 @@ class TerminalPaneRuntime {
   private lastCols = 0;
   private lastRows = 0;
   private initialScrollback = "";
+  private initialScrollbackSource: TerminalInitialContentSource | undefined;
   private hydrationStarted = false;
   private hydrated = false;
   private pendingOutput: Uint8Array[] = [];
@@ -133,6 +164,7 @@ class TerminalPaneRuntime {
     this.ptyId = seed?.ptyId ?? "";
     this.launchCwd = seed?.launchCwd;
     this.initialScrollback = seed?.initialScrollback ?? "";
+    this.initialScrollbackSource = seed?.initialScrollbackSource;
     this.hydrated = this.initialScrollback.length === 0;
     this.shouldLoadWebgl = shouldEnableTerminalWebgl(
       navigator.platform,
@@ -204,6 +236,7 @@ class TerminalPaneRuntime {
           } else {
             this.pendingOutput.push(bytes);
           }
+          this.reportActivity("output");
         } catch (error) {
           console.error("pty-output decode error:", error);
         }
@@ -241,6 +274,7 @@ class TerminalPaneRuntime {
     this.launchCwd = seed.launchCwd ?? this.launchCwd;
     if (!this.hydrationStarted && seed.initialScrollback !== undefined) {
       this.initialScrollback = seed.initialScrollback;
+      this.initialScrollbackSource = seed.initialScrollbackSource;
       this.hydrated = this.initialScrollback.length === 0;
     }
   }
@@ -460,12 +494,13 @@ class TerminalPaneRuntime {
 
     this.hydrationStarted = true;
     if (!this.initialScrollback) {
+      this.finishInitialHydration();
       this.flushPendingOutput();
       return;
     }
 
     this.term.write(this.initialScrollback, () => {
-      this.initialScrollback = "";
+      this.finishInitialHydration();
       this.flushPendingOutput();
     });
   }
@@ -485,6 +520,27 @@ class TerminalPaneRuntime {
   private reportError(message: string) {
     this.lastError = message;
     this.errorHandler?.(message);
+  }
+
+  private finishInitialHydration() {
+    const source = this.initialScrollbackSource;
+    this.initialScrollback = "";
+    this.initialScrollbackSource = undefined;
+    if (source === "tmuxCapture") {
+      this.reportActivity("tmuxCapture");
+    }
+  }
+
+  private reportActivity(source: ActivitySource) {
+    if (!this.ptyId) {
+      return;
+    }
+
+    emitTerminalPaneActivity({
+      paneId: this.paneId,
+      ptyId: this.ptyId,
+      source,
+    });
   }
 
   private dispose() {

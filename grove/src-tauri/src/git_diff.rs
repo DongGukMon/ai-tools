@@ -587,8 +587,10 @@ pub fn get_behind_count_impl(worktree_path: &str) -> Result<BehindInfo, String> 
     let default_branch = crate::git_project::remote_default_branch(wt_path)?;
     let remote_ref = format!("origin/{default_branch}");
 
-    let count_str =
-        run_git_output_with_ssh(worktree_path, &["rev-list", "--count", &format!("HEAD..{remote_ref}")])?;
+    let count_str = run_git_output_with_ssh(
+        worktree_path,
+        &["rev-list", "--count", &format!("HEAD..{remote_ref}")],
+    )?;
 
     let behind: u32 = count_str
         .parse()

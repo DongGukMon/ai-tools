@@ -69,10 +69,26 @@ pub enum CreatePtySessionState {
     Created,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum CreatePtyInitialHydrationSource {
+    TmuxCapture,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CreatePtyInitialHydration {
+    pub text: String,
+    pub truncated: bool,
+    pub source: CreatePtyInitialHydrationSource,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct CreatePtyResult {
     pub session_state: CreatePtySessionState,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub initial_hydration: Option<CreatePtyInitialHydration>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

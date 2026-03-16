@@ -13,11 +13,17 @@ import SplitContainer from "./SplitContainer";
 import TerminalToolbar from "./TerminalToolbar";
 import { log, error as logError } from "../../lib/logger";
 import {
+  buildTerminalPaneTopologySignature,
   buildTerminalSnapshotRequest,
   collectTerminalPanes,
+  findWorktreePathForPtyId,
 } from "../../lib/terminal-session";
-import { getTerminalPaneLaunchCwd } from "../../lib/terminal-runtime";
+import {
+  getTerminalPaneLaunchCwd,
+  subscribeTerminalPaneActivity,
+} from "../../lib/terminal-runtime";
 
+const SNAPSHOT_SAVE_DEBOUNCE_MS = 750;
 
 export default function TerminalPanel() {
   const sessions = useTerminalStore((s) => s.sessions);
@@ -29,67 +35,96 @@ export default function TerminalPanel() {
   const selectedWorktree = useProjectStore((s) => s.selectedWorktree);
   const { createTerminal } = useTerminal();
   const [error, setError] = useState<string | null>(null);
-  const previousSessionSignaturesRef = useRef(new Map<string, string>());
+  const previousPaneTopologyRef = useRef(new Map<string, string>());
+  const snapshotSaveTimersRef = useRef(
+    new Map<string, ReturnType<typeof setTimeout>>(),
+  );
+  const sessionsRef = useRef(sessions);
+
+  sessionsRef.current = sessions;
+
+  const persistSnapshot = (worktreePath: string) => {
+    const node = sessionsRef.current[worktreePath];
+    void saveTerminalSessionSnapshot(
+      buildTerminalSnapshotRequest(
+        worktreePath,
+        node,
+        new Map(
+          (node ? collectTerminalPanes(node) : []).map((pane) => [
+            pane.paneId,
+            getTerminalPaneLaunchCwd(pane.paneId) ?? worktreePath,
+          ]),
+        ),
+      ),
+    ).catch((cause) => {
+      logError("terminal", "fallback snapshot save failed", {
+        worktreePath,
+        cause,
+      });
+    });
+  };
+
+  const scheduleSnapshotSave = (worktreePath: string) => {
+    const timers = snapshotSaveTimersRef.current;
+    const existing = timers.get(worktreePath);
+    if (existing) {
+      clearTimeout(existing);
+    }
+
+    timers.set(
+      worktreePath,
+      setTimeout(() => {
+        timers.delete(worktreePath);
+        persistSnapshot(worktreePath);
+      }, SNAPSHOT_SAVE_DEBOUNCE_MS),
+    );
+  };
 
   useEffect(() => {
-    // tmux session continuity is the primary restore path. Persist snapshots only
-    // as fallback metadata when the live Grove-managed tmux session is missing.
-    const structureSignature = (node: (typeof sessions)[string] | undefined) =>
-      node
-        ? collectTerminalPanes(node)
-            .map((pane) => `${pane.paneId}:${pane.ptyId ?? ""}`)
-            .join("|")
-        : "";
-
-    const previous = previousSessionSignaturesRef.current;
+    const previous = previousPaneTopologyRef.current;
     const changedPaths = new Set<string>([
       ...previous.keys(),
       ...Object.keys(sessions),
     ]);
 
     const nextSignatures = new Map<string, string>();
-    const pathsToPersist: string[] = [];
     for (const worktreePath of changedPaths) {
-      const nextSignature = structureSignature(sessions[worktreePath]);
+      const nextSignature = buildTerminalPaneTopologySignature(
+        sessions[worktreePath],
+      );
       if (nextSignature) {
         nextSignatures.set(worktreePath, nextSignature);
       }
-      if (previous.get(worktreePath) !== nextSignature) {
-        pathsToPersist.push(worktreePath);
+      if (
+        previous.has(worktreePath) &&
+        previous.get(worktreePath) !== nextSignature
+      ) {
+        scheduleSnapshotSave(worktreePath);
       }
     }
 
-    previousSessionSignaturesRef.current = nextSignatures;
-
-    if (pathsToPersist.length === 0) {
-      return;
-    }
-
-    void Promise.all(
-      pathsToPersist.map((worktreePath) =>
-        saveTerminalSessionSnapshot(
-          buildTerminalSnapshotRequest(
-            worktreePath,
-            sessions[worktreePath],
-            new Map(
-              (sessions[worktreePath]
-                ? collectTerminalPanes(sessions[worktreePath])
-                : []
-              ).map((pane) => [
-                pane.paneId,
-                getTerminalPaneLaunchCwd(pane.paneId) ?? worktreePath,
-              ]),
-            ),
-          ),
-        ).catch((cause) => {
-          logError("terminal", "fallback snapshot save failed", {
-            worktreePath,
-            cause,
-          });
-        }),
-      ),
-    );
+    previousPaneTopologyRef.current = nextSignatures;
   }, [sessions]);
+
+  useEffect(
+    () => subscribeTerminalPaneActivity(({ ptyId }) => {
+      const worktreePath = findWorktreePathForPtyId(sessionsRef.current, ptyId);
+      if (!worktreePath) {
+        return;
+      }
+
+      scheduleSnapshotSave(worktreePath);
+    }),
+    [],
+  );
+
+  useEffect(() => () => {
+    for (const [worktreePath, timer] of snapshotSaveTimersRef.current.entries()) {
+      clearTimeout(timer);
+      persistSnapshot(worktreePath);
+    }
+    snapshotSaveTimersRef.current.clear();
+  }, []);
 
   // Load theme + default worktree
   useEffect(() => {

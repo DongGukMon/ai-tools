@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SplitNode } from "../types";
 import {
+  buildTerminalPaneTopologySignature,
   buildTerminalRestorePlan,
   buildTerminalSnapshotRequest,
   collectTerminalPanes,
@@ -33,6 +34,25 @@ describe("collectTerminalPanes", () => {
       { paneId: "pane-b", ptyId: undefined },
       { paneId: "pane-c", ptyId: undefined },
     ]);
+  });
+});
+
+describe("buildTerminalPaneTopologySignature", () => {
+  it("tracks stable pane identity without pty ids", () => {
+    expect(buildTerminalPaneTopologySignature(layout)).toBe(
+      "pane-a|pane-b|pane-c",
+    );
+    expect(
+      buildTerminalPaneTopologySignature(
+        restoreLayoutWithPtyIds(
+          layout,
+          new Map([
+            ["pane-a", "pty-1"],
+            ["pane-b", "pty-2"],
+          ]),
+        ),
+      ),
+    ).toBe("pane-a|pane-b|pane-c");
   });
 });
 

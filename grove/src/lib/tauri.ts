@@ -32,8 +32,15 @@ export interface CreatePtyRequest {
 
 export type CreatePtySessionState = "attached" | "created";
 
+export interface CreatePtyInitialHydration {
+  text: string;
+  truncated: boolean;
+  source: "tmuxCapture";
+}
+
 export interface CreatePtyResult {
   sessionState: CreatePtySessionState;
+  initialHydration?: CreatePtyInitialHydration | null;
 }
 
 export interface TerminalPaneSnapshotInput {

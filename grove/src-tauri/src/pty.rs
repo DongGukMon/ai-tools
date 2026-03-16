@@ -1,7 +1,8 @@
 use crate::{
-    config, process_env::preferred_ssh_auth_sock, CreatePtyRestore, CreatePtyResult,
-    CreatePtySessionState, SaveTerminalSessionSnapshotRequest, TerminalPaneSnapshot,
-    TerminalPaneSnapshotInput, TerminalRestoreCwdSource, TerminalSessionSnapshot,
+    config, process_env::preferred_ssh_auth_sock, CreatePtyInitialHydration,
+    CreatePtyInitialHydrationSource, CreatePtyRestore, CreatePtyResult, CreatePtySessionState,
+    SaveTerminalSessionSnapshotRequest, TerminalPaneSnapshot, TerminalPaneSnapshotInput,
+    TerminalRestoreCwdSource, TerminalSessionSnapshot,
 };
 use base64::Engine;
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
@@ -48,6 +49,7 @@ impl PtyRuntimeState {
         process_id: Option<u32>,
         session_name: String,
         restore: Option<&CreatePtyRestore>,
+        initial_hydration: Option<&TmuxCapturedContent>,
     ) -> Self {
         let mut state = Self {
             launch_cwd,
@@ -71,6 +73,11 @@ impl PtyRuntimeState {
             }
         }
 
+        if let Some(initial_hydration) = initial_hydration {
+            state.scrollback_truncated = initial_hydration.truncated;
+            state.append_scrollback(&initial_hydration.bytes);
+        }
+
         state
     }
 
@@ -92,6 +99,19 @@ struct PtyRuntimeSnapshot {
     last_known_cwd: Option<String>,
     scrollback: Vec<u8>,
     scrollback_truncated: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum TmuxCaptureScope {
+    History,
+    AlternateScreen,
+    ModeScreen,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct TmuxCapturedContent {
+    bytes: Vec<u8>,
+    truncated: bool,
 }
 
 struct PtyInstance {
@@ -149,6 +169,19 @@ pub fn create(
 
     let session_name = grove_tmux_session_name(&worktree_path, &pane_id);
     let session_state = ensure_grove_tmux_session(&session_name, &worktree_path, &pane_id, &cwd)?;
+    let initial_hydration_capture = match session_state {
+        CreatePtySessionState::Attached => Some(capture_tmux_content_with_fallback(
+            &session_name,
+            tmux_capture_scope(
+                tmux_pane_in_mode(&session_name)?,
+                tmux_pane_alternate_on(&session_name)?,
+            ),
+        )?),
+        CreatePtySessionState::Created => None,
+    };
+    let initial_hydration = initial_hydration_capture
+        .as_ref()
+        .map(create_tmux_initial_hydration);
 
     let pty_system = native_pty_system();
     let pair = pty_system
@@ -177,6 +210,7 @@ pub fn create(
         child.process_id(),
         session_name.clone(),
         restore_seed,
+        initial_hydration_capture.as_ref(),
     )));
     drop(pair.slave);
 
@@ -199,7 +233,10 @@ pub fn create(
         .map_err(|e| e.to_string())?
         .insert(pty_id, instance);
 
-    Ok(CreatePtyResult { session_state })
+    Ok(CreatePtyResult {
+        session_state,
+        initial_hydration,
+    })
 }
 
 fn read_pty_output(
@@ -444,6 +481,78 @@ fn runtime_restore_seed<'a>(
         CreatePtySessionState::Created => restore,
         CreatePtySessionState::Attached => None,
     }
+}
+
+fn create_tmux_initial_hydration(capture: &TmuxCapturedContent) -> CreatePtyInitialHydration {
+    CreatePtyInitialHydration {
+        text: String::from_utf8_lossy(&capture.bytes).into_owned(),
+        truncated: capture.truncated,
+        source: CreatePtyInitialHydrationSource::TmuxCapture,
+    }
+}
+
+fn tmux_capture_scope(pane_in_mode: bool, alternate_on: bool) -> TmuxCaptureScope {
+    if pane_in_mode {
+        TmuxCaptureScope::ModeScreen
+    } else if alternate_on {
+        TmuxCaptureScope::AlternateScreen
+    } else {
+        TmuxCaptureScope::History
+    }
+}
+
+fn capture_tmux_content_with_fallback(
+    session_name: &str,
+    preferred_scope: TmuxCaptureScope,
+) -> Result<TmuxCapturedContent, String> {
+    match preferred_scope {
+        TmuxCaptureScope::History => capture_tmux_content(session_name, TmuxCaptureScope::History),
+        TmuxCaptureScope::AlternateScreen | TmuxCaptureScope::ModeScreen => {
+            capture_tmux_content(session_name, preferred_scope)
+                .or_else(|_| capture_tmux_content(session_name, TmuxCaptureScope::History))
+        }
+    }
+}
+
+fn capture_tmux_content(
+    session_name: &str,
+    scope: TmuxCaptureScope,
+) -> Result<TmuxCapturedContent, String> {
+    let output = match scope {
+        TmuxCaptureScope::History => tmux_output([
+            "capture-pane",
+            "-e",
+            "-p",
+            "-J",
+            "-S",
+            "-",
+            "-t",
+            session_name,
+        ])?,
+        TmuxCaptureScope::AlternateScreen => {
+            tmux_output(["capture-pane", "-a", "-e", "-p", "-J", "-t", session_name])?
+        }
+        TmuxCaptureScope::ModeScreen => {
+            tmux_output(["capture-pane", "-M", "-e", "-p", "-J", "-t", session_name])?
+        }
+    };
+    if !output.status.success() {
+        return Err(format!(
+            "failed to capture tmux pane for {session_name}: {}",
+            tmux_output_message(&output)
+        ));
+    }
+
+    let mut bytes = Vec::new();
+    let mut truncated = false;
+    append_scrollback_capped(
+        &mut bytes,
+        &mut truncated,
+        output.stdout.as_slice(),
+        MAX_SCROLLBACK_BYTES,
+    );
+
+    Ok(TmuxCapturedContent { bytes, truncated })
 }
 
 fn required_arg(name: &str, value: &str) -> Result<String, String> {
@@ -695,30 +804,40 @@ fn tmux_output_message(output: &Output) -> String {
     format!("tmux exited with status {}", output.status)
 }
 
+fn tmux_pane_in_mode(session_name: &str) -> Result<bool, String> {
+    Ok(tmux_display_message_value(session_name, "#{pane_in_mode}")?.as_deref() == Some("1"))
+}
+
+fn tmux_pane_alternate_on(session_name: &str) -> Result<bool, String> {
+    Ok(tmux_display_message_value(session_name, "#{alternate_on}")?.as_deref() == Some("1"))
+}
+
+fn tmux_display_message_value(session_name: &str, format: &str) -> Result<Option<String>, String> {
+    let output = tmux_output(["display-message", "-p", "-t", session_name, format])?;
+    if !output.status.success() {
+        return Err(format!(
+            "failed to read tmux display message for {session_name}: {}",
+            tmux_output_message(&output)
+        ));
+    }
+
+    let value = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if value.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(value))
+    }
+}
+
 fn resolve_live_cwd(runtime_state: &PtyRuntimeSnapshot) -> Option<String> {
     resolve_tmux_session_cwd(&runtime_state.session_name)
         .or_else(|| resolve_process_cwd(runtime_state.process_id))
 }
 
 fn resolve_tmux_session_cwd(session_name: &str) -> Option<String> {
-    let output = tmux_output([
-        "display-message",
-        "-p",
-        "-t",
-        session_name,
-        "#{pane_current_path}",
-    ])
-    .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-
-    let cwd = String::from_utf8(output.stdout).ok()?.trim().to_string();
-    if cwd.is_empty() {
-        None
-    } else {
-        Some(cwd)
-    }
+    tmux_display_message_value(session_name, "#{pane_current_path}")
+        .ok()
+        .flatten()
 }
 
 fn resolve_process_cwd(process_id: Option<u32>) -> Option<String> {
@@ -758,7 +877,8 @@ fn resolve_process_cwd(process_id: Option<u32>) -> Option<String> {
 mod tests {
     use super::*;
     use crate::TerminalPaneSnapshotInput;
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::thread::sleep;
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
     #[test]
     fn detects_utf8_locale_variants() {
@@ -811,6 +931,7 @@ mod tests {
             None,
             "grove-test".into(),
             Some(&restore),
+            None,
         );
 
         state.append_scrollback(b"def");
@@ -831,6 +952,7 @@ mod tests {
             None,
             "grove-test".into(),
             Some(&restore),
+            None,
         );
 
         assert_eq!(state.scrollback, b"abc");
@@ -849,6 +971,7 @@ mod tests {
             None,
             "grove-test".into(),
             Some(&restore),
+            None,
         );
 
         state.append_scrollback(b"bcde");
@@ -872,6 +995,7 @@ mod tests {
             None,
             "grove-test".into(),
             Some(&restore),
+            None,
         );
 
         assert_eq!(state.last_known_cwd.as_deref(), Some("/tmp/grove/restored"));
@@ -909,6 +1033,78 @@ mod tests {
                 .and_then(|seed| seed.scrollback.as_deref()),
             Some("seed")
         );
+    }
+
+    #[test]
+    fn runtime_state_seeds_attached_scrollback_from_initial_hydration() {
+        let capture = TmuxCapturedContent {
+            bytes: b"live tmux buffer".to_vec(),
+            truncated: true,
+        };
+
+        let state = PtyRuntimeState::new(
+            "/tmp/grove".into(),
+            Some(123),
+            "grove-session".into(),
+            None,
+            Some(&capture),
+        );
+
+        assert_eq!(state.scrollback, b"live tmux buffer");
+        assert!(state.scrollback_truncated);
+    }
+
+    #[test]
+    fn tmux_capture_scope_prefers_mode_then_alternate_then_history() {
+        assert_eq!(tmux_capture_scope(true, true), TmuxCaptureScope::ModeScreen);
+        assert_eq!(
+            tmux_capture_scope(false, true),
+            TmuxCaptureScope::AlternateScreen
+        );
+        assert_eq!(tmux_capture_scope(false, false), TmuxCaptureScope::History);
+    }
+
+    #[test]
+    fn create_tmux_initial_hydration_returns_live_tmux_content() {
+        if Command::new("tmux").arg("-V").output().is_err() {
+            return;
+        }
+
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let session_name = format!("grove-test-hydration-{nonce}");
+        let worktree_path = env::current_dir().unwrap();
+        let worktree_path = worktree_path.to_string_lossy().into_owned();
+        let pane_id = format!("pane-{nonce}");
+        let marker = format!("hydrate-{nonce}");
+
+        let _ = kill_tmux_session_if_exists(&session_name);
+        ensure_grove_tmux_session(&session_name, &worktree_path, &pane_id, &worktree_path).unwrap();
+
+        sleep(Duration::from_millis(150));
+        tmux_output([
+            "send-keys",
+            "-t",
+            &session_name,
+            &format!("printf '{marker}\\n'"),
+            "Enter",
+        ])
+        .unwrap();
+        sleep(Duration::from_millis(150));
+
+        let hydration = create_tmux_initial_hydration(
+            &capture_tmux_content_with_fallback(&session_name, TmuxCaptureScope::History).unwrap(),
+        );
+        assert_eq!(
+            hydration.source,
+            CreatePtyInitialHydrationSource::TmuxCapture
+        );
+        assert!(!hydration.truncated);
+        assert!(hydration.text.contains(&marker));
+
+        kill_tmux_session_if_exists(&session_name).unwrap();
     }
 
     #[test]

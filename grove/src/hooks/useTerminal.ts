@@ -12,6 +12,7 @@ import {
   restoreLayoutWithPtyIds,
 } from "../lib/terminal-session";
 import { primeTerminalPane } from "../lib/terminal-runtime";
+import { buildTerminalPaneSeed } from "../lib/terminal-startup";
 
 export function useTerminal() {
   const store = useTerminalStore();
@@ -48,7 +49,7 @@ export function useTerminal() {
 
       for (const pane of restorePlan) {
         const ptyId = crypto.randomUUID();
-        const { sessionState } = await createPty({
+        const createResult = await createPty({
           ptyId,
           paneId: pane.paneId,
           worktreePath,
@@ -62,12 +63,10 @@ export function useTerminal() {
           scrollbackTruncated: pane.scrollbackTruncated,
         });
         panePtyIds.set(pane.paneId, ptyId);
-        primeTerminalPane(pane.paneId, {
-          ptyId,
-          launchCwd: pane.launchCwd,
-          initialScrollback:
-            sessionState === "created" ? pane.scrollback : undefined,
-        });
+        primeTerminalPane(
+          pane.paneId,
+          buildTerminalPaneSeed(pane, ptyId, createResult),
+        );
       }
 
       const restored = restoreLayoutWithPtyIds(

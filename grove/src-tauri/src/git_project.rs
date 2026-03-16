@@ -680,7 +680,14 @@ pub fn add_worktree_impl(project_id: &str, name: &str) -> Result<Worktree, Strin
             // Track existing remote branch
             run_git(
                 source,
-                &["worktree", "add", &worktree_path_str, "-b", name, &remote_branch],
+                &[
+                    "worktree",
+                    "add",
+                    &worktree_path_str,
+                    "-b",
+                    name,
+                    &remote_branch,
+                ],
             )?;
         } else {
             // Create new branch from default branch
@@ -767,10 +774,17 @@ fn validate_branch_name(name: &str) -> Result<(), String> {
     if name.starts_with('-') || name.starts_with('.') {
         return Err(format!("Invalid branch name: {name}"));
     }
-    if name.contains("..") || name.contains(" ") || name.contains("~")
-        || name.contains("^") || name.contains(":") || name.contains("\\")
-        || name.contains("*") || name.contains("?") || name.contains("[")
-        || name.ends_with('.')  || name.ends_with(".lock")
+    if name.contains("..")
+        || name.contains(" ")
+        || name.contains("~")
+        || name.contains("^")
+        || name.contains(":")
+        || name.contains("\\")
+        || name.contains("*")
+        || name.contains("?")
+        || name.contains("[")
+        || name.ends_with('.')
+        || name.ends_with(".lock")
     {
         return Err(format!("Invalid branch name: {name}"));
     }
