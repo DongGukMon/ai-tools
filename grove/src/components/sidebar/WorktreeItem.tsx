@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { GitBranch, X } from "lucide-react";
+import { GitBranch, Loader2, X } from "lucide-react";
 import type { Worktree } from "../../types";
 import { useProjectStore } from "../../store/project";
 import { useToast } from "../../store/toast";
@@ -55,7 +55,7 @@ function WorktreeItem({ worktree, projectId }: Props) {
       className={cn(
         "group flex w-full items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors cursor-pointer select-none",
         {
-          "animate-fade-out pointer-events-none opacity-50": removing,
+          "pointer-events-none opacity-50": removing,
           "bg-selected text-foreground": isSelected && !removing,
           "text-muted-foreground hover:bg-secondary/50 hover:text-foreground": !isSelected && !removing,
         },
@@ -65,19 +65,23 @@ function WorktreeItem({ worktree, projectId }: Props) {
     >
       <GitBranch className="h-3.5 w-3.5 shrink-0" />
       <span className="min-w-0 flex-1 truncate">{displayName}</span>
-      <button
-        className={cn(
-          "h-4 w-4 flex items-center justify-center rounded-sm transition-colors",
-          {
-            "opacity-50 hover:opacity-100 hover:text-foreground": isSelected,
-            "opacity-0 group-hover:opacity-100 hover:text-foreground": !isSelected,
-          },
-        )}
-        onClick={handleRemoveClick}
-        title="Remove worktree"
-      >
-        <X className="h-3 w-3" />
-      </button>
+      {removing ? (
+        <Loader2 className={cn("h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground")} />
+      ) : (
+        <button
+          className={cn(
+            "h-4 w-4 flex items-center justify-center rounded-sm transition-colors",
+            {
+              "opacity-50 hover:opacity-100 hover:text-foreground": isSelected,
+              "opacity-0 group-hover:opacity-100 hover:text-foreground": !isSelected,
+            },
+          )}
+          onClick={handleRemoveClick}
+          title="Remove worktree"
+        >
+          <X className="h-3 w-3" />
+        </button>
+      )}
     </div>
   );
 }
