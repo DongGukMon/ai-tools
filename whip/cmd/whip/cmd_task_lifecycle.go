@@ -179,7 +179,7 @@ func completeCmd() *cobra.Command {
 					}
 				}
 				if allTerminal {
-					count, archiveErr := whip.ArchiveWorkspace(store, task.WorkspaceName())
+					count, archiveErr := whip.ArchiveWorkspace(store, task.WorkspaceName(), false)
 					if archiveErr != nil {
 						fmt.Fprintf(os.Stderr, "Warning: auto-archive workspace %s: %v\n", task.WorkspaceName(), archiveErr)
 					} else {

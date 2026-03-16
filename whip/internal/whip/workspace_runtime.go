@@ -588,9 +588,51 @@ func teardownTaskRuntimeForArchive(store *Store, id string) error {
 	return err
 }
 
+func checkWorktreeClean(worktreePath, originalRepoPath string) (dirty bool, unpushed bool, err error) {
+	statusOut, err := exec.Command("git", "-C", worktreePath, "status", "--porcelain").Output()
+	if err != nil {
+		return false, false, err
+	}
+	dirty = len(strings.TrimSpace(string(statusOut))) > 0
+
+	// Try upstream comparison first
+	logOut, err := exec.Command("git", "-C", worktreePath, "log", "@{u}..HEAD", "--oneline").Output()
+	if err == nil {
+		unpushed = len(strings.TrimSpace(string(logOut))) > 0
+	} else if originalRepoPath != "" {
+		// No upstream — compare worktree HEAD against original repo HEAD
+		wtHead, err1 := exec.Command("git", "-C", worktreePath, "rev-parse", "HEAD").Output()
+		origHead, err2 := exec.Command("git", "-C", originalRepoPath, "rev-parse", "HEAD").Output()
+		if err1 == nil && err2 == nil {
+			unpushed = strings.TrimSpace(string(wtHead)) != strings.TrimSpace(string(origHead))
+		} else {
+			unpushed = true // can't determine — treat as unpushed
+		}
+	} else {
+		unpushed = true // no upstream, no original repo — treat as unpushed
+	}
+	return dirty, unpushed, nil
+}
+
+func autoSaveWorktree(worktreePath string) error {
+	if err := exec.Command("git", "-C", worktreePath, "add", "-A").Run(); err != nil {
+		return fmt.Errorf("git add: %w", err)
+	}
+	// Commit (skip if nothing staged)
+	commitCmd := exec.Command("git", "-C", worktreePath, "commit", "-m", "whip: auto-save before archive", "--allow-empty-message")
+	commitCmd.Run() // ignore error — may be nothing to commit
+
+	pushCmd := exec.Command("git", "-C", worktreePath, "push")
+	if out, err := pushCmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("git push: %s", strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
 // ArchiveWorkspace archives all remaining active tasks in a workspace, tears down
 // its runtime/worktree, and marks the workspace archived.
-func ArchiveWorkspace(store *Store, name string) (int, error) {
+// When force is true and the worktree is dirty/unpushed, it auto-saves before archiving.
+func ArchiveWorkspace(store *Store, name string, force bool) (int, error) {
 	name = NormalizeWorkspaceName(name)
 	if name == GlobalWorkspaceName {
 		return 0, fmt.Errorf("global is not a named workspace")
@@ -639,6 +681,26 @@ func ArchiveWorkspace(store *Store, name string) (int, error) {
 			return count, err
 		}
 		count++
+	}
+
+	if workspace.WorktreePath != "" {
+		dirty, unpushed, err := checkWorktreeClean(workspace.WorktreePath, workspace.OriginalRepoPath)
+		if err == nil && (dirty || unpushed) {
+			if force {
+				if saveErr := autoSaveWorktree(workspace.WorktreePath); saveErr != nil {
+					return count, fmt.Errorf("auto-save failed: %w", saveErr)
+				}
+			} else {
+				var reasons []string
+				if dirty {
+					reasons = append(reasons, "uncommitted changes")
+				}
+				if unpushed {
+					reasons = append(reasons, "unpushed commits")
+				}
+				return count, fmt.Errorf("workspace %s worktree has %s; use --force to auto-save and archive", name, strings.Join(reasons, " and "))
+			}
+		}
 	}
 
 	if err := RemoveWorkspaceWorktree(workspace); err != nil {
@@ -707,7 +769,7 @@ func RemoveWorkspaceWorktree(workspace *Workspace) error {
 	}
 
 	if strings.TrimSpace(workspace.OriginalRepoPath) != "" {
-		cmd := exec.Command("git", "-C", workspace.OriginalRepoPath, "worktree", "remove", "--force", workspace.WorktreePath)
+		cmd := exec.Command("git", "-C", workspace.OriginalRepoPath, "worktree", "remove", workspace.WorktreePath)
 		output, err := cmd.CombinedOutput()
 		if err == nil {
 			return nil

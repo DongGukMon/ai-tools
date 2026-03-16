@@ -178,6 +178,8 @@ func workspaceViewCmd() *cobra.Command {
 }
 
 func workspaceArchiveCmd() *cobra.Command {
+	var force bool
+
 	cmd := &cobra.Command{
 		Use:   "archive <name>",
 		Short: "Archive a terminal workspace and tear down its runtime",
@@ -192,7 +194,7 @@ func workspaceArchiveCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			count, err := whip.ArchiveWorkspace(store, name)
+			count, err := whip.ArchiveWorkspace(store, name, force)
 			if err != nil {
 				return err
 			}
@@ -201,6 +203,7 @@ func workspaceArchiveCmd() *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&force, "force", false, "Auto-save uncommitted/unpushed changes before archiving")
 	return cmd
 }
 

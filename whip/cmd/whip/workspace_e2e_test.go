@@ -203,6 +203,55 @@ func TestWorkspaceArchiveTearsDownTerminalRuntime(t *testing.T) {
 	}
 }
 
+func TestWorkspaceArchiveRejectsDirtyWorktree(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+
+	store := tempWhipStore(t)
+	repo := initWhipCLIRepo(t)
+	repoAppDir := filepath.Join(repo, "app")
+
+	runWhipCLI(t, "task", "create", "Dirty task", "--workspace", "dirty-lane", "--cwd", repoAppDir, "--desc", "test dirty")
+
+	tasks, err := store.ListTasks()
+	if err != nil {
+		t.Fatalf("ListTasks: %v", err)
+	}
+	task := tasks[0]
+
+	workspace, err := store.LoadWorkspace("dirty-lane")
+	if err != nil {
+		t.Fatalf("LoadWorkspace: %v", err)
+	}
+
+	// Create uncommitted changes in worktree
+	dirtyFile := filepath.Join(workspace.WorktreePath, "dirty.txt")
+	if err := os.WriteFile(dirtyFile, []byte("unsaved work\n"), 0o644); err != nil {
+		t.Fatalf("write dirty file: %v", err)
+	}
+
+	runWhipCLI(t, "task", "cancel", task.ID, "--note", "done")
+
+	// Archive should reject dirty worktree
+	_, _, err = execWhipCLICapture(t, "workspace", "archive", "dirty-lane")
+	if err == nil {
+		t.Fatal("workspace archive should reject dirty worktree")
+	}
+	if !strings.Contains(err.Error(), "uncommitted changes") {
+		t.Fatalf("workspace archive error = %v, want uncommitted changes rejection", err)
+	}
+
+	// Workspace should still be active
+	workspace, err = store.LoadWorkspace("dirty-lane")
+	if err != nil {
+		t.Fatalf("LoadWorkspace after rejected archive: %v", err)
+	}
+	if workspace.EffectiveStatus() != whiplib.WorkspaceStatusActive {
+		t.Fatalf("workspace status = %q, want active", workspace.EffectiveStatus())
+	}
+}
+
 func TestWorkspaceArchiveRejectsNonTerminalTask(t *testing.T) {
 	store := tempWhipStore(t)
 	nonGitDir := canonicalTestPath(t, t.TempDir())
