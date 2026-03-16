@@ -678,6 +678,14 @@ fn set_grove_tmux_metadata(
     tmux_set_option(session_name, TMUX_GROVE_MANAGED_OPTION, "1")?;
     tmux_set_option(session_name, TMUX_GROVE_WORKTREE_OPTION, worktree_path)?;
     tmux_set_option(session_name, TMUX_GROVE_PANE_ID_OPTION, pane_id)?;
+    enforce_grove_tmux_options(session_name)?;
+    Ok(())
+}
+
+/// Options that must be applied on every session open — both new and existing.
+/// Adding a new enforced option here guarantees it takes effect on the next
+/// attach even for sessions created before the option existed.
+fn enforce_grove_tmux_options(session_name: &str) -> Result<(), String> {
     tmux_set_option(session_name, TMUX_STATUS_OPTION, TMUX_STATUS_OFF_VALUE)?;
     tmux_set_option(session_name, TMUX_MOUSE_OPTION, TMUX_MOUSE_ON_VALUE)?;
     Ok(())
@@ -709,7 +717,7 @@ fn verify_grove_tmux_session(
         ));
     }
 
-    tmux_set_option(session_name, TMUX_STATUS_OPTION, TMUX_STATUS_OFF_VALUE)?;
+    enforce_grove_tmux_options(session_name)?;
 
     Ok(())
 }
@@ -1166,6 +1174,54 @@ mod tests {
                 .unwrap()
                 .as_deref(),
             Some(TMUX_MOUSE_ON_VALUE)
+        );
+
+        kill_tmux_session_if_exists(&session_name).unwrap();
+    }
+
+    #[test]
+    fn enforce_grove_tmux_options_restores_overridden_values_on_attach() {
+        if Command::new("tmux").arg("-V").output().is_err() {
+            return;
+        }
+
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let session_name = format!("grove-test-enforce-{nonce}");
+        let worktree_path = env::current_dir().unwrap();
+        let worktree_path = worktree_path.to_string_lossy().into_owned();
+        let pane_id = format!("pane-{nonce}");
+
+        let _ = kill_tmux_session_if_exists(&session_name);
+
+        // Create session — enforced options are set.
+        ensure_grove_tmux_session(&session_name, &worktree_path, &pane_id, &worktree_path)
+            .unwrap();
+
+        // Simulate user or external process overriding every enforced option.
+        tmux_set_option(&session_name, TMUX_STATUS_OPTION, "on").unwrap();
+        tmux_set_option(&session_name, TMUX_MOUSE_OPTION, "off").unwrap();
+
+        // Re-attach — ensure all enforced options are restored.
+        let state =
+            ensure_grove_tmux_session(&session_name, &worktree_path, &pane_id, &worktree_path)
+                .unwrap();
+        assert_eq!(state, CreatePtySessionState::Attached);
+        assert_eq!(
+            tmux_session_option(&session_name, TMUX_STATUS_OPTION)
+                .unwrap()
+                .as_deref(),
+            Some(TMUX_STATUS_OFF_VALUE),
+            "status must be restored to off on attach"
+        );
+        assert_eq!(
+            tmux_session_option(&session_name, TMUX_MOUSE_OPTION)
+                .unwrap()
+                .as_deref(),
+            Some(TMUX_MOUSE_ON_VALUE),
+            "mouse must be restored to on on attach"
         );
 
         kill_tmux_session_if_exists(&session_name).unwrap();
