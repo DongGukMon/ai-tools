@@ -1,6 +1,6 @@
 {
   "name": "grove",
   "description": "Git-aware terminal with sidebar navigation and inline diff viewer",
-  "version": "0.1.0",
+  "version": "v2.8.0",
   "category": "developer-tools"
 }
