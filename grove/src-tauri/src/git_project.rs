@@ -446,7 +446,7 @@ fn parse_worktree_list(output: &str, project_base: &Path) -> Vec<Worktree> {
     for line in output.lines() {
         if let Some(path) = line.strip_prefix("worktree ") {
             // Flush previous entry
-            if !current_path.is_empty() && !is_bare {
+            if !current_path.is_empty() && !is_bare && Path::new(&current_path).starts_with(project_base) {
                 worktrees.push(make_worktree(&current_path, &current_branch, project_base));
             }
             current_path = path.to_string();
@@ -463,7 +463,7 @@ fn parse_worktree_list(output: &str, project_base: &Path) -> Vec<Worktree> {
     }
 
     // Flush last entry
-    if !current_path.is_empty() && !is_bare {
+    if !current_path.is_empty() && !is_bare && Path::new(&current_path).starts_with(project_base) {
         worktrees.push(make_worktree(&current_path, &current_branch, project_base));
     }
 

@@ -143,39 +143,44 @@ const toastCardConfig: Record<
   ToastItem["variant"],
   {
     icon: typeof CheckCircle2;
-    accentColor: string;
-    iconBg: string;
-    borderColor: string;
-    glowShadow: string;
+    accentClass: string;
+    iconBgClass: string;
+    iconColorClass: string;
+    borderClass: string;
+    progressClass: string;
   }
 > = {
   success: {
     icon: CheckCircle2,
-    accentColor: "oklch(0.72 0.19 145)",
-    iconBg: "oklch(0.72 0.19 145 / 0.10)",
-    borderColor: "oklch(0.72 0.19 145 / 0.15)",
-    glowShadow: "0 0 24px oklch(0.72 0.19 145 / 0.06)",
+    accentClass: "bg-success",
+    iconBgClass: "bg-success/10",
+    iconColorClass: "text-success",
+    borderClass: "border-success/15",
+    progressClass: "bg-success/35",
   },
   error: {
     icon: XCircle,
-    accentColor: "oklch(0.65 0.22 25)",
-    iconBg: "oklch(0.65 0.22 25 / 0.10)",
-    borderColor: "oklch(0.65 0.22 25 / 0.15)",
-    glowShadow: "0 0 24px oklch(0.65 0.22 25 / 0.06)",
+    accentClass: "bg-destructive",
+    iconBgClass: "bg-destructive/10",
+    iconColorClass: "text-destructive",
+    borderClass: "border-destructive/15",
+    progressClass: "bg-destructive/35",
   },
   info: {
     icon: Info,
-    accentColor: "oklch(0.7 0.15 240)",
-    iconBg: "oklch(0.7 0.15 240 / 0.10)",
-    borderColor: "oklch(0.7 0.15 240 / 0.15)",
-    glowShadow: "0 0 24px oklch(0.7 0.15 240 / 0.06)",
+    accentClass: "bg-accent",
+    iconBgClass: "bg-accent/10",
+    iconColorClass: "text-accent",
+    borderClass: "border-accent/15",
+    progressClass: "bg-accent/35",
   },
   warning: {
     icon: AlertCircle,
-    accentColor: "oklch(0.8 0.16 80)",
-    iconBg: "oklch(0.8 0.16 80 / 0.10)",
-    borderColor: "oklch(0.8 0.16 80 / 0.15)",
-    glowShadow: "0 0 24px oklch(0.8 0.16 80 / 0.06)",
+    accentClass: "bg-warning",
+    iconBgClass: "bg-warning/10",
+    iconColorClass: "text-warning",
+    borderClass: "border-warning/15",
+    progressClass: "bg-warning/35",
   },
 };
 
@@ -204,34 +209,27 @@ function ToastCard({ toast }: { toast: ToastItem }) {
   return (
     <div
       className={cn(
-        "group pointer-events-auto relative flex w-full items-center gap-3 overflow-hidden rounded-lg bg-card text-card-foreground py-3 pr-3 pl-4",
+        "group pointer-events-auto relative flex w-full items-center gap-3 overflow-hidden rounded-lg border bg-card text-card-foreground shadow-lg py-3 pr-3 pl-4",
+        config.borderClass,
         {
           "animate-in fade-in-0 slide-in-from-right-full zoom-in-95 duration-300": !exiting,
           "animate-out fade-out-0 slide-out-to-right-full zoom-out-95 duration-200 fill-mode-forwards": exiting,
         },
       )}
-      style={{
-        border: `1px solid ${config.borderColor}`,
-        boxShadow: `0 8px 32px oklch(0 0 0 / 0.45), 0 0 0 1px oklch(1 0 0 / 0.04), ${config.glowShadow}`,
-      }}
     >
       {/* Left accent bar */}
       <div
-        className={cn("absolute inset-y-0 left-0 w-[2.5px]")}
-        style={{ backgroundColor: config.accentColor }}
+        className={cn("absolute inset-y-0 left-0 w-[2.5px]", config.accentClass)}
       />
 
       {/* Icon */}
       <div
         className={cn(
           "flex size-7 shrink-0 items-center justify-center rounded-full",
+          config.iconBgClass,
         )}
-        style={{ backgroundColor: config.iconBg }}
       >
-        <Icon
-          className={cn("size-3.5")}
-          style={{ color: config.accentColor }}
-        />
+        <Icon className={cn("size-3.5", config.iconColorClass)} />
       </div>
 
       {/* Message */}
@@ -256,13 +254,14 @@ function ToastCard({ toast }: { toast: ToastItem }) {
       {/* Progress bar */}
       <div className={cn("absolute inset-x-0 bottom-0 h-[1.5px]")}>
         <div
-          className={cn("h-full origin-left transition-transform ease-linear")}
-          style={{
-            backgroundColor: config.accentColor,
-            opacity: 0.35,
-            transform: progressStarted ? "scaleX(0)" : "scaleX(1)",
-            transitionDuration: "2600ms",
-          }}
+          className={cn(
+            "h-full origin-left transition-transform ease-linear duration-[2600ms]",
+            config.progressClass,
+            {
+              "scale-x-100": !progressStarted,
+              "scale-x-0": progressStarted,
+            },
+          )}
         />
       </div>
     </div>
