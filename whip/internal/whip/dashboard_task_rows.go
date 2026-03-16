@@ -159,6 +159,7 @@ func (m *DashboardModel) expandCurrentLeadRow() {
 	if idx := findDashboardTaskRowIndex(rows, row.task.ID); idx >= 0 {
 		m.cursor = idx
 	}
+	m.clampListScroll()
 }
 
 func (m *DashboardModel) collapseCurrentLeadRow() {
@@ -171,6 +172,7 @@ func (m *DashboardModel) collapseCurrentLeadRow() {
 	if idx := findDashboardTaskRowIndex(rows, row.task.ID); idx >= 0 {
 		m.cursor = idx
 	}
+	m.clampListScroll()
 }
 
 func (m *DashboardModel) collapseSelectedLeadRow() {
@@ -184,6 +186,7 @@ func (m *DashboardModel) moveCurrentWorkerSelectionToLead() {
 	}
 	if idx := findDashboardWorkspaceLeadRowIndex(m.taskRows(), row.parentWorkspace); idx >= 0 {
 		m.cursor = idx
+		m.clampListScroll()
 	}
 }
 

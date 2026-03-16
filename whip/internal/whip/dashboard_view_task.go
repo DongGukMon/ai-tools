@@ -310,16 +310,9 @@ func (m DashboardModel) renderTable() string {
 		rows = append(rows, indicator)
 	}
 
-	for _, row := range visibleRows {
+	for vi, row := range visibleRows {
 		t := row.task
-		// The original row index in the full list is needed for cursor comparison
-		globalIdx := -1
-		for gi, tr := range taskRowList {
-			if tr.task.ID == t.ID && tr.kind == row.kind && tr.workspace == row.workspace {
-				globalIdx = gi
-				break
-			}
-		}
+		globalIdx := scroll + vi
 		selected := globalIdx == m.cursor
 		gutterGlyph := row.gutterGlyph()
 		gutter := "  "
