@@ -62,6 +62,19 @@ pub struct CreatePtyRestore {
     pub scrollback_truncated: Option<bool>,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum CreatePtySessionState {
+    Attached,
+    Created,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CreatePtyResult {
+    pub session_state: CreatePtySessionState,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum TerminalRestoreCwdSource {
@@ -243,13 +256,24 @@ fn list_worktrees(project_id: String) -> Result<Vec<Worktree>, String> {
 #[tauri::command]
 fn create_pty(
     app_handle: tauri::AppHandle,
-    id: String,
+    pty_id: String,
+    pane_id: String,
+    worktree_path: String,
     cwd: String,
     cols: u16,
     rows: u16,
     restore: Option<CreatePtyRestore>,
-) -> Result<(), String> {
-    pty::create(app_handle, id, cwd, cols, rows, restore)
+) -> Result<CreatePtyResult, String> {
+    pty::create(
+        app_handle,
+        pty_id,
+        pane_id,
+        worktree_path,
+        cwd,
+        cols,
+        rows,
+        restore,
+    )
 }
 
 #[tauri::command]
@@ -263,8 +287,8 @@ fn resize_pty(id: String, cols: u16, rows: u16) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn close_pty(id: String) -> Result<(), String> {
-    pty::close(&id)
+fn close_pty(pty_id: String) -> Result<(), String> {
+    pty::close(&pty_id)
 }
 
 #[tauri::command]
