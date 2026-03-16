@@ -1,14 +1,12 @@
 use crate::{
     config,
     process_env::{enriched_path, preferred_ssh_auth_sock},
-    CreatePtyInitialHydration,
-    CreatePtyInitialHydrationSource, CreatePtyRestore, CreatePtyResult, CreatePtySessionState,
-    SaveTerminalSessionSnapshotRequest, TerminalPaneSnapshot, TerminalPaneSnapshotInput,
-    TerminalRestoreCwdSource, TerminalSessionSnapshot,
+    CreatePtyInitialHydration, CreatePtyInitialHydrationSource, CreatePtyRequest, CreatePtyRestore,
+    CreatePtyResult, CreatePtySessionState, SaveTerminalSessionSnapshotRequest,
+    TerminalPaneSnapshot, TerminalPaneSnapshotInput, TerminalRestoreCwdSource,
+    TerminalSessionSnapshot,
 };
-use base64::Engine;
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
-use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::env;
@@ -16,7 +14,6 @@ use std::fmt::Write as _;
 use std::io::{Read, Write};
 use std::process::{Command, Output};
 use std::sync::{Arc, Mutex, OnceLock};
-use tauri::Emitter;
 
 const MAX_SCROLLBACK_BYTES: usize = 256 * 1024;
 const TMUX_NOT_FOUND_ERROR: &str = "tmux is required but was not found in PATH";
@@ -33,10 +30,8 @@ const WORKTREE_HASH_LEN: usize = 12;
 const PANE_PREFIX_LEN: usize = 8;
 const PANE_HASH_LEN: usize = 4;
 
-#[derive(Serialize, Clone)]
-pub struct PtyOutput {
-    pub id: String,
-    pub data: String,
+pub trait PtyEventSink: Send + Sync + 'static {
+    fn on_output(&self, pty_id: &str, data: &[u8]);
 }
 
 #[derive(Clone, Debug)]
@@ -152,15 +147,19 @@ fn preferred_utf8_locale() -> String {
 }
 
 pub fn create(
-    app_handle: tauri::AppHandle,
-    pty_id: String,
-    pane_id: String,
-    worktree_path: String,
-    cwd: String,
-    cols: u16,
-    rows: u16,
-    restore: Option<CreatePtyRestore>,
+    request: CreatePtyRequest,
+    sink: Arc<dyn PtyEventSink>,
 ) -> Result<CreatePtyResult, String> {
+    let CreatePtyRequest {
+        pty_id,
+        pane_id,
+        worktree_path,
+        cwd,
+        cols,
+        rows,
+        restore,
+    } = request;
+
     let pty_id = required_arg("ptyId", &pty_id)?;
     let pane_id = required_arg("paneId", &pane_id)?;
     let worktree_path = required_arg("worktreePath", &worktree_path)?;
@@ -223,7 +222,7 @@ pub fn create(
     let reader_id = pty_id.clone();
     let tracked_for_reader = Arc::clone(&tracked);
     std::thread::spawn(move || {
-        read_pty_output(reader, app_handle, reader_id, tracked_for_reader);
+        read_pty_output(reader, sink, reader_id, tracked_for_reader);
     });
 
     let instance = PtyInstance {
@@ -247,11 +246,10 @@ pub fn create(
 
 fn read_pty_output(
     mut reader: Box<dyn Read + Send>,
-    app_handle: tauri::AppHandle,
+    sink: Arc<dyn PtyEventSink>,
     id: String,
     tracked: Arc<Mutex<PtyRuntimeState>>,
 ) {
-    let engine = base64::engine::general_purpose::STANDARD;
     let mut buf = [0u8; 4096];
     loop {
         match reader.read(&mut buf) {
@@ -260,14 +258,7 @@ fn read_pty_output(
                 if let Ok(mut state) = tracked.lock() {
                     state.append_scrollback(&buf[..n]);
                 }
-                let data = engine.encode(&buf[..n]);
-                let _ = app_handle.emit(
-                    "pty-output",
-                    PtyOutput {
-                        id: id.clone(),
-                        data,
-                    },
-                );
+                sink.on_output(&id, &buf[..n]);
             }
             Err(_) => break,
         }
@@ -1212,8 +1203,7 @@ mod tests {
         let _ = kill_tmux_session_if_exists(&session_name);
 
         // Create session — enforced options are set.
-        ensure_grove_tmux_session(&session_name, &worktree_path, &pane_id, &worktree_path)
-            .unwrap();
+        ensure_grove_tmux_session(&session_name, &worktree_path, &pane_id, &worktree_path).unwrap();
 
         // Simulate user or external process overriding every enforced option.
         tmux_set_option(&session_name, TMUX_STATUS_OPTION, "on").unwrap();

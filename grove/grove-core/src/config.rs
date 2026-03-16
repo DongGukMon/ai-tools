@@ -159,58 +159,48 @@ fn save_terminal_session_snapshot_store_to_path(
     save_json_file(path, store)
 }
 
-// ── Panel layout persistence ──
-
-#[tauri::command]
-pub async fn save_panel_layouts(layouts: String) -> Result<(), String> {
-    tokio::task::spawn_blocking(move || {
-        let path = grove_data_path("panel-layouts.json")?;
-        fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
-        fs::write(&path, layouts).map_err(|e| e.to_string())
-    })
-    .await
-    .map_err(|e| e.to_string())?
+pub fn get_app_config_impl() -> AppConfig {
+    let saved = load_app_config();
+    AppConfig {
+        base_dir: saved.base_dir,
+        terminal_theme: saved
+            .terminal_theme
+            .or_else(|| Some(crate::terminal_theme::detect_terminal_theme().theme)),
+    }
 }
 
-#[tauri::command]
-pub async fn load_panel_layouts() -> Result<String, String> {
-    tokio::task::spawn_blocking(|| {
-        let path = grove_data_path("panel-layouts.json")?;
-        if path.exists() {
-            fs::read_to_string(&path).map_err(|e| e.to_string())
-        } else {
-            Ok("{}".to_string())
-        }
-    })
-    .await
-    .map_err(|e| e.to_string())?
+// ── Panel layout persistence ──
+
+pub fn save_panel_layouts_impl(layouts: &str) -> Result<(), String> {
+    let path = grove_data_path("panel-layouts.json")?;
+    fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
+    fs::write(&path, layouts).map_err(|e| e.to_string())
+}
+
+pub fn load_panel_layouts_impl() -> Result<String, String> {
+    let path = grove_data_path("panel-layouts.json")?;
+    if path.exists() {
+        fs::read_to_string(&path).map_err(|e| e.to_string())
+    } else {
+        Ok("{}".to_string())
+    }
 }
 
 // ── Terminal layout persistence ──
 
-#[tauri::command]
-pub async fn save_terminal_layouts(layouts: String) -> Result<(), String> {
-    tokio::task::spawn_blocking(move || {
-        let path = grove_data_path("terminal-layouts.json")?;
-        fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
-        fs::write(&path, layouts).map_err(|e| e.to_string())
-    })
-    .await
-    .map_err(|e| e.to_string())?
+pub fn save_terminal_layouts_impl(layouts: &str) -> Result<(), String> {
+    let path = grove_data_path("terminal-layouts.json")?;
+    fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
+    fs::write(&path, layouts).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
-pub async fn load_terminal_layouts() -> Result<String, String> {
-    tokio::task::spawn_blocking(|| {
-        let path = grove_data_path("terminal-layouts.json")?;
-        if path.exists() {
-            fs::read_to_string(&path).map_err(|e| e.to_string())
-        } else {
-            Ok("{}".to_string())
-        }
-    })
-    .await
-    .map_err(|e| e.to_string())?
+pub fn load_terminal_layouts_impl() -> Result<String, String> {
+    let path = grove_data_path("terminal-layouts.json")?;
+    if path.exists() {
+        fs::read_to_string(&path).map_err(|e| e.to_string())
+    } else {
+        Ok("{}".to_string())
+    }
 }
 
 #[cfg(test)]

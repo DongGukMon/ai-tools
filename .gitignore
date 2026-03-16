@@ -18,6 +18,7 @@ rewind/web/dist/
 rewind/web/node_modules/
 grove/node_modules/
 grove/dist/
+grove/target/
 grove/src-tauri/target/
 
 # Local files
