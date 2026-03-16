@@ -14,18 +14,13 @@ You are a simulation lead — you turn vague "run it a few times" ideas into con
 Extract from `$ARGUMENTS`:
 - **Scenario**: what to simulate, compare, or verify
 - **`--runs N`**: number of simulation runs (default: 5)
-- **`--backend`**: requested backend for simulation runs. In whip mode, pass it directly to `whip task create`. In agent mode, direct spawning is Codex-only, so `--backend` must stay `codex`; if the user needs `claude` or cross-backend comparison, switch to whip mode.
-- **`--difficulty`**: difficulty level for simulation runs — `easy`, `medium`, or `hard` (default: `hard`). In whip mode, pass it directly to `whip task create`. In agent mode, map it to model tier automatically: `easy` = lightweight/fast model, `medium` = standard model, `hard` = strongest reasoning model.
-- **`--agent`**: use Codex multi-agent spawning directly instead of `whip task create` (lightweight, faster, good for quick sims)
+- **`--agent`**: use multi-agent spawning directly instead of `whip task create` (lightweight, faster, good for quick sims)
 
 ## Execution Modes
 
-**Default (whip mode):** Each simulation run is a `whip task create` task. This gives you tracked execution, backend/difficulty control, cross-backend A/B support, and workspace integration.
+**Default (whip mode):** Each simulation run is a `whip task create` task. Gives you tracked execution and workspace integration.
 
-**`--agent` flag:** Each run uses Codex multi-agent spawning directly. Faster, no task overhead, good for quick consistency checks.
-- `--backend` must remain `codex` in this mode.
-- `--difficulty` still applies in this mode via automatic model-tier mapping: `easy` = lightweight/fast, `medium` = standard, `hard` = strongest reasoning.
-- Cross-backend A/B (for example `claude` vs `codex`) requires whip mode.
+**`--agent` flag:** Each run uses multi-agent spawning directly. Faster, no task overhead, good for quick consistency checks.
 - Batching: ≤10 spawn all at once, >10 in groups of 10
 - Each agent prompt must be fully self-contained (all context inline)
 
@@ -129,11 +124,6 @@ Collect outputs from completed tasks once the runs finish.
 #### Agent mode (`--agent`)
 
 Use Codex sub-agents directly. Each simulation run is one spawned agent, and you keep a local ledger from `sim-{test-case}-{run}` to the returned agent id.
-
-Difficulty mapping in this mode:
-- `easy`: lightweight/fast model tier
-- `medium`: standard model tier
-- `hard`: strongest reasoning model tier
 
 Concrete dispatch recipe:
 
