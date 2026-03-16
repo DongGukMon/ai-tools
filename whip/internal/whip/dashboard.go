@@ -288,7 +288,11 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = msg.err
 			return m, nil
 		}
+		savedCursor := m.cursor
+		savedScroll := m.listScroll
 		m.resetTaskListState()
+		m.cursor = savedCursor
+		m.listScroll = savedScroll
 		return m, m.loadTasks()
 
 	case error:
