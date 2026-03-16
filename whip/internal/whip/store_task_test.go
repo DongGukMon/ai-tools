@@ -447,6 +447,48 @@ func TestArchiveTerminal(t *testing.T) {
 	}
 }
 
+func TestArchiveTerminal_SkipsWorkspaceTasks(t *testing.T) {
+	s := tempStore(t)
+
+	// Global completed task — should be archived
+	globalTask := NewTask("Global Done", "desc", "/tmp")
+	globalTask.Status = StatusCompleted
+	s.SaveTask(globalTask)
+
+	// Workspace completed task — should be skipped
+	wsTask := NewTask("Workspace Done", "desc", "/tmp")
+	wsTask.Status = StatusCompleted
+	wsTask.Workspace = "my-workspace"
+	s.SaveTask(wsTask)
+
+	// Workspace canceled task — should also be skipped
+	wsCanceled := NewTask("Workspace Canceled", "desc", "/tmp")
+	wsCanceled.Status = StatusCanceled
+	wsCanceled.Workspace = "my-workspace"
+	s.SaveTask(wsCanceled)
+
+	count, err := s.ArchiveTerminal()
+	if err != nil {
+		t.Fatalf("ArchiveTerminal: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("count = %d, want 1 (only global task)", count)
+	}
+
+	// Global task should be archived
+	if _, err := s.LoadArchivedTask(globalTask.ID); err != nil {
+		t.Errorf("global task should be archived: %v", err)
+	}
+
+	// Workspace tasks should still be active
+	if _, err := s.LoadTask(wsTask.ID); err != nil {
+		t.Errorf("workspace task should still be active: %v", err)
+	}
+	if _, err := s.LoadTask(wsCanceled.ID); err != nil {
+		t.Errorf("workspace canceled task should still be active: %v", err)
+	}
+}
+
 func TestArchiveTerminal_SkipsReferencedByNonTerminal(t *testing.T) {
 	s := tempStore(t)
 

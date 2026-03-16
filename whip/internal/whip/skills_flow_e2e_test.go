@@ -78,20 +78,22 @@ func TestWhipLeadFlowRegression(t *testing.T) {
 		t.Fatalf("SaveTask lead completed: %v", err)
 	}
 
+	// CleanTerminal should skip workspace tasks — they are archived via workspace archive
 	count, err := s.CleanTerminal()
 	if err != nil {
 		t.Fatalf("CleanTerminal: %v", err)
 	}
-	if count != 2 {
-		t.Fatalf("CleanTerminal count = %d, want 2", count)
+	if count != 0 {
+		t.Fatalf("CleanTerminal count = %d, want 0 (workspace tasks skipped)", count)
 	}
 
+	// Workspace tasks should still be active
 	tasks, err := s.ListTasks()
 	if err != nil {
 		t.Fatalf("ListTasks: %v", err)
 	}
-	if len(tasks) != 0 {
-		t.Fatalf("remaining tasks = %d, want 0", len(tasks))
+	if len(tasks) != 2 {
+		t.Fatalf("remaining tasks = %d, want 2 (workspace tasks not cleaned)", len(tasks))
 	}
 }
 

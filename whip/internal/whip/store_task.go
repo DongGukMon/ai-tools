@@ -471,6 +471,9 @@ func (s *Store) ArchiveTerminal() (int, error) {
 		if !archiveable {
 			continue
 		}
+		if ws := task.WorkspaceName(); ws != "" && ws != GlobalWorkspaceName {
+			continue
+		}
 		if err := s.archiveTask(task.ID); err != nil {
 			return count, err
 		}
