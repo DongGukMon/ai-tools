@@ -39,11 +39,11 @@ const toastVariants = cva(
       variant: {
         default: "border-border bg-card text-card-foreground",
         destructive:
-          "border-destructive/20 bg-destructive/10 text-card-foreground",
-        success: "border-success/20 bg-success/10 text-card-foreground",
-        warning: "border-warning/25 bg-warning/12 text-card-foreground",
+          "border-destructive bg-destructive text-card-foreground",
+        success: "border-success bg-success text-card-foreground",
+        warning: "border-warning bg-warning text-card-foreground",
         info: "border-border bg-background text-card-foreground",
-        error: "border-destructive/20 bg-destructive/10 text-card-foreground",
+        error: "border-destructive bg-destructive text-card-foreground",
       },
     },
     defaultVariants: {
@@ -227,7 +227,7 @@ export function ToastContainer() {
   return (
     <div
       className={cn(
-        "pointer-events-none fixed right-4 bottom-4 z-50 flex flex-col gap-2",
+        "pointer-events-none fixed right-4 top-4 z-50 flex flex-col gap-2",
       )}
     >
       {toasts.map((toast) => (
