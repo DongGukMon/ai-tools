@@ -16,17 +16,16 @@ Extract from `$ARGUMENTS`:
 
 ## Execution Modes
 
-**Default (whip mode):** Each simulation run is a `whip task create` task. Gives you tracked execution and workspace integration.
+**Default (whip mode):** Each simulation run is a whip task, dispatched via `/whip-start`. Gives tracked execution and workspace integration.
 
 **`--agent` flag:** Each run uses the Agent tool directly. Faster, no task overhead, good for quick consistency checks.
-- Batching: ≤10 spawn all at once with `run_in_background: true`, >10 in groups of 10
 
-## Workspace Context
+### Workspace Context
 
 If you are running inside a whip workspace:
 1. Run `whip workspace view <workspace-name>` to get the worktree path
 2. Use that path for reading code artifacts referenced in the scenario
-3. In whip mode, simulation tasks are created in the `global` workspace (they are ephemeral and should not pollute the active workspace)
+3. In whip mode, simulation tasks go in the `global` workspace (ephemeral — do not pollute the active workspace)
 
 ## Workflow
 
@@ -72,38 +71,30 @@ Present the test plan including:
 
 #### Whip mode (default)
 
-Create one task per simulation run:
+Hand off dispatch to `/whip-start`. Prepare one task spec per simulation run and let whip-start handle IRC, creation, assignment, and monitoring.
 
-```bash
-whip task create "sim-{test-case}-{run}" \
-  --desc "You are a simulation agent. Execute the task and produce structured output.
+Each simulation run becomes one task:
+- Title: `sim-{test-case}-{run}`
+- Workspace: `global`
+- Difficulty: `easy`
+- Description: self-contained prompt (Role + Context + Task + Output Contract)
 
-## Context
-<all file contents and reference material embedded inline>
-
-## Task
-<the test case action>
-
-## Output Contract
-<the exact format to produce — copy verbatim from the test plan>"
-```
-
-Then assign all tasks. Monitor progress with `whip task list`. Collect outputs from completed tasks.
+After all tasks complete, collect outputs and proceed to analysis.
 
 #### Agent mode (`--agent`)
 
-Spawn agents in parallel. Each run is one agent named `sim-{test-case}-{run}`.
+Spawn one Agent tool call per run, named `sim-{test-case}-{run}`.
 
-Agent prompt structure — every prompt must be **self-contained**:
+Each prompt must be **self-contained** — embed all context inline, not file paths:
 
 1. **Role**: "You are a simulation agent. Execute the task and produce structured output."
-2. **Context**: All file contents and reference material embedded inline — not file paths
+2. **Context**: All file contents and reference material inline
 3. **Task**: The test case action
 4. **Output contract**: The exact format to produce
 
 Batching:
-- ≤ 10 agents: spawn all at once with `run_in_background: true`
-- \> 10 agents: groups of 10, next batch after previous completes
+- ≤ 10 runs: spawn all at once with `run_in_background: true`
+- \> 10 runs: groups of 10, next batch after previous completes
 
 ### 3. Analyze
 
@@ -147,8 +138,9 @@ Save the full report with raw agent outputs to `/tmp/simulate-{slug}-{timestamp}
 ## Rules
 
 - Never execute before user approves the test plan
-- Embed all context inline in agent prompts — no shared state assumptions
+- Embed all context inline in prompts — no shared state assumptions
 - For A/B comparisons, both versions receive identical inputs
 - Use real file contents from the codebase — never fabricate code
-- In whip mode, use `global` workspace for simulation tasks to avoid polluting active workspaces
-- Clean up simulation tasks after collecting results: `whip task clean`
+- In whip mode, use `global` workspace and delegate dispatch to `/whip-start`
+- In whip mode, clean up simulation tasks after collecting results: `whip task clean`
+- In agent mode, each run is single-shot — no follow-up messages or shared state

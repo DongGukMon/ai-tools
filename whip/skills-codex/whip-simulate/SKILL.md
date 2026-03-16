@@ -18,18 +18,16 @@ Extract from `$ARGUMENTS`:
 
 ## Execution Modes
 
-**Default (whip mode):** Each simulation run is a `whip task create` task. Gives you tracked execution and workspace integration.
+**Default (whip mode):** Each simulation run is a whip task, dispatched via `$whip-start`. Gives tracked execution and workspace integration.
 
-**`--agent` flag:** Each run uses multi-agent spawning directly. Faster, no task overhead, good for quick consistency checks.
-- Batching: ≤10 spawn all at once, >10 in groups of 10
-- Each agent prompt must be fully self-contained (all context inline)
+**`--agent` flag:** Each run uses `spawn_agent` directly. Faster, no task overhead, good for quick consistency checks.
 
-## Workspace Context
+### Workspace Context
 
 If you are running inside a whip workspace:
 1. Run `whip workspace view <workspace-name>` to get the worktree path.
 2. Use that path for reading code artifacts referenced in the scenario.
-3. In whip mode, create simulation tasks in the `global` workspace so temporary runs do not pollute the active workspace lane.
+3. In whip mode, simulation tasks go in the `global` workspace (ephemeral — do not pollute the active workspace).
 
 ## Workflow
 
@@ -76,64 +74,33 @@ Present the test plan including:
 
 #### Whip mode (default)
 
-Resolve one master IRC identity and reuse it for every simulation task. Reuse `claude-irc whoami` if you are already joined; otherwise join a short unique `wp-master-sim-<slug>` identity and add a suffix if the first name is taken:
+Hand off dispatch to `$whip-start`. Prepare one task spec per simulation run and let whip-start handle IRC, creation, assignment, and monitoring.
 
-```bash
-claude-irc whoami 2>/dev/null || claude-irc join wp-master-sim-<slug>
-```
+Each simulation run becomes one task:
+- Title: `sim-{test-case}-{run}`
+- Workspace: `global`
+- Difficulty: `easy`
+- Description: self-contained prompt (Role + Context + Task + Output Contract)
 
-Create one task per simulation run in the `global` workspace:
-
-```bash
-whip task create "sim-{test-case}-{run}" \
-  --desc "You are a simulation task. Execute the task and produce structured output.
-
-## Context
-<all file contents and reference material embedded inline>
-
-## Task
-<the test case action>
-
-## Output Contract
-<the exact format to produce — copy verbatim from the test plan>"
-```
-
-Then assign each created task to the same master IRC identity:
-
-```bash
-whip task assign <task-id> --master-irc <resolved-master-irc>
-```
-
-Monitor progress with:
-- `whip task list`
-- Manual `claude-irc inbox` polling after each assignment batch, after results start landing, and before summarizing
-
-**DO NOT use `/loop`, background polling helpers, or any unattended inbox watcher here.**
-
-Collect outputs from completed tasks once the runs finish.
+After all tasks complete, collect outputs and proceed to analysis.
 
 #### Agent mode (`--agent`)
 
-Use Codex sub-agents directly. Each simulation run is one spawned agent, and you keep a local ledger from `sim-{test-case}-{run}` to the returned agent id.
+Spawn one `spawn_agent` call per run. Keep a local ledger mapping `sim-{test-case}-{run}` to the returned agent id.
 
-Concrete dispatch recipe:
+Each prompt must be **self-contained** — embed all context inline, not file paths:
 
-1. Build one fully self-contained prompt per run with these sections:
-   - `Run label`: `sim-{test-case}-{run}`
-   - `Role`: "You are a simulation agent. Execute the task and produce structured output."
-   - `Context`: all file contents and reference material embedded inline — DO NOT use file paths
-   - `Task`: the test case action
-   - `Output Contract`: the exact format to produce
-2. Spawn one agent per run with `spawn_agent`:
-   - `agent_type`: `default`
-   - `fork_context`: `false`
-   - `message`: the full prompt for that run
-3. Record the returned id for each run label so the batch is traceable even though the tool assigns the final agent nickname.
-4. Run batches of at most 10 agents:
-   - ≤10 runs: spawn the whole batch
-   - >10 runs: spawn 10, wait until that batch finishes, then launch the next 10
-5. After launching a batch, use `wait` on the outstanding ids with a long timeout. Each time an agent finishes, collect its final message as that run's output, remove it from the outstanding set, and continue waiting until the batch is done.
-6. Do not send follow-up context with `send_input`. If a run fails or times out, rerun that run once with the same self-contained prompt. If it fails again, mark it `unclassifiable` and include the failure in the report.
+1. **Role**: "You are a simulation agent. Execute the task and produce structured output."
+2. **Context**: All file contents and reference material inline
+3. **Task**: The test case action
+4. **Output contract**: The exact format to produce
+
+Dispatch:
+- `agent_type`: `default`, `fork_context`: `false`
+- ≤ 10 runs: spawn all at once
+- \> 10 runs: groups of 10, `wait` on each batch before launching the next
+- On failure/timeout: retry once with the same prompt, then mark `unclassifiable`
+- Do not send follow-up context with `send_input`
 
 ### 3. Analyze
 
@@ -179,10 +146,9 @@ Save the full report with raw run outputs to `/tmp/simulate-{slug}-{timestamp}.m
 ## Rules
 
 - DO NOT execute before the user approves the test plan.
-- Embed all context inline in task/agent prompts — no shared-state assumptions.
+- Embed all context inline in prompts — no shared-state assumptions.
 - For A/B comparisons, both versions receive identical inputs.
 - Use real file contents from the codebase — never fabricate code.
-- In whip mode, keep simulation runs in the `global` workspace.
-- In whip mode, poll `claude-irc inbox` manually while runs are active.
+- In whip mode, use `global` workspace and delegate dispatch to `$whip-start`.
 - In whip mode, clean up simulation tasks after collecting results: `whip task clean`
-- In agent mode, keep each run single-shot and self-contained — no shared state, no follow-up prompt patches.
+- In agent mode, each run is single-shot — no follow-up messages or shared state.
