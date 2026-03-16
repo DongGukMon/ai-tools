@@ -102,7 +102,8 @@ type DashboardModel struct {
 	cursor            int
 	view              viewState
 	listMode          taskListMode
-	expandedWorkspace string
+	expandedWorkspaces map[string]bool
+	listScroll        int
 	selectedTask      *Task
 	detailScroll      int
 	tmuxContent       string
@@ -160,13 +161,14 @@ func (m DashboardModel) Cleanup() {
 func NewDashboardModel(store *Store, version string) DashboardModel {
 	cwd, _ := os.Getwd()
 	return DashboardModel{
-		store:            store,
-		version:          version,
-		width:            120,
-		cwd:              cwd,
-		remoteWorkspace:  GlobalWorkspaceName,
-		programRef:       &programHolder{},
-		archiveableTasks: map[string]bool{},
+		store:              store,
+		version:            version,
+		width:              120,
+		cwd:                cwd,
+		remoteWorkspace:    GlobalWorkspaceName,
+		programRef:         &programHolder{},
+		archiveableTasks:   map[string]bool{},
+		expandedWorkspaces: map[string]bool{},
 	}
 }
 
@@ -230,16 +232,12 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.archiveableTasks = map[string]bool{}
 		}
-		if m.expandedWorkspace != "" {
-			keepExpanded := false
-			for _, row := range buildDashboardTaskRows(m.tasks, m.expandedWorkspace) {
-				if row.kind == dashboardTaskRowLead && row.groupWorkspace == m.expandedWorkspace && row.isExpanded {
-					keepExpanded = true
-					break
+		if len(m.expandedWorkspaces) > 0 {
+			leadByWS := dashboardLeadTasksByWorkspace(m.tasks)
+			for ws := range m.expandedWorkspaces {
+				if normalizeDashboardExpandedWorkspace(leadByWS, ws) == "" {
+					delete(m.expandedWorkspaces, ws)
 				}
-			}
-			if !keepExpanded {
-				m.expandedWorkspace = ""
 			}
 		}
 		m.clampCursorToRows()

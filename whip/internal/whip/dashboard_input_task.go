@@ -13,7 +13,8 @@ func (m *DashboardModel) resetTaskListState() {
 	m.tasks = nil
 	m.archiveableTasks = map[string]bool{}
 	m.cursor = 0
-	m.expandedWorkspace = ""
+	m.listScroll = 0
+	m.expandedWorkspaces = map[string]bool{}
 	m.selectedTask = nil
 	m.detailScroll = 0
 	m.view = viewList
@@ -75,8 +76,12 @@ func (m DashboardModel) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "down", "j":
 		m.moveTaskCursor(1)
 	case "right", "l":
-		if row, ok := m.taskRowAtCursor(); ok && row.kind == dashboardTaskRowLead && !row.isExpanded {
-			m.setExpandedWorkspace(row.groupWorkspace)
+		if row, ok := m.taskRowAtCursor(); ok && row.kind == dashboardTaskRowLead {
+			if row.isExpanded {
+				m.collapseCurrentLeadRow()
+			} else {
+				m.expandCurrentLeadRow()
+			}
 		}
 	case "left", "h":
 		if m.focusLeadForSelectedWorker() {

@@ -220,6 +220,30 @@ func (m DashboardModel) renderDetailView(w int) string {
 	return b.String()
 }
 
+// listViewOverhead returns the number of lines used by chrome around the task
+// table (header/underline inside the table + title, separator, summary, peers,
+// serve status, footer outside it).  This is used to derive how many data rows
+// fit in the terminal.
+func (m DashboardModel) listViewOverhead() int {
+	// 2 = table header + underline
+	// 2 = title ("Active Tasks\n\n")
+	// 1 = newline after table
+	// 2 = separator + summary box (≈2 lines)
+	// 1 = blank line
+	// 2 = peers
+	// 1 = serve status
+	// 3 = footer (margin + 2 lines)
+	return 14
+}
+
+func (m DashboardModel) maxVisibleTaskRows() int {
+	max := m.height - m.listViewOverhead()
+	if max < 3 {
+		max = 3
+	}
+	return max
+}
+
 func (m DashboardModel) renderTable() string {
 	colID := 8
 	colTitle := 24
@@ -253,12 +277,50 @@ func (m DashboardModel) renderTable() string {
 		Foreground(lipgloss.Color("#FFFFFF")).
 		Background(colorPrimary)
 
+	taskRowList := m.taskRows()
+	totalRows := len(taskRowList)
+	maxVisible := m.maxVisibleTaskRows()
+
+	// Clamp listScroll
+	maxScroll := totalRows - maxVisible
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	scroll := m.listScroll
+	if scroll > maxScroll {
+		scroll = maxScroll
+	}
+	if scroll < 0 {
+		scroll = 0
+	}
+
+	endIdx := scroll + maxVisible
+	if endIdx > totalRows {
+		endIdx = totalRows
+	}
+	visibleRows := taskRowList[scroll:endIdx]
+
 	var rows []string
 	rows = append(rows, header, underline)
 
-	for i, row := range m.taskRows() {
+	// Scroll-up indicator
+	if scroll > 0 {
+		indicator := lipgloss.NewStyle().Foreground(colorSubtle).Render(
+			fmt.Sprintf("  ↑ %d more", scroll))
+		rows = append(rows, indicator)
+	}
+
+	for _, row := range visibleRows {
 		t := row.task
-		selected := i == m.cursor
+		// The original row index in the full list is needed for cursor comparison
+		globalIdx := -1
+		for gi, tr := range taskRowList {
+			if tr.task.ID == t.ID && tr.kind == row.kind && tr.workspace == row.workspace {
+				globalIdx = gi
+				break
+			}
+		}
+		selected := globalIdx == m.cursor
 		gutterGlyph := row.gutterGlyph()
 		gutter := "  "
 		if gutterGlyph != "" {
@@ -300,8 +362,16 @@ func (m DashboardModel) renderTable() string {
 		updated := padRight(lipgloss.NewStyle().Foreground(colorSubtle).Render(timeAgo(t.UpdatedAt)), colUpdated)
 
 		workspace := padRight(truncate(t.WorkspaceName(), colWorkspace), colWorkspace)
-		row := gutter + strings.Join([]string{id, workspace, title, status, backend, role, irc, deps, note, updated}, sep)
-		rows = append(rows, row)
+		renderedRow := gutter + strings.Join([]string{id, workspace, title, status, backend, role, irc, deps, note, updated}, sep)
+		rows = append(rows, renderedRow)
+	}
+
+	// Scroll-down indicator
+	hiddenBelow := totalRows - endIdx
+	if hiddenBelow > 0 {
+		indicator := lipgloss.NewStyle().Foreground(colorSubtle).Render(
+			fmt.Sprintf("  ↓ %d more", hiddenBelow))
+		rows = append(rows, indicator)
 	}
 
 	return strings.Join(rows, "\n")

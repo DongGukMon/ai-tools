@@ -38,7 +38,7 @@ func (row dashboardTaskRow) gutterGlyph() string {
 }
 
 func (m DashboardModel) taskRows() []dashboardTaskRow {
-	return buildDashboardTaskRows(m.tasks, m.expandedWorkspace)
+	return buildDashboardTaskRows(m.tasks, m.expandedWorkspaces)
 }
 
 func (m DashboardModel) taskRowAtCursor() (dashboardTaskRow, bool) {
@@ -65,6 +65,7 @@ func (m *DashboardModel) clampCursorToRows() {
 	rows := m.taskRows()
 	if len(rows) == 0 {
 		m.cursor = 0
+		m.listScroll = 0
 		return
 	}
 	if m.cursor < 0 {
@@ -73,6 +74,7 @@ func (m *DashboardModel) clampCursorToRows() {
 	if m.cursor >= len(rows) {
 		m.cursor = len(rows) - 1
 	}
+	m.clampListScroll()
 }
 
 func (m *DashboardModel) moveTaskCursor(delta int) {
@@ -83,6 +85,7 @@ func (m *DashboardModel) moveListCursor(delta int) {
 	rows := m.taskRows()
 	if len(rows) == 0 {
 		m.cursor = 0
+		m.listScroll = 0
 		return
 	}
 	if m.cursor < 0 || m.cursor >= len(rows) {
@@ -97,23 +100,61 @@ func (m *DashboardModel) moveListCursor(delta int) {
 	}
 
 	m.cursor = next
+	m.clampListScroll()
+}
+
+// clampListScroll adjusts listScroll so the cursor stays within the visible window.
+func (m *DashboardModel) clampListScroll() {
+	rows := m.taskRows()
+	totalRows := len(rows)
+	maxVisible := m.maxVisibleTaskRows()
+
+	if totalRows <= maxVisible {
+		m.listScroll = 0
+		return
+	}
+
+	// If cursor is above the visible window, scroll up
+	if m.cursor < m.listScroll {
+		m.listScroll = m.cursor
+	}
+	// If cursor is below the visible window, scroll down
+	if m.cursor >= m.listScroll+maxVisible {
+		m.listScroll = m.cursor - maxVisible + 1
+	}
+
+	// Clamp to valid range
+	maxScroll := totalRows - maxVisible
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	if m.listScroll > maxScroll {
+		m.listScroll = maxScroll
+	}
+	if m.listScroll < 0 {
+		m.listScroll = 0
+	}
 }
 
 func (m *DashboardModel) setExpandedWorkspace(workspace string) {
 	workspace = normalizeDashboardExpandedWorkspace(dashboardLeadTasksByWorkspace(m.tasks), workspace)
-	if workspace == m.expandedWorkspace {
+	if workspace == "" {
 		return
 	}
-	m.expandedWorkspace = workspace
+	if m.expandedWorkspaces[workspace] {
+		delete(m.expandedWorkspaces, workspace)
+	} else {
+		m.expandedWorkspaces[workspace] = true
+	}
 	m.clampCursorToRows()
 }
 
 func (m *DashboardModel) expandCurrentLeadRow() {
 	row, ok := m.currentListRow()
-	if !ok || row.kind != dashboardTaskRowLead || m.expandedWorkspace == row.workspace {
+	if !ok || row.kind != dashboardTaskRowLead || m.expandedWorkspaces[row.workspace] {
 		return
 	}
-	m.expandedWorkspace = row.workspace
+	m.expandedWorkspaces[row.workspace] = true
 	rows := m.taskRows()
 	if idx := findDashboardTaskRowIndex(rows, row.task.ID); idx >= 0 {
 		m.cursor = idx
@@ -122,10 +163,10 @@ func (m *DashboardModel) expandCurrentLeadRow() {
 
 func (m *DashboardModel) collapseCurrentLeadRow() {
 	row, ok := m.currentListRow()
-	if !ok || row.kind != dashboardTaskRowLead || m.expandedWorkspace != row.workspace {
+	if !ok || row.kind != dashboardTaskRowLead || !m.expandedWorkspaces[row.workspace] {
 		return
 	}
-	m.expandedWorkspace = ""
+	delete(m.expandedWorkspaces, row.workspace)
 	rows := m.taskRows()
 	if idx := findDashboardTaskRowIndex(rows, row.task.ID); idx >= 0 {
 		m.cursor = idx
@@ -155,15 +196,15 @@ func (m *DashboardModel) focusLeadForSelectedWorker() bool {
 	return true
 }
 
-func buildDashboardTaskRows(tasks []*Task, expandedWorkspace string) []dashboardTaskRow {
+func buildDashboardTaskRows(tasks []*Task, expandedWorkspaces map[string]bool) []dashboardTaskRow {
 	leadByWorkspace := dashboardLeadTasksByWorkspace(tasks)
 	workerByWorkspace := dashboardWorkerTasksByWorkspace(tasks, leadByWorkspace)
-	expandedWorkspace = normalizeDashboardExpandedWorkspace(leadByWorkspace, expandedWorkspace)
 
 	rows := make([]dashboardTaskRow, 0, len(tasks))
 	for _, task := range tasks {
 		workspace := task.WorkspaceName()
 		lead := leadByWorkspace[workspace]
+		isExpanded := expandedWorkspaces[workspace] && normalizeDashboardExpandedWorkspace(leadByWorkspace, workspace) != ""
 		switch {
 		case workspace == GlobalWorkspaceName:
 			rows = append(rows, dashboardTaskRow{
@@ -187,9 +228,9 @@ func buildDashboardTaskRows(tasks []*Task, expandedWorkspace string) []dashboard
 				workspace:      workspace,
 				groupWorkspace: workspace,
 				hasChildren:    len(workers) > 0,
-				isExpanded:     workspace == expandedWorkspace,
+				isExpanded:     isExpanded,
 			})
-			if workspace == expandedWorkspace {
+			if isExpanded {
 				for i, worker := range workers {
 					rows = append(rows, dashboardTaskRow{
 						task:            worker,

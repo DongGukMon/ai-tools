@@ -25,7 +25,7 @@ func TestBuildDashboardTaskRowsGroupsWorkspaceWorkersUnderLead(t *testing.T) {
 		lead,
 		workerAfterLead,
 		noLead,
-	}, "")
+	}, map[string]bool{})
 	if got, want := taskRowIDs(collapsed), []string{global.ID, lead.ID, noLead.ID}; !equalStrings(got, want) {
 		t.Fatalf("collapsed rows = %v, want %v", got, want)
 	}
@@ -39,7 +39,7 @@ func TestBuildDashboardTaskRowsGroupsWorkspaceWorkersUnderLead(t *testing.T) {
 		lead,
 		workerAfterLead,
 		noLead,
-	}, "lane")
+	}, map[string]bool{"lane": true})
 	if got, want := taskRowIDs(expanded), []string{global.ID, lead.ID, workerBeforeLead.ID, workerAfterLead.ID, noLead.ID}; !equalStrings(got, want) {
 		t.Fatalf("expanded rows = %v, want %v", got, want)
 	}
@@ -65,7 +65,7 @@ func TestDashboardRenderTableShowsTreeGlyphs(t *testing.T) {
 
 	m := NewDashboardModel(tempStore(t), "test")
 	m.tasks = []*Task{lead, workerA, workerB}
-	m.expandedWorkspace = "lane"
+	m.expandedWorkspaces = map[string]bool{"lane": true}
 
 	table := m.renderTable()
 	for _, want := range []string{"▼", "├", "└", "Lead", "Worker A", "Worker B"} {
@@ -108,8 +108,8 @@ func TestDashboardListExpandAndCollapseInteractions(t *testing.T) {
 
 	model, _ := m.Update(tea.KeyMsg{Type: tea.KeyRight})
 	dm := model.(DashboardModel)
-	if dm.expandedWorkspace != "lane" {
-		t.Fatalf("expandedWorkspace = %q, want lane", dm.expandedWorkspace)
+	if !dm.expandedWorkspaces["lane"] {
+		t.Fatalf("expandedWorkspaces missing lane, got %v", dm.expandedWorkspaces)
 	}
 	if rows := dm.taskRows(); len(rows) != 3 {
 		t.Fatalf("expanded row count = %d, want 3", len(rows))
@@ -128,14 +128,14 @@ func TestDashboardListExpandAndCollapseInteractions(t *testing.T) {
 	if !ok || row.task.ID != lead.ID {
 		t.Fatalf("selected row after left on worker = %+v, want lead", row)
 	}
-	if dm.expandedWorkspace != "lane" {
-		t.Fatalf("left on worker should keep subtree expanded, got %q", dm.expandedWorkspace)
+	if !dm.expandedWorkspaces["lane"] {
+		t.Fatalf("left on worker should keep subtree expanded, got %v", dm.expandedWorkspaces)
 	}
 
 	model, _ = dm.Update(tea.KeyMsg{Type: tea.KeyLeft})
 	dm = model.(DashboardModel)
-	if dm.expandedWorkspace != "" {
-		t.Fatalf("left on expanded lead should collapse subtree, got %q", dm.expandedWorkspace)
+	if dm.expandedWorkspaces["lane"] {
+		t.Fatalf("left on expanded lead should collapse subtree, got %v", dm.expandedWorkspaces)
 	}
 	if rows := dm.taskRows(); len(rows) != 1 {
 		t.Fatalf("collapsed row count = %d, want 1", len(rows))
@@ -169,8 +169,8 @@ func TestDashboardListKeepsExpandedWorkspaceWhenLeavingSubtree(t *testing.T) {
 		dm = model.(DashboardModel)
 	}
 
-	if dm.expandedWorkspace != "lane" {
-		t.Fatalf("expandedWorkspace = %q, want lane to stay expanded", dm.expandedWorkspace)
+	if !dm.expandedWorkspaces["lane"] {
+		t.Fatalf("expandedWorkspaces missing lane, want lane to stay expanded, got %v", dm.expandedWorkspaces)
 	}
 	row, ok := dm.taskRowAtCursor()
 	if !ok || row.task.ID != after.ID {
@@ -178,7 +178,7 @@ func TestDashboardListKeepsExpandedWorkspaceWhenLeavingSubtree(t *testing.T) {
 	}
 }
 
-func TestDashboardListOnlyOneExpandedWorkspace(t *testing.T) {
+func TestDashboardListMultipleExpandedWorkspaces(t *testing.T) {
 	leadA := NewTask("Lead A", "desc", "/tmp")
 	leadA.Workspace = "lane-a"
 	leadA.Role = TaskRoleLead
@@ -194,8 +194,14 @@ func TestDashboardListOnlyOneExpandedWorkspace(t *testing.T) {
 	m.view = viewList
 	m.tasks = []*Task{leadA, workerA, leadB, workerB}
 
+	// Expand lane-a
 	model, _ := m.Update(tea.KeyMsg{Type: tea.KeyRight})
 	dm := model.(DashboardModel)
+	if !dm.expandedWorkspaces["lane-a"] {
+		t.Fatalf("expandedWorkspaces missing lane-a after first expand, got %v", dm.expandedWorkspaces)
+	}
+
+	// Navigate down past worker to lead B, then expand lane-b
 	for _, key := range []tea.KeyMsg{
 		{Type: tea.KeyDown},
 		{Type: tea.KeyDown},
@@ -205,11 +211,15 @@ func TestDashboardListOnlyOneExpandedWorkspace(t *testing.T) {
 		dm = model.(DashboardModel)
 	}
 
-	if dm.expandedWorkspace != "lane-b" {
-		t.Fatalf("expandedWorkspace = %q, want lane-b", dm.expandedWorkspace)
+	// Both workspaces should be expanded simultaneously
+	if !dm.expandedWorkspaces["lane-a"] {
+		t.Fatalf("lane-a should still be expanded, got %v", dm.expandedWorkspaces)
 	}
-	if got, want := taskRowIDs(dm.taskRows()), []string{leadA.ID, leadB.ID, workerB.ID}; !equalStrings(got, want) {
-		t.Fatalf("visible rows = %v, want %v", got, want)
+	if !dm.expandedWorkspaces["lane-b"] {
+		t.Fatalf("lane-b should be expanded, got %v", dm.expandedWorkspaces)
+	}
+	if got, want := taskRowIDs(dm.taskRows()), []string{leadA.ID, workerA.ID, leadB.ID, workerB.ID}; !equalStrings(got, want) {
+		t.Fatalf("visible rows = %v, want %v (both expanded)", got, want)
 	}
 }
 
@@ -229,8 +239,8 @@ func TestDashboardArchivedListSupportsGroupedNavigation(t *testing.T) {
 
 	model, _ := m.Update(tea.KeyMsg{Type: tea.KeyRight})
 	dm := model.(DashboardModel)
-	if dm.expandedWorkspace != "lane" {
-		t.Fatalf("archived expandedWorkspace = %q, want lane", dm.expandedWorkspace)
+	if !dm.expandedWorkspaces["lane"] {
+		t.Fatalf("archived expandedWorkspaces missing lane, got %v", dm.expandedWorkspaces)
 	}
 
 	model, _ = dm.Update(tea.KeyMsg{Type: tea.KeyDown})
