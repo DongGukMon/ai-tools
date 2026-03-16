@@ -66,7 +66,7 @@ func Run(session *parser.Session, options Options) error {
 		return err
 	}
 
-	viewerDir, err := os.MkdirTemp(viewerRoot, viewerDirPrefix)
+	viewerDir, err := prepareViewerDir(viewerRoot, session.ID)
 	if err != nil {
 		return fmt.Errorf("failed to create viewer directory: %w", err)
 	}
@@ -329,6 +329,37 @@ func ensurePrivateDirTree(base, target string, mode os.FileMode) error {
 	}
 
 	return nil
+}
+
+func prepareViewerDir(root, sessionID string) (string, error) {
+	sanitized := sanitizeViewerDirName(sessionID)
+	if sanitized == "" {
+		return os.MkdirTemp(root, viewerDirPrefix)
+	}
+
+	dir := filepath.Join(root, viewerDirPrefix+sanitized)
+	_ = os.RemoveAll(dir)
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		return "", err
+	}
+	return dir, nil
+}
+
+func sanitizeViewerDirName(sessionID string) string {
+	if sessionID == "" {
+		return ""
+	}
+	var b strings.Builder
+	for _, r := range sessionID {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+			b.WriteRune(r)
+		}
+	}
+	result := b.String()
+	if len(result) > 128 {
+		result = result[:128]
+	}
+	return result
 }
 
 func cleanupViewerDirs(root string, now time.Time, ttl time.Duration) (int, error) {

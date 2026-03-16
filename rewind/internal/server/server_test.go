@@ -156,15 +156,10 @@ func TestRunWritesViewerUnderUserHome(t *testing.T) {
 		t.Fatalf("failed to read viewer root: %v", err)
 	}
 
-	var viewerDir string
-	for _, entry := range entries {
-		if entry.IsDir() && strings.HasPrefix(entry.Name(), viewerDirPrefix) {
-			viewerDir = filepath.Join(viewerRoot, entry.Name())
-			break
-		}
-	}
-	if viewerDir == "" {
-		t.Fatalf("expected exported viewer directory under %s", viewerRoot)
+	expectedDirName := viewerDirPrefix + "session-1"
+	viewerDir := filepath.Join(viewerRoot, expectedDirName)
+	if _, err := os.Stat(viewerDir); err != nil {
+		t.Fatalf("expected viewer directory %q, got err=%v (entries: %v)", expectedDirName, err, entries)
 	}
 
 	indexHTML, err := os.ReadFile(filepath.Join(viewerDir, "index.html"))
@@ -265,6 +260,94 @@ func TestPrepareViewerExportRootRejectsSymlinkedViewerDir(t *testing.T) {
 
 	if _, err := prepareViewerExportRoot(); err == nil {
 		t.Fatal("expected symlinked viewer dir to be rejected")
+	}
+}
+
+func TestRunOverwritesExistingViewerForSameSession(t *testing.T) {
+	tempHome := t.TempDir()
+	restore := stubUserHomeDir(tempHome)
+	defer restore()
+
+	originalOpenBrowser := OpenBrowser
+	OpenBrowser = func(path string) error { return nil }
+	defer func() { OpenBrowser = originalOpenBrowser }()
+
+	session := &parser.Session{
+		ID:      "session-overwrite",
+		Backend: "claude",
+		Events: []parser.TimelineEvent{
+			{
+				Timestamp: time.Date(2026, 3, 12, 10, 0, 0, 0, time.UTC),
+				Type:      "user",
+				Role:      "user",
+				Summary:   "first run",
+				Content:   "first run",
+			},
+		},
+	}
+
+	if err := Run(session, Options{OpenBrowser: false}); err != nil {
+		t.Fatalf("first Run returned error: %v", err)
+	}
+
+	session.Events[0].Content = "second run"
+	if err := Run(session, Options{OpenBrowser: false}); err != nil {
+		t.Fatalf("second Run returned error: %v", err)
+	}
+
+	viewerRoot := filepath.Join(tempHome, ".rewind", "viewers")
+	entries, err := os.ReadDir(viewerRoot)
+	if err != nil {
+		t.Fatalf("failed to read viewer root: %v", err)
+	}
+
+	viewerCount := 0
+	for _, entry := range entries {
+		if entry.IsDir() && strings.HasPrefix(entry.Name(), viewerDirPrefix) {
+			viewerCount++
+		}
+	}
+	if viewerCount != 1 {
+		t.Fatalf("expected exactly 1 viewer directory after re-export, got %d", viewerCount)
+	}
+
+	indexHTML, err := os.ReadFile(filepath.Join(viewerRoot, viewerDirPrefix+"session-overwrite", "index.html"))
+	if err != nil {
+		t.Fatalf("failed to read overwritten viewer: %v", err)
+	}
+	if !strings.Contains(string(indexHTML), "second run") {
+		t.Fatal("expected overwritten viewer to contain updated session data")
+	}
+}
+
+func TestSanitizeViewerDirName(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"abc-123_XYZ", "abc-123_XYZ"},
+		{"", ""},
+		{"../../../etc/passwd", "etcpasswd"},
+		{"session with spaces", "sessionwithspaces"},
+		{"a/b\\c", "abc"},
+		{strings.Repeat("x", 200), strings.Repeat("x", 128)},
+	}
+	for _, tt := range tests {
+		got := sanitizeViewerDirName(tt.input)
+		if got != tt.want {
+			t.Errorf("sanitizeViewerDirName(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
+func TestPrepareViewerDirFallsBackToTempForEmptySessionID(t *testing.T) {
+	root := t.TempDir()
+	dir, err := prepareViewerDir(root, "")
+	if err != nil {
+		t.Fatalf("prepareViewerDir returned error: %v", err)
+	}
+	if !strings.HasPrefix(filepath.Base(dir), viewerDirPrefix) {
+		t.Fatalf("expected temp dir with prefix %q, got %q", viewerDirPrefix, filepath.Base(dir))
 	}
 }
 
