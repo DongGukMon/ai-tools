@@ -5,6 +5,8 @@ whip-lesson-learn/agents/openai.yaml
 whip-lgtm/SKILL.md
 whip-lgtm/agents/openai.yaml
 whip-plan/SKILL.md
+whip-plan/agents/openai.yaml
 whip-simulate/SKILL.md
 whip-simulate/agents/openai.yaml
 whip-start/SKILL.md
+whip-start/agents/openai.yaml

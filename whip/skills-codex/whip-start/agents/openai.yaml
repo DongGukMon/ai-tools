@@ -1,0 +1,4 @@
+interface:
+  display_name: "Whip Start"
+  short_description: "Spawn whip agent sessions to handle tasks with explicit backend, scope, and ownership"
+  default_prompt: "Use $whip-start to dispatch agent sessions for the planned tasks."
