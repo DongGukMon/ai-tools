@@ -28,6 +28,7 @@ export interface PtySession {
 }
 
 export interface SplitNode {
+  id: string;
   type: "leaf" | "horizontal" | "vertical";
   ptyId?: string;
   children?: SplitNode[];
