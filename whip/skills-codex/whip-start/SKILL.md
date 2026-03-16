@@ -117,8 +117,9 @@ Whether you are dispatching a solo task, direct-team worker, or a workspace lead
 Use this contract whenever the task requires judgment instead of purely mechanical execution:
 - `Context`: why the task exists, how it fits the larger outcome, which existing patterns or constraints it must preserve, and why this direction was chosen
 - `Objective`: the concrete deliverable
+- `Counterparts`: related workers, their scope, how their work relates, and their IRC identity for direct communication — include the shared contract shape (fields, types, semantics) when work crosses a boundary
 - `Implementation Details`: file paths, interfaces, sequencing notes, scope boundaries, and code references
-- `Acceptance Criteria`: reviewable outcomes
+- `Acceptance Criteria`: reviewable outcomes — include at least one contract verification step (payload assertion, integration test, or end-to-end smoke check) when work crosses a subsystem boundary
 
 For direct `whip task create` descriptions below, keep `Scope` as its own section because the CLI stores a single freeform description string. Put `Context` first so the worker understands the rationale before deciding how to implement the task.
 
@@ -139,13 +140,17 @@ whip task create "<title>" --backend <chosen-backend> --difficulty <level> --des
 - In: <files/areas to modify>
 - Out: <what NOT to touch>
 
+## Counterparts
+<if this task shares a boundary with other tasks or subsystems, list the related workers, what they own, how their work relates, and the shared contract shape — fields, types, semantics>
+
 ## Implementation Details
 - <key file paths, interfaces, sequencing notes>
 - <reference existing code, tests, or contracts to follow>
 
 ## Acceptance Criteria
 - <specific, verifiable condition>
-- <specific, verifiable condition>"
+- <specific, verifiable condition>
+- <contract verification step when work crosses a boundary>"
 whip task assign <task-id> --master-irc <resolved-master-irc>
 ```
 
@@ -172,6 +177,7 @@ Parallelization guardrails:
 - If two tasks need to edit the same file, shared interface, or session plumbing, do not parallelize that part.
 - Create a single owner task for shared files or contracts first, then make downstream stack tasks consume the result.
 - If a task says "match Task X" or "implement the shared interface", that task is `medium` minimum and usually should wait for the owner task to land.
+- Tasks that share a data contract boundary (producer/consumer, API server/client, generated/source) must include counterpart awareness and the shared contract shape (fields, types, semantics) in both task descriptions.
 
 ### Step 2: Create & deploy agents
 
@@ -190,13 +196,17 @@ whip task create "<agent role/title>" [--workspace <workspace-name>] --backend <
 - In: <files/areas to modify>
 - Out: <what NOT to touch>
 
+## Counterparts
+<if this task shares a boundary with other tasks, list the related workers, what they own, how their work relates, and the shared contract shape — fields, types, semantics>
+
 ## Implementation Details
 - <key file paths, interfaces, sequencing notes>
 - <reference existing code, tests, or contracts to follow>
 
 ## Acceptance Criteria
 - <specific, verifiable condition>
-- <specific, verifiable condition>"
+- <specific, verifiable condition>
+- <contract verification step when work crosses a boundary>"
 whip task dep <task-id> --after <prerequisite-id>  # only if needed; this encodes stack order
 whip task assign <task-id> --master-irc <resolved-master-irc>  # only assign tasks without unmet prerequisites
 ```
@@ -235,6 +245,8 @@ Use Lead Flow when the work belongs in a named workspace with multiple tasks. Cr
 
 Keep the nested worker specs high-fidelity. The lead uses them as the execution source of truth, so do not collapse away context, design rationale, or file/interface guidance that workers need in order to execute independently.
 
+When creating workers that share a contract boundary (producer/consumer, API server/client, generated/source), the lead must include counterpart info and the shared contract shape (fields, types, semantics) in both worker descriptions so each side can verify independently.
+
 ### Step 1: Create the lead task
 
 If you are continuing an existing named workspace, inspect it first with `whip workspace view <workspace-name>`. If it already has a `worktree_path`, use that path as the working-directory context for your own repo commands. If it does not exist yet, the first `whip task create --workspace <workspace-name>` below will ensure it.
@@ -249,6 +261,7 @@ whip task create "<workspace lead title>" --role lead --workspace <workspace-nam
 - Backend: claude | codex
 - Difficulty: easy | medium | hard
 - Depends on: (none) | Worker 2, Worker 3
+- Counterparts: (none) | Worker 2 (<scope summary>) — <shared contract shape>
 - Scope:
   - In: <files/areas to modify>
   - Out: <what NOT to touch>
@@ -260,12 +273,17 @@ whip task create "<workspace lead title>" --role lead --workspace <workspace-nam
   #### Objective
   <specific deliverable>
 
+  #### Counterparts
+  <related workers, what they own, how their work relates, and their IRC identity for direct communication>
+  <when a cross-boundary contract exists, state the shared shape: fields, types, semantics>
+
   #### Implementation Details
   <file paths, interfaces, sequencing requirements, code references>
 
   #### Acceptance Criteria
   - <specific, verifiable condition>
   - <specific, verifiable condition>
+  - <contract verification step when work crosses a boundary>
 
 ### Worker 2: <title>
 ..."
@@ -289,6 +307,7 @@ whip task assign <lead-id> --master-irc <resolved-master-irc>
 
 - The Workspace Lead is autonomous for worker creation, assignment, coordination, and review handoffs.
 - If the lead needs user input, cross-task alignment, or policy decisions, answer it and let the lead continue.
+- When the lead reports that producer/consumer workers are ready for review, verify that both sides agree on the shared contract shape (fields, types, modes, semantics) before approving either.
 - Mirror important lead decisions or blockers into the main user chat.
 
 ### Step 5: Review and complete the lead

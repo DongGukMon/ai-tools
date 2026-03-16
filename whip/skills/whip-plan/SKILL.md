@@ -82,6 +82,7 @@ With a concrete mental model in hand, explore the codebase to understand what ex
    - Existing code structure, patterns, and conventions
    - Files and modules that will be affected
    - Interfaces between components
+   - Cross-boundary contracts: when work spans multiple subsystems (backend/frontend, producer/consumer, API server/client, generated/source), identify the shared data shapes, field names, types, and semantic expectations that must match across boundaries
    - Test patterns in use
    - Current whip task state (anything already in progress?)
 
@@ -95,6 +96,8 @@ Produce an exploration summary in the conversation:
 ## Exploration Summary
 - Existing files/modules/patterns:
 - Relevant interfaces/contracts:
+- Cross-boundary contracts:
+  - <producer task/module> → <consumer task/module>: <shared shape — fields, types, semantics>
 - Test/build hooks:
 - Current whip state:
 - Risks, gaps, or hidden dependencies:
@@ -110,6 +113,7 @@ Produce an exploration summary in the conversation:
 Exploration is complete when:
 - You know which areas of the codebase matter
 - You can name the key interfaces and ownership boundaries
+- Cross-boundary contracts are explicitly listed when work spans producer/consumer or multi-subsystem boundaries
 - You understand enough surrounding context to avoid planning in isolation
 
 ---
@@ -178,10 +182,11 @@ Separate the work into:
 ### Lead role for named workspaces
 
 - Every named workspace gets a Workspace Lead.
-- The Lead is an autonomous orchestrator that receives all worker task specs in its description, creates, assigns, and monitors workers, and escalates to master when needed.
+- The Lead is an autonomous orchestrator that receives all worker task specs in its description, creates workers, assigns them, monitors them, and escalates to master when needed.
 - The lead task owns the workspace objective and should always be planned as `hard`.
 - Lead tasks are always review-gated (enforced automatically); lifecycle: `in_progress → review → approved → completed (auto-archives workspace)`.
 - For named workspaces, plan worker tasks as specs nested under the Workspace Lead instead of as separate top-level task specs.
+- The Lead must verify that producer/consumer workers agree on the same contract shape (fields, types, modes, semantics) before approving either side's output. When ambiguity arises during execution, the Lead should use IRC to broker contract alignment between workers.
 
 ### Task sizing
 
@@ -198,7 +203,8 @@ After stacking all tasks into parallel and sequential units, run a mental simula
 2. No two parallel tasks need to edit the same file or own the same interface contract.
 3. Each task has enough context to execute independently from the written plan alone.
 4. Difficulty and backend match the actual reasoning burden of the task.
-5. The graph preserves both speed and quality:
+5. Cross-boundary contracts are explicit: when a producer task and a consumer task share a data contract (API payload, shared types, protocol shape), the contract shape (fields, types, semantics) is stated in both task descriptions so each side can verify independently.
+6. The graph preserves both speed and quality:
    - Speed: no unnecessary sequential edge, no avoidable idle round
    - Efficiency: task sizes are balanced and ownership is clean
    - Context preservation: closely-related decisions are not split across agents without a clear contract
@@ -210,6 +216,7 @@ Treat the simulation as failed if any of the following is true:
 - A task cannot be executed from the written plan without hidden planner context
 - An `easy` task still requires interface matching or architectural judgment
 - The graph exceeds three rounds without a concrete reason
+- Producer and consumer tasks share a data contract but the contract shape (fields, types, semantics) is not explicitly stated in both task descriptions
 
 If the simulation exposes a problem, adjust task boundaries and re-simulate until the graph feels right.
 
@@ -221,6 +228,7 @@ Record the result in the conversation:
 - Parallel width:
 - Blocking edges:
 - File/interface ownership check:
+- Contract verification: <list each cross-boundary contract and confirm both producer and consumer task descriptions include the shared shape>
 - Context handoff risks:
 - Quality risks:
 - Adjustments made after simulation:
@@ -423,6 +431,7 @@ Round 2 (after Round 1):
 - **Difficulty**: easy | medium | hard
 - **Workspace**: global
 - **Depends on**: (none) | Task 2, Task 3
+- **Counterparts**: (none) | Task 2 (<scope summary>, IRC: <irc-name>) — <shared contract shape>
 - **Scope**:
   - In: <files to create/modify>
   - Out: <files NOT to touch>
@@ -434,6 +443,10 @@ Round 2 (after Round 1):
   ## Objective
   <what needs to be done — be specific>
 
+  ## Counterparts
+  <list related tasks, what they own, how their work relates to this task, and their IRC identity for direct communication>
+  <when a cross-boundary contract exists, state the shared shape here: fields, types, semantics>
+
   ## Implementation Details
   <concrete guidance: function signatures, struct shapes, API paths, routing patterns, sequencing notes>
   <reference existing code: "See store.go:CheckAllPresence() for the method signature">
@@ -441,6 +454,7 @@ Round 2 (after Round 1):
   ## Acceptance Criteria
   - <specific, verifiable condition>
   - <specific, verifiable condition>
+  - <contract verification step when work crosses a boundary: payload assertion, integration test, or end-to-end smoke check>
 
 ### Task 2: <title>
 ...
@@ -488,6 +502,7 @@ Worker sequence:
 - Parallel width:
 - Blocking edges:
 - File/interface ownership check:
+- Contract verification: <list each cross-boundary contract and confirm both producer and consumer worker descriptions include the shared shape>
 - Context handoff risks:
 - Quality risks:
 - Adjustments made after simulation:
@@ -511,6 +526,7 @@ Worker sequence:
   - **Backend**: claude | codex
   - **Difficulty**: easy | medium | hard
   - **Depends on**: (none) | Worker 2, Worker 3
+  - **Counterparts**: (none) | Worker 2 (<scope summary>, IRC: <irc-name>) — <shared contract shape>
   - **Scope**:
     - In: <files to create/modify>
     - Out: <files NOT to touch>
@@ -522,12 +538,17 @@ Worker sequence:
     #### Objective
     <specific deliverable>
 
+    #### Counterparts
+    <related workers, what they own, how their work relates, and their IRC identity for direct communication>
+    <when a cross-boundary contract exists, state the shared shape: fields, types, semantics>
+
     #### Implementation Details
     <file paths, interfaces, sequencing requirements, code references>
 
     #### Acceptance Criteria
     - <specific, verifiable condition>
     - <specific, verifiable condition>
+    - <contract verification step when work crosses a boundary>
 
   ### Worker 2: <title>
   ...
@@ -546,7 +567,8 @@ Run `/whip-start <actual-path>` to execute this plan.
 - Backend and difficulty are recorded, not implied
 - Task descriptions carry context and rationale instead of assuming planner memory
 - Implementation details contain real file paths, interfaces, and code references when available
-- Acceptance criteria are specific enough to review
+- Cross-boundary contracts are stated in both producer and consumer task descriptions when work spans subsystem boundaries
+- Acceptance criteria are specific enough to review, and include contract verification steps for multi-layer work
 - The file is sufficient for execution without hidden planner context
 
 ### Hand off
