@@ -913,32 +913,95 @@ fn resolve_origin_head(source: &Path) -> Result<String, String> {
         .ok_or_else(|| format!("Unexpected origin HEAD ref: {symbolic_ref}"))
 }
 
+fn create_source_sync_stash(source: &Path) -> Result<Option<String>, String> {
+    if !has_local_source_changes(source) {
+        return Ok(None);
+    }
+
+    let stash_label = format!("grove-source-sync-{}", Uuid::new_v4());
+    run_git(
+        source,
+        &[
+            "stash",
+            "push",
+            "--include-untracked",
+            "-m",
+            stash_label.as_str(),
+        ],
+    )?;
+
+    let stash_ref = run_git_output(source, &["rev-parse", "-q", "--verify", "refs/stash"])?;
+    Ok(Some(stash_ref))
+}
+
+fn resolve_stash_selector(source: &Path, stash_ref: &str) -> Result<String, String> {
+    let stash_list = run_git_output(source, &["stash", "list", "--format=%H %gd"])?;
+
+    stash_list
+        .lines()
+        .find_map(|line| {
+            let mut parts = line.split_whitespace();
+            let hash = parts.next()?;
+            let selector = parts.next()?;
+            (hash == stash_ref).then(|| selector.to_string())
+        })
+        .ok_or_else(|| format!("Temporary stash {stash_ref} is no longer present"))
+}
+
+fn restore_source_sync_stash(source: &Path, stash_ref: &str, context: &str) -> Result<(), String> {
+    if let Err(e) = run_git(source, &["stash", "apply", stash_ref]) {
+        return Err(format!(
+            "{context}. Restoring local changes from temporary stash {stash_ref} failed: {e}. Your changes are still available in that stash entry. Recover them with `git stash apply {stash_ref}` or inspect them with `git stash show -p {stash_ref}`."
+        ));
+    }
+
+    let stash_selector = resolve_stash_selector(source, stash_ref)?;
+    if let Err(e) = run_git(source, &["stash", "drop", stash_selector.as_str()]) {
+        return Err(format!(
+            "{context}. Local changes were restored from temporary stash {stash_ref}, but dropping that stash failed: {e}. You can remove it manually with `git stash drop {stash_selector}`."
+        ));
+    }
+
+    Ok(())
+}
+
 fn refresh_source_repo(source: &Path) -> Result<(), String> {
     let default_branch = remote_default_branch(source)?;
+    let sync_stash_ref = create_source_sync_stash(source)?;
 
-    run_git(source, &["checkout", &default_branch])?;
-    run_git(source, &["fetch", "--prune", "origin"])?;
+    let restore_after_error = |base: String| -> Result<(), String> {
+        if let Some(stash_ref) = sync_stash_ref.as_deref() {
+            if let Err(restore_err) = restore_source_sync_stash(source, stash_ref, &base) {
+                return Err(format!("{base}\n{restore_err}"));
+            }
+        }
 
-    let dirty = run_git_output(source, &["status", "--porcelain"])
-        .map(|s| !s.trim().is_empty())
-        .unwrap_or(false);
+        Err(base)
+    };
 
-    if dirty {
-        run_git(source, &["stash", "push"])?;
+    if let Err(e) = run_git(source, &["checkout", &default_branch]) {
+        return restore_after_error(format!(
+            "Failed to switch source repo to default branch '{default_branch}' during sync: {e}"
+        ));
+    }
+
+    if let Err(e) = run_git(source, &["fetch", "--prune", "origin"]) {
+        return restore_after_error(format!("Failed to fetch origin during source sync: {e}"));
     }
 
     if let Err(e) = run_git(source, &["pull", "--rebase", "origin", &default_branch]) {
         let _ = run_git(source, &["rebase", "--abort"]);
-        if dirty {
-            let _ = run_git(source, &["stash", "pop"]);
-        }
-        return Err(format!(
+        return restore_after_error(format!(
             "Rebase failed during source sync (local commits may conflict with upstream): {e}"
         ));
     }
 
-    if dirty {
-        let _ = run_git(source, &["stash", "pop"]);
+    if let Some(stash_ref) = sync_stash_ref.as_deref() {
+        restore_source_sync_stash(
+            source,
+            stash_ref,
+            "Source sync completed, but reapplying local changes failed",
+        )?;
     }
 
     Ok(())
@@ -1602,6 +1665,138 @@ mod tests {
         assert_eq!(
             run_git_output(&source_dir, &["branch", "--show-current"]).unwrap(),
             "trunk"
+        );
+    }
+
+    #[test]
+    fn refresh_project_restores_tracked_dirty_changes_after_sync() {
+        let _lock = env_lock();
+        let home = TestHome::new();
+        let base_dir = home.root.join("grove-data");
+        let source_dir = base_dir
+            .join("github.com")
+            .join("bang9")
+            .join("grove")
+            .join("source");
+        let remotes_dir = home.root.join("remotes");
+        let (remote_dir, seed_dir) =
+            create_bare_remote(&remotes_dir, "grove-refresh-tracked", "trunk");
+
+        commit_and_push(
+            &seed_dir,
+            &remote_dir,
+            "trunk",
+            "README.md",
+            "# Grove v1\n",
+            "Initial commit",
+        );
+
+        fs::create_dir_all(source_dir.parent().unwrap()).unwrap();
+        let remote_dir_str = remote_dir.to_string_lossy().to_string();
+        let source_dir_str = source_dir.to_string_lossy().to_string();
+        run_git_ok(
+            source_dir.parent().unwrap(),
+            &["clone", &remote_dir_str, &source_dir_str],
+        );
+
+        save_test_config(
+            &base_dir,
+            vec![project_entry(
+                "project-1",
+                "https://github.com/bang9/grove.git",
+                &source_dir,
+            )],
+        );
+
+        fs::write(source_dir.join("README.md"), "# Grove v1\nLocal note\n").unwrap();
+
+        commit_and_push(
+            &seed_dir,
+            &remote_dir,
+            "trunk",
+            "SYNC.md",
+            "remote update\n",
+            "Refresh source",
+        );
+
+        let project = refresh_project_impl("project-1").unwrap();
+
+        // Tracked file modification is preserved via stash/pop
+        assert!(project.source_has_changes);
+        assert_eq!(
+            fs::read_to_string(source_dir.join("README.md")).unwrap(),
+            "# Grove v1\nLocal note\n"
+        );
+        assert_eq!(
+            fs::read_to_string(source_dir.join("SYNC.md")).unwrap(),
+            "remote update\n"
+        );
+        assert_eq!(
+            run_git_output(&source_dir, &["rev-parse", "HEAD"]).unwrap(),
+            run_git_output(&source_dir, &["rev-parse", "origin/trunk"]).unwrap()
+        );
+    }
+
+    #[test]
+    fn refresh_project_keeps_recoverable_stash_when_reapply_conflicts() {
+        let _lock = env_lock();
+        let home = TestHome::new();
+        let base_dir = home.root.join("grove-data");
+        let source_dir = base_dir
+            .join("github.com")
+            .join("bang9")
+            .join("grove")
+            .join("source");
+        let remotes_dir = home.root.join("remotes");
+        let (remote_dir, seed_dir) =
+            create_bare_remote(&remotes_dir, "grove-refresh-conflict", "trunk");
+
+        commit_and_push(
+            &seed_dir,
+            &remote_dir,
+            "trunk",
+            "README.md",
+            "# Grove v1\n",
+            "Initial commit",
+        );
+
+        fs::create_dir_all(source_dir.parent().unwrap()).unwrap();
+        let remote_dir_str = remote_dir.to_string_lossy().to_string();
+        let source_dir_str = source_dir.to_string_lossy().to_string();
+        run_git_ok(
+            source_dir.parent().unwrap(),
+            &["clone", &remote_dir_str, &source_dir_str],
+        );
+
+        save_test_config(
+            &base_dir,
+            vec![project_entry(
+                "project-1",
+                "https://github.com/bang9/grove.git",
+                &source_dir,
+            )],
+        );
+
+        fs::write(source_dir.join("README.md"), "# Grove local\n").unwrap();
+
+        commit_and_push(
+            &seed_dir,
+            &remote_dir,
+            "trunk",
+            "README.md",
+            "# Grove remote\n",
+            "Conflicting refresh source",
+        );
+
+        let error = refresh_project_impl("project-1").unwrap_err();
+        let stash_list = run_git_output(&source_dir, &["stash", "list"]).unwrap();
+
+        assert!(error.contains("temporary stash"));
+        assert!(error.contains("git stash apply"));
+        assert!(stash_list.contains("grove-source-sync-"));
+        assert_eq!(
+            run_git_output(&source_dir, &["rev-parse", "HEAD"]).unwrap(),
+            run_git_output(&source_dir, &["rev-parse", "origin/trunk"]).unwrap()
         );
     }
 }

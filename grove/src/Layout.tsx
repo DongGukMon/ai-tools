@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback } from "react";
+import type { MouseEvent } from "react";
 import { Allotment } from "allotment";
 import "allotment/dist/style.css";
 import { Command } from "lucide-react";
@@ -43,32 +44,94 @@ function TitleBar() {
 }
 
 function Layout() {
-  const { main, loaded, init, updateMain } = usePanelLayoutStore();
+  const main = usePanelLayoutStore((s) => s.main);
+  const loaded = usePanelLayoutStore((s) => s.loaded);
+  const init = usePanelLayoutStore((s) => s.init);
+  const updateMain = usePanelLayoutStore((s) => s.updateMain);
   const dragging = useRef(false);
+  const pendingSizesRef = useRef<number[] | null>(null);
+  const resetPendingRef = useRef(false);
+  const resetClearTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
-    init();
+    void init();
   }, [init]);
+
+  const clearResetPending = useCallback(() => {
+    if (resetClearTimerRef.current !== null) {
+      window.clearTimeout(resetClearTimerRef.current);
+      resetClearTimerRef.current = null;
+    }
+    resetPendingRef.current = false;
+  }, []);
+
+  useEffect(() => clearResetPending, [clearResetPending]);
+
+  const handleDragStart = useCallback(() => {
+    dragging.current = true;
+    pendingSizesRef.current = null;
+    clearResetPending();
+  }, [clearResetPending]);
+
+  const handleSashDoubleClickCapture = useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      if (!(event.target instanceof Element) || !event.target.closest("[data-testid='sash']")) {
+        return;
+      }
+
+      clearResetPending();
+      resetPendingRef.current = true;
+      resetClearTimerRef.current = window.setTimeout(() => {
+        resetPendingRef.current = false;
+        resetClearTimerRef.current = null;
+      }, 0);
+    },
+    [clearResetPending],
+  );
 
   const handleChange = useCallback(
     (sizes: number[]) => {
-      if (dragging.current && sizes.length > 0) {
-        updateMain(sizes);
+      if (sizes.length === 0) return;
+
+      if (dragging.current) {
+        pendingSizesRef.current = sizes.slice();
+        return;
       }
+
+      if (!resetPendingRef.current) {
+        return;
+      }
+
+      clearResetPending();
+      updateMain(sizes);
     },
-    [updateMain],
+    [clearResetPending, updateMain],
   );
+
+  const handleDragEnd = useCallback((sizes: number[]) => {
+    dragging.current = false;
+
+    const finalSizes = sizes.length > 0 ? sizes : pendingSizesRef.current;
+    pendingSizesRef.current = null;
+    if (finalSizes && finalSizes.length > 0) {
+      updateMain(finalSizes);
+    }
+    clearResetPending();
+  }, [clearResetPending, updateMain]);
 
   if (!loaded) return null;
 
   return (
     <div className="flex flex-col h-full w-full bg-background">
       <TitleBar />
-      <div className="flex-1 min-h-0">
+      <div
+        className="flex-1 min-h-0"
+        onDoubleClickCapture={handleSashDoubleClickCapture}
+      >
         <Allotment
           defaultSizes={main.map((r) => r * 1000)}
-          onDragStart={() => { dragging.current = true; }}
-          onDragEnd={() => { dragging.current = false; }}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
           onChange={handleChange}
         >
           <Allotment.Pane minSize={180}>

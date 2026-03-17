@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { useTerminalStore } from "../store/terminal";
 import {
   createPty as ipcCreatePty,
@@ -15,9 +16,13 @@ import { primeTerminalPane } from "../lib/terminal-runtime";
 import { buildTerminalPaneSeed } from "../lib/terminal-startup";
 
 export function useTerminal() {
-  const store = useTerminalStore();
+  const createSession = useTerminalStore((s) => s.createSession);
+  const restoreSession = useTerminalStore((s) => s.restoreSession);
+  const splitTerminal = useTerminalStore((s) => s.splitTerminal);
+  const closeTerminalStore = useTerminalStore((s) => s.closeTerminal);
+  const getSavedLayout = useTerminalStore((s) => s.getSavedLayout);
 
-  const createTerminal = async (worktreePath: string) => {
+  const createTerminal = useCallback(async (worktreePath: string) => {
     const createPty = (
       request: Omit<CreatePtyRequest, "cols" | "rows" | "restore">,
       restore?: CreatePtyRestore,
@@ -32,7 +37,7 @@ export function useTerminal() {
       });
 
     // Check for saved layout
-    const savedLayout = store.getSavedLayout(worktreePath);
+    const savedLayout = getSavedLayout(worktreePath);
     if (savedLayout) {
       // Snapshot data seeds cwd/scrollback only when a Grove-managed tmux session
       // is missing. Existing tmux sessions remain the primary restore path.
@@ -73,7 +78,7 @@ export function useTerminal() {
         structuredClone(savedLayout),
         panePtyIds,
       );
-      store.restoreSession(worktreePath, restored);
+      restoreSession(worktreePath, restored);
       return restorePlan[0]
         ? panePtyIds.get(restorePlan[0].paneId) ?? null
         : null;
@@ -83,11 +88,11 @@ export function useTerminal() {
     const paneId = crypto.randomUUID();
     const ptyId = crypto.randomUUID();
     await createPty({ ptyId, paneId, worktreePath, cwd: worktreePath });
-    store.createSession(worktreePath, paneId, ptyId);
+    createSession(worktreePath, paneId, ptyId);
     return ptyId;
-  };
+  }, [createSession, getSavedLayout, restoreSession]);
 
-  const splitCurrent = async (direction: "horizontal" | "vertical") => {
+  const splitCurrent = useCallback(async (direction: "horizontal" | "vertical") => {
     const { activeWorktree, focusedPtyId } = useTerminalStore.getState();
     if (!activeWorktree || !focusedPtyId) return;
     const newPaneId = crypto.randomUUID();
@@ -106,7 +111,7 @@ export function useTerminal() {
       errorToast: "Failed to split terminal",
     });
     if (created) {
-      store.splitTerminal(
+      splitTerminal(
         activeWorktree,
         focusedPtyId,
         direction,
@@ -114,19 +119,18 @@ export function useTerminal() {
         newPtyId,
       );
     }
-  };
+  }, [splitTerminal]);
 
-  const closeCurrent = async () => {
+  const closeCurrent = useCallback(async () => {
     const { activeWorktree, focusedPtyId } = useTerminalStore.getState();
     if (!activeWorktree || !focusedPtyId) return;
-    store.closeTerminal(activeWorktree, focusedPtyId);
+    closeTerminalStore(activeWorktree, focusedPtyId);
     await runCommandSafely(() => ipcClosePty(focusedPtyId), {
       errorToast: "Failed to close terminal",
     });
-  };
+  }, [closeTerminalStore]);
 
   return {
-    ...store,
     createTerminal,
     splitCurrent,
     closeCurrent,

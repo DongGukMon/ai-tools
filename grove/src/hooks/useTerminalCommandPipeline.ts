@@ -6,6 +6,7 @@ import {
   isTerminalCommandEnabled,
   type TerminalCommandDefinition,
 } from "../lib/terminal-command-pipeline";
+import { useTerminalStore } from "../store/terminal";
 import { TERMINAL_TOOLBAR_COMMANDS } from "../lib/terminal-command-registry";
 import { useTerminal } from "./useTerminal";
 import { countLeaves } from "../lib/split-tree";
@@ -15,14 +16,16 @@ interface Options {
 }
 
 export function useTerminalCommandPipeline({ openThemeSettings }: Options) {
-  const { activeWorktree, focusedPtyId, sessions, splitCurrent, closeCurrent } =
-    useTerminal();
+  const activeWorktree = useTerminalStore((s) => s.activeWorktree);
+  const focusedPtyId = useTerminalStore((s) => s.focusedPtyId);
+  const activeSession = useTerminalStore((s) =>
+    s.activeWorktree ? (s.sessions[s.activeWorktree] ?? null) : null,
+  );
+  const { splitCurrent, closeCurrent } = useTerminal();
 
   const terminalCount = useMemo(() => {
-    if (!activeWorktree) return 0;
-    const root = sessions[activeWorktree];
-    return root ? countLeaves(root) : 0;
-  }, [activeWorktree, sessions]);
+    return activeSession ? countLeaves(activeSession) : 0;
+  }, [activeSession]);
 
   const sendText = useCallback(
     async (text: string, options?: { addNewline?: boolean }) => {

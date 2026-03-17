@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { TerminalSquare } from "lucide-react";
 import { useTerminalStore } from "../../store/terminal";
 import { useProjectStore } from "../../store/project";
@@ -23,12 +23,35 @@ import {
   getTerminalPaneLaunchCwd,
   subscribeTerminalPaneActivity,
 } from "../../lib/terminal-runtime";
+import type { SplitNode } from "../../types";
 
 const SNAPSHOT_SAVE_DEBOUNCE_MS = 750;
 
-export default function TerminalPanel() {
+const TerminalSessionView = memo(function TerminalSessionView({
+  isActive,
+  node,
+  worktreePath,
+}: {
+  isActive: boolean;
+  node: SplitNode;
+  worktreePath: string;
+}) {
+  return (
+    <div
+      className="absolute inset-0"
+      style={{ display: isActive ? "block" : "none" }}
+    >
+      <SplitContainer node={node} worktreePath={worktreePath} />
+    </div>
+  );
+});
+
+function TerminalPanel() {
   const sessions = useTerminalStore((s) => s.sessions);
   const activeWorktree = useTerminalStore((s) => s.activeWorktree);
+  const activeSession = useTerminalStore((s) =>
+    s.activeWorktree ? (s.sessions[s.activeWorktree] ?? null) : null,
+  );
   const theme = useTerminalStore((s) => s.theme);
   const loadTheme = useTerminalStore((s) => s.loadTheme);
   const setDetectedTheme = useTerminalStore((s) => s.setDetectedTheme);
@@ -179,7 +202,7 @@ export default function TerminalPanel() {
       log("terminal", "skip session create", { activeWorktree, hasTheme: !!theme });
       return;
     }
-    if (sessions[activeWorktree]) {
+    if (activeSession) {
       log("terminal", "session exists", activeWorktree);
       return;
     }
@@ -188,7 +211,7 @@ export default function TerminalPanel() {
       logError("terminal", "session create failed", e);
       setError(getCommandErrorMessage(e));
     });
-  }, [activeWorktree, theme]);
+  }, [activeSession, activeWorktree, createTerminal, theme]);
 
   if (error) {
     return (
@@ -220,16 +243,17 @@ export default function TerminalPanel() {
         ) : (
           // Render ALL sessions, show/hide via CSS - preserves xterm state
           sessionEntries.map(([path, node]) => (
-            <div
+            <TerminalSessionView
               key={path}
-              className="absolute inset-0"
-              style={{ display: path === activeWorktree ? "block" : "none" }}
-            >
-              <SplitContainer node={node} />
-            </div>
+              isActive={path === activeWorktree}
+              node={node}
+              worktreePath={path}
+            />
           ))
         )}
       </div>
     </div>
   );
 }
+
+export default memo(TerminalPanel);
