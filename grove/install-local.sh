@@ -60,47 +60,61 @@ pnpm install --frozen-lockfile
 echo "==> About version: ${APP_VERSION} (${BUILD_VERSION})"
 echo "==> About label: ${ABOUT_LABEL}"
 
+install_tauri() {
+  local bundle_path="target/release/bundle/macos/${APP_NAME}.app"
+  local install_path="/Applications/${APP_NAME}.app"
+  local tauri_config_override
+
+  tauri_config_override="$(mktemp -t grove-tauri-config)"
+  CLEANUP_FILES+=("$tauri_config_override")
+  create_tauri_config_override "$tauri_config_override"
+
+  echo "==> Building Tauri app..."
+  pnpm tauri build --bundles app --config "$tauri_config_override"
+
+  echo "==> Installing to /Applications..."
+  if [ -d "$install_path" ]; then
+    rm -rf "$install_path"
+  fi
+  cp -r "$bundle_path" "$install_path"
+
+  echo "==> Done! Open grove from /Applications or Spotlight."
+  echo "==> Installed About version: ${APP_VERSION} (${BUILD_VERSION})"
+}
+
+install_electron() {
+  local bundle_path="dist-electron/mac-arm64/Grove.app"
+  local install_path="/Applications/${APP_NAME}-electron.app"
+
+  echo "==> Building Electron app..."
+  GROVE_APP_VERSION="$APP_VERSION" \
+  GROVE_BUILD_VERSION="$BUILD_VERSION" \
+  GROVE_ELECTRON_DIR_ONLY=1 \
+  pnpm build:electron
+
+  echo "==> Installing to /Applications..."
+  if [ -d "$install_path" ]; then
+    rm -rf "$install_path"
+  fi
+  cp -r "$bundle_path" "$install_path"
+
+  echo "==> Done! Open grove-electron from /Applications or Spotlight."
+  echo "==> Installed About version: ${APP_VERSION} (${BUILD_VERSION})"
+}
+
 case "$TARGET" in
   tauri)
-    BUNDLE_PATH="target/release/bundle/macos/${APP_NAME}.app"
-    INSTALL_PATH="/Applications/${APP_NAME}.app"
-    TAURI_CONFIG_OVERRIDE="$(mktemp -t grove-tauri-config)"
-    CLEANUP_FILES+=("$TAURI_CONFIG_OVERRIDE")
-    create_tauri_config_override "$TAURI_CONFIG_OVERRIDE"
-
-    echo "==> Building Tauri app..."
-    pnpm tauri build --bundles app --config "$TAURI_CONFIG_OVERRIDE"
-
-    echo "==> Installing to /Applications..."
-    if [ -d "$INSTALL_PATH" ]; then
-      rm -rf "$INSTALL_PATH"
-    fi
-    cp -r "$BUNDLE_PATH" "$INSTALL_PATH"
-
-    echo "==> Done! Open grove from /Applications or Spotlight."
-    echo "==> Installed About version: ${APP_VERSION} (${BUILD_VERSION})"
+    install_tauri
     ;;
   electron)
-    BUNDLE_PATH="dist-electron/mac-arm64/Grove.app"
-    INSTALL_PATH="/Applications/${APP_NAME}-electron.app"
-
-    echo "==> Building Electron app..."
-    GROVE_APP_VERSION="$APP_VERSION" \
-    GROVE_BUILD_VERSION="$BUILD_VERSION" \
-    GROVE_ELECTRON_DIR_ONLY=1 \
-    pnpm build:electron
-
-    echo "==> Installing to /Applications..."
-    if [ -d "$INSTALL_PATH" ]; then
-      rm -rf "$INSTALL_PATH"
-    fi
-    cp -r "$BUNDLE_PATH" "$INSTALL_PATH"
-
-    echo "==> Done! Open grove-electron from /Applications or Spotlight."
-    echo "==> Installed About version: ${APP_VERSION} (${BUILD_VERSION})"
+    install_electron
+    ;;
+  all)
+    install_tauri
+    install_electron
     ;;
   *)
-    echo "Usage: $0 [tauri|electron]"
+    echo "Usage: $0 [tauri|electron|all]"
     exit 1
     ;;
 esac
