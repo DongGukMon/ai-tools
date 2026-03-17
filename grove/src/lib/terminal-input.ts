@@ -13,6 +13,7 @@ const MAC_SHORTCUT_SEQUENCES: Record<string, string> = {
   Backspace: "\x1b\x7f",
   Delete: "\x1bd",
 };
+const MAC_CLEAR_TERMINAL_SEQUENCE = "\x0c";
 
 export function isTerminalCompositionEvent(
   event: TerminalCompositionLikeEvent,
@@ -36,6 +37,15 @@ export function isMacClearTerminalShortcut(
     event.ctrlKey !== true &&
     event.key?.toLowerCase() === "k"
   );
+}
+
+export function getMacClearTerminalSequence(
+  event: Pick<
+    TerminalCompositionLikeEvent,
+    "altKey" | "ctrlKey" | "key" | "metaKey"
+  >,
+): string | null {
+  return isMacClearTerminalShortcut(event) ? MAC_CLEAR_TERMINAL_SEQUENCE : null;
 }
 
 export function getMacShortcutSequence(
