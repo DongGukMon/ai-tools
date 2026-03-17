@@ -61,7 +61,12 @@ Review the output before proceeding:
 - Do not assume the user can see master IRC traffic. Relay important agent messages back into the main chat yourself.
 
 Poll for messages by running `claude-irc inbox` manually, especially after state-changing commands such as `assign`, `review`, `request-changes`, `approve`, `complete`, `fail`, and `cancel`.
-- Keep polling only while the task or lead is active. Once it is terminal or you are about to quit, stop polling.
+
+Stop polling when ALL of the following are true:
+1. No non-terminal tasks remain where `master-irc` matches your `resolved-master-irc` (other sessions' tasks are irrelevant)
+2. 10 consecutive inbox checks returned no messages
+
+When both conditions are met, stop polling and run `claude-irc quit` to disconnect. If a new message arrives or a new task becomes active, reset the empty-inbox counter.
 
 ## Master IRC Selection
 
@@ -298,7 +303,7 @@ whip task assign <lead-id> --master-irc <resolved-master-irc>
 ### Step 3: Monitor the lead
 
 - Run `claude-irc inbox` after each meaningful action or when you expect a lead escalation.
-- Once the lead is terminal or you are about to quit, stop polling.
+- Apply the same stop condition: 10 consecutive empty inbox checks with no active tasks under your master-irc.
 - Use `whip task list` to monitor overall workspace state.
 - Use `whip task view <lead-id>` and the lead task notes as the durable status mirror; the lead is expected to mirror major progress, blockers, policy decisions, and review handoffs there, not only in IRC.
 - Review lead updates and answer questions promptly.

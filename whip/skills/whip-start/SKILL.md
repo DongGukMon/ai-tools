@@ -66,15 +66,24 @@ In Claude Code, use the built-in loop only while the task is active:
 /loop 1m claude-irc inbox
 ```
 
-When the task is about to finish, fail, cancel, or quit:
-- Use `CronList` if you need to find the scheduled inbox loop.
-- Use `CronDelete` to remove that loop before the terminal action.
+Stop the inbox poll loop when ALL of the following are true:
+1. No non-terminal tasks remain where `master-irc` matches your `resolved-master-irc` (other sessions' tasks are irrelevant)
+2. 10 consecutive inbox checks returned no messages
+
+When both conditions are met:
+- Use `CronList` to find the scheduled inbox loop
+- Use `CronDelete` to remove it
+- Run `claude-irc quit` to disconnect
+
+If a new message arrives or a new task becomes active, reset the empty-inbox counter.
 
 If slash commands are unavailable, poll manually:
 
 ```bash
 claude-irc inbox
 ```
+
+Apply the same stop condition: 10 consecutive empty checks with no active tasks under your master-irc.
 
 ## Master IRC Selection
 
