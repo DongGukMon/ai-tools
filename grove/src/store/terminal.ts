@@ -9,6 +9,7 @@ import {
   findFirstLeaf,
   normalizeSplitTree,
 } from "../lib/split-tree";
+import { loadTerminalLayouts, saveTerminalLayouts } from "../lib/platform";
 
 // In-memory cache populated at startup via initLayouts()
 let layoutCache: Record<string, SplitNode> = {};
@@ -29,9 +30,7 @@ function saveLayouts(sessions: Record<string, SplitNode>) {
 
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    import("../lib/tauri").then(({ saveTerminalLayouts }) => {
-      saveTerminalLayouts(JSON.stringify(layoutCache)).catch(console.error);
-    });
+    saveTerminalLayouts(JSON.stringify(layoutCache)).catch(console.error);
   }, 500);
 }
 
@@ -163,7 +162,6 @@ export const useTerminalStore = create<TerminalState>((set) => ({
 
   initLayouts: async () => {
     try {
-      const { loadTerminalLayouts } = await import("../lib/tauri");
       const raw = await loadTerminalLayouts();
       const parsed = JSON.parse(raw) as Record<string, SplitNode>;
       layoutCache = Object.fromEntries(

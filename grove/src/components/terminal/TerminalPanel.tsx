@@ -7,7 +7,7 @@ import {
   getAppConfig,
   getCommandErrorMessage,
   saveTerminalSessionSnapshot,
-} from "../../lib/tauri";
+} from "../../lib/platform";
 import { runCommand } from "../../lib/command";
 import { useTerminal } from "../../hooks/useTerminal";
 import SplitContainer from "./SplitContainer";

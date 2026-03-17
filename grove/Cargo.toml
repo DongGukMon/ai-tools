@@ -1,0 +1,3 @@
+[workspace]
+members = ["grove-core", "src-tauri", "src-electron/native"]
+resolver = "2"

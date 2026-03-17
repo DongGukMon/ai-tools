@@ -4,7 +4,7 @@ import type {
   TerminalPaneSnapshot,
   TerminalRestoreCwdSource,
   TerminalSessionSnapshot,
-} from "./tauri";
+} from "./platform";
 
 export interface TerminalPaneEntry {
   paneId: string;

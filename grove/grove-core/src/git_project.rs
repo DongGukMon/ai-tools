@@ -442,11 +442,15 @@ fn parse_worktree_list(output: &str, project_base: &Path) -> Vec<Worktree> {
     let mut current_path = String::new();
     let mut current_branch = String::new();
     let mut is_bare = false;
+    let normalized_project_base = normalized_path(project_base);
 
     for line in output.lines() {
         if let Some(path) = line.strip_prefix("worktree ") {
             // Flush previous entry
-            if !current_path.is_empty() && !is_bare && Path::new(&current_path).starts_with(project_base) {
+            if !current_path.is_empty()
+                && !is_bare
+                && normalized_path(Path::new(&current_path)).starts_with(&normalized_project_base)
+            {
                 worktrees.push(make_worktree(&current_path, &current_branch, project_base));
             }
             current_path = path.to_string();
@@ -463,7 +467,10 @@ fn parse_worktree_list(output: &str, project_base: &Path) -> Vec<Worktree> {
     }
 
     // Flush last entry
-    if !current_path.is_empty() && !is_bare && Path::new(&current_path).starts_with(project_base) {
+    if !current_path.is_empty()
+        && !is_bare
+        && normalized_path(Path::new(&current_path)).starts_with(&normalized_project_base)
+    {
         worktrees.push(make_worktree(&current_path, &current_branch, project_base));
     }
 
@@ -472,13 +479,16 @@ fn parse_worktree_list(output: &str, project_base: &Path) -> Vec<Worktree> {
 
 fn make_worktree(path_str: &str, branch: &str, project_base: &Path) -> Worktree {
     let path = Path::new(path_str);
-    let name = if path == project_base.join(SOURCE_WORKTREE_NAME) {
+    let normalized_project_base = normalized_path(project_base);
+    let normalized_path_buf = normalized_path(path);
+    let name = if normalized_path_buf == normalized_project_base.join(SOURCE_WORKTREE_NAME) {
         SOURCE_WORKTREE_NAME.to_string()
     } else {
         // Derive name from relative path under worktrees/ to preserve slashes
         // e.g. <project>/worktrees/feat/new-feature → feat/new-feature
-        let worktrees_dir = project_base.join("worktrees");
-        path.strip_prefix(&worktrees_dir)
+        let worktrees_dir = normalized_project_base.join("worktrees");
+        normalized_path_buf
+            .strip_prefix(&worktrees_dir)
             .ok()
             .map(|rel| rel.to_string_lossy().to_string())
             .unwrap_or_else(|| {
@@ -487,9 +497,16 @@ fn make_worktree(path_str: &str, branch: &str, project_base: &Path) -> Worktree 
                     .unwrap_or_else(|| path_str.to_string())
             })
     };
+
+    let display_path = normalized_path_buf
+        .strip_prefix(&normalized_project_base)
+        .ok()
+        .map(|rel| project_base.join(rel).to_string_lossy().to_string())
+        .unwrap_or_else(|| path_str.to_string());
+
     Worktree {
         name,
-        path: path_str.to_string(),
+        path: display_path,
         branch: branch.to_string(),
     }
 }
@@ -919,7 +936,9 @@ mod tests {
 
     fn env_lock() -> std::sync::MutexGuard<'static, ()> {
         static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(())).lock().unwrap()
+        LOCK.get_or_init(|| Mutex::new(()))
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
     }
 
     struct TestHome {

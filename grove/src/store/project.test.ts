@@ -11,7 +11,7 @@ vi.mock("../lib/command", () => ({
     runCommandSafelyMock(...args),
 }));
 
-vi.mock("../lib/tauri", () => ({
+vi.mock("../lib/platform", () => ({
   listProjects: vi.fn(),
   refreshProject: vi.fn(),
   addProject: vi.fn(),
@@ -20,7 +20,7 @@ vi.mock("../lib/tauri", () => ({
   removeWorktree: vi.fn(),
 }));
 
-import * as tauri from "../lib/tauri";
+import * as tauri from "../lib/platform";
 import { useProjectStore } from "./project";
 
 function makeWorktree(name: string, branch = name): Worktree {

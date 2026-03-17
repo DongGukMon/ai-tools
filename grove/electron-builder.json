@@ -1,0 +1,18 @@
+{
+  "appId": "com.sendbird.grove",
+  "productName": "Grove",
+  "directories": {
+    "output": "dist-electron"
+  },
+  "files": [
+    "dist/**/*",
+    ".electron/**/*",
+    "package.json"
+  ],
+  "asarUnpack": [
+    ".electron/native/*.node"
+  ],
+  "mac": {
+    "category": "public.app-category.developer-tools"
+  }
+}

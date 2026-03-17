@@ -1,0 +1,219 @@
+pub mod config;
+pub mod git_diff;
+pub mod git_project;
+pub mod logger;
+pub mod process_env;
+pub mod pty;
+pub mod terminal_theme;
+
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+
+pub use config::AppConfig;
+pub use logger::LogEventSink;
+pub use pty::PtyEventSink;
+pub use terminal_theme::{DetectedThemeResult, TerminalTheme};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Project {
+    pub id: String,
+    pub name: String,
+    pub url: String,
+    pub org: String,
+    pub repo: String,
+    pub source_path: String,
+    pub worktrees: Vec<Worktree>,
+    pub source_dirty: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Worktree {
+    pub name: String,
+    pub path: String,
+    pub branch: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PtySession {
+    pub id: String,
+    pub worktree_path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalPaneSnapshotInput {
+    pub pane_id: String,
+    #[serde(default)]
+    pub pty_id: Option<String>,
+    #[serde(default)]
+    pub launch_cwd: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreatePtyRestore {
+    #[serde(default)]
+    pub last_known_cwd: Option<String>,
+    #[serde(default)]
+    pub scrollback: Option<String>,
+    #[serde(default)]
+    pub scrollback_truncated: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreatePtyRequest {
+    pub pty_id: String,
+    pub pane_id: String,
+    pub worktree_path: String,
+    pub cwd: String,
+    pub cols: u16,
+    pub rows: u16,
+    #[serde(default)]
+    pub restore: Option<CreatePtyRestore>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum CreatePtySessionState {
+    Attached,
+    Created,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum CreatePtyInitialHydrationSource {
+    TmuxCapture,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CreatePtyInitialHydration {
+    pub text: String,
+    pub truncated: bool,
+    pub source: CreatePtyInitialHydrationSource,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CreatePtyResult {
+    pub session_state: CreatePtySessionState,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub initial_hydration: Option<CreatePtyInitialHydration>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum TerminalRestoreCwdSource {
+    LaunchCwd,
+    LastKnownCwd,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalPaneSnapshot {
+    pub pane_id: String,
+    pub scrollback: String,
+    pub scrollback_truncated: bool,
+    pub launch_cwd: String,
+    pub last_known_cwd: Option<String>,
+    pub restore_cwd: String,
+    pub restore_cwd_source: TerminalRestoreCwdSource,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalSessionSnapshot {
+    pub worktree_path: String,
+    #[serde(default)]
+    pub panes: Vec<TerminalPaneSnapshot>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveTerminalSessionSnapshotRequest {
+    pub worktree_path: String,
+    #[serde(default)]
+    pub panes: Vec<TerminalPaneSnapshotInput>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalSessionSnapshotStore {
+    #[serde(default = "default_terminal_session_snapshot_version")]
+    pub version: u32,
+    #[serde(default)]
+    pub worktrees: HashMap<String, TerminalSessionSnapshot>,
+}
+
+fn default_terminal_session_snapshot_version() -> u32 {
+    1
+}
+
+impl Default for TerminalSessionSnapshotStore {
+    fn default() -> Self {
+        Self {
+            version: default_terminal_session_snapshot_version(),
+            worktrees: HashMap::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileStatus {
+    pub path: String,
+    pub status: String,
+    pub staged: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommitInfo {
+    pub hash: String,
+    pub short_hash: String,
+    pub message: String,
+    pub author: String,
+    pub date: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiffLine {
+    #[serde(rename = "type")]
+    pub line_type: String,
+    pub content: String,
+    pub old_line_number: Option<u32>,
+    pub new_line_number: Option<u32>,
+    pub index: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiffHunk {
+    pub header: String,
+    pub lines: Vec<DiffLine>,
+    pub old_start: u32,
+    pub old_count: u32,
+    pub new_start: u32,
+    pub new_count: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileDiff {
+    pub path: String,
+    pub old_path: Option<String>,
+    pub status: String,
+    pub hunks: Vec<DiffHunk>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BehindInfo {
+    pub behind: u32,
+    pub default_branch: String,
+}

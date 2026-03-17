@@ -6,7 +6,7 @@ import {
   DEFAULT_THEME_KEY,
 } from "../../lib/terminal-themes";
 import { useTerminalStore } from "../../store/terminal";
-import { saveAppConfig, getAppConfig } from "../../lib/tauri";
+import { saveAppConfig, getAppConfig } from "../../lib/platform";
 import { runCommandSafely } from "../../lib/command";
 import { Button } from "../ui/button";
 import { cn } from "../../lib/cn";
