@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 func (m DashboardModel) listModeTitle() string {
@@ -48,16 +49,17 @@ func (m DashboardModel) renderListView(w int) string {
 			Italic(true).
 			Render(empty))
 		b.WriteString("\n")
-	} else {
-		b.WriteString(" " + lipgloss.NewStyle().Foreground(colorPrimary).Render(strings.Repeat("━", w-2)))
-		b.WriteString("\n")
-		b.WriteString(m.renderSummary())
 	}
 
 	b.WriteString("\n")
 	b.WriteString(m.renderPeers())
 	b.WriteString("\n")
 	b.WriteString(m.renderServeStatus())
+	b.WriteString("\n")
+	if usage := m.renderUsageStrip(w); usage != "" {
+		b.WriteString("\n")
+		b.WriteString(usage)
+	}
 	b.WriteString("\n")
 	b.WriteString(m.renderListFooter())
 
@@ -228,12 +230,12 @@ func (m DashboardModel) listViewOverhead() int {
 	// 2 = table header + underline
 	// 2 = title ("Active Tasks\n\n")
 	// 1 = newline after table
-	// 2 = separator + summary box (≈2 lines)
 	// 1 = blank line
 	// 2 = peers
 	// 1 = serve status
+	// 1 = extra spacing below serve status
 	// 3 = footer (margin + 2 lines)
-	return 14
+	return 13 + m.usageStripLineCount()
 }
 
 func (m DashboardModel) maxVisibleTaskRows() int {
@@ -373,7 +375,7 @@ func (m DashboardModel) renderTable() string {
 	return strings.Join(rows, "\n")
 }
 
-func (m DashboardModel) renderSummary() string {
+func (m DashboardModel) renderSummaryInline(maxWidth int) string {
 	counts := map[TaskStatus]int{}
 	for _, t := range m.tasks {
 		counts[t.Status]++
@@ -410,13 +412,10 @@ func (m DashboardModel) renderSummary() string {
 	}
 
 	content := strings.Join(parts, dot)
-	box := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(colorDim).
-		Padding(0, 2).
-		MarginLeft(2).
-		Render(content)
-	return box
+	if maxWidth > 0 && lipgloss.Width(content) > maxWidth {
+		return ansi.Truncate(content, maxWidth, "")
+	}
+	return content
 }
 
 func (m DashboardModel) renderListFooter() string {

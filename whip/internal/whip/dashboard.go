@@ -22,6 +22,9 @@ var (
 	colorMuted     = lipgloss.Color("#9CA3AF")
 	colorSubtle    = lipgloss.Color("#6B7280")
 	colorDim       = lipgloss.Color("#374151")
+	colorClaude    = lipgloss.Color("#D08770")
+	colorCodex     = lipgloss.Color("#5FB3C4")
+	colorMoney     = lipgloss.Color("#E9C46A")
 
 	colorReview   = lipgloss.Color("#F472B6")
 	colorApproved = lipgloss.Color("#22C55E")
@@ -52,6 +55,9 @@ type taskDeletedMsg struct{ err error }
 type tasksLoadedMsg struct {
 	tasks []*Task
 	mode  taskListMode
+}
+type dashboardUsageLoadedMsg struct {
+	state dashboardUsageState
 }
 
 type peerInfo struct {
@@ -90,25 +96,25 @@ type ircMessage struct {
 type ircSendResultMsg struct{ err error }
 
 type DashboardModel struct {
-	store             *Store
-	tasks             []*Task
-	peers             []peerInfo
-	version           string
-	width             int
-	height            int
-	err               error
-	spinnerIndex      int
-	tickCount         int
-	cursor            int
-	view              viewState
-	listMode          taskListMode
+	store              *Store
+	tasks              []*Task
+	peers              []peerInfo
+	version            string
+	width              int
+	height             int
+	err                error
+	spinnerIndex       int
+	tickCount          int
+	cursor             int
+	view               viewState
+	listMode           taskListMode
 	expandedWorkspaces map[string]bool
-	listScroll        int
-	selectedTask      *Task
-	detailScroll      int
-	tmuxContent       string
-	pendingAttach     string
-	archiveableTasks  map[string]bool
+	listScroll         int
+	selectedTask       *Task
+	detailScroll       int
+	tmuxContent        string
+	pendingAttach      string
+	archiveableTasks   map[string]bool
 
 	ircSelectedPeer string
 	ircInput        string
@@ -129,6 +135,8 @@ type DashboardModel struct {
 	noteHistoryScroll int
 	msgHistoryScroll  int
 	msgHistoryLines   []ircMessage
+	usageState        dashboardUsageState
+	usageLoading      bool
 
 	programRef *programHolder
 
@@ -169,6 +177,7 @@ func NewDashboardModel(store *Store, version string) DashboardModel {
 		programRef:         &programHolder{},
 		archiveableTasks:   map[string]bool{},
 		expandedWorkspaces: map[string]bool{},
+		usageLoading:       true,
 	}
 }
 
@@ -176,6 +185,7 @@ func (m DashboardModel) Init() tea.Cmd {
 	return tea.Batch(
 		m.loadTasks(),
 		loadPeers(),
+		loadDashboardUsageCmd(),
 		tickCmd(),
 	)
 }
@@ -295,6 +305,11 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.listScroll = savedScroll
 		return m, m.loadTasks()
 
+	case dashboardUsageLoadedMsg:
+		m.usageState = msg.state
+		m.usageLoading = false
+		return m, nil
+
 	case error:
 		m.err = msg
 
@@ -340,6 +355,9 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.spinnerIndex = (m.spinnerIndex + 1) % len(spinnerFrames)
 		m.tickCount++
 		cmds := []tea.Cmd{m.loadTasks(), loadPeers(), tickCmd()}
+		if usageCmd := m.maybeLoadDashboardUsage(time.Time(msg)); usageCmd != nil {
+			cmds = append(cmds, usageCmd)
+		}
 		if m.view == viewTmux && m.selectedTask != nil {
 			if content, err := CaptureTmuxPane(m.selectedTask.ID); err == nil {
 				m.tmuxContent = content

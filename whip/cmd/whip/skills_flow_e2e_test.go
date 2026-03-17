@@ -110,8 +110,8 @@ func TestWhipStartSoloFlowRegression(t *testing.T) {
 		t.Fatalf("broadcast log missing normal task message:\n%s", ircLog)
 	}
 
-	runWhipCLI(t, "task", "clean")
-	assertWorkspaceHasNoActiveTasks(t, h.store, workspace)
+	runWhipCLI(t, "workspace", "archive", workspace)
+	assertWorkspaceArchived(t, h.store, workspace)
 }
 
 func TestWhipStartReviewFlowRegression(t *testing.T) {
@@ -176,8 +176,8 @@ func TestWhipStartReviewFlowRegression(t *testing.T) {
 		t.Fatalf("approval log missing review notification:\n%s", ircLog)
 	}
 
-	runWhipCLI(t, "task", "clean")
-	assertWorkspaceHasNoActiveTasks(t, h.store, workspace)
+	runWhipCLI(t, "workspace", "archive", workspace)
+	assertWorkspaceArchived(t, h.store, workspace)
 }
 
 func TestWhipLeadFlowRegression(t *testing.T) {
@@ -606,34 +606,6 @@ func assertWorkspaceView(t *testing.T, workspace string, executionModel string) 
 	}
 	if !strings.Contains(workspaceView, "Execution model:  "+executionModel) {
 		t.Fatalf("workspace view missing execution model %q:\n%s", executionModel, workspaceView)
-	}
-}
-
-func assertWorkspaceHasNoActiveTasks(t *testing.T, store *whiplib.Store, workspace string) {
-	t.Helper()
-
-	tasks, err := store.ListTasks()
-	if err != nil {
-		t.Fatalf("ListTasks after clean: %v", err)
-	}
-	for _, task := range tasks {
-		if task.WorkspaceName() == workspace {
-			t.Fatalf("workspace %s should have no active tasks after clean; found %s", workspace, task.ID)
-		}
-	}
-
-	workspaceAfterClean, _, err := execWhipCLICapture(t, "workspace", "view", workspace)
-	if err != nil {
-		t.Fatalf("workspace view after clean: %v", err)
-	}
-	if !strings.Contains(workspaceAfterClean, "Status:           active") {
-		t.Fatalf("workspace should remain active after clean:\n%s", workspaceAfterClean)
-	}
-	if !strings.Contains(workspaceAfterClean, "Active tasks:     none") {
-		t.Fatalf("workspace view after clean should report no active tasks:\n%s", workspaceAfterClean)
-	}
-	if !strings.Contains(workspaceAfterClean, "Archived tasks:") {
-		t.Fatalf("workspace view after clean should report archived tasks:\n%s", workspaceAfterClean)
 	}
 }
 
