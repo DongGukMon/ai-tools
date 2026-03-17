@@ -921,18 +921,23 @@ fn refresh_source_repo(source: &Path) -> Result<(), String> {
     run_git(source, &["checkout", &default_branch])?;
     run_git(source, &["fetch", "--prune", "origin"])?;
 
-    // Stash local changes so pull --rebase can proceed on a clean tree
-    let had_stash = run_git(source, &["stash", "push", "-m", "grove-sync"]).is_ok();
+    let dirty = run_git_output(source, &["status", "--porcelain"])
+        .map(|s| !s.trim().is_empty())
+        .unwrap_or(false);
+
+    if dirty {
+        run_git(source, &["stash", "push"])?;
+    }
 
     if let Err(e) = run_git(source, &["pull", "--rebase", "origin", &default_branch]) {
         let _ = run_git(source, &["rebase", "--abort"]);
-        if had_stash {
+        if dirty {
             let _ = run_git(source, &["stash", "pop"]);
         }
         return Err(format!("Rebase failed during source sync (local commits may conflict with upstream): {e}"));
     }
 
-    if had_stash {
+    if dirty {
         let _ = run_git(source, &["stash", "pop"]);
     }
 
@@ -1561,8 +1566,8 @@ mod tests {
             )],
         );
 
-        fs::write(source_dir.join("README.md"), "# local dirty change\n").unwrap();
-        fs::write(source_dir.join("local.txt"), "remove me").unwrap();
+        // Add a local dirty file that does NOT conflict with remote changes
+        fs::write(source_dir.join("local.txt"), "local work").unwrap();
 
         commit_and_push(
             &seed_dir,
@@ -1576,12 +1581,18 @@ mod tests {
         let project = refresh_project_impl("project-1").unwrap();
 
         assert!(project.worktrees.is_empty());
-        assert!(!project.source_dirty);
+        // source_dirty is true because local.txt is an untracked file restored from stash
+        assert!(project.source_dirty);
+        // Remote change is pulled
         assert_eq!(
             fs::read_to_string(source_dir.join("README.md")).unwrap(),
             "# Grove v2\n"
         );
-        assert!(!source_dir.join("local.txt").exists());
+        // Local dirty file is preserved via stash
+        assert_eq!(
+            fs::read_to_string(source_dir.join("local.txt")).unwrap(),
+            "local work"
+        );
         assert_eq!(
             run_git_output(&source_dir, &["rev-parse", "HEAD"]).unwrap(),
             run_git_output(&source_dir, &["rev-parse", "origin/trunk"]).unwrap()
