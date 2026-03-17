@@ -18,8 +18,14 @@ rewind/web/dist/
 rewind/web/node_modules/
 grove/node_modules/
 grove/dist/
+grove/.electron/
+grove/dist-electron/
+grove/tsconfig.tsbuildinfo
 grove/target/
 grove/src-tauri/target/
+grove/src-electron/native/*.node
+grove/src-electron/native/index.d.ts
+grove/src-electron/native/index.js
 
 # Local files
 blog-post.md

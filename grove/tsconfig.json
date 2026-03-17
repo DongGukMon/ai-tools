@@ -6,6 +6,10 @@
     "module": "ESNext",
     "skipLibCheck": true,
     "moduleResolution": "bundler",
+    "baseUrl": ".",
+    "paths": {
+      "@platform": ["./src/lib/platform/tauri.ts"]
+    },
     "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "moduleDetection": "force",
