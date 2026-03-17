@@ -53,6 +53,8 @@ fn cached_launchctl_ssh_auth_sock() -> Option<String> {
 }
 
 const LOGIN_SHELL_TIMEOUT: Duration = Duration::from_secs(2);
+const LOGIN_SHELL_RETRY_ATTEMPTS: usize = 4;
+const LOGIN_SHELL_RETRY_DELAY: Duration = Duration::from_millis(1500);
 const PATH_MARKER: &str = "__GROVE_PATH__";
 
 pub fn enriched_path() -> &'static str {
@@ -65,6 +67,15 @@ pub fn enriched_path() -> &'static str {
 
 #[cfg(target_os = "macos")]
 fn resolve_login_shell_path() -> Option<String> {
+    resolve_with_retry(
+        LOGIN_SHELL_RETRY_ATTEMPTS,
+        LOGIN_SHELL_RETRY_DELAY,
+        resolve_login_shell_path_once,
+    )
+}
+
+#[cfg(target_os = "macos")]
+fn resolve_login_shell_path_once() -> Option<String> {
     let shell = env::var("SHELL").ok()?;
     if !is_posix_like_shell(&shell) {
         return None;
@@ -108,6 +119,27 @@ fn resolve_login_shell_path() -> Option<String> {
     None
 }
 
+fn resolve_with_retry<T, F>(attempts: usize, delay: Duration, mut resolver: F) -> Option<T>
+where
+    F: FnMut() -> Option<T>,
+{
+    if attempts == 0 {
+        return None;
+    }
+
+    for attempt_idx in 0..attempts {
+        if let Some(value) = resolver() {
+            return Some(value);
+        }
+
+        if attempt_idx + 1 < attempts {
+            std::thread::sleep(delay);
+        }
+    }
+
+    None
+}
+
 fn is_posix_like_shell(shell: &str) -> bool {
     let basename = std::path::Path::new(shell)
         .file_name()
@@ -144,9 +176,10 @@ pub fn preferred_ssh_auth_sock() -> Option<String> {
 mod tests {
     use super::{
         enriched_path, is_posix_like_shell, normalize_env_value, parse_path_marker,
-        preferred_ssh_auth_sock, resolve_with,
+        preferred_ssh_auth_sock, resolve_with, resolve_with_retry,
     };
     use std::sync::{Mutex, OnceLock};
+    use std::time::Duration;
 
     fn env_lock() -> std::sync::MutexGuard<'static, ()> {
         static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
@@ -225,5 +258,33 @@ mod tests {
     #[test]
     fn enriched_path_returns_non_empty() {
         assert!(!enriched_path().is_empty());
+    }
+
+    #[test]
+    fn resolve_with_retry_retries_until_success() {
+        let mut attempts = 0;
+        let resolved = resolve_with_retry(4, Duration::ZERO, || {
+            attempts += 1;
+            if attempts == 4 {
+                Some("resolved".to_string())
+            } else {
+                None
+            }
+        });
+
+        assert_eq!(resolved.as_deref(), Some("resolved"));
+        assert_eq!(attempts, 4);
+    }
+
+    #[test]
+    fn resolve_with_retry_stops_after_attempt_limit() {
+        let mut attempts = 0;
+        let resolved = resolve_with_retry::<String, _>(4, Duration::ZERO, || {
+            attempts += 1;
+            None
+        });
+
+        assert_eq!(resolved, None);
+        assert_eq!(attempts, 4);
     }
 }
