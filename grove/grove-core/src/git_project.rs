@@ -326,7 +326,9 @@ fn project_from_entry(entry: ProjectEntry) -> Project {
         &entry.source_path,
     );
 
-    let source_dirty = check_source_refresh_needed(&entry.source_path);
+    let path = std::path::Path::new(&entry.source_path);
+    let source_has_changes = path.exists() && has_local_source_changes(path);
+    let source_behind_remote = check_source_behind_remote(&entry.source_path);
 
     Project {
         id: entry.id,
@@ -336,18 +338,15 @@ fn project_from_entry(entry: ProjectEntry) -> Project {
         repo: entry.repo,
         source_path: entry.source_path,
         worktrees,
-        source_dirty,
+        source_has_changes,
+        source_behind_remote,
     }
 }
 
-fn check_source_refresh_needed(source_path: &str) -> bool {
+fn check_source_behind_remote(source_path: &str) -> bool {
     let path = std::path::Path::new(source_path);
     if !path.exists() {
         return false;
-    }
-
-    if has_local_source_changes(path) {
-        return true;
     }
 
     let _ = maybe_fetch_source_remote(path);
@@ -1467,7 +1466,7 @@ mod tests {
     }
 
     #[test]
-    fn list_projects_marks_source_dirty_when_remote_default_branch_advances() {
+    fn list_projects_marks_source_behind_remote_when_default_branch_advances() {
         let _lock = env_lock();
         let home = TestHome::new();
         let base_dir = home.root.join("grove-data");
@@ -1507,7 +1506,8 @@ mod tests {
         );
 
         let initial_project = list_projects_impl().unwrap().pop().unwrap();
-        assert!(!initial_project.source_dirty);
+        assert!(!initial_project.source_has_changes);
+        assert!(!initial_project.source_behind_remote);
 
         commit_and_push(
             &seed_dir,
@@ -1521,7 +1521,8 @@ mod tests {
 
         let project = list_projects_impl().unwrap().pop().unwrap();
 
-        assert!(project.source_dirty);
+        assert!(!project.source_has_changes);
+        assert!(project.source_behind_remote);
         assert_ne!(
             run_git_output(&source_dir, &["rev-parse", "HEAD"]).unwrap(),
             run_git_output(&source_dir, &["rev-parse", "origin/trunk"]).unwrap()
@@ -1582,8 +1583,8 @@ mod tests {
         let project = refresh_project_impl("project-1").unwrap();
 
         assert!(project.worktrees.is_empty());
-        // source_dirty is true because local.txt is an untracked file restored from stash
-        assert!(project.source_dirty);
+        // source_has_changes is true because local.txt remains an untracked local change
+        assert!(project.source_has_changes);
         // Remote change is pulled
         assert_eq!(
             fs::read_to_string(source_dir.join("README.md")).unwrap(),

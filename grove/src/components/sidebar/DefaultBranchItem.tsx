@@ -58,16 +58,26 @@ function DefaultBranchItem({ project }: Props) {
           className={cn(
             "h-4 w-4 flex items-center justify-center rounded-sm transition-colors",
             {
+              "opacity-30 cursor-not-allowed": project.sourceHasChanges,
               "opacity-100 text-accent hover:text-foreground":
-                project.sourceDirty,
+                !project.sourceHasChanges && project.sourceBehindRemote,
               "opacity-50 hover:opacity-100 hover:text-foreground":
-                !project.sourceDirty && isSelected,
+                !project.sourceHasChanges &&
+                !project.sourceBehindRemote &&
+                isSelected,
               "opacity-0 group-hover:opacity-100 hover:text-foreground":
-                !project.sourceDirty && !isSelected,
+                !project.sourceHasChanges &&
+                !project.sourceBehindRemote &&
+                !isSelected,
             },
           )}
           onClick={handleRefresh}
-          title="Sync source repo"
+          disabled={project.sourceHasChanges}
+          title={
+            project.sourceHasChanges
+              ? "Commit or stash working changes before syncing"
+              : "Sync source repo"
+          }
         >
           <RotateCw className="h-3 w-3" />
         </button>

@@ -6,7 +6,8 @@ export interface Project {
   repo: string;
   sourcePath: string;
   worktrees: Worktree[];
-  sourceDirty: boolean;
+  sourceHasChanges: boolean;
+  sourceBehindRemote: boolean;
 }
 
 export interface Worktree {

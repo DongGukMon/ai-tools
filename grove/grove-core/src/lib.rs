@@ -25,7 +25,8 @@ pub struct Project {
     pub repo: String,
     pub source_path: String,
     pub worktrees: Vec<Worktree>,
-    pub source_dirty: bool,
+    pub source_has_changes: bool,
+    pub source_behind_remote: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
