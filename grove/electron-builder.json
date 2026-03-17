@@ -14,12 +14,12 @@
   ],
   "mac": {
     "category": "public.app-category.developer-tools",
-    "icon": "src-tauri/icons/icon.icns"
+    "icon": "resources/icons/icon.icns"
   },
   "win": {
-    "icon": "src-tauri/icons/icon.ico"
+    "icon": "resources/icons/icon.ico"
   },
   "linux": {
-    "icon": "src-tauri/icons/icon.png"
+    "icon": "resources/icons/icon.png"
   }
 }
