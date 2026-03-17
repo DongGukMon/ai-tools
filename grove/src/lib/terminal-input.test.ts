@@ -3,7 +3,6 @@ import {
   getMacShortcutSequence,
   isTerminalCompositionEvent,
   isMacClearTerminalShortcut,
-  shouldEnableTerminalWebgl,
 } from "./terminal-input";
 
 describe("isTerminalCompositionEvent", () => {
@@ -21,32 +20,6 @@ describe("isTerminalCompositionEvent", () => {
     expect(
       isTerminalCompositionEvent({ isComposing: false, key: "a", keyCode: 65 }),
     ).toBe(false);
-  });
-});
-
-describe("shouldEnableTerminalWebgl", () => {
-  it("disables WebGL on Apple platforms", () => {
-    expect(
-      shouldEnableTerminalWebgl(
-        "MacIntel",
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
-      ),
-    ).toBe(false);
-    expect(
-      shouldEnableTerminalWebgl(
-        "iPhone",
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)",
-      ),
-    ).toBe(false);
-  });
-
-  it("keeps WebGL enabled elsewhere", () => {
-    expect(
-      shouldEnableTerminalWebgl(
-        "Linux x86_64",
-        "Mozilla/5.0 (X11; Linux x86_64)",
-      ),
-    ).toBe(true);
   });
 });
 

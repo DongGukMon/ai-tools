@@ -8,7 +8,6 @@ import {
   getMacShortcutSequence,
   isMacClearTerminalShortcut,
   isTerminalCompositionEvent,
-  shouldEnableTerminalWebgl,
 } from "./terminal-input";
 
 export type TerminalInitialContentSource = "snapshotFallback" | "tmuxCapture";
@@ -124,7 +123,6 @@ class TerminalPaneRuntime {
   readonly paneId: string;
   readonly term: Terminal;
   readonly fitAddon: FitAddon;
-  readonly shouldLoadWebgl: boolean;
   launchCwd?: string;
 
   private ptyId = "";
@@ -166,11 +164,6 @@ class TerminalPaneRuntime {
     this.initialScrollback = seed?.initialScrollback ?? "";
     this.initialScrollbackSource = seed?.initialScrollbackSource;
     this.hydrated = this.initialScrollback.length === 0;
-    this.shouldLoadWebgl = shouldEnableTerminalWebgl(
-      navigator.platform,
-      navigator.userAgent,
-    );
-
     this.term = new Terminal({
       cursorBlink: true,
       fontFamily: theme?.fontFamily ?? "Menlo, monospace",
@@ -451,7 +444,7 @@ class TerminalPaneRuntime {
   }
 
   private loadWebglAddon() {
-    if (!this.shouldLoadWebgl || this.hasLoadedWebgl) {
+    if (this.hasLoadedWebgl) {
       return;
     }
 

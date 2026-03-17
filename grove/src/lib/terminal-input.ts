@@ -24,16 +24,6 @@ export function isTerminalCompositionEvent(
   );
 }
 
-export function shouldEnableTerminalWebgl(
-  platform: string,
-  userAgent: string,
-): boolean {
-  const applePlatform = /\b(Mac|iPhone|iPad|iPod)\b/i.test(
-    `${platform} ${userAgent}`,
-  );
-  return !applePlatform;
-}
-
 export function isMacClearTerminalShortcut(
   event: Pick<
     TerminalCompositionLikeEvent,
