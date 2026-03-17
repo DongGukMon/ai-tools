@@ -1,15 +1,45 @@
 # Terminal Tabs Research
 
-## Recommendation
+## Vision
 
-Grove should model tabs as the top-level terminal unit inside each worktree, with each tab owning exactly one split tree.
+Grove's main content area will become a **typed tab system** at the app level, not just terminal-level tabs.
+
+```
+┌──────────────────────────────────────────────────────┐
+│ [Terminal] [Changes ✕] [Browser ✕]                   │  ← App-level tab bar
+├──────────────────────────────────────────────────────┤
+│                                                      │
+│   Active tab content                                 │
+│                                                      │
+└──────────────────────────────────────────────────────┘
+```
+
+### Tab Types
+
+| Tab | Content | Layout | Closable |
+|-----|---------|--------|----------|
+| **Terminal** | Current TerminalPanel (split panes) | Free split (h/v) | No (pinned, always first) |
+| **Changes** | Files (Staged/Unstaged) + Diffs | Fixed: Files↕Staged/Unstaged, Files↔Diffs | Yes |
+| **Browser** | Embedded browser (iframe) for rewind, webform, etc. | Single view | Yes |
+
+### Tab Model
+
+Each tab has a `type` discriminator (`terminal` | `changes` | `browser`). The Terminal tab is always present and cannot be deleted. Changes and Browser tabs are opened on demand and closable.
+
+## Terminal Tab Research
+
+### Recommendation
+
+The Terminal tab should model its content as the existing split-tree system — one `SplitNode` tree per worktree, as it works today. The tab system lives above the terminal layer.
 
 Recommended shape:
 
-- `worktree -> terminal session`
-- `terminal session -> ordered tabs[] + activeTabId`
-- `tab -> title + split tree + active pane`
-- `split tree -> existing `SplitNode` structure`
+- `worktree -> app-level tab session`
+- `tab session -> ordered tabs[] + activeTabId`
+- `tab -> type + type-specific content`
+- `terminal tab -> existing SplitNode split tree`
+- `changes tab -> fixed split layout (files + diffs)`
+- `browser tab -> url + state`
 
 Do not try to graft tabs directly onto `SplitNode`. The current code assumes one split tree per worktree in too many places, and other products consistently treat splits as something that lives inside a tab, not as a peer of the tab strip.
 
@@ -394,21 +424,39 @@ Later enhancement:
 
 ## Suggested Implementation Order
 
-1. Introduce tab-aware types and session store shape.
-2. Add migration from old `SplitNode` persistence to one default tab.
-3. Render a tab strip and make split actions operate on `activeTab`.
-4. Persist tab metadata and active tab.
-5. Add rename, reorder, overflow, and activity indicators.
+### Phase 1: App-Level Tab Infrastructure
+1. Introduce app-level tab types (`terminal` | `changes` | `browser`) and tab session store.
+2. Wrap current TerminalPanel as the default pinned Terminal tab.
+3. Render tab bar with Terminal tab always first, non-closable.
+
+### Phase 2: Terminal Tab Internals
+4. Existing split-tree system works as-is inside the Terminal tab.
+5. Persist tab metadata (order, active tab, tab type).
+6. Migration: existing sessions become single-Terminal-tab sessions.
+
+### Phase 3: Changes Tab
+7. Implement Changes tab with fixed layout: Files (Staged↕Unstaged) ↔ Diffs.
+8. Openable from sidebar/diff actions, closable.
+
+### Phase 4: Browser Tab
+9. Implement Browser tab with iframe embedding.
+10. Route rewind/webform outputs to Browser tab.
+11. Closable, multiple instances possible.
+
+### Phase 5: Polish
+12. Tab overflow, reorder, keyboard shortcuts.
+13. Activity indicators on inactive tabs.
 
 ## Final Recommendation
 
-Grove should adopt a `tab -> split tree` model, not a tabbed `SplitNode`.
+Grove should adopt an **app-level typed tab system** where the Terminal tab contains the existing split-tree layout and new tab types (Changes, Browser) provide additional views.
 
-That direction is:
+This direction is:
 
 - aligned with the design reference
 - aligned with VS Code, iTerm2, Warp, and Hyper
-- compatible with Grove’s existing pane/PTy backend
-- low-risk if implemented as a state-model migration plus a new header layer
+- compatible with Grove’s existing pane/PTY backend
+- extensible to new tab types without modifying terminal internals
+- low-risk if implemented incrementally (Terminal tab first, then Changes, then Browser)
 
-The biggest work is not xterm.js or tmux. The biggest work is replacing the assumption that a worktree owns exactly one split tree.
+The biggest work is introducing the app-level tab abstraction above the current TerminalPanel. The terminal split-tree system itself needs minimal changes.
