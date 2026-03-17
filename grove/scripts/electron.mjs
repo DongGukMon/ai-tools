@@ -24,6 +24,9 @@ const rendererPort = Number.parseInt(
   process.env.GROVE_RENDERER_PORT ?? (rendererUrl.port || "1420"),
   10,
 );
+const appVersion = process.env.GROVE_APP_VERSION?.trim() || "";
+const buildVersion = process.env.GROVE_BUILD_VERSION?.trim() || "";
+const electronDirOnly = process.env.GROVE_ELECTRON_DIR_ONLY === "1";
 const pnpmCommand = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 
 function withElectronEnv(extraEnv = {}) {
@@ -316,7 +319,30 @@ async function runBuild() {
   await run(pnpmCommand, ["exec", "vite", "build"], {
     env: withElectronEnv(),
   });
-  await run(pnpmCommand, ["exec", "electron-builder", "--config", "electron-builder.json", "--publish", "never"], {
+  const electronBuilderArgs = [
+    "exec",
+    "electron-builder",
+    "--config",
+    "electron-builder.json",
+    "--publish",
+    "never",
+  ];
+
+  if (electronDirOnly) {
+    electronBuilderArgs.push("--dir");
+  }
+
+  if (appVersion) {
+    electronBuilderArgs.push(`-c.extraMetadata.version=${appVersion}`);
+    electronBuilderArgs.push(`-c.mac.bundleShortVersion=${appVersion}`);
+  }
+
+  if (buildVersion) {
+    electronBuilderArgs.push(`-c.buildVersion=${buildVersion}`);
+    electronBuilderArgs.push(`-c.mac.bundleVersion=${buildVersion}`);
+  }
+
+  await run(pnpmCommand, electronBuilderArgs, {
     env: withElectronEnv(),
   });
 }
