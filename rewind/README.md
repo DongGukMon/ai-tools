@@ -2,6 +2,10 @@
 
 Visual timeline viewer for Claude Code and Codex session transcripts. It finds a local session file, parses it into normalized events, then opens an interactive browser UI for inspection.
 
+<p align="center">
+  <img src="../.github/screenshot/rewind-preview.png" alt="rewind preview" width="1100" />
+</p>
+
 ## Install
 
 ### CLI

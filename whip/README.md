@@ -2,6 +2,10 @@
 
 Task orchestrator for Claude Code. Use `whip task ...` for task lifecycle, `whip workspace ...` for named workspaces, and the dashboard or remote mode for monitoring.
 
+<p align="center">
+  <img src="../.github/screenshot/whip-preview.png" alt="whip preview" width="1100" />
+</p>
+
 ## Install
 
 ```bash

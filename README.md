@@ -84,6 +84,10 @@ curl -fsSL https://raw.githubusercontent.com/bang9/ai-tools/main/webform/install
 
 Session transcript timeline viewer for Claude Code and Codex agent sessions. Opens a visual timeline in the browser showing user messages, assistant responses, tool calls, and thinking events.
 
+<p align="center">
+  <img src=".github/screenshot/rewind-preview.png" alt="rewind preview" width="1100" />
+</p>
+
 #### Installation
 
 **CLI**
@@ -102,6 +106,10 @@ curl -fsSL https://raw.githubusercontent.com/bang9/ai-tools/main/rewind/install.
 ### [whip](./whip)
 
 Task orchestrator for Claude Code. Run single-task work in `global`, run stacked work in a named `workspace`, and manage multiple Claude Code sessions via tmux with inter-session communication through `claude-irc`. Includes a TUI dashboard, web dashboard with real-time terminal view, and remote mode for headless operation.
+
+<p align="center">
+  <img src=".github/screenshot/whip-preview.png" alt="whip preview" width="1100" />
+</p>
 
 #### Installation
 
