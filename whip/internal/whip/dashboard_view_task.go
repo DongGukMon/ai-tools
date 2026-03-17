@@ -59,6 +59,11 @@ func (m DashboardModel) renderListView(w int) string {
 	b.WriteString("\n")
 	b.WriteString(m.renderServeStatus())
 	b.WriteString("\n")
+	if usage := m.renderUsageStrip(w); usage != "" {
+		b.WriteString("\n")
+		b.WriteString(usage)
+	}
+	b.WriteString("\n")
 	b.WriteString(m.renderListFooter())
 
 	return b.String()
@@ -232,8 +237,9 @@ func (m DashboardModel) listViewOverhead() int {
 	// 1 = blank line
 	// 2 = peers
 	// 1 = serve status
+	// 1 = extra spacing below serve status
 	// 3 = footer (margin + 2 lines)
-	return 14
+	return 15 + m.usageStripLineCount()
 }
 
 func (m DashboardModel) maxVisibleTaskRows() int {
