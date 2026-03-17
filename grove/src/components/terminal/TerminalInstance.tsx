@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTerminalStore } from "../../store/terminal";
 import "@xterm/xterm/css/xterm.css";
 import { cn } from "../../lib/cn";
@@ -18,7 +18,7 @@ export default function TerminalInstance({ paneId, ptyId }: Props) {
   const [error, setError] = useState<string | null>(null);
   const isFocused = focusedPtyId === ptyId;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const container = termRef.current;
     if (!container) return;
 

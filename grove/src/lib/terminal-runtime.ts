@@ -61,6 +61,7 @@ function toXtermTheme(theme: TerminalTheme | null) {
 const paneSeeds = new Map<string, TerminalPaneSeed>();
 const runtimes = new Map<string, TerminalPaneRuntime>();
 const activityListeners = new Set<(activity: TerminalPaneActivity) => void>();
+const RUNTIME_RELEASE_GRACE_MS = 50;
 
 function emitTerminalPaneActivity(activity: TerminalPaneActivity) {
   for (const listener of activityListeners) {
@@ -260,12 +261,14 @@ class TerminalPaneRuntime {
       return;
     }
 
+    // Split collapse can unmount and remount the surviving pane in quick succession.
+    // Keep the runtime alive briefly so xterm DOM can be reattached instead of torn down.
     this.releaseTimer = window.setTimeout(() => {
       this.releaseTimer = null;
       if (this.refCount === 0) {
         this.dispose();
       }
-    }, 0);
+    }, RUNTIME_RELEASE_GRACE_MS);
   }
 
   applySeed(seed: TerminalPaneSeed) {
