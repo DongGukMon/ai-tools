@@ -316,7 +316,7 @@ async function runBuild() {
   await run(pnpmCommand, ["exec", "vite", "build"], {
     env: withElectronEnv(),
   });
-  await run(pnpmCommand, ["exec", "electron-builder", "--config", "electron-builder.json"], {
+  await run(pnpmCommand, ["exec", "electron-builder", "--config", "electron-builder.json", "--publish", "never"], {
     env: withElectronEnv(),
   });
 }
