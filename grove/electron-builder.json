@@ -13,6 +13,13 @@
     ".electron/native/*.node"
   ],
   "mac": {
-    "category": "public.app-category.developer-tools"
+    "category": "public.app-category.developer-tools",
+    "icon": "src-tauri/icons/icon.icns"
+  },
+  "win": {
+    "icon": "src-tauri/icons/icon.ico"
+  },
+  "linux": {
+    "icon": "src-tauri/icons/icon.png"
   }
 }
