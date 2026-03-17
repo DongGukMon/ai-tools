@@ -11,6 +11,7 @@ const target = process.env.GROVE_TARGET || "tauri";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  base: target === "electron" ? "./" : "/",
   clearScreen: false,
   resolve: {
     alias: {
