@@ -48,6 +48,7 @@ var (
 )
 
 type tickMsg time.Time
+type spinnerTickMsg time.Time
 type cleanedMsg int
 type serveNoticeMsg string
 type taskArchivedMsg struct{ err error }
@@ -187,12 +188,19 @@ func (m DashboardModel) Init() tea.Cmd {
 		loadPeers(),
 		loadDashboardUsageCmd(),
 		tickCmd(),
+		spinnerTickCmd(),
 	)
 }
 
 func tickCmd() tea.Cmd {
 	return tea.Tick(time.Second*2, func(t time.Time) tea.Msg {
 		return tickMsg(t)
+	})
+}
+
+func spinnerTickCmd() tea.Cmd {
+	return tea.Tick(83*time.Millisecond, func(t time.Time) tea.Msg {
+		return spinnerTickMsg(t)
 	})
 }
 
@@ -351,8 +359,11 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.view = viewList
 		return m, nil
 
-	case tickMsg:
+	case spinnerTickMsg:
 		m.spinnerIndex = (m.spinnerIndex + 1) % len(spinnerFrames)
+		return m, spinnerTickCmd()
+
+	case tickMsg:
 		m.tickCount++
 		cmds := []tea.Cmd{m.loadTasks(), loadPeers(), tickCmd()}
 		if usageCmd := m.maybeLoadDashboardUsage(time.Time(msg)); usageCmd != nil {
