@@ -117,6 +117,7 @@ struct TmuxCapturedContent {
 
 struct PtyInstance {
     session_name: String,
+    worktree_path: String,
     writer: Box<dyn Write + Send>,
     master: Box<dyn MasterPty + Send>,
     child: Box<dyn portable_pty::Child + Send + Sync>,
@@ -227,6 +228,7 @@ pub fn create(
 
     let instance = PtyInstance {
         session_name,
+        worktree_path,
         writer,
         master: pair.master,
         child,
@@ -302,6 +304,24 @@ pub fn close(id: &str) -> Result<(), String> {
     let mut reg = registry().lock().map_err(|e| e.to_string())?;
     if let Some(mut instance) = reg.remove(id) {
         let _ = instance.child.kill();
+    }
+
+    Ok(())
+}
+
+pub fn close_ptys_for_worktree(worktree_path: &str) -> Result<(), String> {
+    let matching_ids: Vec<String> = {
+        let reg = registry().lock().map_err(|e| e.to_string())?;
+        reg.iter()
+            .filter(|(_, instance)| instance.worktree_path == worktree_path)
+            .map(|(id, _)| id.clone())
+            .collect()
+    };
+
+    for id in &matching_ids {
+        if let Err(e) = close(id) {
+            eprintln!("Warning: failed to close PTY {id} for worktree {worktree_path}: {e}");
+        }
     }
 
     Ok(())

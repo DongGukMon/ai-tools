@@ -739,12 +739,29 @@ pub fn remove_worktree_impl(project_id: &str, worktree_name: &str) -> Result<(),
         .join("worktrees")
         .join(worktree_name);
 
+    let worktree_path_str = worktree_path.to_string_lossy();
+
+    // Clean up associated data before removing the worktree.
+    // Each step logs errors but does not block removal.
+    if let Err(e) = crate::pty::close_ptys_for_worktree(&worktree_path_str) {
+        eprintln!("Warning: failed to close PTYs for worktree {worktree_path_str}: {e}");
+    }
+    if let Err(e) = config::remove_terminal_layouts_for_worktree(&worktree_path_str) {
+        eprintln!("Warning: failed to remove terminal layouts for worktree {worktree_path_str}: {e}");
+    }
+    if let Err(e) = config::remove_terminal_session_snapshot_for_worktree(&worktree_path_str) {
+        eprintln!("Warning: failed to remove terminal session snapshot for worktree {worktree_path_str}: {e}");
+    }
+    if let Err(e) = config::remove_panel_layouts_for_worktree(&worktree_path_str) {
+        eprintln!("Warning: failed to remove panel layouts for worktree {worktree_path_str}: {e}");
+    }
+
     run_git(
         source,
         &[
             "worktree",
             "remove",
-            &worktree_path.to_string_lossy(),
+            &worktree_path_str,
             "--force",
         ],
     )
