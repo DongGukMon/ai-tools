@@ -1,359 +1,414 @@
-# Terminal Tabs Research — Architecture Analysis
+# Terminal Tabs Research
 
-## Executive Summary
+## Recommendation
 
-Adding tab-based terminal management to Grove is **primarily a frontend concern**. The Rust PTY layer needs zero changes — it already operates on individual PTY instances identified by `ptyId`, completely independent of how the UI organizes them. The main work is restructuring the Zustand store and adding a thin TabBar UI component, while preserving the existing split-tree system within each tab.
+Grove should model tabs as the top-level terminal unit inside each worktree, with each tab owning exactly one split tree.
 
-**Recommended approach**: Tabs as top-level containers, each containing its own split tree (VS Code model).
+Recommended shape:
 
----
+- `worktree -> terminal session`
+- `terminal session -> ordered tabs[] + activeTabId`
+- `tab -> title + split tree + active pane`
+- `split tree -> existing `SplitNode` structure`
 
-## 1. Architecture Options
+Do not try to graft tabs directly onto `SplitNode`. The current code assumes one split tree per worktree in too many places, and other products consistently treat splits as something that lives inside a tab, not as a peer of the tab strip.
 
-### Option A: Tabs wrapping split trees (Recommended)
+## What Comparable Products Do
 
-Each tab is a container holding its own independent `SplitNode` tree. Users can split panes within a tab, and switch between tabs to get entirely different layouts.
+### VS Code
 
-```
-WorktreeSession
-├── Tab 1 (active)
-│   └── SplitNode tree (h-split: [pane-a, pane-b])
-├── Tab 2
-│   └── SplitNode tree (single leaf: pane-c)
-└── Tab 3
-    └── SplitNode tree (v-split: [pane-d, h-split: [pane-e, pane-f]])
-```
+Patterns that matter:
 
-**Pros:**
-- Matches VS Code / iTerm2 mental model — users expect this
-- Design reference shows both tabs AND a split button in the toolbar, implying coexistence
-- Clean separation: tab = workspace context, splits = spatial arrangement
-- Backward compatible: existing single-split-tree sessions become "Tab 1" automatically
+- The integrated terminal exposes multiple terminals as tabs/list items and also supports split terminals.
+- Terminals can be renamed.
+- Tabs can be moved around, including dragging terminals into editor tabs or across windows.
+- Terminal UI behavior is tuned around visibility and customization instead of rebuilding the terminal every switch.
 
-**Cons:**
-- Slightly more state complexity (array of trees vs. single tree)
-- Need to manage tab lifecycle (create, close, rename, reorder)
+Why this matters for Grove:
 
-### Option B: Tabs as alternative view mode
+- VS Code treats tab identity separately from split identity. That is the cleanest fit for Grove too.
+- It also demonstrates that terminal tabs and split panes can coexist without sharing one tree structure.
 
-Toggle between "tab view" (flat list, one pane visible at a time) and "split view" (current behavior). All panes live in one flat pool; tabs show one at a time, splits show multiple.
+Sources:
 
-**Pros:**
-- No structural change to the split tree model
-- Simpler state model
+- https://code.visualstudio.com/docs/terminal/appearance
+- https://code.visualstudio.com/docs/terminal/getting-started
+- https://code.visualstudio.com/updates/v1_59
+- https://code.visualstudio.com/updates/v1_93
 
-**Cons:**
-- Awkward UX: switching modes reshuffles the layout
-- Doesn't match the design reference (which shows tabs + splits coexisting)
-- Harder to reason about persistence (which mode was active?)
+### iTerm2
 
-### Option C: Tabs replacing splits entirely
+Patterns that matter:
 
-Remove split support. Each tab = one terminal pane.
+- A window can have tabs, and each tab can contain many split panes.
+- Tabs are draggable and reorderable.
+- iTerm2 explicitly provides overflow aids for many tabs, such as tab bar placement on the left and "Open Quickly".
+- Pane maximization is scoped to the current tab, not the whole window.
 
-**Pros:**
-- Simplest implementation
-- Design reference's primary view is tab-based
+Why this matters for Grove:
 
-**Cons:**
-- Loses existing split functionality that users already rely on
-- Split button in the design toolbar suggests splits should remain
-- Regression in capability
+- iTerm2 reinforces the same hierarchy: tabs are the top-level session grouping, panes are local to a tab.
+- Overflow and discoverability become important once tabs exceed the width of the panel.
 
-### Recommendation: Option A
+Sources:
 
-The design reference explicitly shows both a tab bar (line 87-103) and a split/columns button (line 124-129), confirming that tabs and splits should coexist. Option A is the only approach that supports this naturally.
+- https://iterm2.com/documentation-general-usage.html
+- https://iterm2.com/3.3/documentation-one-page.html
+- https://iterm2.com/3.3/documentation-tmux-integration.html
 
----
+### Warp
 
-## 2. State Model Changes
+Patterns that matter:
 
-### Current State (`src/store/terminal.ts`)
+- Warp persists windows, tabs, and panes together.
+- Warp supports custom tab titles and pane-based session layouts.
+- Warp warns when closing tabs with active work.
+- Warp’s launch/session features treat tabs and panes as separate layers in the saved model.
 
-```typescript
-interface TerminalState {
-  sessions: Record<string, SplitNode>;  // worktreePath → single split tree
-  activeWorktree: string | null;
-  focusedPtyId: string | null;
-  theme: TerminalTheme | null;
-  detectedTheme: TerminalTheme | null;
-}
-```
+Why this matters for Grove:
 
-### Proposed State
+- Grove already persists layouts and scrollback, so Warp is the closest UX match on persistence expectations.
+- The main lesson is that tab metadata must be first-class in persistence, not inferred from panes.
 
-```typescript
-interface TerminalTab {
-  id: string;           // Stable tab identifier (UUID)
-  name: string;         // User-visible label ("Terminal 1", or auto from cwd)
-  splitRoot: SplitNode; // This tab's split tree (existing type, unchanged)
-}
+Sources:
 
-interface WorktreeSession {
-  tabs: TerminalTab[];    // Ordered list of tabs
-  activeTabId: string;    // Currently visible tab
-}
+- https://docs.warp.dev/features/sessions/session-restoration
+- https://docs.warp.dev/features/sessions/launch-configurations
+- https://docs.warp.dev/changelog
 
-interface TerminalState {
-  sessions: Record<string, WorktreeSession>;  // worktreePath → session with tabs
-  activeWorktree: string | null;
-  focusedPtyId: string | null;
-  theme: TerminalTheme | null;
-  detectedTheme: TerminalTheme | null;
-}
-```
+### Hyper
 
-### New Store Actions
+Patterns that matter:
 
-```typescript
-// Tab management
-createTab(worktreePath: string): Promise<void>       // Add new tab with fresh PTY
-closeTab(worktreePath: string, tabId: string): void   // Close tab and its PTYs
-switchTab(worktreePath: string, tabId: string): void   // Activate tab
-renameTab(worktreePath: string, tabId: string, name: string): void
-moveTab(worktreePath: string, tabId: string, newIndex: number): void  // Reorder
-```
+- Hyper renders a tab header at the top of the window and tracks the active tab separately from split groups.
+- Its reducer keeps a top-level `activeRootGroup` and stores split panes as a child tree under each root.
+- Split operations mutate the active root group, not the tab list itself.
 
-### Modified Store Actions
+Why this matters for Grove:
 
-These existing actions need an extra level of indirection — they currently operate on `sessions[worktreePath]` (a `SplitNode`), and would now operate on `sessions[worktreePath].tabs[activeTabIndex].splitRoot`:
+- Hyper’s state model is the closest architectural analogue to what Grove needs.
+- Grove should copy the hierarchy, not the implementation details.
 
-| Action | Current target | New target |
-|--------|---------------|------------|
-| `splitTerminal()` | `sessions[worktreePath]` | `activeTab.splitRoot` |
-| `closeTerminal()` | `sessions[worktreePath]` | `activeTab.splitRoot` |
-| `updateSizes()` | `sessions[worktreePath]` | `activeTab.splitRoot` |
-| `setFocusedPtyId()` | Global | Global (unchanged — focused pty is independent of tab structure) |
+Sources:
 
-### Helper: Resolve Active Tab
+- https://github.com/vercel/hyper/blob/main/lib/components/header.tsx
+- https://github.com/vercel/hyper/blob/main/lib/reducers/term-groups.ts
+- https://github.com/vercel/hyper/blob/main/app/keymaps/darwin.json
 
-A small utility used throughout the store:
+## Current Grove Constraints
 
-```typescript
-function getActiveTab(session: WorktreeSession): TerminalTab | undefined {
-  return session.tabs.find(t => t.id === session.activeTabId);
-}
-```
+### UI layer
 
-### SplitNode Type — No Changes
+The current panel is split-only:
 
-The `SplitNode` type in `src/types/terminal.ts` remains exactly as-is. Tabs wrap split trees; they don't modify the tree structure.
+- [`src/components/terminal/TerminalPanel.tsx`](../src/components/terminal/TerminalPanel.tsx) renders a toolbar and then one `SplitContainer` per worktree, hiding inactive worktrees with `display: none`.
+- [`src/components/terminal/TerminalToolbar.tsx`](../src/components/terminal/TerminalToolbar.tsx) only knows about theme settings, split, and close actions.
+- [`src/components/terminal/SplitContainer.tsx`](../src/components/terminal/SplitContainer.tsx) recursively renders `SplitNode` and has no notion of a tab container.
 
----
+The design reference at `~/Downloads/grove-design/components/grove/terminal-panel.tsx` assumes a simpler model: a tab strip on the left, toolbar actions on the right, then one active terminal view below it.
 
-## 3. Backend (Rust) Impact
+### State layer
 
-### PTY Layer: Zero Changes Required
+The current Zustand shape is the main blocker:
 
-The Rust PTY layer (`grove-core/src/pty.rs`) is **completely tab-unaware**. It operates on:
-- Individual PTY instances identified by `ptyId`
-- Worktree-scoped tmux sessions named by `grove:${hash}:${pane}`
+- [`src/store/terminal.ts`](../src/store/terminal.ts) stores `sessions: Record<string, SplitNode>`, keyed only by `worktreePath`.
+- `activeWorktree` and `focusedPtyId` are global.
+- `createSession`, `restoreSession`, `splitTerminal`, `closeTerminal`, and `updateSizes` all assume a single split tree per worktree.
+- Layout persistence serializes only a `SplitNode` template per worktree.
 
-None of these concepts depend on how the frontend organizes panes into tabs vs. splits. The IPC commands (`create_pty`, `write_pty`, `resize_pty`, `close_pty`) all take `ptyId` — tabs are invisible to them.
+That means tabs cannot be added as a small UI feature. Tabs need a new session shape.
 
-### Snapshot Layer: Minor Extension
+### Restore/persistence layer
 
-The snapshot system (`save_terminal_session_snapshot` / `load_terminal_session_snapshot`) currently captures per-pane metadata (scrollback, cwd) keyed by `paneId`. This remains correct because:
-- `paneId` is stable and lives inside `SplitNode` leaves
-- The snapshot captures ALL panes in a worktree session, regardless of tab grouping
-- Tab assignment of panes is reconstructed from the layout template
+Current persistence is pane-centric:
 
-**No Rust changes needed.** The tab→pane mapping is reconstructed from the layout template on the TypeScript side during restoration.
+- [`src/lib/terminal-session.ts`](../src/lib/terminal-session.ts) builds restore/snapshot plans from pane IDs only.
+- [`grove-core/src/config.rs`](../grove-core/src/config.rs) persists `terminal-layouts.json` and `terminal-session-snapshots.json`.
+- [`grove-core/src/pty.rs`](../grove-core/src/pty.rs) snapshots runtime state per pane and stores snapshots under a worktree.
 
-### Layout Persistence: Frontend-Only Change
+There is currently nowhere to persist:
 
-`save_terminal_layouts` / `load_terminal_layouts` serialize/deserialize a JSON string. The format change from `Record<string, SplitNode>` to `Record<string, WorktreeSession>` is handled entirely in TypeScript serialization. The Rust side just stores/returns an opaque string.
+- tab order
+- active tab
+- tab title
+- per-tab active pane
 
----
+### Backend/PTy layer
 
-## 4. Session Persistence
+The backend is not the hard part:
 
-### Layout Templates (`~/.grove/terminal-layouts.json`)
+- [`grove-core/src/pty.rs`](../grove-core/src/pty.rs) already creates one tmux-backed PTY per pane.
+- PTY identity is per `paneId`/`ptyId`, not per worktree tree node.
 
-**Current format:**
-```json
-{
-  "/path/to/worktree": { "id": "...", "type": "horizontal", "children": [...] }
-}
-```
+That is good news. Tabs do not require a different PTY backend model. They mostly require new frontend state and new persistence metadata.
 
-**New format:**
-```json
-{
-  "/path/to/worktree": {
-    "tabs": [
-      { "id": "tab-1", "name": "Terminal 1", "splitRoot": { "id": "...", "type": "leaf" } },
-      { "id": "tab-2", "name": "Terminal 2", "splitRoot": { "id": "...", "type": "horizontal", "children": [...] } }
-    ],
-    "activeTabId": "tab-1"
-  }
-}
-```
+## Recommended Interaction Model
 
-The `toLayoutTemplate()` function in `split-tree.ts` strips `ptyId` from each tab's `splitRoot` independently. No change to the strip logic itself — it's called per-tree.
+### Tab + split hierarchy
 
-### Session Snapshots
+Use this model:
 
-No format change. Snapshots store per-pane data (scrollback, cwd) keyed by `paneId`. During restoration, the `buildTerminalRestorePlan()` function iterates ALL panes across ALL tabs to build the plan. The only change is the iteration pattern — instead of traversing one tree, traverse all tabs' trees.
+1. A selected worktree opens one terminal session.
+2. That session contains ordered tabs.
+3. The active tab owns one split tree.
+4. Split commands operate only inside the active tab.
 
-### Restoration Flow
+This is the best fit because it matches:
 
-**Current:**
-```
-loadLayout(worktreePath) → SplitNode
-loadSnapshot(worktreePath) → pane metadata
-buildRestorePlan(layout, snapshot)
-for each pane: createPty, prime runtime
-restoreSession(worktreePath, node)
-```
+- the design reference
+- iTerm2/Warp/Hyper behavior
+- Grove’s current per-pane PTY backend
 
-**New:**
-```
-loadLayout(worktreePath) → WorktreeSession (with tabs)
-loadSnapshot(worktreePath) → pane metadata (unchanged)
-for each tab:
-  buildRestorePlan(tab.splitRoot, snapshot, defaultCwd)
-  for each pane in tab: createPty, prime runtime
-  assignPtyIds(tab.splitRoot, ptyIds)
-restoreSession(worktreePath, restoredSession)
-```
+### What a new tab should create
 
-The inner loop is identical — it just runs once per tab instead of once per session.
+A new tab should create:
 
----
+- a new `tabId`
+- a default title like `Terminal 2`
+- a fresh root `SplitNode` with one leaf
+- a new `paneId` + `ptyId`
 
-## 5. Migration Path
+### What closing should do
 
-### Forward Migration (existing sessions → tabbed sessions)
+Recommended behavior:
 
-When `initLayouts()` loads a legacy layout (raw `SplitNode` instead of `WorktreeSession`), normalize it:
+- Closing a pane behaves exactly like today inside a tab.
+- Closing the last pane in a tab closes the tab.
+- Closing the last tab in a worktree should leave the worktree in an empty terminal state, not auto-recreate immediately.
 
-```typescript
-function migrateLayout(stored: SplitNode | WorktreeSession): WorktreeSession {
-  // If it's already the new format, return as-is
-  if ('tabs' in stored) return stored;
+Important implication:
 
-  // Wrap legacy SplitNode in a single-tab session
-  const tabId = generateId();
-  return {
-    tabs: [{ id: tabId, name: 'Terminal 1', splitRoot: stored }],
-    activeTabId: tabId,
-  };
-}
-```
+The current `TerminalPanel` auto-create effect recreates a session whenever `activeWorktree` exists and `sessions[activeWorktree]` is missing. That behavior must change or "close last tab" will be impossible.
 
-This runs inside `normalizeSplitTree()` or alongside it during `initLayouts()`. Users see their existing layout appear as "Terminal 1" — no data loss, no behavioral change.
+## UI/UX Recommendation
 
-### Backward Compatibility
+### Header layout
 
-Not needed. Once migrated, the new format is written on save. There's no scenario where a newer Grove version needs to downgrade.
+Recommended component layout:
 
-### Rollout Strategy
+1. `TerminalPanel`
+2. `TerminalHeader`
+3. `TerminalTabBar` on the left
+4. `TerminalToolbar` on the right
+5. Optional path/status row below the header
+6. Active tab content below that
 
-The migration is automatic and invisible. No user action required. The first `saveLayouts()` after loading will write the new format.
+This is the closest match to the design reference and keeps the toolbar visible even when tabs overflow.
 
----
+### Toolbar behavior
 
-## 6. Files Requiring Modification
+Recommended toolbar scope:
 
-### Must Change
+- Theme/settings remain session-level.
+- Split buttons act on the active pane in the active tab.
+- Close button should close the active pane when there are multiple panes, otherwise close the active tab.
+- Add-tab belongs in the tab strip, not the toolbar.
 
-| File | Change | Scope |
-|------|--------|-------|
-| `src/types/terminal.ts` | Add `TerminalTab`, `WorktreeSession` interfaces | Small |
-| `src/store/terminal.ts` | Restructure `sessions` type; add tab CRUD actions; update split/close to target active tab | Medium |
-| `src/lib/split-tree.ts` | Add `migrateLayout()` for forward migration; possibly extract `toLayoutTemplate` to work per-tab | Small |
-| `src/lib/terminal-session.ts` | Update `collectTerminalPanes`, `buildTerminalPaneTopologySignature`, `buildTerminalRestorePlan`, `buildTerminalSnapshotRequest` to iterate across tabs | Small |
-| `src/hooks/useTerminal.ts` | Update `createTerminal` to restore multi-tab sessions; add `createTab`, `closeTab` functions | Medium |
-| `src/components/terminal/TerminalPanel.tsx` | Add TabBar component; render only active tab's SplitContainer; snapshot logic iterates tabs | Medium |
+### Overflow behavior
 
-### New Files
+Recommended v1 behavior:
 
-| File | Purpose |
-|------|---------|
-| `src/components/terminal/TabBar.tsx` | Tab bar UI component (tab switching, add, close, rename, reorder) |
+- horizontally scrollable tab strip
+- fixed minimum tab width
+- trailing overflow menu listing all tabs
 
-### No Changes Required
+Do not try to auto-compress tab labels too aggressively. Once tabs are too narrow, the model stops being legible.
 
-| File | Why |
-|------|-----|
-| `grove-core/src/pty.rs` | PTY layer is tab-unaware |
-| `src/lib/terminal-runtime.ts` | Runtime operates on paneId/ptyId, independent of tabs |
-| `src/components/terminal/SplitContainer.tsx` | Renders a SplitNode tree — unchanged, just called per-tab |
-| `src/components/terminal/TerminalInstance.tsx` | Leaf renderer — unchanged |
-| `src/lib/platform/tauri.ts` | IPC abstraction — unchanged |
-| `src/lib/platform/electron.ts` | IPC abstraction — unchanged |
+Future-friendly additions:
 
----
+- activity dot on inactive tabs
+- dirty/running indicator
+- drag handle region for reordering
 
-## 7. Implementation Plan
+### Renaming
 
-### Phase 1: State Model (foundation)
+Recommended v1:
 
-1. Add `TerminalTab` and `WorktreeSession` types to `src/types/terminal.ts`
-2. Update `src/store/terminal.ts`:
-   - Change `sessions` type from `Record<string, SplitNode>` to `Record<string, WorktreeSession>`
-   - Add migration in `initLayouts()` / `restoreSession()`
-   - Update all actions that read/write `sessions[worktreePath]` to go through active tab
-   - Add `createTab`, `closeTab`, `switchTab`, `renameTab`, `moveTab` actions
-3. Update `src/lib/split-tree.ts` with `migrateLayout()` normalization
-4. Update `src/lib/terminal-session.ts` to iterate panes across all tabs
+- double-click tab title to rename
+- Enter commits, Escape cancels
+- if title is empty after trimming, fall back to auto-generated default
 
-### Phase 2: Hook Layer
+This matches Warp and common terminal behavior and avoids inventing a new interaction.
 
-5. Update `src/hooks/useTerminal.ts`:
-   - `createTerminal()`: Restore all tabs (not just one tree)
-   - Add `createTab()`: Generate IDs, createPty, prime runtime, add to session
-   - Add `closeTab()`: Close all PTYs in tab, remove from session
-   - Wire `switchTab()` to store action
+## Component-Level Changes
 
-### Phase 3: UI
+### Files that must change
 
-6. Create `src/components/terminal/TabBar.tsx`:
-   - Render tab list from `session.tabs`
-   - Active tab highlight
-   - Click to switch, X to close, + to create
-   - Optional: double-click to rename, drag to reorder
-7. Update `src/components/terminal/TerminalPanel.tsx`:
-   - Render TabBar above the SplitContainer area
-   - Only mount/show the active tab's SplitContainer
-   - Keep inactive tabs' SplitContainers mounted but hidden (CSS `display: none`) to preserve xterm state — same pattern already used for worktree switching
+- [`src/types/terminal.ts`](../src/types/terminal.ts)
+  Add tab/session types, not just `SplitNode`.
+- [`src/store/terminal.ts`](../src/store/terminal.ts)
+  Replace `worktree -> SplitNode` with `worktree -> session-with-tabs`.
+- [`src/hooks/useTerminal.ts`](../src/hooks/useTerminal.ts)
+  Create/restore tabs, split within active tab, close active tab or pane.
+- [`src/hooks/useTerminalCommandPipeline.ts`](../src/hooks/useTerminalCommandPipeline.ts)
+  Command enablement currently derives from one worktree tree and one `focusedPtyId`.
+- [`src/components/terminal/TerminalPanel.tsx`](../src/components/terminal/TerminalPanel.tsx)
+  Render active worktree session, active tab, tab header, and empty state.
+- [`src/components/terminal/TerminalToolbar.tsx`](../src/components/terminal/TerminalToolbar.tsx)
+  Should become tab-aware and probably narrower in responsibility.
+- [`src/components/terminal/SplitContainer.tsx`](../src/components/terminal/SplitContainer.tsx)
+  Needs to update sizes for the active tab’s tree, not a worktree-global tree.
+- [`src/lib/terminal-session.ts`](../src/lib/terminal-session.ts)
+  Snapshot/restore helpers must become tab-aware.
+- [`src/lib/split-tree.ts`](../src/lib/split-tree.ts)
+  Likely reusable as-is for per-tab trees.
+- [`src/lib/platform/tauri.ts`](../src/lib/platform/tauri.ts)
+  Type definitions for layout/snapshot payloads will need updates.
+- [`src/lib/platform/electron.ts`](../src/lib/platform/electron.ts)
+  Same as Tauri types.
+- [`grove-core/src/lib.rs`](../grove-core/src/lib.rs)
+  Add tab-aware snapshot/layout structs.
+- [`grove-core/src/config.rs`](../grove-core/src/config.rs)
+  Persist new schema and migrate old schema.
+- [`grove-core/src/pty.rs`](../grove-core/src/pty.rs)
+  Mostly snapshot input/output changes, not PTY lifecycle changes.
 
-### Phase 4: Persistence & Polish
+### New components worth adding
 
-8. Verify layout save/restore with multi-tab sessions
-9. Verify snapshot save/restore across tabs
-10. Add keyboard shortcuts (Cmd+T new tab, Cmd+W close tab, Cmd+Shift+[ / ] switch tabs)
-11. Tab naming: auto-name from cwd basename, allow user rename
+- `src/components/terminal/TerminalHeader.tsx`
+- `src/components/terminal/TerminalTabBar.tsx`
+- `src/components/terminal/TerminalTab.tsx`
+- `src/components/terminal/TerminalTabOverflow.tsx`
 
-### Ordering Rationale
+This keeps `TerminalPanel` from becoming a 300-line coordinator.
 
-Phase 1 must come first — everything depends on the state model. Phase 2 can partially overlap with Phase 3 since the hook changes and UI are somewhat independent. Phase 4 is polish and should come last to avoid rework.
+## xterm.js Considerations
 
-### Estimated Complexity
+### Visibility and sizing
 
-- **Total files changed**: 7 (6 modified + 1 new)
-- **Rust changes**: 0
-- **State model**: The main complexity — restructuring sessions from single tree to tabbed session
-- **UI**: Straightforward — TabBar is a simple list component; SplitContainer is unchanged
-- **Migration**: Trivial — wrap existing SplitNode in single-tab session
-- **Risk**: Low — the split-tree system and PTY layer are completely unaffected
+xterm.js requires the host element to be visible when `open()` runs. The official API explicitly says the parent element "must be visible (have dimensions)" when `open` is called.
 
----
+Relevant current behavior:
 
-## 8. Design Reference Alignment
+- [`src/lib/terminal-runtime.ts`](../src/lib/terminal-runtime.ts) already protects against zero-sized hosts with `hasLayoutDimensions()`.
+- It calls `term.open(container)` only after layout dimensions are available.
+- It uses `FitAddon` and a `ResizeObserver` to keep the PTY size in sync.
 
-The design reference (`~/Downloads/grove-design/components/grove/terminal-panel.tsx`) shows:
+Implication for tabs:
 
-| Design Element | Implementation Mapping |
-|---------------|----------------------|
-| `TerminalTab { id, name, cwd, history, active }` | Maps to our `TerminalTab { id, name, splitRoot }` — `cwd` derived from active pane, `history` is xterm state |
-| Tab bar with click-to-switch | `TabBar.tsx` + `switchTab()` store action |
-| Close (X) button on active tab | `closeTab()` store action + PTY cleanup |
-| Plus (+) button | `createTab()` hook function |
-| Split (Columns2) toolbar button | Existing `splitCurrent()` — operates within active tab |
-| Maximize (Square) button | Future: toggle single-pane view within tab |
-| Settings button | Existing terminal settings (theme, font) |
-| Terminal path display | Derived from active tab's focused pane's cwd |
+- Hiding inactive tabs with `display: none` is fine, but the active tab must trigger a fit/sync on reveal.
+- Relying only on initial mount is too risky; tab activation should explicitly force a layout sync.
 
-The design's flat `history: string[]` is a mock — real implementation uses xterm.js with PTY-backed scrollback, which we already have.
+### Hidden terminals still cost memory/CPU
+
+Current runtime behavior keeps more state alive than the UI suggests:
+
+- every pane has a `Terminal` instance
+- every pane listens for PTY output
+- every pane keeps buffered scrollback/hydration state
+- every pane tries to load `WebglAddon`
+
+If Grove keeps all tabs mounted and hidden, tab switching will be fast, but memory and GPU usage will grow with:
+
+- number of tabs
+- number of panes per tab
+- number of worktrees currently rendered
+
+Recommended v1 tradeoff:
+
+- keep inactive tabs mounted within the active worktree for correctness and fast switching
+- do not add more runtime caching layers yet
+- if performance becomes an issue later, add LRU disposal for inactive tabs backed by existing tmux/snapshot restore
+
+### WebGL renderer pressure
+
+[`src/lib/terminal-runtime.ts`](../src/lib/terminal-runtime.ts) loads `WebglAddon` once per pane. That is fine for a few panes but scales poorly if users open many tabs with many panes.
+
+Recommendation:
+
+- keep the current behavior for v1
+- add instrumentation or at least log counts during development
+- be prepared to fall back to canvas/DOM rendering if many hidden panes become a problem
+
+## Persistence and Migration
+
+### Recommended new persisted shape
+
+At minimum, persist:
+
+- `tabs[]`
+- `activeTabId`
+- per-tab `title`
+- per-tab `layout`
+- per-tab `activePaneId`
+
+Snapshots should also become tab-aware, for example:
+
+- `worktree`
+- `tabs[]`
+- `tabId`
+- `panes[]`
+
+### Backward compatibility
+
+Migrate old data like this:
+
+1. If a saved worktree entry is a raw `SplitNode`, wrap it in one default tab.
+2. Preserve the old root node and pane IDs unchanged.
+3. Set `activeTabId` to the migrated default tab.
+
+This keeps old layouts and scrollback valid.
+
+## Edge Cases
+
+### Drag-and-drop reordering
+
+Recommended v1:
+
+- reorder within one worktree only
+- persist tab order immediately
+- do not support cross-worktree dragging
+
+### Keyboard shortcuts
+
+Recommended shortcuts:
+
+- `Cmd/Ctrl+T`: new tab
+- `Cmd/Ctrl+Shift+]`: next tab
+- `Cmd/Ctrl+Shift+[` : previous tab
+- `Cmd/Ctrl+1..9`: jump to tab
+- keep pane split shortcuts scoped to the active tab
+
+### Activity indicators
+
+Grove already emits pane activity through `subscribeTerminalPaneActivity`. Use that to mark inactive tabs as active/running when any pane under that tab receives output.
+
+### Overflow
+
+Once tabs exceed available width:
+
+- keep the active tab fully visible
+- horizontally scroll the strip
+- expose a searchable overflow menu
+
+### Tab titles
+
+Initial titles should be simple and deterministic:
+
+- `Terminal 1`
+- `Terminal 2`
+
+Later enhancement:
+
+- derive default titles from active pane cwd or command name if shell integration is added
+
+## Suggested Implementation Order
+
+1. Introduce tab-aware types and session store shape.
+2. Add migration from old `SplitNode` persistence to one default tab.
+3. Render a tab strip and make split actions operate on `activeTab`.
+4. Persist tab metadata and active tab.
+5. Add rename, reorder, overflow, and activity indicators.
+
+## Final Recommendation
+
+Grove should adopt a `tab -> split tree` model, not a tabbed `SplitNode`.
+
+That direction is:
+
+- aligned with the design reference
+- aligned with VS Code, iTerm2, Warp, and Hyper
+- compatible with Grove’s existing pane/PTy backend
+- low-risk if implemented as a state-model migration plus a new header layer
+
+The biggest work is not xterm.js or tmux. The biggest work is replacing the assumption that a worktree owns exactly one split tree.
