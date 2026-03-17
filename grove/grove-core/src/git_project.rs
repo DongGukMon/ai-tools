@@ -921,16 +921,9 @@ fn refresh_source_repo(source: &Path) -> Result<(), String> {
     run_git(source, &["checkout", &default_branch])?;
     run_git(source, &["fetch", "--prune", "origin"])?;
 
-    // Discard uncommitted working-tree changes so pull --rebase can proceed.
-    // The source dir mirrors the default branch; uncommitted edits are not expected.
-    let _ = run_git(source, &["checkout", "--", "."]);
-    let _ = run_git(source, &["clean", "-fd"]);
-
     if let Err(e) = run_git(source, &["pull", "--rebase", "origin", &default_branch]) {
         let _ = run_git(source, &["rebase", "--abort"]);
-        return Err(format!(
-            "Rebase failed during source sync (local commits may conflict with upstream): {e}"
-        ));
+        return Err(format!("Rebase failed during source sync (local commits may conflict with upstream): {e}"));
     }
 
     Ok(())
