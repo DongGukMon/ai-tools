@@ -5,6 +5,7 @@ pub mod logger;
 pub mod process_env;
 pub mod pty;
 pub mod terminal_theme;
+pub mod worktree_lifecycle;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

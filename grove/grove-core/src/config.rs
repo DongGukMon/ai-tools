@@ -1,4 +1,5 @@
 use crate::terminal_theme::TerminalTheme;
+use crate::worktree_lifecycle::WorktreeResource;
 use crate::TerminalSessionSnapshotStore;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::fs;
@@ -207,8 +208,8 @@ pub fn load_terminal_layouts_impl() -> Result<String, String> {
 
 pub fn remove_terminal_layouts_for_worktree(worktree_path: &str) -> Result<(), String> {
     let raw = load_terminal_layouts_impl()?;
-    let mut map: serde_json::Map<String, serde_json::Value> =
-        serde_json::from_str(&raw).map_err(|e| format!("Failed to parse terminal-layouts.json: {e}"))?;
+    let mut map: serde_json::Map<String, serde_json::Value> = serde_json::from_str(&raw)
+        .map_err(|e| format!("Failed to parse terminal-layouts.json: {e}"))?;
     if map.remove(worktree_path).is_some() {
         let updated = serde_json::to_string_pretty(&map)
             .map_err(|e| format!("Failed to serialize terminal-layouts.json: {e}"))?;
@@ -227,14 +228,50 @@ pub fn remove_terminal_session_snapshot_for_worktree(worktree_path: &str) -> Res
 
 pub fn remove_panel_layouts_for_worktree(worktree_path: &str) -> Result<(), String> {
     let raw = load_panel_layouts_impl()?;
-    let mut map: serde_json::Map<String, serde_json::Value> =
-        serde_json::from_str(&raw).map_err(|e| format!("Failed to parse panel-layouts.json: {e}"))?;
+    let mut map: serde_json::Map<String, serde_json::Value> = serde_json::from_str(&raw)
+        .map_err(|e| format!("Failed to parse panel-layouts.json: {e}"))?;
     if map.remove(worktree_path).is_some() {
         let updated = serde_json::to_string_pretty(&map)
             .map_err(|e| format!("Failed to serialize panel-layouts.json: {e}"))?;
         save_panel_layouts_impl(&updated)?;
     }
     Ok(())
+}
+
+pub struct TerminalLayoutResource;
+
+impl WorktreeResource for TerminalLayoutResource {
+    fn name(&self) -> &str {
+        "terminal layouts"
+    }
+
+    fn on_remove(&self, worktree_path: &str) -> Result<(), String> {
+        remove_terminal_layouts_for_worktree(worktree_path)
+    }
+}
+
+pub struct SessionSnapshotResource;
+
+impl WorktreeResource for SessionSnapshotResource {
+    fn name(&self) -> &str {
+        "terminal session snapshots"
+    }
+
+    fn on_remove(&self, worktree_path: &str) -> Result<(), String> {
+        remove_terminal_session_snapshot_for_worktree(worktree_path)
+    }
+}
+
+pub struct PanelLayoutResource;
+
+impl WorktreeResource for PanelLayoutResource {
+    fn name(&self) -> &str {
+        "panel layouts"
+    }
+
+    fn on_remove(&self, worktree_path: &str) -> Result<(), String> {
+        remove_panel_layouts_for_worktree(worktree_path)
+    }
 }
 
 #[cfg(test)]

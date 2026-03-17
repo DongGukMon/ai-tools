@@ -1,6 +1,7 @@
 use crate::{
     config,
     process_env::{enriched_path, preferred_ssh_auth_sock},
+    worktree_lifecycle::WorktreeResource,
     CreatePtyInitialHydration, CreatePtyInitialHydrationSource, CreatePtyRequest, CreatePtyRestore,
     CreatePtyResult, CreatePtySessionState, SaveTerminalSessionSnapshotRequest,
     TerminalPaneSnapshot, TerminalPaneSnapshotInput, TerminalRestoreCwdSource,
@@ -325,6 +326,18 @@ pub fn close_ptys_for_worktree(worktree_path: &str) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+pub struct PtySessionResource;
+
+impl WorktreeResource for PtySessionResource {
+    fn name(&self) -> &str {
+        "PTY sessions"
+    }
+
+    fn on_remove(&self, worktree_path: &str) -> Result<(), String> {
+        close_ptys_for_worktree(worktree_path)
+    }
 }
 
 pub fn save_terminal_session_snapshot(
