@@ -11,8 +11,8 @@ interface PanelLayoutStore {
   diff: number[];
   loaded: boolean;
   init: () => Promise<void>;
-  updateMain: (sizes: number[]) => void;
-  updateDiff: (sizes: number[]) => void;
+  updateMain: (ratios: number[]) => void;
+  updateDiff: (ratios: number[]) => void;
 }
 
 const DEFAULTS: PanelLayouts = {
@@ -27,11 +27,6 @@ function debouncedSave(layouts: PanelLayouts) {
   saveTimer = setTimeout(() => {
     savePanelLayouts(JSON.stringify(layouts)).catch(() => {});
   }, 500);
-}
-
-function toRatios(sizes: number[]): number[] {
-  const total = sizes.reduce((a, b) => a + b, 0);
-  return total > 0 ? sizes.map((s) => s / total) : sizes;
 }
 
 export const usePanelLayoutStore = create<PanelLayoutStore>((set, get) => ({
@@ -53,14 +48,12 @@ export const usePanelLayoutStore = create<PanelLayoutStore>((set, get) => ({
     }
   },
 
-  updateMain: (sizes) => {
-    const ratios = toRatios(sizes);
+  updateMain: (ratios) => {
     set({ main: ratios });
     debouncedSave({ main: ratios, diff: get().diff });
   },
 
-  updateDiff: (sizes) => {
-    const ratios = toRatios(sizes);
+  updateDiff: (ratios) => {
     set({ diff: ratios });
     debouncedSave({ main: get().main, diff: ratios });
   },

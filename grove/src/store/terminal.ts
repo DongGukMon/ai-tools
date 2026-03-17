@@ -56,7 +56,7 @@ interface TerminalState {
   setFocusedPtyId: (ptyId: string | null) => void;
   setDetectedTheme: (theme: TerminalTheme) => void;
   loadTheme: (theme: TerminalTheme) => void;
-  updateSizes: (worktreePath: string, nodePath: number[], sizes: number[]) => void;
+  updateSizes: (worktreePath: string, nodePath: number[], ratios: number[]) => void;
   getSavedLayout: (worktreePath: string) => SplitNode | null;
   initLayouts: () => Promise<void>;
 }
@@ -144,13 +144,10 @@ export const useTerminalStore = create<TerminalState>((set) => ({
 
   setFocusedPtyId: (ptyId) => set({ focusedPtyId: ptyId }),
 
-  updateSizes: (worktreePath, nodePath, sizes) =>
+  updateSizes: (worktreePath, nodePath, ratios) =>
     set((state) => {
       const root = state.sessions[worktreePath];
       if (!root) return state;
-      // Convert pixel sizes to ratios (0-1) for resolution independence
-      const total = sizes.reduce((a, b) => a + b, 0);
-      const ratios = total > 0 ? sizes.map((s) => s / total) : sizes;
       const updated = setSizesAtPath(root, nodePath, ratios);
       const newSessions = { ...state.sessions, [worktreePath]: updated };
       saveLayouts(newSessions);
