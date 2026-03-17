@@ -241,6 +241,9 @@ func (m DashboardModel) maxVisibleTaskRows() int {
 	if max < 3 {
 		max = 3
 	}
+	if max > 30 {
+		max = 30
+	}
 	return max
 }
 
