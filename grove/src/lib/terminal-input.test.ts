@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  getMacClearTerminalSequence,
   getMacShortcutSequence,
   isTerminalCompositionEvent,
   isMacClearTerminalShortcut,
@@ -43,28 +42,6 @@ describe("isMacClearTerminalShortcut", () => {
         metaKey: true,
       }),
     ).toBe(false);
-  });
-});
-
-describe("getMacClearTerminalSequence", () => {
-  it("maps plain cmd+k to ctrl+l", () => {
-    expect(
-      getMacClearTerminalSequence({
-        altKey: false,
-        ctrlKey: false,
-        key: "k",
-        metaKey: true,
-      }),
-    ).toBe("\x0c");
-
-    expect(
-      getMacClearTerminalSequence({
-        altKey: false,
-        ctrlKey: false,
-        key: "k",
-        metaKey: false,
-      }),
-    ).toBeNull();
   });
 });
 

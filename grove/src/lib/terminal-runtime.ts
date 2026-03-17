@@ -5,8 +5,8 @@ import { Terminal } from "@xterm/xterm";
 import type { TerminalTheme } from "../types";
 import { platform, resizePty, writePty } from "./platform";
 import {
-  getMacClearTerminalSequence,
   getMacShortcutSequence,
+  isMacClearTerminalShortcut,
   isTerminalCompositionEvent,
 } from "./terminal-input";
 
@@ -195,12 +195,8 @@ class TerminalPaneRuntime {
       if (event.type !== "keydown") return true;
       if (isTerminalCompositionEvent(event)) return true;
 
-      const clearSequence = getMacClearTerminalSequence(event);
-      if (clearSequence) {
-        if (this.ptyId) {
-          const bytes = Array.from(new TextEncoder().encode(clearSequence));
-          writePty(this.ptyId, bytes).catch(() => {});
-        }
+      if (isMacClearTerminalShortcut(event)) {
+        this.term.clear();
         return false;
       }
 
