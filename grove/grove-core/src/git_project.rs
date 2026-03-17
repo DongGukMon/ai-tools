@@ -921,9 +921,19 @@ fn refresh_source_repo(source: &Path) -> Result<(), String> {
     run_git(source, &["checkout", &default_branch])?;
     run_git(source, &["fetch", "--prune", "origin"])?;
 
+    // Stash local changes so pull --rebase can proceed on a clean tree
+    let had_stash = run_git(source, &["stash", "push", "-m", "grove-sync"]).is_ok();
+
     if let Err(e) = run_git(source, &["pull", "--rebase", "origin", &default_branch]) {
         let _ = run_git(source, &["rebase", "--abort"]);
+        if had_stash {
+            let _ = run_git(source, &["stash", "pop"]);
+        }
         return Err(format!("Rebase failed during source sync (local commits may conflict with upstream): {e}"));
+    }
+
+    if had_stash {
+        let _ = run_git(source, &["stash", "pop"]);
     }
 
     Ok(())
