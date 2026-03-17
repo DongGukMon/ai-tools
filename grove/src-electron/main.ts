@@ -272,11 +272,24 @@ function createMainWindow() {
     height: 960,
     minWidth: 1024,
     minHeight: 720,
+    titleBarStyle: "hiddenInset",
+    trafficLightPosition: { x: 14, y: 20 },
     webPreferences: {
       preload: resolvePreloadPath(),
       nodeIntegration: false,
       contextIsolation: true,
     },
+  });
+
+  mainWindow.on("enter-full-screen", () => {
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("fullscreen-change", true);
+    }
+  });
+  mainWindow.on("leave-full-screen", () => {
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("fullscreen-change", false);
+    }
   });
 
   void loadRenderer(mainWindow);
@@ -291,6 +304,10 @@ function registerIpcHandlers() {
       const targetWindow = BrowserWindow.fromWebContents(event.sender);
       if (!targetWindow) {
         throw new Error("Unable to resolve caller window for invoke IPC");
+      }
+
+      if (command === "is_fullscreen") {
+        return targetWindow.isFullScreen();
       }
 
       return invokeNative(targetWindow, command, args);

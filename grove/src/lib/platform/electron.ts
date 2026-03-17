@@ -1,3 +1,4 @@
+import type React from "react";
 import type {
   TerminalTheme,
   AppConfig,
@@ -30,7 +31,9 @@ function getBridge(): GroveElectronBridge {
   return bridge;
 }
 
-export const windowDragRegionProps = {} as const;
+export const windowDragRegionProps = {
+  style: { WebkitAppRegion: "drag" } as React.CSSProperties,
+} as const;
 
 export const platform: Platform = {
   invoke<T>(cmd: string, args?: Record<string, unknown>) {
@@ -40,7 +43,7 @@ export const platform: Platform = {
     return Promise.resolve(getBridge().on(event, (payload) => handler(payload as T)));
   },
   isFullscreen() {
-    return Promise.resolve(false);
+    return getBridge().invoke("is_fullscreen") as Promise<boolean>;
   },
   onResized(handler: () => void) {
     window.addEventListener("resize", handler);
