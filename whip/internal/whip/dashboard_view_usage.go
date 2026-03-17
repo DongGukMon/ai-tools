@@ -84,7 +84,7 @@ func (m DashboardModel) renderUsagePrimary(window *dashboardUsageWindow, barStyl
 
 	bar := renderUsageBar(window.LeftPercent, 10)
 	percent := lipgloss.NewStyle().Foreground(colorText).Render(fmt.Sprintf("%d%%", window.LeftPercent))
-	reset := lipgloss.NewStyle().Foreground(colorDim).Render("(" + formatDashboardPrimaryReset(window.ResetAt) + ")")
+	reset := lipgloss.NewStyle().Foreground(colorSubtle).Render("(" + formatDashboardPrimaryReset(window.ResetAt) + ")")
 	return barStyle.Render(bar) + " " + percent + " " + reset
 }
 
@@ -94,7 +94,7 @@ func (m DashboardModel) renderUsageWeekly(window *dashboardUsageWindow) string {
 	}
 	label := lipgloss.NewStyle().Foreground(colorMuted).Render("W")
 	percent := lipgloss.NewStyle().Foreground(colorText).Render(fmt.Sprintf("%d%%", window.LeftPercent))
-	reset := lipgloss.NewStyle().Foreground(colorDim).Render("(" + formatDashboardWeeklyReset(window.ResetAt) + ")")
+	reset := lipgloss.NewStyle().Foreground(colorSubtle).Render("(" + formatDashboardWeeklyReset(window.ResetAt) + ")")
 	return label + " " + percent + " " + reset
 }
 
