@@ -143,6 +143,11 @@ async fn resize_pty(id: String, cols: u16, rows: u16) -> Result<(), String> {
 }
 
 #[tauri::command]
+async fn clear_pty_scrollback(pty_id: String) -> Result<(), String> {
+    blocking(move || grove_core::pty::clear_scrollback(&pty_id)).await
+}
+
+#[tauri::command]
 async fn close_pty(pty_id: String) -> Result<(), String> {
     blocking(move || grove_core::pty::close(&pty_id)).await
 }
@@ -294,6 +299,7 @@ pub fn run() {
             create_pty,
             write_pty,
             resize_pty,
+            clear_pty_scrollback,
             close_pty,
             save_terminal_session_snapshot,
             load_terminal_session_snapshot,

@@ -3,7 +3,7 @@ import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal } from "@xterm/xterm";
 import type { TerminalTheme } from "../types";
-import { platform, resizePty, writePty } from "./platform";
+import { clearPtyScrollback, platform, resizePty, writePty } from "./platform";
 import {
   getMacShortcutSequence,
   isMacClearTerminalShortcut,
@@ -197,6 +197,9 @@ class TerminalPaneRuntime {
 
       if (isMacClearTerminalShortcut(event)) {
         this.term.clear();
+        if (this.ptyId) {
+          clearPtyScrollback(this.ptyId).catch(() => {});
+        }
         return false;
       }
 

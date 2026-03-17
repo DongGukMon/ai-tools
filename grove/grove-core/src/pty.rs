@@ -292,6 +292,24 @@ pub fn resize(id: &str, cols: u16, rows: u16) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+pub fn clear_scrollback(id: &str) -> Result<(), String> {
+    let (session_name, tracked) = {
+        let reg = registry().lock().map_err(|e| e.to_string())?;
+        let instance = reg
+            .get(id)
+            .ok_or_else(|| format!("PTY not found: {}", id))?;
+        (instance.session_name.clone(), Arc::clone(&instance.tracked))
+    };
+
+    clear_tmux_history(&session_name)?;
+
+    let mut state = tracked.lock().map_err(|e| e.to_string())?;
+    state.scrollback.clear();
+    state.scrollback_truncated = false;
+
+    Ok(())
+}
+
 pub fn close(id: &str) -> Result<(), String> {
     let session_name = {
         let reg = registry().lock().map_err(|e| e.to_string())?;
@@ -769,6 +787,18 @@ fn tmux_set_server_option(option: &str, value: &str) -> Result<(), String> {
 
     Err(format!(
         "failed to set tmux server option {option}: {}",
+        tmux_output_message(&output)
+    ))
+}
+
+fn clear_tmux_history(target: &str) -> Result<(), String> {
+    let output = tmux_output(["clear-history", "-t", target])?;
+    if output.status.success() {
+        return Ok(());
+    }
+
+    Err(format!(
+        "failed to clear tmux history for {target}: {}",
         tmux_output_message(&output)
     ))
 }
@@ -1263,5 +1293,32 @@ mod tests {
         );
 
         kill_tmux_session_if_exists(&session_name).unwrap();
+    }
+
+    #[test]
+    fn clear_scrollback_resets_runtime_buffer() {
+        let tracked = Arc::new(Mutex::new(PtyRuntimeState::new(
+            "/tmp/grove/worktree".into(),
+            None,
+            "grove-test".into(),
+            None,
+            None,
+        )));
+
+        {
+            let mut state = tracked.lock().unwrap();
+            state.append_scrollback(b"hello");
+            state.scrollback_truncated = true;
+        }
+
+        {
+            let mut state = tracked.lock().unwrap();
+            state.scrollback.clear();
+            state.scrollback_truncated = false;
+        }
+
+        let state = tracked.lock().unwrap();
+        assert!(state.scrollback.is_empty());
+        assert!(!state.scrollback_truncated);
     }
 }

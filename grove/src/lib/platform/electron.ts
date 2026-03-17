@@ -232,6 +232,10 @@ export async function resizePty(
   return platform.invoke("resize_pty", { id, cols, rows });
 }
 
+export async function clearPtyScrollback(ptyId: string): Promise<void> {
+  return platform.invoke("clear_pty_scrollback", { ptyId });
+}
+
 export async function closePty(ptyId: string): Promise<void> {
   return platform.invoke("close_pty", { ptyId });
 }
