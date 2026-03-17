@@ -1,3 +1,6 @@
 onlyBuiltDependencies:
   - electron
   - esbuild
+
+patchedDependencies:
+  '@xterm/xterm': patches/@xterm__xterm.patch
