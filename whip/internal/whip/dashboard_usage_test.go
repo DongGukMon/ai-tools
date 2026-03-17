@@ -84,3 +84,22 @@ func TestRenderListViewPlacesUsageStripAboveFooter(t *testing.T) {
 		t.Fatalf("usage strip should render above footer:\n%s", got)
 	}
 }
+
+func TestRenderHeaderIncludesInlineSummaryForListView(t *testing.T) {
+	store := tempStore(t)
+	model := NewDashboardModel(store, "test")
+	model.view = viewList
+	model.tasks = []*Task{
+		{Status: StatusInProgress},
+		{Status: StatusCompleted},
+		{Status: StatusCompleted},
+	}
+
+	got := model.renderHeader(160)
+
+	for _, want := range []string{"Task Orchestrator", "3 active", "▶ 1 active", "✓ 2 done"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("header missing %q in:\n%s", want, got)
+		}
+	}
+}

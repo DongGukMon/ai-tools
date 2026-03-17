@@ -82,6 +82,14 @@ func (m DashboardModel) renderHeader(w int) string {
 	rightParts = append(rightParts, spinner, lipgloss.NewStyle().Foreground(colorMuted).Render(time.Now().Format("15:04:05")))
 	right := strings.Join(rightParts, "  ")
 
+	if m.view == viewList {
+		sep := lipgloss.NewStyle().Foreground(colorDim).Render("  ·  ")
+		available := w - lipgloss.Width(left) - lipgloss.Width(right) - lipgloss.Width(sep) - 2
+		if summary := m.renderSummaryInline(available); summary != "" {
+			left += sep + summary
+		}
+	}
+
 	leftW := lipgloss.Width(left)
 	rightW := lipgloss.Width(right)
 	gap := w - leftW - rightW - 2
