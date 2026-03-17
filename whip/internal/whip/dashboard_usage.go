@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	dashboardUsageRefreshInterval = time.Minute
+	dashboardUsageRefreshInterval = 10 * time.Minute
 	dashboardUsageTimeout         = 15 * time.Second
 	dashboardUsageWeekDays        = 7
 )
@@ -215,6 +215,14 @@ func (m *DashboardModel) maybeLoadDashboardUsage(now time.Time) tea.Cmd {
 		return nil
 	}
 	if !m.usageState.needsRefresh(now) {
+		return nil
+	}
+	m.usageLoading = true
+	return loadDashboardUsageCmd()
+}
+
+func (m *DashboardModel) forceLoadDashboardUsage() tea.Cmd {
+	if m.usageLoading {
 		return nil
 	}
 	m.usageLoading = true

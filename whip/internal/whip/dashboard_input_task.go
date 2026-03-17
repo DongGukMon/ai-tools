@@ -102,6 +102,12 @@ func (m DashboardModel) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.view = viewIRC
 			}
 		}
+	case "r":
+		if m.listMode == listModeActive {
+			if cmd := m.forceLoadDashboardUsage(); cmd != nil {
+				return m, cmd
+			}
+		}
 	case "R":
 		if m.remoteHandle != nil {
 			m.view = viewRemoteStatus

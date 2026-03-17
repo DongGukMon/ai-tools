@@ -420,7 +420,6 @@ func (m DashboardModel) renderSummaryInline(maxWidth int) string {
 
 func (m DashboardModel) renderListFooter() string {
 	dot := lipgloss.NewStyle().Foreground(colorDim).Render("  ·  ")
-	refresh := lipgloss.NewStyle().Foreground(colorDim).Render("↻ 2s")
 
 	var remoteHint string
 	if m.remoteHandle != nil {
@@ -436,12 +435,22 @@ func (m DashboardModel) renderListFooter() string {
 	}
 	line2 += dot + remoteHint + dot + footerKey("q", "quit")
 	if m.listMode == listModeActive {
-		line2 += dot + footerKey("c", "clean")
+		line2 += dot + footerKey("c", "clean") + dot + footerKey("r", "refresh usage")
 	} else if m.canDeleteTask(m.currentListTask()) {
 		line2 += dot + footerKey("d", "delete")
 	}
-	line2 += dot + refresh
+	line2 += dot + m.renderUsageRefreshHint()
 	return lipgloss.NewStyle().MarginTop(1).Render(line1 + "\n" + line2)
+}
+
+func (m DashboardModel) renderUsageRefreshHint() string {
+	if m.usageLoading {
+		return lipgloss.NewStyle().Foreground(colorDim).Render("↻ loading…")
+	}
+	if m.usageState.UpdatedAt.IsZero() {
+		return lipgloss.NewStyle().Foreground(colorDim).Render("↻ —")
+	}
+	return lipgloss.NewStyle().Foreground(colorDim).Render("↻ " + timeAgo(m.usageState.UpdatedAt))
 }
 
 func (m DashboardModel) renderDetailFooter() string {
