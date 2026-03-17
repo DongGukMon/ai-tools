@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTerminalStore } from "../../store/terminal";
 import "@xterm/xterm/css/xterm.css";
 import { cn } from "../../lib/cn";
@@ -9,14 +9,18 @@ interface Props {
   ptyId: string;
 }
 
-export default function TerminalInstance({ paneId, ptyId }: Props) {
+function TerminalInstance({ paneId, ptyId }: Props) {
   const termRef = useRef<HTMLDivElement>(null);
   const runtimeRef = useRef<ReturnType<typeof acquireTerminalRuntime> | null>(null);
   const theme = useTerminalStore((s) => s.theme);
-  const focusedPtyId = useTerminalStore((s) => s.focusedPtyId);
+  const isFocused = useTerminalStore((s) => s.focusedPtyId === ptyId);
   const setFocusedPtyId = useTerminalStore((s) => s.setFocusedPtyId);
   const [error, setError] = useState<string | null>(null);
-  const isFocused = focusedPtyId === ptyId;
+
+  const handleClick = useCallback(() => {
+    setFocusedPtyId(ptyId);
+    runtimeRef.current?.focus();
+  }, [ptyId, setFocusedPtyId]);
 
   useLayoutEffect(() => {
     const container = termRef.current;
@@ -62,12 +66,13 @@ export default function TerminalInstance({ paneId, ptyId }: Props) {
         "terminal-pane-focused": isFocused,
       })}
       style={{ backgroundColor: theme?.background ?? "#000" }}
-      onClick={() => {
-        setFocusedPtyId(ptyId);
-        runtimeRef.current?.focus();
-      }}
+      onClick={handleClick}
     >
       <div ref={termRef} className={cn("terminal-instance h-full w-full")} />
     </div>
   );
 }
+
+export default memo(TerminalInstance, (prev, next) =>
+  prev.paneId === next.paneId && prev.ptyId === next.ptyId,
+);

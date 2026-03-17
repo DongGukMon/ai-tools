@@ -1,3 +1,4 @@
+import { memo, useCallback } from "react";
 import type { SplitNode } from "../../types";
 import TerminalInstance from "./TerminalInstance";
 import { useTerminalStore } from "../../store/terminal";
@@ -10,12 +11,31 @@ interface Props {
   path?: number[];
 }
 
-export default function SplitContainer({
+function pathsEqual(left: number[] | undefined, right: number[] | undefined) {
+  const leftLength = left?.length ?? 0;
+  const rightLength = right?.length ?? 0;
+  if (leftLength !== rightLength) {
+    return false;
+  }
+
+  for (let i = 0; i < leftLength; i += 1) {
+    if (left?.[i] !== right?.[i]) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function SplitContainer({
   node,
   worktreePath,
   path = [],
 }: Props) {
   const updateSizes = useTerminalStore((s) => s.updateSizes);
+  const handleCommit = useCallback((ratios: number[]) => {
+    updateSizes(worktreePath, path, ratios);
+  }, [path, updateSizes, worktreePath]);
 
   if (node.type === "leaf") {
     return node.ptyId ? (
@@ -31,9 +51,7 @@ export default function SplitContainer({
       id={node.id}
       vertical={node.type === "vertical"}
       ratios={node.sizes}
-      onCommit={(ratios) => {
-        updateSizes(worktreePath, path, ratios);
-      }}
+      onCommit={handleCommit}
     >
       {node.children?.map((child, i) => (
         <ResizablePanelGroup.Pane
@@ -50,3 +68,9 @@ export default function SplitContainer({
     </ResizablePanelGroup>
   );
 }
+
+export default memo(SplitContainer, (prev, next) =>
+  prev.node === next.node &&
+  prev.worktreePath === next.worktreePath &&
+  pathsEqual(prev.path, next.path),
+);

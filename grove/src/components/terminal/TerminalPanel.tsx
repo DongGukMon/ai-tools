@@ -1,5 +1,6 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { TerminalSquare } from "lucide-react";
+import { useShallow } from "zustand/react/shallow";
 import { useTerminalStore } from "../../store/terminal";
 import { useProjectStore } from "../../store/project";
 import {
@@ -23,22 +24,39 @@ import {
   getTerminalPaneLaunchCwd,
   subscribeTerminalPaneActivity,
 } from "../../lib/terminal-runtime";
+import { cn } from "../../lib/cn";
 import type { SplitNode } from "../../types";
 
 const SNAPSHOT_SAVE_DEBOUNCE_MS = 750;
 
+function buildPaneTopologySignatures(sessions: Record<string, SplitNode>) {
+  const signatures = new Map<string, string>();
+
+  for (const [worktreePath, node] of Object.entries(sessions)) {
+    const signature = buildTerminalPaneTopologySignature(node);
+    if (signature) {
+      signatures.set(worktreePath, signature);
+    }
+  }
+
+  return signatures;
+}
+
 const TerminalSessionView = memo(function TerminalSessionView({
-  isActive,
-  node,
   worktreePath,
 }: {
-  isActive: boolean;
-  node: SplitNode;
   worktreePath: string;
 }) {
+  const isActive = useTerminalStore((s) => s.activeWorktree === worktreePath);
+  const node = useTerminalStore((s) => s.sessions[worktreePath] ?? null);
+
+  if (!node) {
+    return null;
+  }
+
   return (
     <div
-      className="absolute inset-0"
+      className={cn("absolute inset-0")}
       style={{ display: isActive ? "block" : "none" }}
     >
       <SplitContainer node={node} worktreePath={worktreePath} />
@@ -47,25 +65,25 @@ const TerminalSessionView = memo(function TerminalSessionView({
 });
 
 function TerminalPanel() {
-  const sessions = useTerminalStore((s) => s.sessions);
+  const worktreePaths = useTerminalStore(
+    useShallow((s) => Object.keys(s.sessions)),
+  );
   const activeWorktree = useTerminalStore((s) => s.activeWorktree);
-  const activeSession = useTerminalStore((s) =>
-    s.activeWorktree ? (s.sessions[s.activeWorktree] ?? null) : null,
+  const hasActiveSession = useTerminalStore((s) =>
+    s.activeWorktree ? s.sessions[s.activeWorktree] !== undefined : false,
   );
   const theme = useTerminalStore((s) => s.theme);
   const loadTheme = useTerminalStore((s) => s.loadTheme);
   const setDetectedTheme = useTerminalStore((s) => s.setDetectedTheme);
   const setActiveWorktree = useTerminalStore((s) => s.setActiveWorktree);
-  const selectedWorktree = useProjectStore((s) => s.selectedWorktree);
+  const selectedWorktreePath = useProjectStore((s) => s.selectedWorktree?.path ?? null);
   const { createTerminal } = useTerminal();
   const [error, setError] = useState<string | null>(null);
   const previousPaneTopologyRef = useRef(new Map<string, string>());
   const snapshotSaveTimersRef = useRef(
     new Map<string, ReturnType<typeof setTimeout>>(),
   );
-  const sessionsRef = useRef(sessions);
-
-  sessionsRef.current = sessions;
+  const sessionsRef = useRef(useTerminalStore.getState().sessions);
 
   const persistSnapshot = (worktreePath: string) => {
     const node = sessionsRef.current[worktreePath];
@@ -105,30 +123,37 @@ function TerminalPanel() {
   };
 
   useEffect(() => {
-    const previous = previousPaneTopologyRef.current;
-    const changedPaths = new Set<string>([
-      ...previous.keys(),
-      ...Object.keys(sessions),
-    ]);
+    const initialSessions = useTerminalStore.getState().sessions;
+    sessionsRef.current = initialSessions;
+    previousPaneTopologyRef.current = buildPaneTopologySignatures(initialSessions);
 
-    const nextSignatures = new Map<string, string>();
-    for (const worktreePath of changedPaths) {
-      const nextSignature = buildTerminalPaneTopologySignature(
-        sessions[worktreePath],
-      );
-      if (nextSignature) {
-        nextSignatures.set(worktreePath, nextSignature);
+    return useTerminalStore.subscribe((state, previousState) => {
+      if (state.sessions === previousState.sessions) {
+        return;
       }
-      if (
-        previous.has(worktreePath) &&
-        previous.get(worktreePath) !== nextSignature
-      ) {
-        scheduleSnapshotSave(worktreePath);
-      }
-    }
 
-    previousPaneTopologyRef.current = nextSignatures;
-  }, [sessions]);
+      sessionsRef.current = state.sessions;
+
+      const previous = previousPaneTopologyRef.current;
+      const next = buildPaneTopologySignatures(state.sessions);
+      const changedPaths = new Set<string>([
+        ...previous.keys(),
+        ...Object.keys(state.sessions),
+      ]);
+
+      for (const worktreePath of changedPaths) {
+        const nextSignature = next.get(worktreePath);
+        if (
+          previous.has(worktreePath) &&
+          previous.get(worktreePath) !== nextSignature
+        ) {
+          scheduleSnapshotSave(worktreePath);
+        }
+      }
+
+      previousPaneTopologyRef.current = next;
+    });
+  }, []);
 
   useEffect(
     () => subscribeTerminalPaneActivity(({ ptyId }) => {
@@ -193,8 +218,8 @@ function TerminalPanel() {
 
   // Sync sidebar -> terminal
   useEffect(() => {
-    setActiveWorktree(selectedWorktree?.path ?? null);
-  }, [selectedWorktree?.path, setActiveWorktree]);
+    setActiveWorktree(selectedWorktreePath);
+  }, [selectedWorktreePath, setActiveWorktree]);
 
   // Create session for new worktree
   useEffect(() => {
@@ -202,7 +227,7 @@ function TerminalPanel() {
       log("terminal", "skip session create", { activeWorktree, hasTheme: !!theme });
       return;
     }
-    if (activeSession) {
+    if (hasActiveSession) {
       log("terminal", "session exists", activeWorktree);
       return;
     }
@@ -211,42 +236,38 @@ function TerminalPanel() {
       logError("terminal", "session create failed", e);
       setError(getCommandErrorMessage(e));
     });
-  }, [activeSession, activeWorktree, createTerminal, theme]);
+  }, [activeWorktree, createTerminal, hasActiveSession, theme]);
 
   if (error) {
     return (
-      <div className="flex items-center justify-center h-full bg-background">
-        <span className="text-sm text-destructive px-4">Error: {error}</span>
+      <div className={cn("flex items-center justify-center h-full bg-background")}>
+        <span className={cn("text-sm text-destructive px-4")}>Error: {error}</span>
       </div>
     );
   }
 
   if (!theme) {
     return (
-      <div className="flex items-center justify-center h-full bg-background">
-        <span className="text-sm text-muted-foreground">Loading...</span>
+      <div className={cn("flex items-center justify-center h-full bg-background")}>
+        <span className={cn("text-sm text-muted-foreground")}>Loading...</span>
       </div>
     );
   }
 
-  const sessionEntries = Object.entries(sessions);
-
   return (
-    <div className="flex flex-col h-full bg-background">
+    <div className={cn("flex flex-col h-full bg-background")}>
       <TerminalToolbar />
-      <div className="flex-1 relative overflow-hidden">
+      <div className={cn("flex-1 relative overflow-hidden")}>
         {!activeWorktree ? (
-          <div className="flex flex-col items-center justify-center h-full gap-3">
-            <TerminalSquare className="size-10 text-muted-foreground/50" />
-            <span className="text-sm text-muted-foreground">Select a worktree to open terminal</span>
+          <div className={cn("flex flex-col items-center justify-center h-full gap-3")}>
+            <TerminalSquare className={cn("size-10 text-muted-foreground/50")} />
+            <span className={cn("text-sm text-muted-foreground")}>Select a worktree to open terminal</span>
           </div>
         ) : (
           // Render ALL sessions, show/hide via CSS - preserves xterm state
-          sessionEntries.map(([path, node]) => (
+          worktreePaths.map((path) => (
             <TerminalSessionView
               key={path}
-              isActive={path === activeWorktree}
-              node={node}
               worktreePath={path}
             />
           ))
