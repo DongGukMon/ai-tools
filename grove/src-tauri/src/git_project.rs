@@ -900,11 +900,15 @@ fn resolve_origin_head(source: &Path) -> Result<String, String> {
 
 fn refresh_source_repo(source: &Path) -> Result<(), String> {
     let default_branch = remote_default_branch(source)?;
-    let remote_ref = format!("origin/{default_branch}");
 
     run_git(source, &["checkout", &default_branch])?;
-    run_git(source, &["pull", "--prune"])?;
-    run_git(source, &["reset", "--hard", remote_ref.as_str()])?;
+    run_git(source, &["fetch", "--prune", "origin"])?;
+
+    if let Err(e) = run_git(source, &["pull", "--rebase", "origin", &default_branch]) {
+        let _ = run_git(source, &["rebase", "--abort"]);
+        return Err(format!("Rebase failed during source sync (local commits may conflict with upstream): {e}"));
+    }
+
     Ok(())
 }
 
