@@ -47,6 +47,11 @@ REPO="bang9/ai-tools"
 SEMVER_TAG_PATTERN='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*)|[0-9A-Za-z-][0-9A-Za-z-]*)(\.((0|[1-9][0-9]*)|[0-9A-Za-z-][0-9A-Za-z-]*))*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'
 SAFE_INSTALL_FAILURE_REASON=""
 
+# --- semver_gte: true if $1 >= $2 (both vX.Y.Z) ---
+semver_gte() {
+    [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | head -n1)" = "$2" ]
+}
+
 extract_expected_version() {
     local plugin_json="$1" version
 
@@ -90,6 +95,9 @@ if [ "$VERSION_CHECK" = "file" ]; then
         if [ "$INSTALLED_VERSION" = "$EXPECTED_VERSION" ]; then
             exit 0
         fi
+        if [ -n "$INSTALLED_VERSION" ] && semver_gte "$INSTALLED_VERSION" "$EXPECTED_VERSION"; then
+            exit 0
+        fi
         echo "Upgrading $BINARY_NAME from ${INSTALLED_VERSION:-unknown} to $EXPECTED_VERSION..." >&2
     fi
 else
@@ -102,6 +110,9 @@ else
     if [ -n "$BINARY_PATH" ]; then
         INSTALLED_VERSION=$("$BINARY_PATH" --version 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' || echo "")
         if [ "$INSTALLED_VERSION" = "$EXPECTED_VERSION" ]; then
+            exit 0
+        fi
+        if [ -n "$INSTALLED_VERSION" ] && semver_gte "$INSTALLED_VERSION" "$EXPECTED_VERSION"; then
             exit 0
         fi
         echo "Upgrading $BINARY_NAME from ${INSTALLED_VERSION:-unknown} to $EXPECTED_VERSION..." >&2
