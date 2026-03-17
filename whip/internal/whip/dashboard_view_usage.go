@@ -13,6 +13,9 @@ import (
 func (m DashboardModel) renderUsageStrip(width int) string {
 	providers := m.usageState.visibleProviders()
 	if len(providers) == 0 {
+		if m.usageLoading {
+			return m.renderUsageLoadingStrip()
+		}
 		return ""
 	}
 
@@ -27,8 +30,22 @@ func (m DashboardModel) renderUsageStrip(width int) string {
 	return strings.Join(lines, "\n")
 }
 
+func (m DashboardModel) renderUsageLoadingStrip() string {
+	spinner := spinnerFrames[m.spinnerIndex]
+	claudeName := padRight(lipgloss.NewStyle().Bold(true).Foreground(colorClaude).Render("Claude"), 8)
+	codexName := padRight(lipgloss.NewStyle().Bold(true).Foreground(colorCodex).Render("Codex"), 8)
+	claudeSpinner := lipgloss.NewStyle().Foreground(colorClaude).Render(spinner)
+	codexSpinner := lipgloss.NewStyle().Foreground(colorCodex).Render(spinner)
+	return "  " + claudeName + " " + claudeSpinner + "\n" +
+		"  " + codexName + " " + codexSpinner
+}
+
 func (m DashboardModel) usageStripLineCount() int {
-	return len(m.usageState.visibleProviders())
+	n := len(m.usageState.visibleProviders())
+	if n == 0 && m.usageLoading {
+		return 2
+	}
+	return n
 }
 
 func (m DashboardModel) renderUsageLine(provider dashboardUsageProviderSummary, width int) string {
