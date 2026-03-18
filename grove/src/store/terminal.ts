@@ -56,6 +56,7 @@ interface TerminalState {
   setFocusedPtyId: (ptyId: string | null) => void;
   setDetectedTheme: (theme: TerminalTheme) => void;
   loadTheme: (theme: TerminalTheme) => void;
+  removeSession: (worktreePath: string) => void;
   updateSizes: (worktreePath: string, nodePath: number[], ratios: number[]) => void;
   getSavedLayout: (worktreePath: string) => SplitNode | null;
   initLayouts: () => Promise<void>;
@@ -109,6 +110,21 @@ export const useTerminalStore = create<TerminalState>((set) => ({
       };
       saveLayouts(newSessions);
       return { sessions: newSessions, focusedPtyId: newPtyId };
+    }),
+
+  removeSession: (worktreePath) =>
+    set((state) => {
+      const newSessions = { ...state.sessions };
+      delete newSessions[worktreePath];
+      delete layoutCache[worktreePath];
+      saveLayouts(newSessions);
+      return {
+        sessions: newSessions,
+        focusedPtyId:
+          state.activeWorktree === worktreePath ? null : state.focusedPtyId,
+        activeWorktree:
+          state.activeWorktree === worktreePath ? null : state.activeWorktree,
+      };
     }),
 
   closeTerminal: (worktreePath, ptyId) =>

@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { Project, Worktree } from "../types";
 import * as tauri from "../lib/platform";
 import { runCommand, runCommandSafely } from "../lib/command";
+import { useTerminalStore } from "./terminal";
 
 interface ProjectState {
   projects: Project[];
@@ -174,9 +175,19 @@ export const useProjectStore = create<ProjectState>((set) => ({
   },
 
   removeWorktree: async (projectId: string, name: string) => {
+    const worktreePath = useProjectStore
+      .getState()
+      .projects.find((p) => p.id === projectId)
+      ?.worktrees.find((w) => w.name === name)?.path;
+
     await runCommand(() => tauri.removeWorktree(projectId, name), {
       errorToast: "Failed to remove worktree",
     });
+
+    if (worktreePath) {
+      useTerminalStore.getState().removeSession(worktreePath);
+    }
+
     set((state) => ({
       projects: state.projects.map((p) =>
         p.id === projectId
