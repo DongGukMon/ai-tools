@@ -71,7 +71,7 @@ Rules:
 
 ```bash
 # single-task work
-claude-irc whoami 2>/dev/null
+claude-irc whoami
 claude-irc who
 whip task create "Auth module" --difficulty medium --desc "Implement JWT auth"
 whip task assign <task-id> --master-irc <resolved-master-irc>
@@ -80,7 +80,7 @@ whip task list
 
 ```bash
 # named workspace
-claude-irc whoami 2>/dev/null
+claude-irc whoami
 claude-irc who
 whip workspace view issue-sweep
 whip task create "Auth module" --workspace issue-sweep --difficulty medium --desc "Implement JWT auth"
@@ -92,7 +92,7 @@ claude-irc inbox
 
 ```bash
 # lead-managed workspace — master delegates orchestration to a lead
-claude-irc whoami 2>/dev/null
+claude-irc whoami
 claude-irc who
 whip task create "Refactor auth system" --workspace auth-refactor --role lead --desc "Refactor auth to middleware pattern, update tests, write docs"
 whip task assign <lead-id> --master-irc <resolved-master-irc>

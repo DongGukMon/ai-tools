@@ -42,7 +42,7 @@ Every invocation starts here — no exceptions. Check live state before doing an
 
 ```bash
 # 1. Inspect IRC state
-claude-irc whoami 2>/dev/null
+claude-irc whoami
 claude-irc who
 
 # 2. Live status — what's running right now?
@@ -72,10 +72,10 @@ When both conditions are met, stop polling and run `claude-irc quit` to disconne
 
 Resolve `resolved-master-irc` before any `whip task assign` command. Do not rely on the implicit `wp-master` fallback.
 
-1. Run `claude-irc whoami 2>/dev/null`.
-   - If it succeeds, reuse that exact identity as `resolved-master-irc`.
+1. Run `claude-irc whoami`.
+   - If the output is a peer name (not `"not joined"`), reuse that exact identity as `resolved-master-irc`.
    - Do NOT join again. The current session identity already owns the coordination channel for this run.
-2. If `whoami` fails, mint a fresh candidate for this coordinating session:
+2. If the output is `"not joined"`, mint a fresh candidate for this coordinating session:
    - Base form: `wp-master-<task-name-short>`
    - Keep `<task-name-short>` short, lowercase, and hyphenated so the full peer name stays within the IRC name limit.
    - If a workspace slug helps readability, include it only if the full name still fits comfortably.

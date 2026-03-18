@@ -54,7 +54,7 @@ Before assigning tasks, resolve `master-irc` explicitly:
 
 ```bash
 # Reuse the current IRC identity when this session is already joined
-claude-irc whoami 2>/dev/null
+claude-irc whoami
 
 # Inspect active peers for awareness; this is not your identity check
 claude-irc who

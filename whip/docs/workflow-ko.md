@@ -142,7 +142,7 @@ failed --> canceled
 
 ```bash
 # 현재 세션이 이미 IRC identity를 갖고 있는지 확인
-claude-irc whoami 2>/dev/null
+claude-irc whoami
 
 # master identity를 고르기 전에 활성 peer를 확인
 claude-irc who
@@ -484,7 +484,7 @@ flowchart LR
 
 ```bash
 # 마스터 세션 시작
-claude-irc whoami 2>/dev/null
+claude-irc whoami
 claude-irc who
 /loop 1m claude-irc inbox   # Claude 전용; 종료 전 CronDelete
 

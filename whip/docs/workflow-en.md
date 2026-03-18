@@ -142,7 +142,7 @@ failed --> canceled
 
 ```bash
 # Check whether this session already owns an IRC identity
-claude-irc whoami 2>/dev/null
+claude-irc whoami
 
 # Inspect active peers before choosing a master identity
 claude-irc who
@@ -487,7 +487,7 @@ Here's what a typical multi-task session looks like (based on actual usage):
 
 ```bash
 # Master session starts
-claude-irc whoami 2>/dev/null
+claude-irc whoami
 claude-irc who
 /loop 1m claude-irc inbox   # Claude only; remove it with CronDelete before terminal actions
 
