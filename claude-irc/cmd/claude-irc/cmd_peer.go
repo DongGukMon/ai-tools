@@ -113,7 +113,8 @@ func whoamiCmd() *cobra.Command {
 
 			name, err := resolveMyName(store)
 			if err != nil {
-				return err
+				fmt.Fprintln(cmd.OutOrStdout(), "not joined")
+				return nil
 			}
 
 			fmt.Fprintln(cmd.OutOrStdout(), name)
