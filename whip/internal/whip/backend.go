@@ -24,6 +24,10 @@ type SessionBackend interface {
 	// SyncSession updates backend-specific session tracking after spawn.
 	// Backends that can predeclare session IDs may return nil immediately.
 	SyncSession(task *Task, promptPath string, launchedAt time.Time) error
+
+	// PrepareSession preseeds backend config (e.g., trust directory) before spawn.
+	// Called once per Spawn, before BuildLaunchCmd.
+	PrepareSession(task *Task) error
 }
 
 // GetBackend returns the SessionBackend for the given name.

@@ -35,6 +35,10 @@ func (b *ClaudeBackend) BuildLaunchCmd(task *Task, promptPath string) string {
 	)
 }
 
+func (b *ClaudeBackend) PrepareSession(task *Task) error {
+	return preseedClaudeTrust(task.CWD)
+}
+
 func (b *ClaudeBackend) SyncSession(task *Task, promptPath string, launchedAt time.Time) error {
 	return nil
 }

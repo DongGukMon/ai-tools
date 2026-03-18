@@ -26,6 +26,10 @@ func (b *CodexBackend) BuildLaunchCmd(task *Task, promptPath string) string {
 	return shellJoin(args)
 }
 
+func (b *CodexBackend) PrepareSession(task *Task) error {
+	return preseedCodexTrust(task.CWD)
+}
+
 func (b *CodexBackend) SyncSession(task *Task, promptPath string, launchedAt time.Time) error {
 	if _, err := exec.LookPath("codex"); err != nil {
 		return fmt.Errorf("codex CLI not found. Install it with: npm install -g @openai/codex")

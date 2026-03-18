@@ -13,6 +13,10 @@ func Spawn(task *Task, promptPath string) (string, error) {
 		return "", err
 	}
 
+	if err := backend.PrepareSession(task); err != nil {
+		return "", fmt.Errorf("prepare session: %w", err)
+	}
+
 	launchCmd := backend.BuildLaunchCmd(task, promptPath)
 	launchedAt := time.Now()
 	shellCmd := fmt.Sprintf(
