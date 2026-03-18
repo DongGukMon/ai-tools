@@ -206,11 +206,54 @@ pub fn load_terminal_layouts_impl() -> Result<String, String> {
 
 // ── Worktree data cleanup ──
 
+fn normalized_worktree_path(path: &str) -> PathBuf {
+    fs::canonicalize(path).unwrap_or_else(|_| PathBuf::from(path))
+}
+
+fn matching_worktree_keys<'a>(
+    keys: impl Iterator<Item = &'a str>,
+    worktree_path: &str,
+) -> Vec<String> {
+    let normalized_target = normalized_worktree_path(worktree_path);
+    keys.filter(|key| normalized_worktree_path(key) == normalized_target)
+        .map(str::to_owned)
+        .collect()
+}
+
+fn remove_worktree_entries_from_json_map(
+    map: &mut serde_json::Map<String, serde_json::Value>,
+    worktree_path: &str,
+) -> bool {
+    let keys_to_remove = matching_worktree_keys(map.keys().map(String::as_str), worktree_path);
+    let mut removed = false;
+
+    for key in keys_to_remove {
+        removed |= map.remove(&key).is_some();
+    }
+
+    removed
+}
+
+fn remove_worktree_entries_from_snapshot_store(
+    store: &mut TerminalSessionSnapshotStore,
+    worktree_path: &str,
+) -> bool {
+    let keys_to_remove =
+        matching_worktree_keys(store.worktrees.keys().map(String::as_str), worktree_path);
+    let mut removed = false;
+
+    for key in keys_to_remove {
+        removed |= store.worktrees.remove(&key).is_some();
+    }
+
+    removed
+}
+
 pub fn remove_terminal_layouts_for_worktree(worktree_path: &str) -> Result<(), String> {
     let raw = load_terminal_layouts_impl()?;
     let mut map: serde_json::Map<String, serde_json::Value> = serde_json::from_str(&raw)
         .map_err(|e| format!("Failed to parse terminal-layouts.json: {e}"))?;
-    if map.remove(worktree_path).is_some() {
+    if remove_worktree_entries_from_json_map(&mut map, worktree_path) {
         let updated = serde_json::to_string_pretty(&map)
             .map_err(|e| format!("Failed to serialize terminal-layouts.json: {e}"))?;
         save_terminal_layouts_impl(&updated)?;
@@ -220,7 +263,7 @@ pub fn remove_terminal_layouts_for_worktree(worktree_path: &str) -> Result<(), S
 
 pub fn remove_terminal_session_snapshot_for_worktree(worktree_path: &str) -> Result<(), String> {
     let mut store = load_terminal_session_snapshot_store()?;
-    if store.worktrees.remove(worktree_path).is_some() {
+    if remove_worktree_entries_from_snapshot_store(&mut store, worktree_path) {
         save_terminal_session_snapshot_store(&store)?;
     }
     Ok(())
@@ -230,7 +273,7 @@ pub fn remove_panel_layouts_for_worktree(worktree_path: &str) -> Result<(), Stri
     let raw = load_panel_layouts_impl()?;
     let mut map: serde_json::Map<String, serde_json::Value> = serde_json::from_str(&raw)
         .map_err(|e| format!("Failed to parse panel-layouts.json: {e}"))?;
-    if map.remove(worktree_path).is_some() {
+    if remove_worktree_entries_from_json_map(&mut map, worktree_path) {
         let updated = serde_json::to_string_pretty(&map)
             .map_err(|e| format!("Failed to serialize panel-layouts.json: {e}"))?;
         save_panel_layouts_impl(&updated)?;
@@ -295,6 +338,10 @@ mod tests {
             .join("terminal-session-snapshots.json")
     }
 
+    fn temp_worktree_root() -> PathBuf {
+        std::env::temp_dir().join(format!("grove-worktree-tests-{}", Uuid::new_v4()))
+    }
+
     fn write_fixture(path: &Path, content: &str) {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).unwrap();
@@ -339,24 +386,74 @@ mod tests {
         }
     }
 
+    fn sample_snapshot(worktree_path: &str) -> TerminalSessionSnapshot {
+        let restore_cwd = Path::new(worktree_path).join("src");
+        let restore_cwd = restore_cwd.to_string_lossy().to_string();
+
+        TerminalSessionSnapshot {
+            worktree_path: worktree_path.into(),
+            panes: vec![TerminalPaneSnapshot {
+                pane_id: "pane-1".into(),
+                scrollback: "ls -la\n".into(),
+                scrollback_truncated: false,
+                launch_cwd: worktree_path.into(),
+                last_known_cwd: Some(restore_cwd.clone()),
+                restore_cwd,
+                restore_cwd_source: TerminalRestoreCwdSource::LastKnownCwd,
+            }],
+        }
+    }
+
     fn sample_snapshot_store() -> TerminalSessionSnapshotStore {
         let mut store = TerminalSessionSnapshotStore::default();
         store.worktrees.insert(
             "/tmp/grove/worktree".into(),
-            TerminalSessionSnapshot {
-                worktree_path: "/tmp/grove/worktree".into(),
-                panes: vec![TerminalPaneSnapshot {
-                    pane_id: "pane-1".into(),
-                    scrollback: "ls -la\n".into(),
-                    scrollback_truncated: false,
-                    launch_cwd: "/tmp/grove/worktree".into(),
-                    last_known_cwd: Some("/tmp/grove/worktree/src".into()),
-                    restore_cwd: "/tmp/grove/worktree/src".into(),
-                    restore_cwd_source: TerminalRestoreCwdSource::LastKnownCwd,
-                }],
-            },
+            sample_snapshot("/tmp/grove/worktree"),
         );
         store
+    }
+
+    fn existing_worktree_paths() -> (String, String, String, PathBuf) {
+        let root = temp_worktree_root();
+        let source_dir = root.join("project").join("source");
+        let worktree_dir = root.join("project").join("worktrees").join("feature");
+        let other_dir = root.join("project").join("worktrees").join("other");
+
+        fs::create_dir_all(&source_dir).unwrap();
+        fs::create_dir_all(&worktree_dir).unwrap();
+        fs::create_dir_all(&other_dir).unwrap();
+
+        let canonical_path = fs::canonicalize(&worktree_dir)
+            .unwrap()
+            .to_string_lossy()
+            .to_string();
+        let cleanup_path = source_dir
+            .join("..")
+            .join("worktrees")
+            .join("feature")
+            .to_string_lossy()
+            .to_string();
+        let other_path = other_dir.to_string_lossy().to_string();
+
+        (canonical_path, cleanup_path, other_path, root)
+    }
+
+    fn missing_worktree_path() -> (String, String, PathBuf) {
+        let root = temp_worktree_root();
+        let missing_path = root
+            .join("project")
+            .join("worktrees")
+            .join("missing-feature")
+            .to_string_lossy()
+            .to_string();
+        let other_path = root
+            .join("project")
+            .join("worktrees")
+            .join("other-feature")
+            .to_string_lossy()
+            .to_string();
+
+        (missing_path, other_path, root)
     }
 
     #[test]
@@ -565,5 +662,93 @@ mod tests {
         );
 
         let _ = fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn remove_worktree_entries_from_json_map_matches_exact_nonexistent_paths() {
+        let (missing_path, other_path, root) = missing_worktree_path();
+        let mut map = serde_json::Map::new();
+        map.insert(
+            missing_path.clone(),
+            serde_json::json!({"layout": "target"}),
+        );
+        map.insert(other_path.clone(), serde_json::json!({"layout": "other"}));
+
+        assert!(remove_worktree_entries_from_json_map(
+            &mut map,
+            &missing_path
+        ));
+        assert!(!map.contains_key(&missing_path));
+        assert!(map.contains_key(&other_path));
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn remove_worktree_entries_from_json_map_matches_canonicalized_paths() {
+        let (stored_path, cleanup_path, other_path, root) = existing_worktree_paths();
+        let mut map = serde_json::Map::new();
+        map.insert(stored_path.clone(), serde_json::json!({"layout": "target"}));
+        map.insert(
+            cleanup_path.clone(),
+            serde_json::json!({"layout": "duplicate"}),
+        );
+        map.insert(other_path.clone(), serde_json::json!({"layout": "other"}));
+
+        assert!(remove_worktree_entries_from_json_map(
+            &mut map,
+            &cleanup_path
+        ));
+        assert!(!map.contains_key(&stored_path));
+        assert!(!map.contains_key(&cleanup_path));
+        assert!(map.contains_key(&other_path));
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn remove_worktree_entries_from_snapshot_store_matches_exact_nonexistent_paths() {
+        let (missing_path, other_path, root) = missing_worktree_path();
+        let mut store = TerminalSessionSnapshotStore::default();
+        store
+            .worktrees
+            .insert(missing_path.clone(), sample_snapshot(&missing_path));
+        store
+            .worktrees
+            .insert(other_path.clone(), sample_snapshot(&other_path));
+
+        assert!(remove_worktree_entries_from_snapshot_store(
+            &mut store,
+            &missing_path
+        ));
+        assert!(!store.worktrees.contains_key(&missing_path));
+        assert!(store.worktrees.contains_key(&other_path));
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn remove_worktree_entries_from_snapshot_store_matches_canonicalized_paths() {
+        let (stored_path, cleanup_path, other_path, root) = existing_worktree_paths();
+        let mut store = TerminalSessionSnapshotStore::default();
+        store
+            .worktrees
+            .insert(stored_path.clone(), sample_snapshot(&stored_path));
+        store
+            .worktrees
+            .insert(cleanup_path.clone(), sample_snapshot(&cleanup_path));
+        store
+            .worktrees
+            .insert(other_path.clone(), sample_snapshot(&other_path));
+
+        assert!(remove_worktree_entries_from_snapshot_store(
+            &mut store,
+            &cleanup_path
+        ));
+        assert!(!store.worktrees.contains_key(&stored_path));
+        assert!(!store.worktrees.contains_key(&cleanup_path));
+        assert!(store.worktrees.contains_key(&other_path));
+
+        let _ = fs::remove_dir_all(root);
     }
 }
