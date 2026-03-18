@@ -343,6 +343,8 @@ pub fn close_ptys_for_worktree(worktree_path: &str) -> Result<(), String> {
         }
     }
 
+    close_orphaned_tmux_sessions_for_worktree(worktree_path)?;
+
     Ok(())
 }
 
@@ -859,6 +861,74 @@ fn kill_tmux_session_if_exists(session_name: &str) -> Result<(), String> {
     ))
 }
 
+fn close_orphaned_tmux_sessions_for_worktree(worktree_path: &str) -> Result<(), String> {
+    for session_name in list_grove_tmux_sessions()? {
+        let managed = match tmux_session_option(&session_name, TMUX_GROVE_MANAGED_OPTION) {
+            Ok(value) => value,
+            Err(error) if tmux_session_missing(&error) => continue,
+            Err(error) => {
+                eprintln!(
+                    "Warning: failed to inspect tmux session {session_name} for worktree {worktree_path}: {error}"
+                );
+                continue;
+            }
+        };
+        if managed.as_deref() != Some("1") {
+            continue;
+        }
+
+        let session_worktree = match tmux_session_option(&session_name, TMUX_GROVE_WORKTREE_OPTION)
+        {
+            Ok(value) => value,
+            Err(error) if tmux_session_missing(&error) => continue,
+            Err(error) => {
+                eprintln!(
+                    "Warning: failed to inspect tmux session {session_name} for worktree {worktree_path}: {error}"
+                );
+                continue;
+            }
+        };
+        if session_worktree.as_deref() != Some(worktree_path) {
+            continue;
+        }
+
+        if let Err(error) = kill_tmux_session_if_exists(&session_name) {
+            eprintln!(
+                "Warning: failed to close orphaned tmux session {session_name} for worktree {worktree_path}: {error}"
+            );
+        }
+    }
+
+    Ok(())
+}
+
+fn list_grove_tmux_sessions() -> Result<Vec<String>, String> {
+    let output = match tmux_output(["list-sessions", "-F", "#{session_name}"]) {
+        Ok(output) => output,
+        Err(error) if error == TMUX_NOT_FOUND_ERROR => return Ok(Vec::new()),
+        Err(error) => return Err(error),
+    };
+    if !output.status.success() {
+        let message = tmux_output_message(&output);
+        if message.contains("no server running") {
+            return Ok(Vec::new());
+        }
+
+        return Err(format!("failed to list tmux sessions: {message}"));
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(str::trim)
+        .filter(|session_name| !session_name.is_empty() && session_name.starts_with("grove-"))
+        .map(str::to_string)
+        .collect())
+}
+
+fn tmux_session_missing(error: &str) -> bool {
+    error.contains("can't find session") || error.contains("no server running")
+}
+
 fn tmux_output<const N: usize>(args: [&str; N]) -> Result<Output, String> {
     Command::new("tmux")
         .args(args)
@@ -1293,6 +1363,35 @@ mod tests {
         );
 
         kill_tmux_session_if_exists(&session_name).unwrap();
+    }
+
+    #[test]
+    fn close_ptys_for_worktree_kills_orphaned_tmux_sessions() {
+        if Command::new("tmux").arg("-V").output().is_err() {
+            return;
+        }
+
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let session_name = format!("grove-test-orphan-{nonce}");
+        let worktree_path = env::temp_dir().join(format!("grove-worktree-{nonce}"));
+        std::fs::create_dir_all(&worktree_path).unwrap();
+        let worktree_path = worktree_path.to_string_lossy().into_owned();
+        let pane_id = format!("pane-{nonce}");
+
+        let _ = kill_tmux_session_if_exists(&session_name);
+        ensure_grove_tmux_session(&session_name, &worktree_path, &pane_id, &worktree_path).unwrap();
+        assert!(tmux_session_exists(&session_name).unwrap());
+
+        // This reproduces the restart case: the tmux session exists, but no live PTY
+        // instance was registered in memory.
+        close_ptys_for_worktree(&worktree_path).unwrap();
+
+        assert!(!tmux_session_exists(&session_name).unwrap());
+
+        let _ = std::fs::remove_dir_all(&worktree_path);
     }
 
     #[test]
