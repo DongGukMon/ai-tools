@@ -131,8 +131,28 @@ pub fn get_working_diff_impl(worktree_path: &str, path: &str) -> Result<FileDiff
         opts.pathspec(actual_path);
         opts.include_untracked(true);
         opts.show_untracked_content(true);
-        repo.diff_index_to_workdir(None, Some(&mut opts))
-            .map_err(|e| e.to_string())?
+        let d = repo
+            .diff_index_to_workdir(None, Some(&mut opts))
+            .map_err(|e| e.to_string())?;
+
+        // pathspec doesn't match untracked files (not in index).
+        // Only attempt the expensive unfiltered fallback when the file is actually untracked.
+        if d.deltas().count() == 0 && is_untracked(&repo, actual_path) {
+            let mut opts2 = DiffOptions::new();
+            opts2.include_untracked(true);
+            opts2.show_untracked_content(true);
+            let full = repo
+                .diff_index_to_workdir(None, Some(&mut opts2))
+                .map_err(|e| e.to_string())?;
+
+            let file_diffs = parse_diff(&full)?;
+            if let Some(fd) = file_diffs.into_iter().find(|f| f.path == actual_path) {
+                return Ok(fd);
+            }
+            d
+        } else {
+            d
+        }
     };
 
     let file_diffs = parse_diff(&diff)?;
@@ -268,6 +288,12 @@ pub fn discard_lines_impl(
 }
 
 // === INTERNAL HELPERS ===
+
+fn is_untracked(repo: &Repository, path: &str) -> bool {
+    repo.status_file(Path::new(path))
+        .map(|s| s.contains(git2::Status::WT_NEW))
+        .unwrap_or(false)
+}
 
 fn get_unstaged_diff(worktree_path: &str, file_path: &str) -> Result<FileDiff, String> {
     let repo = Repository::open(worktree_path).map_err(|e| e.to_string())?;
