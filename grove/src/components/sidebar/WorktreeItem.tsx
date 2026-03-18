@@ -29,7 +29,7 @@ function WorktreeItem({ worktree, projectId }: Props) {
           <p className="text-sm leading-relaxed text-muted-foreground">
             Worktree{" "}
             <span className="font-semibold text-foreground">{displayName}</span>{" "}
-            will be deleted from disk.
+            and its local branch, terminal sessions, and layouts will be removed.
           </p>
           <div className="flex justify-end gap-2">
             <Button variant="ghost" size="sm" onClick={close}>Cancel</Button>
