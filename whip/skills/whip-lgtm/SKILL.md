@@ -13,17 +13,16 @@ Traits: INTP. Code taste. Simplicity obsession. First principles. Intellectual h
 
 ```
 loop:
-  1. whip task create 'review this code' --backend codex --difficulty hard
-  2. whip task assign -> fresh agent reviews code, reports findings
-  3. agent completes -> master reads findings, applies fixes directly
+  1. Dispatch fresh review task via /whip-start Solo Flow
+  2. Reviewer reports findings
+  3. Master reads findings, applies fixes directly
   4. goto 1
-  until: agent reports 'LGTM, no issues'
+  until: reviewer reports 'LGTM, no issues'
 ```
 
 Key properties:
 - Each round spawns a FRESH agent — no prior context contamination
 - The reviewer ONLY reviews; it does NOT fix. Master fixes.
-- Backend is always `codex` with `--difficulty hard` — non-negotiable (maximum reasoning for review)
 - Termination: reviewer finds zero blocking or important issues
 - Skip style-only findings; focus on correctness, logic, interfaces, design
 
@@ -38,16 +37,48 @@ Default scope when nothing is specified:
 git diff $(git merge-base HEAD main)..HEAD
 ```
 
+## Dispatch
+
+This skill uses `/whip-start` Solo Flow for all task dispatch.
+
+- IRC selection, task creation, assignment, and polling follow `/whip-start` conventions.
+- Backend: always `codex` — non-negotiable for review quality.
+- Difficulty: always `hard` — non-negotiable for review depth.
+- These two overrides are the only deviation from `/whip-start` defaults.
+
+Prepare the task spec per the Review Task Spec below, then dispatch through `/whip-start` Solo Flow.
+
 ## Dual execution mode
 
 Two ways to run the review loop:
 
-### Default: `whip task create` (tracked)
+### Default: `/whip-start` Solo Flow (tracked)
 
-Full lifecycle tracking. Use for thorough multi-round reviews where history matters.
+Full lifecycle tracking via `/whip-start`. Use for thorough multi-round reviews where history matters.
 
-```bash
-whip task create "review: <scope summary>" --backend codex --difficulty hard --desc "## Review Scope
+### `--agent` flag: Agent tool (lightweight)
+
+No tracking, no lifecycle. Use for a quick one-off review when you do not need history.
+
+```
+Agent tool with subagent_type=Explore:
+  prompt: "Review the following changes. Do not fix anything — only report findings.
+           <diff or file contents>
+           <focus area if any>
+           Skip style-only issues. Focus on correctness, logic, interfaces, design.
+           Report in the findings format specified below."
+```
+
+Choose `--agent` when the scope is small and you expect one round. Switch to tracked mode when you expect multiple rounds or want audit trail.
+
+## Review task spec
+
+Title: `review: <scope summary>`
+
+Description template:
+
+```
+## Review Scope
 <diff command or file list>
 
 ## Focus
@@ -75,74 +106,21 @@ Produce your report in this exact format:
 - Total findings: N (X blocking, Y important)
 \`\`\`
 
-If there are zero blocking and zero important findings, report: Review Result: LGTM"
-whip task assign <task-id> --master-irc <resolved-master-irc>
+If there are zero blocking and zero important findings, report: Review Result: LGTM
 ```
-
-### `--agent` flag: Agent tool (lightweight)
-
-No tracking, no lifecycle. Use for a quick one-off review when you do not need history.
-
-```
-Agent tool with subagent_type=Explore:
-  prompt: "Review the following changes. Do not fix anything — only report findings.
-           <diff or file contents>
-           <focus area if any>
-           Skip style-only issues. Focus on correctness, logic, interfaces, design.
-           Report in the findings format specified below."
-```
-
-Choose `--agent` when the scope is small and you expect one round. Switch to `whip task create` when you expect multiple rounds or want audit trail.
-
-## Master IRC selection
-
-Follow Master IRC Selection from `/whip-start`:
-
-1. `claude-irc whoami 2>/dev/null` — if it succeeds, reuse that identity as `resolved-master-irc`
-2. If it fails, mint `wp-master-lgtm` (or `wp-master-lgtm-<rand4>` on collision)
-3. `claude-irc join <candidate>`
-4. Reuse the same `resolved-master-irc` for every review task in this session
-
-## IRC polling
-
-Use `/loop 1m claude-irc inbox` while the review loop is active.
-
-When the loop terminates (LGTM received or user aborts):
-- `CronList` to find the inbox loop
-- `CronDelete` to remove it
-- `claude-irc quit`
 
 ## Step-by-step execution
 
 ### Step 0: Setup
 
-```bash
-claude-irc whoami 2>/dev/null
-# resolve master IRC per rules above
-```
-
-Determine the review scope:
+Run `/whip-start` Step 0 (health check, IRC selection, polling setup). Then determine the review scope:
 - If the user provided files or a diff command, use that
 - If a workspace is active, use the workspace worktree changes
 - Otherwise, default to `git diff $(git merge-base HEAD main)..HEAD`
 
-Start the inbox loop:
-
-```text
-/loop 1m claude-irc inbox
-```
-
 ### Step 1: Dispatch reviewer
 
-Create a review task with the scope embedded in the description. Always use `--backend codex --difficulty hard`.
-
-The task description must include:
-- The exact diff command or file list to review
-- The focus area (if any)
-- The findings format template
-- Explicit instruction: "do not fix anything — only report findings"
-
-Assign and wait for completion.
+Prepare a review task with scope and focus embedded in the description using the Review Task Spec above. Dispatch via `/whip-start` Solo Flow with `--backend codex --difficulty hard`.
 
 ### Step 2: Read findings
 
@@ -168,27 +146,13 @@ After all fixes are applied, go back to Step 1.
 
 When the reviewer reports LGTM:
 
-1. Remove the inbox cron (`CronList` then `CronDelete`)
-2. Summarize to the user:
+1. Summarize to the user:
    - Number of rounds completed
    - Total findings fixed across all rounds
    - Final LGTM confirmation
-3. `claude-irc quit` (only if you joined IRC for this skill)
+2. Follow `/whip-start` cleanup conventions (stop polling, disconnect IRC)
 
 ## Findings format
-
-The reviewer must produce output in this format:
-
-```
-## Review Result: LGTM | CHANGES NEEDED
-
-### Findings (if any)
-- [blocking] <description> — <file:line>
-- [important] <description> — <file:line>
-
-### Summary
-- Total findings: N (X blocking, Y important)
-```
 
 Severity levels:
 - `[blocking]`: correctness bug, data loss risk, security issue, broken interface contract

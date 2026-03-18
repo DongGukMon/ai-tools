@@ -1,6 +1,6 @@
 ---
 name: whip-simulate
-description: Run multi-agent simulations to measure output consistency. Use when you want to A/B test, validate behavioral equivalence, or stress-test non-deterministic behavior at scale.
+description: Run multi-agent simulations to measure consistency of non-deterministic behavior. Use when the user wants to A/B test, validate behavioral equivalence, or stress-test outputs at scale.
 argument-hint: "<scenario> [--runs N] [--agent]"
 user_invocable: true
 ---
@@ -14,18 +14,12 @@ Extract from `$ARGUMENTS`:
 - **`--runs N`**: number of simulation runs (default: 5)
 - **`--agent`**: use Agent tool directly instead of `whip task create` (lightweight, faster, good for quick sims)
 
-## Execution Modes
+## Dispatch
 
-**Default (whip mode):** Each simulation run is a whip task, dispatched via `/whip-start`. Gives tracked execution and workspace integration.
+- **Whip mode (default)**: dispatches through `/whip-start` Team Flow. Each simulation run becomes one task spec handed to `/whip-start`. IRC selection, workspace, and polling follow `/whip-start` conventions.
+- **Agent mode (`--agent`)**: bypasses `/whip-start` entirely — uses Agent tool directly for lightweight single-shot runs.
 
-**`--agent` flag:** Each run uses the Agent tool directly. Faster, no task overhead, good for quick consistency checks.
-
-### Workspace Context
-
-If you are running inside a whip workspace:
-1. Run `whip workspace view <workspace-name>` to get the worktree path
-2. Use that path for reading code artifacts referenced in the scenario
-3. In whip mode, simulation tasks go in the `global` workspace (ephemeral — do not pollute the active workspace)
+If running inside an active whip workspace, use `whip workspace view <workspace-name>` to get the worktree path for reading code artifacts referenced in the scenario. In whip mode, simulation tasks go in the `global` workspace (ephemeral — do not pollute the active workspace).
 
 ## Workflow
 
@@ -71,7 +65,7 @@ Present the test plan including:
 
 #### Whip mode (default)
 
-Hand off dispatch to `/whip-start`. Prepare one task spec per simulation run and let whip-start handle IRC, creation, assignment, and monitoring.
+Hand off dispatch to `/whip-start`. Prepare one task spec per simulation run and let `/whip-start` handle IRC, creation, assignment, and monitoring.
 
 Each simulation run becomes one task:
 - Title: `sim-{test-case}-{run}`

@@ -197,28 +197,44 @@ Separate the work into:
 
 ### Simulate the graph
 
-After stacking all tasks into parallel and sequential units, run a mental simulation. Walk through the execution round by round and check:
+Two-phase validation: static verification runs inline, then an optional context sufficiency check via `/whip-simulate --agent`.
+
+#### Phase A: Static verification
+
+Analytical checks that do not need agent execution. Walk through the graph round by round and verify:
 
 1. Every prerequisite output is explicit and available when the task starts.
 2. No two parallel tasks need to edit the same file or own the same interface contract.
-3. Each task has enough context to execute independently from the written plan alone.
-4. Difficulty and backend match the actual reasoning burden of the task.
-5. Cross-boundary contracts are explicit: when a producer task and a consumer task share a data contract (API payload, shared types, protocol shape), the contract shape (fields, types, semantics) is stated in both task descriptions so each side can verify independently.
-6. The graph preserves both speed and quality:
+3. Difficulty and backend match the actual reasoning burden of the task.
+4. Cross-boundary contracts are explicit: when a producer task and a consumer task share a data contract (API payload, shared types, protocol shape), the contract shape (fields, types, semantics) is stated in both task descriptions so each side can verify independently.
+5. The graph preserves both speed and quality:
    - Speed: no unnecessary sequential edge, no avoidable idle round
    - Efficiency: task sizes are balanced and ownership is clean
    - Context preservation: closely-related decisions are not split across agents without a clear contract
    - Quality: acceptance criteria are specific and interfaces are explicit
 
-Treat the simulation as failed if any of the following is true:
+Treat the static verification as failed if any of the following is true:
 - Two parallel tasks need to edit the same file or own the same contract
 - A task depends on an unstated output from another task
-- A task cannot be executed from the written plan without hidden planner context
 - An `easy` task still requires interface matching or architectural judgment
 - The graph exceeds three rounds without a concrete reason
 - Producer and consumer tasks share a data contract but the contract shape (fields, types, semantics) is not explicitly stated in both task descriptions
 
-If the simulation exposes a problem, adjust task boundaries and re-simulate until the graph feels right.
+If static verification exposes a problem, adjust task boundaries and re-verify until the graph is clean.
+
+#### Phase B: Context sufficiency verification (optional)
+
+When the plan is complex or context handoff risks are high, delegate to `/whip-simulate --agent` to verify that each task spec contains enough information for independent execution.
+
+Scenario per task:
+- Input: the full task spec (description, scope, acceptance criteria)
+- Action: "Can you execute this task independently with only the information provided? Identify any missing context."
+- Output contract: `sufficiency: yes | no`, `missing: [list of gaps]`
+
+If any agent reports insufficient context, enrich the task description with the identified gaps and re-verify. This phase is optional for simple plans but recommended when:
+- The plan has 3+ tasks
+- Tasks share cross-boundary contracts
+- Context handoff risks were flagged during exploration
 
 Record the result in the conversation:
 
@@ -229,7 +245,7 @@ Record the result in the conversation:
 - Blocking edges:
 - File/interface ownership check:
 - Contract verification: <list each cross-boundary contract and confirm both producer and consumer task descriptions include the shared shape>
-- Context handoff risks:
+- Context sufficiency: <skipped | verified via /whip-simulate --agent — N/N tasks sufficient>
 - Quality risks:
 - Adjustments made after simulation:
 - Final verdict:
@@ -419,7 +435,8 @@ Round 2 (after Round 1):
 - Parallel width:
 - Blocking edges:
 - File/interface ownership check:
-- Context handoff risks:
+- Contract verification: <cross-boundary contracts with shared shape confirmation>
+- Context sufficiency: <skipped | verified via /whip-simulate --agent — N/N tasks sufficient>
 - Quality risks:
 - Adjustments made after simulation:
 - Final verdict:
@@ -503,7 +520,7 @@ Worker sequence:
 - Blocking edges:
 - File/interface ownership check:
 - Contract verification: <list each cross-boundary contract and confirm both producer and consumer worker descriptions include the shared shape>
-- Context handoff risks:
+- Context sufficiency: <skipped | verified via /whip-simulate --agent — N/N tasks sufficient>
 - Quality risks:
 - Adjustments made after simulation:
 - Final verdict:

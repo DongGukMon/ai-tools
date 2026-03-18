@@ -1,7 +1,7 @@
 ---
 name: whip-lgtm
 description: Iterative review-fix loop — dispatch a fresh codex reviewer each round, apply fixes, repeat until LGTM. Use when you want rigorous code quality validation before merge.
-argument-hint: "[<scope>] [--focus <area>] [--agent]"
+argument-hint: "[<scope>] [--focus <area>]"
 user_invocable: true
 ---
 
@@ -13,9 +13,9 @@ Traits: INTP. Code taste. Simplicity obsession. First principles. Intellectual h
 
 ```text
 loop:
-  1. whip task create "review this code" --backend codex --difficulty hard
-  2. whip task assign -> fresh agent reviews code, reports findings
-  3. reviewer task completes -> master reads findings, applies fixes directly
+  1. Dispatch fresh review task via $whip-start Solo Flow
+  2. Reviewer reports findings
+  3. Master reads findings, applies fixes directly
   4. goto 1
   until: reviewer reports "LGTM, no issues"
 ```
@@ -23,7 +23,6 @@ loop:
 Key properties:
 - Each round spawns a FRESH agent — no prior context contamination.
 - The reviewer ONLY reviews — it does NOT fix. Master fixes.
-- Backend is always `codex` with `--difficulty hard` — non-negotiable (maximum reasoning for review).
 - Termination: reviewer finds zero blocking or important issues.
 - Skip style-only findings — focus on correctness, logic, interfaces, design.
 
@@ -38,12 +37,25 @@ Default scope when nothing is specified:
 git diff $(git merge-base HEAD main)..HEAD
 ```
 
-## Review task creation
+## Dispatch
 
-Run every review round as a tracked whip task. Create and assign it like this:
+This skill uses `$whip-start` Solo Flow for all task dispatch.
 
-```bash
-whip task create "review: <scope summary>" --backend codex --difficulty hard --desc "## Review Scope
+- IRC selection, task creation, assignment, and polling follow `$whip-start` conventions.
+- Backend: always `codex` — non-negotiable for review quality.
+- Difficulty: always `hard` — non-negotiable for review depth.
+- These two overrides are the only deviation from `$whip-start` defaults.
+
+Prepare the task spec per the Review Task Spec below, then dispatch through `$whip-start` Solo Flow.
+
+## Review task spec
+
+Title: `review: <scope summary>`
+
+Description template:
+
+```
+## Review Scope
 <diff command or file list>
 
 ## Focus
@@ -71,58 +83,21 @@ Produce your report in this exact format:
 - Total findings: N (X blocking, Y important)
 \`\`\`
 
-If there are zero blocking and zero important findings, report: Review Result: LGTM"
-whip task assign <task-id> --master-irc <resolved-master-irc>
+If there are zero blocking and zero important findings, report: Review Result: LGTM
 ```
-
-## Master IRC selection
-
-Follow Master IRC Selection from `$whip-start`:
-
-1. `claude-irc whoami 2>/dev/null` — if it succeeds, reuse that identity as `resolved-master-irc`
-2. If it fails, mint `wp-master-lgtm` (or `wp-master-lgtm-<rand4>` on collision)
-3. `claude-irc join <candidate>`
-4. Reuse the same `resolved-master-irc` for every review task in this session
-
-## IRC polling
-
-Use `claude-irc inbox` manually while the review loop is active.
-
-Poll especially after state-changing commands such as `assign`, `complete`, `fail`, and `cancel`.
-
-When the loop terminates (LGTM received or user aborts):
-- stop polling
-- `claude-irc quit`
 
 ## Step-by-step execution
 
 ### Step 0: Setup
 
-```bash
-claude-irc whoami 2>/dev/null
-# resolve master IRC per rules above
-```
-
-Determine the review scope:
+Run `$whip-start` Step 0 (health check, IRC selection). Then determine the review scope:
 - If the user provided files or a diff command, use that
 - If a workspace is active, use the workspace worktree changes
 - Otherwise, default to `git diff $(git merge-base HEAD main)..HEAD`
 
-Start manual inbox polling:
-- Run `claude-irc inbox` now
-- Run `claude-irc inbox` after each meaningful action or when you expect a reply
-
 ### Step 1: Dispatch reviewer
 
-Create a review task with the scope embedded in the description. Always use `--backend codex --difficulty hard`.
-
-The task description must include:
-- The exact diff command or file list to review
-- The focus area (if any)
-- The findings format template
-- Explicit instruction: "DO NOT fix anything — only report findings"
-
-Assign and wait for completion.
+Prepare a review task with scope and focus embedded in the description using the Review Task Spec above. Dispatch via `$whip-start` Solo Flow with `--backend codex --difficulty hard`.
 
 ### Step 2: Read findings
 
@@ -152,22 +127,9 @@ When the reviewer reports LGTM:
    - Number of rounds completed
    - Total findings fixed across all rounds
    - Final LGTM confirmation
-2. `claude-irc quit` (only if you joined IRC for this skill)
+2. Follow `$whip-start` cleanup conventions (stop polling, disconnect IRC)
 
 ## Findings format
-
-The reviewer must produce output in this format:
-
-```text
-## Review Result: LGTM | CHANGES NEEDED
-
-### Findings (if any)
-- [blocking] <description> — <file:line>
-- [important] <description> — <file:line>
-
-### Summary
-- Total findings: N (X blocking, Y important)
-```
 
 Severity levels:
 - `[blocking]`: correctness bug, data loss risk, security issue, broken interface contract

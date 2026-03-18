@@ -14,7 +14,6 @@ When invoked as `$whip-debug`, run a strict evidence-first loop. Default new wor
 ## Operating Rules
 
 - Reproduction is a gate, not a nice-to-have — DO NOT move into fix design without a reliable repro or a specific blocked report.
-- Poll manually with `claude-irc inbox` after each meaningful chunk of work or task state change — DO NOT rely on automatic polling.
 - Hold the decision thread yourself — DO NOT outsource the final call on root cause, workaround status, or whether another round is required.
 
 ## Workflow Overview
@@ -32,6 +31,17 @@ Phase 4: Loop decision
     ├─→ Fundamental fix confirmed → done
     └─→ Workaround detected → Phase 1 (max 4 rounds, then escalate)
 ```
+
+## Dispatch
+
+This skill uses `$whip-start` Solo Flow for Phase 1 (analysis) and Phase 3 (verification) task dispatch.
+
+- IRC selection, task creation, assignment, and polling follow `$whip-start` conventions.
+- Phase 1 (analysis): `--backend codex --difficulty hard`
+- Phase 3 (verification): `--backend claude --difficulty hard`
+  - Different backend from Phase 1 is intentional — fresh-eye verification counters confirmation bias.
+
+Prepare the task spec per each phase's template below, then dispatch through `$whip-start` Solo Flow.
 
 ---
 
@@ -65,10 +75,14 @@ If any required information is unclear or ambiguous:
 
 > **Purpose**: Reproduce the bug and identify root cause. Reproduction is a GATE — the worker cannot proceed without it.
 
-### Dispatch
+### Task spec
 
-```bash
-whip task create "repro+analysis: <bug-summary>" --backend codex --difficulty hard --desc "## Context
+Title: `repro+analysis: <bug-summary>`
+
+Description template:
+
+```
+## Context
 <problem description from Phase 0, including scope, expected vs actual behavior, and any reproduction steps the user provided>
 
 ## Objective
@@ -122,9 +136,10 @@ Try these approaches in order of effectiveness for your bug type:
 - Reproduction is NOT optional. It is your first and most important task.
 - If reproduction fails, DO NOT proceed to root cause analysis. Return 'blocked' immediately.
 - DO NOT propose a fix without evidence linking it to the reproduction.
-- Search for similar patterns — bugs rarely exist in isolation."
-whip task assign <task-id> --master-irc <resolved-master-irc>
+- Search for similar patterns — bugs rarely exist in isolation.
 ```
+
+Dispatch via `$whip-start` Solo Flow with `--backend codex --difficulty hard`.
 
 ### Handling Blocked Analysis
 
@@ -161,7 +176,7 @@ Choose the application method based on complexity:
 |----------|--------|
 | Simple, single-file | Master applies directly |
 | Multi-file, clear scope | Master applies directly with care |
-| Multi-file, shared code, high-risk | Dispatch fix task: `whip task create "fix: <summary>" --backend codex --difficulty hard --desc "..."` |
+| Multi-file, shared code, high-risk | Dispatch fix task via `$whip-start` Solo Flow: `--backend codex --difficulty hard` |
 
 When dispatching a fix task, include the full analysis output in the task description so the fix worker has complete context.
 
@@ -171,10 +186,14 @@ When dispatching a fix task, include the full analysis output in the task descri
 
 > **Purpose**: Fresh-eye verification. A different backend challenges the fix. This is the highest-value dispatch — it counters confirmation bias.
 
-### Dispatch
+### Task spec
 
-```bash
-whip task create "verify: <bug-summary>" --backend claude --difficulty hard --desc "## Context
+Title: `verify: <bug-summary>`
+
+Description template:
+
+```
+## Context
 <original bug description>
 
 ## Fix Applied
@@ -222,9 +241,10 @@ The fix is likely a workaround if:
 ## Verdict
 Return exactly one of:
 - **fundamental**: the fix addresses the root cause. Include specific reasoning.
-- **workaround**: the fix suppresses symptoms. Include: what the actual root cause is, why this fix does not address it, and what a fundamental fix would look like."
-whip task assign <task-id> --master-irc <resolved-master-irc>
+- **workaround**: the fix suppresses symptoms. Include: what the actual root cause is, why this fix does not address it, and what a fundamental fix would look like.
 ```
+
+Dispatch via `$whip-start` Solo Flow with `--backend claude --difficulty hard`.
 
 ---
 
@@ -256,14 +276,11 @@ Verification result == 'workaround'
    - Spawn a deeper investigation task with broader scope
    - Or explicitly accept the documented workaround with the user's agreement
 
-### Re-dispatch Format
+### Re-dispatch format
 
-When returning to Phase 1 after a workaround detection:
+When returning to Phase 1 after a workaround detection, augment the Phase 1 task spec with:
 
-```bash
-whip task create "repro+analysis (round N): <bug-summary>" --backend codex --difficulty hard --desc "## Context
-<original problem description>
-
+```
 ## Previous Rounds
 
 ### Round N-1
@@ -274,14 +291,9 @@ whip task create "repro+analysis (round N): <bug-summary>" --backend codex --dif
 
 ## Refined Hypothesis
 <updated root cause theory based on new evidence>
-
-## Objective
-Find and fix the actual root cause. The previous fix was a workaround because: <reason>.
-The verifier identified: <key finding>.
-
-<include the same Required Deliverables and Reproduction Strategies sections from Phase 1>"
-whip task assign <task-id> --master-irc <resolved-master-irc>
 ```
+
+Dispatch via `$whip-start` Solo Flow with the same backend and difficulty as Phase 1.
 
 ---
 
