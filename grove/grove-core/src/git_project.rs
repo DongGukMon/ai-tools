@@ -745,7 +745,15 @@ pub fn remove_worktree_impl(project_id: &str, worktree_name: &str) -> Result<(),
     run_git(
         source,
         &["worktree", "remove", &worktree_path_str, "--force"],
-    )
+    )?;
+
+    if let Err(error) = run_git(source, &["branch", "-D", worktree_name]) {
+        eprintln!(
+            "Warning: removed worktree {worktree_name}, but failed to delete local branch: {error}"
+        );
+    }
+
+    Ok(())
 }
 
 pub fn list_worktrees_impl(project_id: &str) -> Result<Vec<Worktree>, String> {
@@ -1526,6 +1534,141 @@ mod tests {
             run_git_output(&source_dir, &["rev-parse", "origin/trunk"]).unwrap()
         );
         assert_eq!(list_worktrees_impl("project-1").unwrap().len(), 1);
+    }
+
+    #[test]
+    fn remove_worktree_deletes_local_branch_and_recreates_from_default_branch() {
+        let _lock = env_lock();
+        let home = TestHome::new();
+        let base_dir = home.root.join("grove-data");
+        let source_dir = base_dir
+            .join("github.com")
+            .join("bang9")
+            .join("grove")
+            .join("source");
+        let remotes_dir = home.root.join("remotes");
+        let (remote_dir, seed_dir) =
+            create_bare_remote(&remotes_dir, "grove-remove-worktree", "trunk");
+
+        commit_and_push(
+            &seed_dir,
+            &remote_dir,
+            "trunk",
+            "README.md",
+            "# Grove\n",
+            "Initial commit",
+        );
+
+        fs::create_dir_all(source_dir.parent().unwrap()).unwrap();
+        let remote_dir_str = remote_dir.to_string_lossy().to_string();
+        let source_dir_str = source_dir.to_string_lossy().to_string();
+        run_git_ok(
+            source_dir.parent().unwrap(),
+            &["clone", &remote_dir_str, &source_dir_str],
+        );
+        configure_git_identity(&source_dir);
+
+        save_test_config(
+            &base_dir,
+            vec![project_entry(
+                "project-1",
+                "https://github.com/bang9/grove.git",
+                &source_dir,
+            )],
+        );
+
+        let default_head = run_git_output(&source_dir, &["rev-parse", "origin/trunk"]).unwrap();
+
+        let worktree = add_worktree_impl("project-1", "feature-1").unwrap();
+        let worktree_path = PathBuf::from(&worktree.path);
+
+        fs::write(worktree_path.join("README.md"), "# Feature branch\n").unwrap();
+        run_git_ok(&worktree_path, &["add", "README.md"]);
+        run_git_ok(&worktree_path, &["commit", "-m", "Feature branch commit"]);
+
+        let stale_feature_head = run_git_output(&worktree_path, &["rev-parse", "HEAD"]).unwrap();
+        assert_ne!(stale_feature_head, default_head);
+
+        remove_worktree_impl("project-1", "feature-1").unwrap();
+
+        assert!(!worktree_path.exists());
+        assert!(list_worktrees_impl("project-1").unwrap().is_empty());
+        assert!(run_git_output(
+            &source_dir,
+            &["rev-parse", "--verify", "refs/heads/feature-1"],
+        )
+        .is_err());
+
+        let recreated = add_worktree_impl("project-1", "feature-1").unwrap();
+        let recreated_path = PathBuf::from(&recreated.path);
+        let recreated_head = run_git_output(&recreated_path, &["rev-parse", "HEAD"]).unwrap();
+
+        assert_eq!(recreated_head, default_head);
+        assert_ne!(recreated_head, stale_feature_head);
+        assert_eq!(
+            fs::read_to_string(recreated_path.join("README.md")).unwrap(),
+            "# Grove\n"
+        );
+    }
+
+    #[test]
+    fn remove_worktree_ignores_missing_local_branch_after_removal() {
+        let _lock = env_lock();
+        let home = TestHome::new();
+        let base_dir = home.root.join("grove-data");
+        let source_dir = base_dir
+            .join("github.com")
+            .join("bang9")
+            .join("grove")
+            .join("source");
+        let remotes_dir = home.root.join("remotes");
+        let (remote_dir, seed_dir) = create_bare_remote(
+            &remotes_dir,
+            "grove-remove-worktree-missing-branch",
+            "trunk",
+        );
+
+        commit_and_push(
+            &seed_dir,
+            &remote_dir,
+            "trunk",
+            "README.md",
+            "# Grove\n",
+            "Initial commit",
+        );
+
+        fs::create_dir_all(source_dir.parent().unwrap()).unwrap();
+        let remote_dir_str = remote_dir.to_string_lossy().to_string();
+        let source_dir_str = source_dir.to_string_lossy().to_string();
+        run_git_ok(
+            source_dir.parent().unwrap(),
+            &["clone", &remote_dir_str, &source_dir_str],
+        );
+
+        save_test_config(
+            &base_dir,
+            vec![project_entry(
+                "project-1",
+                "https://github.com/bang9/grove.git",
+                &source_dir,
+            )],
+        );
+
+        let worktree = add_worktree_impl("project-1", "feature-1").unwrap();
+        let worktree_path = PathBuf::from(&worktree.path);
+
+        run_git_ok(&worktree_path, &["checkout", "--detach", "HEAD"]);
+        run_git_ok(&source_dir, &["branch", "-D", "feature-1"]);
+        assert!(run_git_output(
+            &source_dir,
+            &["rev-parse", "--verify", "refs/heads/feature-1"],
+        )
+        .is_err());
+
+        remove_worktree_impl("project-1", "feature-1").unwrap();
+
+        assert!(!worktree_path.exists());
+        assert!(list_worktrees_impl("project-1").unwrap().is_empty());
     }
 
     #[test]
