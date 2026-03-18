@@ -13,6 +13,10 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   base: target === "electron" ? "./" : "/",
   clearScreen: false,
+  build: {
+    // Desktop bundles are expected to stay large due to xterm/monaco-class deps.
+    chunkSizeWarningLimit: 950,
+  },
   resolve: {
     alias: {
       "@platform": path.resolve(__dirname, `src/lib/platform/${target}.ts`),

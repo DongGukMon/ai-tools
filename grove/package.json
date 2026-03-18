@@ -2,6 +2,8 @@
   "name": "grove",
   "private": true,
   "version": "0.1.0",
+  "description": "Git project manager with split terminal and diff viewer.",
+  "author": "Airen Kang",
   "type": "module",
   "main": ".electron/main.js",
   "scripts": {
@@ -40,7 +42,6 @@
     "zustand": "^5"
   },
   "devDependencies": {
-    "@electron/rebuild": "^3.7.2",
     "@napi-rs/cli": "^2.18.4",
     "@tailwindcss/vite": "^4.2.1",
     "@tauri-apps/cli": "^2",

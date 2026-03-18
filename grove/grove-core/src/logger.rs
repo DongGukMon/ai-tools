@@ -23,6 +23,7 @@ pub fn emit_log(level: &str, tag: &str, message: &str) {
     eprintln!("[grove:{}] [{}] {}", tag, level, message);
 }
 
+#[allow(unused_macros)]
 macro_rules! log_emit {
     ($level:expr, $tag:expr, $msg:expr) => {
         $crate::logger::emit_log($level, $tag, $msg);

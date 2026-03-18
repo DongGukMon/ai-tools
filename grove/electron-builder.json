@@ -1,5 +1,5 @@
 {
-  "appId": "com.sendbird.grove",
+  "appId": "com.bang9.dev.grove",
   "productName": "Grove",
   "directories": {
     "output": "dist-electron"

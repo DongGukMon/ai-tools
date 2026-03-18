@@ -347,13 +347,18 @@ pub fn detect_terminal_theme() -> DetectedThemeResult {
         }
     };
 
+    #[cfg(debug_assertions)]
     let mut ansi_count = 0;
     for (i, key) in ANSI_KEYS.iter().enumerate() {
         if let Some(hex) = read_color_hex(&xml, &profile, key) {
             *ansi_fields[i] = hex;
-            ansi_count += 1;
+            #[cfg(debug_assertions)]
+            {
+                ansi_count += 1;
+            }
         }
     }
+    #[cfg(debug_assertions)]
     crate::logger::grove_info!(
         "theme",
         &format!("ANSI colors: {}/16 from plist", ansi_count)
