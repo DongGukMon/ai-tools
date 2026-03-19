@@ -661,8 +661,28 @@ func autoSaveWorktree(worktreePath string) error {
 	commitCmd := exec.Command("git", "-C", worktreePath, "commit", "-m", "whip: auto-save before archive", "--allow-empty-message")
 	commitCmd.Run() // ignore error — may be nothing to commit
 
+	detached, err := isDetachedHead(worktreePath)
+	if err != nil {
+		return fmt.Errorf("git branch check: %w", err)
+	}
+
+	if detached {
+		// Detached HEAD cannot push without an explicit refspec.
+		// Create a temporary branch from HEAD and push that.
+		branchName := "whip-autosave-" + filepath.Base(filepath.Dir(worktreePath))
+		checkoutCmd := exec.Command("git", "-C", worktreePath, "checkout", "-b", branchName)
+		if out, checkoutErr := checkoutCmd.CombinedOutput(); checkoutErr != nil {
+			return fmt.Errorf("git checkout -b %s: %s", branchName, strings.TrimSpace(string(out)))
+		}
+		pushCmd := exec.Command("git", "-C", worktreePath, "push", "-u", "origin", branchName)
+		if out, pushErr := pushCmd.CombinedOutput(); pushErr != nil {
+			return fmt.Errorf("git push: %s", strings.TrimSpace(string(out)))
+		}
+		return nil
+	}
+
 	pushCmd := exec.Command("git", "-C", worktreePath, "push")
-	if out, err := pushCmd.CombinedOutput(); err != nil {
+	if out, pushErr := pushCmd.CombinedOutput(); pushErr != nil {
 		return fmt.Errorf("git push: %s", strings.TrimSpace(string(out)))
 	}
 	return nil
