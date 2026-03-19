@@ -17,6 +17,7 @@ func taskCmd() *cobra.Command {
 		createCmd(),
 		listCmd(),
 		viewCmd(),
+		taskTypeCmd(),
 		lifecycleCmd(),
 		assignCmd(),
 		startCmd(),
