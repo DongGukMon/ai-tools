@@ -7,10 +7,6 @@ func (m DashboardModel) updateStats(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "esc", "left", "backspace":
 		m.view = viewList
 		m.statsScroll = 0
-	case "a":
-		m.statsIncludeArchived = !m.statsIncludeArchived
-		m.err = nil
-		m.statsSections = m.computeStatsSections()
 	case "up", "k":
 		if m.statsScroll > 0 {
 			m.statsScroll--

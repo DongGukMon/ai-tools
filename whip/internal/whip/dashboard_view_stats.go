@@ -54,10 +54,6 @@ func (m DashboardModel) statsTasks() ([]*Task, error) {
 	}
 
 	tasks := append([]*Task(nil), activeTasks...)
-	if !m.statsIncludeArchived {
-		return tasks, nil
-	}
-
 	archivedTasks, err := m.store.ListArchivedTasks()
 	if err != nil {
 		return nil, err
@@ -205,10 +201,7 @@ func (m DashboardModel) renderStatsView(w int) string {
 	b.WriteString("\n\n")
 
 	if len(m.statsSections) == 0 {
-		empty := "  No active tasks available."
-		if m.statsIncludeArchived {
-			empty = "  No task data available."
-		}
+		empty := "  No task data available."
 		b.WriteString(lipgloss.NewStyle().
 			Foreground(colorSubtle).
 			Italic(true).
@@ -263,26 +256,7 @@ func (m DashboardModel) renderStatsBreadcrumb(w int) string {
 		lipgloss.NewStyle().Foreground(colorDim).Render(" › ") +
 		lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render("Stats")
 
-	indicatorStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(colorText).
-		Background(colorDim).
-		Padding(0, 1)
-	indicator := indicatorStyle.Render("[Active only]")
-	if m.statsIncludeArchived {
-		indicator = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("#111827")).
-			Background(colorWarning).
-			Padding(0, 1).
-			Render("[Including archived]")
-	}
-
-	gap := w - lipgloss.Width(breadcrumb) - lipgloss.Width(indicator)
-	if gap < 2 {
-		gap = 2
-	}
-	return breadcrumb + strings.Repeat(" ", gap) + indicator
+	return breadcrumb
 }
 
 func (m DashboardModel) renderStatsContentLines(w int) []string {
@@ -450,7 +424,6 @@ func statsRowTotal(rows []statsRow) int {
 func (m DashboardModel) renderStatsFooter() string {
 	dot := lipgloss.NewStyle().Foreground(colorDim).Render("  ·  ")
 	line := "  " + footerKey("←/esc", "back") +
-		dot + footerKey("a", "toggle archived") +
 		dot + footerKey("↑↓", "scroll") +
 		dot + footerKey("r", "refresh")
 	return lipgloss.NewStyle().MarginTop(1).Render(line)

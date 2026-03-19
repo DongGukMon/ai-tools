@@ -148,8 +148,7 @@ type DashboardModel struct {
 	noteHistoryScroll    int
 	msgHistoryScroll     int
 	msgHistoryLines      []ircMessage
-	statsIncludeArchived bool
-	statsScroll          int
+	statsScroll int
 	statsSections        []statsSection
 	usageState           dashboardUsageState
 	usageLoading         bool

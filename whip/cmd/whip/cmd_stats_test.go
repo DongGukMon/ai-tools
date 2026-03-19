@@ -86,7 +86,7 @@ func TestStatsCommand_RendersOverviewAndSections(t *testing.T) {
 	}
 }
 
-func TestStatsCommand_IncludeArchived(t *testing.T) {
+func TestStatsCommand_IncludesArchivedByDefault(t *testing.T) {
 	store := newStatsTestStore(t)
 
 	saveStatsTask(t, store, statsTaskSpec{
@@ -114,19 +114,11 @@ func TestStatsCommand_IncludeArchived(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stats: %v", err)
 	}
-	if strings.Contains(stdout, whiplib.TaskTypeDebugging) {
-		t.Fatalf("stats without --include-archived should exclude archived tasks:\n%s", stdout)
-	}
-
-	stdout, _, err = execWhipCLICapture(t, "stats", "--include-archived")
-	if err != nil {
-		t.Fatalf("stats --include-archived: %v", err)
-	}
 	if !strings.Contains(stdout, "Overview (2 tasks, all time)") {
-		t.Fatalf("stats --include-archived missing combined count:\n%s", stdout)
+		t.Fatalf("stats should include all tasks by default:\n%s", stdout)
 	}
 	if !strings.Contains(stdout, whiplib.TaskTypeDebugging) {
-		t.Fatalf("stats --include-archived missing archived task type:\n%s", stdout)
+		t.Fatalf("stats should include archived task types by default:\n%s", stdout)
 	}
 }
 

@@ -9,7 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-func TestDashboardStatsViewAggregatesAndTogglesArchived(t *testing.T) {
+func TestDashboardStatsViewIncludesAllTasks(t *testing.T) {
 	store := tempStore(t)
 
 	activeCompleted := statsTestTask("Frontend polish", TaskTypeFrontend, "claude", "hard", GlobalWorkspaceName, StatusCompleted, time.Date(2026, time.March, 20, 9, 0, 0, 0, time.Local), 2*time.Hour)
@@ -40,62 +40,31 @@ func TestDashboardStatsViewAggregatesAndTogglesArchived(t *testing.T) {
 	if dm.view != viewStats {
 		t.Fatalf("view = %v, want stats", dm.view)
 	}
-	if dm.statsIncludeArchived {
-		t.Fatal("stats should default to active-only mode")
-	}
 	if len(dm.statsSections) != 5 {
 		t.Fatalf("stats section count = %d, want 5", len(dm.statsSections))
 	}
 
+	// Stats should include both active and archived tasks
 	overview := statsSectionByTitle(t, dm.statsSections, "Overview")
-	if got := statsRowByLabel(t, overview, "Completed").Count; got != 2 {
-		t.Fatalf("active completed count = %d, want 2", got)
+	if got := statsRowByLabel(t, overview, "Completed").Count; got != 3 {
+		t.Fatalf("completed count = %d, want 3", got)
 	}
-	if got := math.Round(statsRowByLabel(t, overview, "Completed").Percent); got != 67 {
-		t.Fatalf("active completion percent = %.0f, want 67", got)
+	if got := math.Round(statsRowByLabel(t, overview, "Completed").Percent); got != 75 {
+		t.Fatalf("completion percent = %.0f, want 75", got)
 	}
-	if got := statsRowByLabel(t, overview, "Avg Duration").Count; got != int((5 * time.Hour / 2).Seconds()) {
-		t.Fatalf("active avg duration seconds = %d, want %d", got, int((5 * time.Hour / 2).Seconds()))
+	if got := statsRowByLabel(t, overview, "Avg Duration").Count; got != int((2 * time.Hour).Seconds()) {
+		t.Fatalf("avg duration seconds = %d, want %d", got, int((2*time.Hour).Seconds()))
 	}
 
 	typeRows := statsSectionByTitle(t, dm.statsSections, "Type").Rows
-	if got := statsRowLabels(typeRows); strings.Join(got, ",") != strings.Join([]string{TaskTypeFrontend, statsUnsetLabel}, ",") {
-		t.Fatalf("active type rows = %v, want [frontend (unset)]", got)
+	if got := statsRowLabels(typeRows); strings.Join(got, ",") != strings.Join([]string{TaskTypeDebugging, TaskTypeFrontend, statsUnsetLabel}, ",") {
+		t.Fatalf("type rows = %v, want [debugging frontend (unset)]", got)
 	}
 
 	rendered := dm.renderStatsView(120)
-	for _, want := range []string{"Overview (3 tasks)", "[Active only]", "2/3", "2h 30m"} {
+	for _, want := range []string{"Overview (4 tasks)", "3/4", "2h"} {
 		if !strings.Contains(rendered, want) {
-			t.Fatalf("active stats view missing %q:\n%s", want, rendered)
-		}
-	}
-
-	updated, _ = dm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
-	dm = updated.(DashboardModel)
-	if !dm.statsIncludeArchived {
-		t.Fatal("archived toggle should be enabled after pressing a")
-	}
-
-	overview = statsSectionByTitle(t, dm.statsSections, "Overview")
-	if got := statsRowByLabel(t, overview, "Completed").Count; got != 3 {
-		t.Fatalf("archived-inclusive completed count = %d, want 3", got)
-	}
-	if got := math.Round(statsRowByLabel(t, overview, "Completed").Percent); got != 75 {
-		t.Fatalf("archived-inclusive completion percent = %.0f, want 75", got)
-	}
-	if got := statsRowByLabel(t, overview, "Avg Duration").Count; got != int((2 * time.Hour).Seconds()) {
-		t.Fatalf("archived-inclusive avg duration seconds = %d, want %d", got, int((2 * time.Hour).Seconds()))
-	}
-
-	typeRows = statsSectionByTitle(t, dm.statsSections, "Type").Rows
-	if got := statsRowLabels(typeRows); strings.Join(got, ",") != strings.Join([]string{TaskTypeDebugging, TaskTypeFrontend, statsUnsetLabel}, ",") {
-		t.Fatalf("archived-inclusive type rows = %v, want [debugging frontend (unset)]", got)
-	}
-
-	rendered = dm.renderStatsView(120)
-	for _, want := range []string{"Overview (4 tasks)", "[Including archived]", "3/4", "2h"} {
-		if !strings.Contains(rendered, want) {
-			t.Fatalf("archived-inclusive stats view missing %q:\n%s", want, rendered)
+			t.Fatalf("stats view missing %q:\n%s", want, rendered)
 		}
 	}
 }
@@ -107,16 +76,8 @@ func TestDashboardStatsViewShowsEmptyState(t *testing.T) {
 	model.view = viewStats
 
 	rendered := model.renderStatsView(120)
-	for _, want := range []string{"No active tasks available.", "[Active only]", "a toggle archived"} {
-		if !strings.Contains(rendered, want) {
-			t.Fatalf("empty stats view missing %q:\n%s", want, rendered)
-		}
-	}
-
-	model.statsIncludeArchived = true
-	rendered = model.renderStatsView(120)
 	if !strings.Contains(rendered, "No task data available.") {
-		t.Fatalf("archived-empty stats view missing archived message:\n%s", rendered)
+		t.Fatalf("empty stats view missing empty message:\n%s", rendered)
 	}
 }
 

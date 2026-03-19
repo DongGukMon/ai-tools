@@ -23,8 +23,6 @@ type chartRow struct {
 func statsCmd() *cobra.Command {
 	var sinceArg string
 	var lastArg string
-	var includeArchived bool
-
 	cmd := &cobra.Command{
 		Use:   "stats",
 		Short: "Show task usage patterns",
@@ -43,13 +41,11 @@ func statsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if includeArchived {
-				archivedTasks, err := store.ListArchivedTasks()
-				if err != nil {
-					return err
-				}
-				tasks = append(tasks, archivedTasks...)
+			archivedTasks, err := store.ListArchivedTasks()
+			if err != nil {
+				return err
 			}
+			tasks = append(tasks, archivedTasks...)
 
 			filterLabel := "all time"
 			if sinceArg != "" {
@@ -128,7 +124,6 @@ func statsCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&sinceArg, "since", "", "Only include tasks created on or after YYYY-MM-DD")
 	cmd.Flags().StringVar(&lastArg, "last", "", "Only include tasks from the last window (for example 30d or 48h)")
-	cmd.Flags().BoolVar(&includeArchived, "include-archived", false, "Include archived tasks")
 	return cmd
 }
 
