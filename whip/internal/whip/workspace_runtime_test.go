@@ -249,6 +249,113 @@ func TestRemoveWorkspaceWorktreeIsNoopForNonGitWorkspace(t *testing.T) {
 	}
 }
 
+func TestCheckWorktreeCleanDetachedHeadTreatsPushedCommitAsClean(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+
+	repo := initWorkspaceTestRepo(t)
+	remote := initWorkspaceBareRemote(t)
+	worktreePath := filepath.Join(t.TempDir(), "detached-worktree")
+
+	runWorkspaceGit(t, repo, "remote", "add", "origin", remote)
+	runWorkspaceGit(t, repo, "push", "-u", "origin", "HEAD")
+	runWorkspaceGit(t, repo, "worktree", "add", "--detach", worktreePath, "HEAD")
+
+	if err := os.WriteFile(filepath.Join(worktreePath, "app", "main.txt"), []byte("seed\npushed\n"), 0o644); err != nil {
+		t.Fatalf("write detached worktree change: %v", err)
+	}
+	runWorkspaceGit(t, worktreePath, "add", "app/main.txt")
+	runWorkspaceGit(t, worktreePath, "commit", "-m", "detached change")
+
+	dirty, unpushed, err := checkWorktreeClean(worktreePath, repo)
+	if err != nil {
+		t.Fatalf("checkWorktreeClean before push: %v", err)
+	}
+	if dirty {
+		t.Fatal("dirty before push = true, want false")
+	}
+	if !unpushed {
+		t.Fatal("unpushed before push = false, want true")
+	}
+
+	runWorkspaceGit(t, worktreePath, "push", "origin", "HEAD:refs/heads/archive-check")
+
+	dirty, unpushed, err = checkWorktreeClean(worktreePath, repo)
+	if err != nil {
+		t.Fatalf("checkWorktreeClean after push: %v", err)
+	}
+	if dirty {
+		t.Fatal("dirty after push = true, want false")
+	}
+	if unpushed {
+		t.Fatal("unpushed after push = true, want false")
+	}
+}
+
+func TestCheckWorktreeCleanDetachedHeadFallsBackToOriginalHead(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+
+	repo := initWorkspaceTestRepo(t)
+	worktreePath := filepath.Join(t.TempDir(), "detached-worktree")
+	runWorkspaceGit(t, repo, "worktree", "add", "--detach", worktreePath, "HEAD")
+
+	dirty, unpushed, err := checkWorktreeClean(worktreePath, repo)
+	if err != nil {
+		t.Fatalf("checkWorktreeClean: %v", err)
+	}
+	if dirty {
+		t.Fatal("dirty = true, want false")
+	}
+	if unpushed {
+		t.Fatal("unpushed = true, want false when detached HEAD matches original repo")
+	}
+}
+
+func TestCheckWorktreeCleanBranchUsesUpstreamComparison(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+
+	repo := initWorkspaceTestRepo(t)
+	remote := initWorkspaceBareRemote(t)
+
+	runWorkspaceGit(t, repo, "remote", "add", "origin", remote)
+	runWorkspaceGit(t, repo, "push", "-u", "origin", "HEAD")
+
+	if err := os.WriteFile(filepath.Join(repo, "app", "main.txt"), []byte("seed\nbranch\n"), 0o644); err != nil {
+		t.Fatalf("write branch change: %v", err)
+	}
+	runWorkspaceGit(t, repo, "add", "app/main.txt")
+	runWorkspaceGit(t, repo, "commit", "-m", "branch change")
+
+	dirty, unpushed, err := checkWorktreeClean(repo, repo)
+	if err != nil {
+		t.Fatalf("checkWorktreeClean before push: %v", err)
+	}
+	if dirty {
+		t.Fatal("dirty before push = true, want false")
+	}
+	if !unpushed {
+		t.Fatal("unpushed before push = false, want true")
+	}
+
+	runWorkspaceGit(t, repo, "push")
+
+	dirty, unpushed, err = checkWorktreeClean(repo, repo)
+	if err != nil {
+		t.Fatalf("checkWorktreeClean after push: %v", err)
+	}
+	if dirty {
+		t.Fatal("dirty after push = true, want false")
+	}
+	if unpushed {
+		t.Fatal("unpushed after push = true, want false")
+	}
+}
+
 func initWorkspaceTestRepo(t *testing.T) string {
 	t.Helper()
 
@@ -279,6 +386,17 @@ func initWorkspaceTestRepo(t *testing.T) string {
 	runWorkspaceGit(t, repo, "add", "README.md", "app/main.txt", "api/main.txt")
 	runWorkspaceGit(t, repo, "commit", "-m", "init")
 	return repo
+}
+
+func initWorkspaceBareRemote(t *testing.T) string {
+	t.Helper()
+
+	remote := filepath.Join(t.TempDir(), "remote.git")
+	if err := os.MkdirAll(remote, 0o755); err != nil {
+		t.Fatalf("mkdir remote: %v", err)
+	}
+	runWorkspaceGit(t, remote, "init", "--bare")
+	return remote
 }
 
 func assertWorkspaceModel(t *testing.T, workspace *Workspace, want WorkspaceExecutionModel) {

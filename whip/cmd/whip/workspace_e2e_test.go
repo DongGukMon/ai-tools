@@ -252,6 +252,102 @@ func TestWorkspaceArchiveRejectsDirtyWorktree(t *testing.T) {
 	}
 }
 
+func TestWorkspaceArchiveAllowsDetachedHeadWithPushedCommit(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+
+	store := tempWhipStore(t)
+	repo := initWhipCLIRepo(t)
+	remote := initWhipBareRemote(t)
+	repoAppDir := filepath.Join(repo, "app")
+
+	runWhipGit(t, repo, "remote", "add", "origin", remote)
+	runWhipGit(t, repo, "push", "-u", "origin", "HEAD")
+
+	runWhipCLI(t, "task", "create", "Pushed task", "--workspace", "push-lane", "--cwd", repoAppDir, "--desc", "test pushed detached head")
+
+	tasks, err := store.ListTasks()
+	if err != nil {
+		t.Fatalf("ListTasks: %v", err)
+	}
+	task := tasks[0]
+
+	workspace, err := store.LoadWorkspace("push-lane")
+	if err != nil {
+		t.Fatalf("LoadWorkspace: %v", err)
+	}
+	worktreeFile := filepath.Join(workspace.WorktreePath, "app", "main.txt")
+	if err := os.WriteFile(worktreeFile, []byte("seed\npushed\n"), 0o644); err != nil {
+		t.Fatalf("write worktree file: %v", err)
+	}
+	runWhipGit(t, workspace.WorktreePath, "add", "app/main.txt")
+	runWhipGit(t, workspace.WorktreePath, "commit", "-m", "detached pushed change")
+	runWhipGit(t, workspace.WorktreePath, "push", "origin", "HEAD:refs/heads/push-lane")
+
+	runWhipCLI(t, "task", "cancel", task.ID, "--note", "done")
+	runWhipCLI(t, "workspace", "archive", "push-lane")
+
+	workspace, err = store.LoadWorkspace("push-lane")
+	if err != nil {
+		t.Fatalf("LoadWorkspace after archive: %v", err)
+	}
+	if workspace.EffectiveStatus() != whiplib.WorkspaceStatusArchived {
+		t.Fatalf("workspace status = %q, want archived", workspace.EffectiveStatus())
+	}
+}
+
+func TestWorkspaceArchiveRejectsDetachedHeadWithUnpushedCommit(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+
+	store := tempWhipStore(t)
+	repo := initWhipCLIRepo(t)
+	remote := initWhipBareRemote(t)
+	repoAppDir := filepath.Join(repo, "app")
+
+	runWhipGit(t, repo, "remote", "add", "origin", remote)
+	runWhipGit(t, repo, "push", "-u", "origin", "HEAD")
+
+	runWhipCLI(t, "task", "create", "Unpushed task", "--workspace", "unpushed-lane", "--cwd", repoAppDir, "--desc", "test unpushed detached head")
+
+	tasks, err := store.ListTasks()
+	if err != nil {
+		t.Fatalf("ListTasks: %v", err)
+	}
+	task := tasks[0]
+
+	workspace, err := store.LoadWorkspace("unpushed-lane")
+	if err != nil {
+		t.Fatalf("LoadWorkspace: %v", err)
+	}
+	worktreeFile := filepath.Join(workspace.WorktreePath, "app", "main.txt")
+	if err := os.WriteFile(worktreeFile, []byte("seed\nunpushed\n"), 0o644); err != nil {
+		t.Fatalf("write worktree file: %v", err)
+	}
+	runWhipGit(t, workspace.WorktreePath, "add", "app/main.txt")
+	runWhipGit(t, workspace.WorktreePath, "commit", "-m", "detached unpushed change")
+
+	runWhipCLI(t, "task", "cancel", task.ID, "--note", "done")
+
+	_, _, err = execWhipCLICapture(t, "workspace", "archive", "unpushed-lane")
+	if err == nil {
+		t.Fatal("workspace archive should reject detached HEAD with unpushed commit")
+	}
+	if !strings.Contains(err.Error(), "unpushed commits") {
+		t.Fatalf("workspace archive error = %v, want unpushed commits rejection", err)
+	}
+
+	workspace, err = store.LoadWorkspace("unpushed-lane")
+	if err != nil {
+		t.Fatalf("LoadWorkspace after rejected archive: %v", err)
+	}
+	if workspace.EffectiveStatus() != whiplib.WorkspaceStatusActive {
+		t.Fatalf("workspace status = %q, want active", workspace.EffectiveStatus())
+	}
+}
+
 func TestWorkspaceArchiveRejectsNonTerminalTask(t *testing.T) {
 	store := tempWhipStore(t)
 	nonGitDir := canonicalTestPath(t, t.TempDir())
@@ -598,6 +694,17 @@ func initWhipCLIRepo(t *testing.T) string {
 	runWhipGit(t, repo, "add", "README.md", "app/main.txt")
 	runWhipGit(t, repo, "commit", "-m", "init")
 	return repo
+}
+
+func initWhipBareRemote(t *testing.T) string {
+	t.Helper()
+
+	remote := filepath.Join(canonicalTestPath(t, t.TempDir()), "remote.git")
+	if err := os.MkdirAll(remote, 0o755); err != nil {
+		t.Fatalf("mkdir remote: %v", err)
+	}
+	runWhipGit(t, remote, "init", "--bare")
+	return remote
 }
 
 func runWhipGit(t *testing.T, repo string, args ...string) {

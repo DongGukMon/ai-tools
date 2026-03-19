@@ -599,19 +599,58 @@ func checkWorktreeClean(worktreePath, originalRepoPath string) (dirty bool, unpu
 	logOut, err := exec.Command("git", "-C", worktreePath, "log", "@{u}..HEAD", "--oneline").Output()
 	if err == nil {
 		unpushed = len(strings.TrimSpace(string(logOut))) > 0
-	} else if originalRepoPath != "" {
-		// No upstream — compare worktree HEAD against original repo HEAD
-		wtHead, err1 := exec.Command("git", "-C", worktreePath, "rev-parse", "HEAD").Output()
-		origHead, err2 := exec.Command("git", "-C", originalRepoPath, "rev-parse", "HEAD").Output()
-		if err1 == nil && err2 == nil {
-			unpushed = strings.TrimSpace(string(wtHead)) != strings.TrimSpace(string(origHead))
-		} else {
-			unpushed = true // can't determine — treat as unpushed
+		return dirty, unpushed, nil
+	}
+
+	if originalRepoPath == "" {
+		return dirty, true, nil // no upstream, no original repo — treat as unpushed
+	}
+
+	detachedHead, detachedErr := isDetachedHead(worktreePath)
+	if detachedErr == nil && detachedHead {
+		// Detached worktrees never have @{u}; if HEAD is already reachable from any
+		// remote ref, treat it as pushed before falling back to local HEAD comparison.
+		containsRemote, containsErr := remoteRefContainsHead(worktreePath)
+		if containsErr == nil && containsRemote {
+			return dirty, false, nil
 		}
+	}
+
+	headDiffers, compareErr := worktreeHeadDiffersFromOriginal(worktreePath, originalRepoPath)
+	if compareErr == nil {
+		unpushed = headDiffers
 	} else {
-		unpushed = true // no upstream, no original repo — treat as unpushed
+		unpushed = true // can't determine — treat as unpushed
 	}
 	return dirty, unpushed, nil
+}
+
+func isDetachedHead(worktreePath string) (bool, error) {
+	branchOut, err := exec.Command("git", "-C", worktreePath, "branch", "--show-current").Output()
+	if err != nil {
+		return false, err
+	}
+	return strings.TrimSpace(string(branchOut)) == "", nil
+}
+
+func remoteRefContainsHead(worktreePath string) (bool, error) {
+	remoteOut, err := exec.Command("git", "-C", worktreePath, "branch", "-r", "--contains", "HEAD").Output()
+	if err != nil {
+		return false, err
+	}
+	return strings.TrimSpace(string(remoteOut)) != "", nil
+}
+
+func worktreeHeadDiffersFromOriginal(worktreePath, originalRepoPath string) (bool, error) {
+	wtHead, err := exec.Command("git", "-C", worktreePath, "rev-parse", "HEAD").Output()
+	if err != nil {
+		return false, err
+	}
+	origHead, err := exec.Command("git", "-C", originalRepoPath, "rev-parse", "HEAD").Output()
+	if err != nil {
+		return false, err
+	}
+	return strings.TrimSpace(string(wtHead)) != strings.TrimSpace(string(origHead)), nil
 }
 
 func autoSaveWorktree(worktreePath string) error {
