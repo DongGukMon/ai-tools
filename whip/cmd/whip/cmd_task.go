@@ -12,7 +12,7 @@ import (
 )
 
 func createCmd() *cobra.Command {
-	var desc, file, cwd, difficulty, backend, workspace, role string
+	var desc, file, cwd, difficulty, backend, workspace, role, taskType string
 	var review bool
 
 	cmd := &cobra.Command{
@@ -87,6 +87,12 @@ func createCmd() *cobra.Command {
 			}
 
 			task := whip.NewTask(title, description, cwd)
+			if taskType != "" {
+				if err := whip.ValidateTaskType(taskType); err != nil {
+					return err
+				}
+				task.Type = taskType
+			}
 			task.Workspace = workspace
 			task.Difficulty = difficulty
 			task.Review = review
@@ -98,6 +104,7 @@ func createCmd() *cobra.Command {
 			}
 
 			fmt.Fprintf(os.Stderr, "Created task %s: %s\n", task.ID, task.Title)
+			fmt.Fprintf(os.Stderr, "type: %s\n", task.Type)
 			fmt.Print(task.ID)
 			return nil
 		},
@@ -112,6 +119,7 @@ func createCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&review, "review", false, "Require review before completion (medium/hard only; always enabled for --role lead)")
 	cmd.Flags().StringVar(&backend, "backend", "", "AI backend (default: claude)")
 	cmd.Flags().StringVar(&role, "role", "", `Task role: "lead" creates a Workspace Lead that autonomously manages workers (requires --workspace)`)
+	cmd.Flags().StringVar(&taskType, "type", "", fmt.Sprintf("Task type override (%s)", strings.Join(whip.AllTaskTypes(), ", ")))
 
 	return cmd
 }
