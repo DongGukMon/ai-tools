@@ -45,6 +45,7 @@ type storeMetadata struct {
 	CanonicalRoot string    `json:"canonical_root"`
 	CreatedAt     time.Time `json:"created_at"`
 	InstallID     string    `json:"install_id"`
+	SchemaVersion int       `json:"schema_version,omitempty"`
 }
 
 func NewStore() (*Store, error) {
@@ -61,7 +62,11 @@ func NewStore() (*Store, error) {
 	if err := ensurePrivateDir(filepath.Join(baseDir, archiveDir)); err != nil {
 		return nil, fmt.Errorf("cannot create archive directory: %w", err)
 	}
-	return &Store{BaseDir: baseDir}, nil
+	store := &Store{BaseDir: baseDir}
+	if err := store.runMigrations(); err != nil {
+		return nil, fmt.Errorf("store migration failed: %w", err)
+	}
+	return store, nil
 }
 
 func ResolveWhipBaseDir() (string, error) {

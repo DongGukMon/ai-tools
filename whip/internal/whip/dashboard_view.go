@@ -57,6 +57,8 @@ func (m DashboardModel) View() string {
 		b.WriteString(m.renderNoteHistoryView(w))
 	case viewMsgHistory:
 		b.WriteString(m.renderMsgHistoryView(w))
+	case viewStats:
+		b.WriteString(m.renderStatsView(w))
 	}
 
 	return b.String()

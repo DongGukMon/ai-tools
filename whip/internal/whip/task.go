@@ -24,6 +24,7 @@ type Task struct {
 	ID            string      `json:"id"`
 	Title         string      `json:"title"`
 	Description   string      `json:"description"`
+	Type          string      `json:"type,omitempty"`
 	CWD           string      `json:"cwd"`
 	Workspace     string      `json:"workspace,omitempty"`
 	Status        TaskStatus  `json:"status"`
@@ -53,6 +54,7 @@ func NewTask(title, description, cwd string) *Task {
 		ID:          generateID(),
 		Title:       title,
 		Description: description,
+		Type:        InferTaskType(title, description),
 		CWD:         cwd,
 		Workspace:   GlobalWorkspaceName,
 		Status:      StatusCreated,

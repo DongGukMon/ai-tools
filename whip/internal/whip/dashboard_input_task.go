@@ -14,6 +14,8 @@ func (m *DashboardModel) resetTaskListState() {
 	m.archiveableTasks = map[string]bool{}
 	m.cursor = 0
 	m.listScroll = 0
+	m.statsScroll = 0
+	m.statsSections = nil
 	m.expandedWorkspaces = map[string]bool{}
 	m.selectedTask = nil
 	m.detailScroll = 0
@@ -102,6 +104,12 @@ func (m DashboardModel) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.view = viewIRC
 			}
 		}
+	case "s":
+		m.view = viewStats
+		m.statsScroll = 0
+		m.err = nil
+		m.statsSections = m.computeStatsSections()
+		return m, nil
 	case "r":
 		if m.listMode == listModeActive {
 			if cmd := m.forceLoadDashboardUsage(); cmd != nil {

@@ -81,6 +81,7 @@ const (
 	viewRemoteStatus
 	viewNoteHistory
 	viewMsgHistory
+	viewStats
 )
 
 const (
@@ -92,6 +93,17 @@ type ircMessage struct {
 	From      string    `json:"from"`
 	Content   string    `json:"content"`
 	Timestamp time.Time `json:"timestamp"`
+}
+
+type statsRow struct {
+	Label   string
+	Count   int
+	Percent float64
+}
+
+type statsSection struct {
+	Title string
+	Rows  []statsRow
 }
 
 type ircSendResultMsg struct{ err error }
@@ -133,11 +145,14 @@ type DashboardModel struct {
 	remoteWorkspace string
 	serveNotices    []string
 
-	noteHistoryScroll int
-	msgHistoryScroll  int
-	msgHistoryLines   []ircMessage
-	usageState        dashboardUsageState
-	usageLoading      bool
+	noteHistoryScroll    int
+	msgHistoryScroll     int
+	msgHistoryLines      []ircMessage
+	statsIncludeArchived bool
+	statsScroll          int
+	statsSections        []statsSection
+	usageState           dashboardUsageState
+	usageLoading         bool
 
 	programRef *programHolder
 
@@ -226,6 +241,8 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateNoteHistory(msg)
 		case viewMsgHistory:
 			return m.updateMsgHistory(msg)
+		case viewStats:
+			return m.updateStats(msg)
 		}
 
 	case tea.WindowSizeMsg:
@@ -273,6 +290,9 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.detailScroll = 0
 				m.view = viewList
 			}
+		}
+		if m.view == viewStats {
+			m.statsSections = m.computeStatsSections()
 		}
 
 	case peersMsg:

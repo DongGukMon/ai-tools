@@ -25,6 +25,7 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(
 		taskCmd(),
 		workspaceCmd(),
+		statsCmd(),
 		dashboardCmd(),
 		graphCmd(),
 		remoteCmd(),
