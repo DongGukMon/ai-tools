@@ -145,7 +145,10 @@ export default function ThemeSettings({ open, onClose }: Props) {
       <div
         className={cn(
           "absolute inset-0 bg-black/20",
-          closing ? "animate-out fade-out-0 duration-200 fill-mode-forwards" : "animate-in fade-in-0 duration-200",
+          {
+            "animate-out fade-out-0 duration-200 fill-mode-forwards": closing,
+            "animate-in fade-in-0 duration-200": !closing,
+          },
         )}
       />
 
@@ -154,9 +157,10 @@ export default function ThemeSettings({ open, onClose }: Props) {
         ref={panelRef}
         className={cn(
           "relative w-[340px] h-full bg-background border-l border-border shadow-lg",
-          closing
-            ? "animate-out slide-out-to-right duration-200 fill-mode-forwards"
-            : "animate-in slide-in-from-right duration-200",
+          {
+            "animate-out slide-out-to-right duration-200 fill-mode-forwards": closing,
+            "animate-in slide-in-from-right duration-200": !closing,
+          },
         )}
         style={{ overflowY: "overlay" as never, overscrollBehavior: "none" }}
         onAnimationEnd={handleAnimationEnd}
@@ -355,7 +359,7 @@ export default function ThemeSettings({ open, onClose }: Props) {
         </div>
 
         {/* Footer actions */}
-        <div className="sticky bottom-0 flex items-center justify-between gap-2 px-4 py-3 bg-background border-t border-border">
+        <div className={cn("sticky bottom-0 flex items-center justify-between gap-2 px-4 py-3 bg-background border-t border-border")}>
           <Button variant="ghost" size="sm" onClick={handleReset}>
             <RotateCcw size={12} strokeWidth={1.5} />
             Reset

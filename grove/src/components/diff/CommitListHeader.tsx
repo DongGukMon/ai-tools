@@ -1,6 +1,8 @@
 import { GitMerge } from "lucide-react";
 import { IconButton } from "../ui/button";
 import { Spinner } from "../ui/spinner";
+import { cn } from "../../lib/cn";
+
 
 interface Props {
   behindCount: number;
@@ -14,13 +16,13 @@ export default function CommitListHeader({
   onMerge,
 }: Props) {
   return (
-    <div className="flex items-center border-b border-border px-4 h-9 select-none">
-      <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+    <div className={cn("flex items-center border-b border-border px-4 h-9 select-none")}>
+      <span className={cn("text-xs font-medium uppercase tracking-wider text-muted-foreground")}>
         Commits
       </span>
       {behindCount > 0 && (
-        <div className="ml-auto flex items-center gap-1.5">
-          <span className="rounded-full bg-accent/20 px-2 py-0.5 text-xs font-medium text-accent">
+        <div className={cn("ml-auto flex items-center gap-1.5")}>
+          <span className={cn("rounded-full bg-accent/20 px-2 py-0.5 text-xs font-medium text-accent")}>
             {"\u2193"}{behindCount}
           </span>
           <IconButton

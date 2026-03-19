@@ -2,6 +2,8 @@ import type { CommitInfo } from "../../types";
 import CommitListHeader from "./CommitListHeader";
 import CommitListItem from "./CommitListItem";
 import WorkingChanges from "./WorkingChanges";
+import { cn } from "../../lib/cn";
+
 
 interface Props {
   commits: CommitInfo[];
@@ -25,9 +27,9 @@ export default function CommitList({
   const isChangesSelected = selectedView === "changes";
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className={cn("flex flex-col h-full overflow-hidden")}>
       <CommitListHeader behindCount={behindCount} merging={merging} onMerge={onMerge} />
-      <div className="flex-1 overflow-y-auto">
+      <div className={cn("flex-1 overflow-y-auto")}>
         <WorkingChanges
           changeCount={changeCount}
           isSelected={isChangesSelected}

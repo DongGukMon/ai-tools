@@ -9,6 +9,7 @@ import {
   findFirstLeaf,
   normalizeSplitTree,
 } from "../lib/split-tree";
+import { collectTerminalPanes } from "../lib/terminal-session";
 import { loadTerminalLayouts, saveTerminalLayouts } from "../lib/platform";
 
 // In-memory cache populated at startup via initLayouts()
@@ -40,6 +41,7 @@ interface TerminalState {
   sessions: Record<string, SplitNode>;
   activeWorktree: string | null;
   focusedPtyId: string | null;
+  bellPtyIds: Set<string>;
   theme: TerminalTheme | null;
   detectedTheme: TerminalTheme | null;
   createSession: (worktreePath: string, paneId: string, ptyId: string) => void;
@@ -54,6 +56,7 @@ interface TerminalState {
   closeTerminal: (worktreePath: string, ptyId: string) => void;
   setActiveWorktree: (worktreePath: string | null) => void;
   setFocusedPtyId: (ptyId: string | null) => void;
+  markBellPty: (ptyId: string) => void;
   setDetectedTheme: (theme: TerminalTheme) => void;
   loadTheme: (theme: TerminalTheme) => void;
   removeSession: (worktreePath: string) => void;
@@ -66,6 +69,7 @@ export const useTerminalStore = create<TerminalState>((set) => ({
   sessions: {},
   activeWorktree: null,
   focusedPtyId: null,
+  bellPtyIds: new Set<string>(),
   theme: null,
   detectedTheme: null,
 
@@ -82,7 +86,10 @@ export const useTerminalStore = create<TerminalState>((set) => ({
         [worktreePath]: { id: paneId, type: "leaf" as const, ptyId },
       };
       saveLayouts(newSessions);
-      return { sessions: newSessions, focusedPtyId: ptyId };
+      return {
+        sessions: newSessions,
+        focusedPtyId: ptyId,
+      };
     }),
 
   restoreSession: (worktreePath, node) =>
@@ -115,11 +122,21 @@ export const useTerminalStore = create<TerminalState>((set) => ({
   removeSession: (worktreePath) =>
     set((state) => {
       const newSessions = { ...state.sessions };
+      const nextBellPtyIds = new Set(state.bellPtyIds);
+      const existingSession = state.sessions[worktreePath];
+      if (existingSession) {
+        for (const { ptyId } of collectTerminalPanes(existingSession)) {
+          if (ptyId) {
+            nextBellPtyIds.delete(ptyId);
+          }
+        }
+      }
       delete newSessions[worktreePath];
       delete layoutCache[worktreePath];
       saveLayouts(newSessions);
       return {
         sessions: newSessions,
+        bellPtyIds: nextBellPtyIds,
         focusedPtyId:
           state.activeWorktree === worktreePath ? null : state.focusedPtyId,
         activeWorktree:
@@ -145,7 +162,13 @@ export const useTerminalStore = create<TerminalState>((set) => ({
             ? findFirstLeaf(updated)
             : null
           : state.focusedPtyId;
-      return { sessions: newSessions, focusedPtyId: newFocused };
+      const nextBellPtyIds = new Set(state.bellPtyIds);
+      nextBellPtyIds.delete(ptyId);
+      return {
+        sessions: newSessions,
+        focusedPtyId: newFocused,
+        bellPtyIds: nextBellPtyIds,
+      };
     }),
 
   setActiveWorktree: (worktreePath) =>
@@ -155,10 +178,33 @@ export const useTerminalStore = create<TerminalState>((set) => ({
             ? findFirstLeaf(state.sessions[worktreePath])
             : null)
         : null;
-      return { activeWorktree: worktreePath, focusedPtyId: newFocused };
+      const nextBellPtyIds = new Set(state.bellPtyIds);
+      if (worktreePath && state.sessions[worktreePath]) {
+        for (const { ptyId } of collectTerminalPanes(state.sessions[worktreePath])) {
+          if (ptyId) {
+            nextBellPtyIds.delete(ptyId);
+          }
+        }
+      }
+      return {
+        activeWorktree: worktreePath,
+        focusedPtyId: newFocused,
+        bellPtyIds: nextBellPtyIds,
+      };
     }),
 
   setFocusedPtyId: (ptyId) => set({ focusedPtyId: ptyId }),
+
+  markBellPty: (ptyId) =>
+    set((state) => {
+      if (state.bellPtyIds.has(ptyId)) {
+        return state;
+      }
+
+      return {
+        bellPtyIds: new Set(state.bellPtyIds).add(ptyId),
+      };
+    }),
 
   updateSizes: (worktreePath, nodePath, ratios) =>
     set((state) => {

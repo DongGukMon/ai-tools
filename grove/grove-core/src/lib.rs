@@ -44,6 +44,12 @@ pub struct PtySession {
     pub worktree_path: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PtyBellEvent {
+    pub pty_id: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TerminalPaneSnapshotInput {

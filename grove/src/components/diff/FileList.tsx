@@ -15,23 +15,23 @@ export default function FileList({
 }: Props) {
   if (fileStatuses.length === 0) {
     return (
-      <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+      <div className={cn("flex items-center justify-center h-full text-sm text-muted-foreground")}>
         No changes
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      <div className="flex items-center gap-2 px-4 h-9 shrink-0 border-b border-border">
-        <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+    <div className={cn("flex flex-col h-full overflow-hidden")}>
+      <div className={cn("flex items-center gap-2 px-4 h-9 shrink-0 border-b border-border")}>
+        <span className={cn("text-xs font-medium uppercase tracking-wider text-muted-foreground")}>
           Files
         </span>
-        <span className="rounded-full bg-accent/20 px-2 py-0.5 text-xs font-medium text-accent">
+        <span className={cn("rounded-full bg-accent/20 px-2 py-0.5 text-xs font-medium text-accent")}>
           {fileStatuses.length}
         </span>
       </div>
-      <div className="flex-1 overflow-y-auto">
+      <div className={cn("flex-1 overflow-y-auto")}>
         {fileStatuses.map((file) => (
           <div
             key={file.path}
@@ -45,7 +45,7 @@ export default function FileList({
             )}
             onClick={() => onSelectFile(file.path)}
           >
-            <FileText className="h-3.5 w-3.5 shrink-0" />
+            <FileText className={cn("h-3.5 w-3.5 shrink-0")} />
             <span className={cn("min-w-0 truncate", {
               "font-medium": selectedFile === file.path,
             })}>

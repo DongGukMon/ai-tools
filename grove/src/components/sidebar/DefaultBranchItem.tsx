@@ -49,10 +49,10 @@ function DefaultBranchItem({ project }: Props) {
       onClick={() => !refreshing && selectWorktree(sourceWorktree)}
       title={project.sourcePath}
     >
-      <GitBranch className="h-3.5 w-3.5 shrink-0" />
-      <span className="min-w-0 flex-1 truncate">main</span>
+      <GitBranch className={cn("h-3.5 w-3.5 shrink-0")} />
+      <span className={cn("min-w-0 flex-1 truncate")}>main</span>
       {refreshing ? (
-        <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
+        <Loader2 className={cn("h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground")} />
       ) : (
         <button
           className={cn(
@@ -79,7 +79,7 @@ function DefaultBranchItem({ project }: Props) {
               : "Sync source repo"
           }
         >
-          <RotateCw className="h-3 w-3" />
+          <RotateCw className={cn("h-3 w-3")} />
         </button>
       )}
     </div>

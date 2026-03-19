@@ -1,8 +1,8 @@
 mod eventbus;
 use grove_core::{
     AppConfig, BehindInfo, CommitInfo, CreatePtyRequest, CreatePtyRestore, CreatePtyResult,
-    DetectedThemeResult, FileDiff, FileStatus, Project, SaveTerminalSessionSnapshotRequest,
-    TerminalSessionSnapshot, Worktree,
+    DetectedThemeResult, FileDiff, FileStatus, Project, PtyBellEvent,
+    SaveTerminalSessionSnapshotRequest, TerminalSessionSnapshot, Worktree,
 };
 
 // === Async helper ===
@@ -150,6 +150,11 @@ async fn clear_pty_scrollback(pty_id: String) -> Result<(), String> {
 #[tauri::command]
 async fn close_pty(pty_id: String) -> Result<(), String> {
     blocking(move || grove_core::pty::close(&pty_id)).await
+}
+
+#[tauri::command]
+async fn poll_pty_bells() -> Result<Vec<PtyBellEvent>, String> {
+    blocking(grove_core::pty::poll_bell_events).await
 }
 
 #[tauri::command]
@@ -301,6 +306,7 @@ pub fn run() {
             resize_pty,
             clear_pty_scrollback,
             close_pty,
+            poll_pty_bells,
             save_terminal_session_snapshot,
             load_terminal_session_snapshot,
             // Git Diff (W4)

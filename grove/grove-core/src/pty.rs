@@ -3,7 +3,7 @@ use crate::{
     process_env::{enriched_path, preferred_ssh_auth_sock},
     worktree_lifecycle::WorktreeResource,
     CreatePtyInitialHydration, CreatePtyInitialHydrationSource, CreatePtyRequest, CreatePtyRestore,
-    CreatePtyResult, CreatePtySessionState, SaveTerminalSessionSnapshotRequest,
+    CreatePtyResult, CreatePtySessionState, PtyBellEvent, SaveTerminalSessionSnapshotRequest,
     TerminalPaneSnapshot, TerminalPaneSnapshotInput, TerminalRestoreCwdSource,
     TerminalSessionSnapshot,
 };
@@ -25,6 +25,8 @@ const TMUX_STATUS_OPTION: &str = "status";
 const TMUX_STATUS_OFF_VALUE: &str = "off";
 const TMUX_MOUSE_OPTION: &str = "mouse";
 const TMUX_MOUSE_ON_VALUE: &str = "on";
+const TMUX_MONITOR_BELL_OPTION: &str = "monitor-bell";
+const TMUX_MONITOR_BELL_ON_VALUE: &str = "on";
 const TMUX_ESCAPE_TIME_OPTION: &str = "escape-time";
 const TMUX_ESCAPE_TIME_VALUE: &str = "100";
 const WORKTREE_HASH_LEN: usize = 12;
@@ -43,6 +45,7 @@ struct PtyRuntimeState {
     last_known_cwd: Option<String>,
     scrollback: Vec<u8>,
     scrollback_truncated: bool,
+    last_bell_flag: bool,
 }
 
 impl PtyRuntimeState {
@@ -60,6 +63,7 @@ impl PtyRuntimeState {
             last_known_cwd: None,
             scrollback: Vec::new(),
             scrollback_truncated: false,
+            last_bell_flag: false,
         };
 
         if let Some(restore) = restore {
@@ -346,6 +350,42 @@ pub fn close_ptys_for_worktree(worktree_path: &str) -> Result<(), String> {
     close_orphaned_tmux_sessions_for_worktree(worktree_path)?;
 
     Ok(())
+}
+
+pub fn poll_bell_events() -> Result<Vec<PtyBellEvent>, String> {
+    let tracked_sessions = {
+        let reg = registry().lock().map_err(|e| e.to_string())?;
+        reg.iter()
+            .map(|(pty_id, instance)| {
+                (
+                    pty_id.clone(),
+                    instance.session_name.clone(),
+                    Arc::clone(&instance.tracked),
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+
+    let mut events = Vec::new();
+
+    for (pty_id, session_name, tracked) in tracked_sessions {
+        let bell_flag = match tmux_window_bell_flag(&session_name) {
+            Ok(value) => value,
+            Err(error) if error == TMUX_NOT_FOUND_ERROR || tmux_session_missing(&error) => false,
+            Err(error) => {
+                return Err(format!(
+                    "failed to poll tmux bell state for {session_name}: {error}"
+                ));
+            }
+        };
+
+        let mut state = tracked.lock().map_err(|e| e.to_string())?;
+        if consume_bell_edge(&mut state.last_bell_flag, bell_flag) {
+            events.push(PtyBellEvent { pty_id });
+        }
+    }
+
+    Ok(events)
 }
 
 pub struct PtySessionResource;
@@ -734,6 +774,11 @@ fn set_grove_tmux_metadata(
 fn enforce_grove_tmux_options(session_name: &str) -> Result<(), String> {
     tmux_set_option(session_name, TMUX_STATUS_OPTION, TMUX_STATUS_OFF_VALUE)?;
     tmux_set_option(session_name, TMUX_MOUSE_OPTION, TMUX_MOUSE_ON_VALUE)?;
+    tmux_set_window_option(
+        session_name,
+        TMUX_MONITOR_BELL_OPTION,
+        TMUX_MONITOR_BELL_ON_VALUE,
+    )?;
     tmux_set_server_option(TMUX_ESCAPE_TIME_OPTION, TMUX_ESCAPE_TIME_VALUE)?;
     Ok(())
 }
@@ -813,6 +858,18 @@ fn tmux_set_option(session_name: &str, option: &str, value: &str) -> Result<(), 
 
     Err(format!(
         "failed to set tmux option {option} on {session_name}: {}",
+        tmux_output_message(&output)
+    ))
+}
+
+fn tmux_set_window_option(session_name: &str, option: &str, value: &str) -> Result<(), String> {
+    let output = tmux_output(["set-window-option", "-q", "-t", session_name, option, value])?;
+    if output.status.success() {
+        return Ok(());
+    }
+
+    Err(format!(
+        "failed to set tmux window option {option} on {session_name}: {}",
         tmux_output_message(&output)
     ))
 }
@@ -967,6 +1024,10 @@ fn tmux_pane_alternate_on(session_name: &str) -> Result<bool, String> {
     Ok(tmux_display_message_value(session_name, "#{alternate_on}")?.as_deref() == Some("1"))
 }
 
+fn tmux_window_bell_flag(session_name: &str) -> Result<bool, String> {
+    Ok(tmux_display_message_value(session_name, "#{window_bell_flag}")?.as_deref() == Some("1"))
+}
+
 fn tmux_display_message_value(session_name: &str, format: &str) -> Result<Option<String>, String> {
     let output = tmux_output(["display-message", "-p", "-t", session_name, format])?;
     if !output.status.success() {
@@ -1026,6 +1087,12 @@ fn resolve_process_cwd(process_id: Option<u32>) -> Option<String> {
     {
         None
     }
+}
+
+fn consume_bell_edge(previous_flag: &mut bool, current_flag: bool) -> bool {
+    let triggered = current_flag && !*previous_flag;
+    *previous_flag = current_flag;
+    triggered
 }
 
 #[cfg(test)]
@@ -1112,6 +1179,16 @@ mod tests {
 
         assert_eq!(state.scrollback, b"abc");
         assert!(state.scrollback_truncated);
+    }
+
+    #[test]
+    fn consume_bell_edge_only_triggers_on_rising_edge() {
+        let mut previous = false;
+
+        assert!(consume_bell_edge(&mut previous, true));
+        assert!(!consume_bell_edge(&mut previous, true));
+        assert!(!consume_bell_edge(&mut previous, false));
+        assert!(consume_bell_edge(&mut previous, true));
     }
 
     #[test]

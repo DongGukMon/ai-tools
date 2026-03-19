@@ -4,6 +4,8 @@ import { useTerminalCommandPipeline } from "../../hooks/useTerminalCommandPipeli
 import type { TerminalCommandDefinition } from "../../lib/terminal-command-pipeline";
 import ThemeSettings from "./ThemeSettings";
 import { IconButton } from "../ui/button";
+import { cn } from "../../lib/cn";
+
 
 const terminalCommandIcons = {
   settings: Settings,
@@ -22,21 +24,21 @@ export default function TerminalToolbar() {
 
   return (
     <>
-      <div className="flex items-center justify-end border-b border-border bg-sidebar px-2 h-9 shrink-0">
-        <div className="flex items-center gap-1">
+      <div className={cn("flex items-center justify-end border-b border-border bg-sidebar px-2 h-9 shrink-0")}>
+        <div className={cn("flex items-center gap-1")}>
           {commands.map((command) => {
             const Icon = terminalCommandIcons[command.icon];
             return (
               <IconButton
                 key={command.id}
-                className="h-7 w-7"
+                className={cn("h-7 w-7")}
                 onClick={() => {
                   executeCommand(command).catch(() => {});
                 }}
                 disabled={!isCommandEnabled(command)}
                 title={command.title}
               >
-                <Icon className="h-3.5 w-3.5" />
+                <Icon className={cn("h-3.5 w-3.5")} />
               </IconButton>
             );
           })}

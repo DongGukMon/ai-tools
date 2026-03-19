@@ -1,5 +1,7 @@
 import type { FileDiff } from "../../types";
 import DiffHunk from "./DiffHunk";
+import { cn } from "../../lib/cn";
+
 
 interface Props {
   diff: FileDiff | null;
@@ -9,8 +11,8 @@ interface Props {
 export default function DiffViewer({ diff, selectedFile }: Props) {
   if (!diff || !selectedFile) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <span className="text-sm text-muted-foreground">
+      <div className={cn("flex items-center justify-center h-full")}>
+        <span className={cn("text-sm text-muted-foreground")}>
           Select a file to view diff
         </span>
       </div>
@@ -19,8 +21,8 @@ export default function DiffViewer({ diff, selectedFile }: Props) {
 
   if (diff.hunks.length === 0) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <span className="text-sm text-muted-foreground">
+      <div className={cn("flex items-center justify-center h-full")}>
+        <span className={cn("text-sm text-muted-foreground")}>
           No changes
         </span>
       </div>
@@ -28,7 +30,7 @@ export default function DiffViewer({ diff, selectedFile }: Props) {
   }
 
   return (
-    <div className="h-full overflow-y-auto">
+    <div className={cn("h-full overflow-y-auto")}>
       {diff.hunks.map((hunk, i) => (
         <DiffHunk
           key={`${hunk.header}-${i}`}

@@ -22,14 +22,14 @@ export default function CommitListItem({ commit, isSelected, onClick }: Props) {
       onClick={onClick}
     >
       <div className="mt-0.5">
-        <GitCommit className="h-4 w-4 text-accent" />
+        <GitCommit className={cn("h-4 w-4 text-accent")} />
       </div>
-      <div className="flex-1 min-w-0">
-        <p className="truncate text-sm text-foreground">
+      <div className={cn("flex-1 min-w-0")}>
+        <p className={cn("truncate text-sm text-foreground")}>
           {commit.message.split("\n")[0]}
         </p>
-        <div className="mt-1 flex items-baseline gap-2 text-xs text-muted-foreground min-w-0">
-          <span className="font-mono shrink-0">{commit.shortHash}</span>
+        <div className={cn("mt-1 flex items-baseline gap-2 text-xs text-muted-foreground min-w-0")}>
+          <span className={cn("font-mono shrink-0")}>{commit.shortHash}</span>
           <span className="truncate">{commit.author}</span>
           <span className="shrink-0">{formatCommitTime(commit.date)}</span>
         </div>

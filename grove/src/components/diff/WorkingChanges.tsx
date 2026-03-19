@@ -15,11 +15,11 @@ export default function WorkingChanges({ changeCount, isSelected, onClick }: Pro
       })}
       onClick={onClick}
     >
-      <span className="text-sm font-medium text-foreground">
+      <span className={cn("text-sm font-medium text-foreground")}>
         Working Changes
       </span>
       {changeCount > 0 && (
-        <span className="ml-1.5 text-sm text-muted-foreground">
+        <span className={cn("ml-1.5 text-sm text-muted-foreground")}>
           ({changeCount})
         </span>
       )}

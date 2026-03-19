@@ -86,6 +86,10 @@ export interface CreatePtyResult {
   initialHydration?: CreatePtyInitialHydration | null;
 }
 
+export interface PtyBellEvent {
+  ptyId: string;
+}
+
 export interface TerminalPaneSnapshotInput {
   paneId: string;
   ptyId?: string | null;
@@ -238,6 +242,10 @@ export async function clearPtyScrollback(ptyId: string): Promise<void> {
 
 export async function closePty(ptyId: string): Promise<void> {
   return platform.invoke("close_pty", { ptyId });
+}
+
+export async function pollPtyBells(): Promise<PtyBellEvent[]> {
+  return platform.invoke<PtyBellEvent[]>("poll_pty_bells");
 }
 
 export async function saveTerminalSessionSnapshot(

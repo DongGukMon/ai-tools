@@ -223,6 +223,11 @@ pub async fn close_pty(pty_id: String) -> Result<()> {
 }
 
 #[napi]
+pub async fn poll_pty_bells() -> Result<String> {
+    blocking_json(grove_core::pty::poll_bell_events).await
+}
+
+#[napi]
 pub async fn save_terminal_session_snapshot(snapshot: String) -> Result<String> {
     let snapshot = from_json::<grove_core::SaveTerminalSessionSnapshotRequest>(
         &snapshot,

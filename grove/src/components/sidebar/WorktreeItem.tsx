@@ -2,8 +2,10 @@ import { useState } from "react";
 import { GitBranch, Loader2, X } from "lucide-react";
 import type { Worktree } from "../../types";
 import { useProjectStore } from "../../store/project";
+import { useTerminalStore } from "../../store/terminal";
 import { useToast } from "../../store/toast";
 import { overlay } from "../../lib/overlay";
+import { collectTerminalPanes } from "../../lib/terminal-session";
 import { Button } from "../ui/button";
 import { Dialog } from "../ui/dialog";
 import { cn } from "../../lib/cn";
@@ -19,19 +21,29 @@ function WorktreeItem({ worktree, projectId }: Props) {
     useProjectStore();
   const { toast } = useToast();
   const isSelected = selectedWorktree?.path === worktree.path;
+  const hasBell = useTerminalStore((state) => {
+    const session = state.sessions[worktree.path];
+    if (!session || state.bellPtyIds.size === 0) {
+      return false;
+    }
+
+    return collectTerminalPanes(session).some(
+      ({ ptyId }) => !!ptyId && state.bellPtyIds.has(ptyId),
+    );
+  });
   const displayName = worktree.branch || worktree.name;
 
   const handleRemoveClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
     const confirmed = await overlay.open<boolean>(({ resolve, close }) => (
-      <Dialog open onClose={close} title="Remove worktree?" className="max-w-sm">
-        <div className="space-y-4">
-          <p className="text-sm leading-relaxed text-muted-foreground">
+      <Dialog open onClose={close} title="Remove worktree?" className={cn("max-w-sm")}>
+        <div className={cn("space-y-4")}>
+          <p className={cn("text-sm leading-relaxed text-muted-foreground")}>
             Worktree{" "}
-            <span className="font-semibold text-foreground">{displayName}</span>{" "}
+            <span className={cn("font-semibold text-foreground")}>{displayName}</span>{" "}
             and its local branch, terminal sessions, and layouts will be removed.
           </p>
-          <div className="flex justify-end gap-2">
+          <div className={cn("flex justify-end gap-2")}>
             <Button variant="ghost" size="sm" onClick={close}>Cancel</Button>
             <Button variant="destructive" size="sm" onClick={() => resolve(true)}>Delete</Button>
           </div>
@@ -63,8 +75,15 @@ function WorktreeItem({ worktree, projectId }: Props) {
       onClick={() => !removing && selectWorktree(worktree)}
       title={worktree.path}
     >
-      <GitBranch className="h-3.5 w-3.5 shrink-0" />
-      <span className="min-w-0 flex-1 truncate">{displayName}</span>
+      <GitBranch className={cn("h-3.5 w-3.5 shrink-0")} />
+      <span className={cn("min-w-0 flex-1 truncate")}>{displayName}</span>
+      {hasBell && (
+        <span
+          className={cn("h-2 w-2 shrink-0 rounded-full bg-orange-500")}
+          aria-label="Terminal bell pending"
+          title="Terminal bell pending"
+        />
+      )}
       {removing ? (
         <Loader2 className={cn("h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground")} />
       ) : (
@@ -79,7 +98,7 @@ function WorktreeItem({ worktree, projectId }: Props) {
           onClick={handleRemoveClick}
           title="Remove worktree"
         >
-          <X className="h-3 w-3" />
+          <X className={cn("h-3 w-3")} />
         </button>
       )}
     </div>

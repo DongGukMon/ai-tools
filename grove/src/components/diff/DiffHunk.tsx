@@ -38,9 +38,9 @@ export default function DiffHunk({
   return (
     <div className={cn({ "border-t border-border": !isFirst })}>
       {/* Hunk header */}
-      <div className="flex items-center gap-2 px-3 h-[30px] bg-secondary/50 border-b border-border select-none">
+      <div className={cn("flex items-center gap-2 px-3 h-[30px] bg-secondary/50 border-b border-border select-none")}>
         <button
-          className="flex items-center justify-center w-[18px] h-[18px] shrink-0 rounded hover:bg-secondary transition-colors cursor-pointer text-muted-foreground"
+          className={cn("flex items-center justify-center w-[18px] h-[18px] shrink-0 rounded hover:bg-secondary transition-colors cursor-pointer text-muted-foreground")}
           onClick={() => setCollapsed((prev) => !prev)}
           aria-label={collapsed ? "Expand hunk" : "Collapse hunk"}
         >
@@ -50,7 +50,7 @@ export default function DiffHunk({
             <ChevronDown size={14} strokeWidth={2} />
           )}
         </button>
-        <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground">
+        <span className={cn("min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground")}>
           {hunk.header}
         </span>
       </div>
@@ -114,7 +114,7 @@ function LineGroupView({
         {lines.map((line) => (
           <div
             key={line.index}
-            className="flex min-h-[20px] leading-[20px] font-mono text-[12px]"
+            className={cn("flex min-h-[20px] leading-[20px] font-mono text-[12px]")}
           >
             <span className={cn("w-[40px] text-right pr-2 text-[11px] select-none", {
               "text-muted-foreground/50": isContext,
@@ -129,7 +129,7 @@ function LineGroupView({
               {line.newLineNumber ?? ""}
             </span>
             <span
-              className="w-[18px] text-center select-none font-medium"
+              className={cn("w-[18px] text-center select-none font-medium")}
               style={{ color: prefixColor }}
             >
               {prefix}
@@ -139,7 +139,7 @@ function LineGroupView({
       </div>
 
       {/* Shared scrollable code content */}
-      <div className="flex-1 overflow-x-auto overflow-y-hidden diff-line-content">
+      <div className={cn("flex-1 overflow-x-auto overflow-y-hidden diff-line-content")}>
         {lines.map((line) => (
           <div
             key={line.index}

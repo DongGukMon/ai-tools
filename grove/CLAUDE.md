@@ -12,9 +12,10 @@ Tauri v2 macOS app — Git project manager + split terminal + diff viewer.
 
 ```bash
 pnpm install
+pnpm lint              # ESLint for src/**/*.{ts,tsx}
+pnpm test              # Vitest
 pnpm tauri dev         # Dev server + Tauri window
 pnpm tauri build       # Production build
-pnpm vitest run        # Unit tests (split-tree)
 ```
 
 ## Structure
@@ -95,4 +96,4 @@ Available: `Button`, `Input`, `Badge`, `Dialog`, `Toast` (via `useToast()`)
 
 ### Tests — write alongside features
 
-Split-tree operations tested in `src/lib/split-tree.test.ts`. Run: `npx vitest run`.
+Before closing work, run `pnpm lint && pnpm test`.

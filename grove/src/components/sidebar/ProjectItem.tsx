@@ -51,18 +51,18 @@ function ProjectItem({ project }: Props) {
     const confirmed = await overlay.open<boolean>(({ resolve, close }) => (
       <Dialog open onClose={close} title="Remove project?" className="max-w-sm">
         <div className="space-y-4">
-          <p className="text-sm leading-relaxed text-muted-foreground">
-            <span className="font-semibold text-foreground">
+          <p className={cn("text-sm leading-relaxed text-muted-foreground")}>
+            <span className={cn("font-semibold text-foreground")}>
               {project.org}/{project.repo}
             </span>{" "}
             project folder and all worktrees will be deleted.
           </p>
-          <p className="text-xs leading-relaxed text-muted-foreground/70">
+          <p className={cn("text-xs leading-relaxed text-muted-foreground/70")}>
             This removes the hidden source repository too. Use sync source if
             you only want to reset the source repo to the remote default
             branch.
           </p>
-          <div className="flex justify-end gap-2">
+          <div className={cn("flex justify-end gap-2")}>
             <Button variant="ghost" size="sm" onClick={close}>
               Cancel
             </Button>
@@ -98,30 +98,30 @@ function ProjectItem({ project }: Props) {
         onClick={() => setExpanded(!expanded)}
       >
         {expanded ? (
-          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <ChevronDown className={cn("h-3.5 w-3.5 shrink-0 text-muted-foreground")} />
         ) : (
-          <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <ChevronRight className={cn("h-3.5 w-3.5 shrink-0 text-muted-foreground")} />
         )}
         <GitFork className={cn("h-4 w-4 shrink-0", {
           "text-accent": expanded,
           "text-muted-foreground": !expanded,
         })} />
-        <span className="truncate font-medium">
+        <span className={cn("truncate font-medium")}>
           {project.org}/{project.repo}
         </span>
-        <div className="ml-auto flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className={cn("ml-auto flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity")}>
           <IconButton
             onClick={handleRemoveProject}
             title="Remove project"
           >
-            <X className="h-3.5 w-3.5" />
+            <X className={cn("h-3.5 w-3.5")} />
           </IconButton>
         </div>
       </div>
 
       {/* Worktree list */}
       {expanded && (
-        <div className="ml-5 mt-1 space-y-0.5 border-l border-border pl-3">
+        <div className={cn("ml-5 mt-1 space-y-0.5 border-l border-border pl-3")}>
           <DefaultBranchItem project={project} />
           {project.worktrees.map((wt) => (
             <WorktreeItem
@@ -132,8 +132,8 @@ function ProjectItem({ project }: Props) {
           ))}
           {adding ? (
             <form onSubmit={handleAddWorktree}>
-              <div className="relative flex items-center gap-2 rounded-md px-2 py-1">
-                <GitBranch className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <div className={cn("relative flex items-center gap-2 rounded-md px-2 py-1")}>
+                <GitBranch className={cn("h-3.5 w-3.5 shrink-0 text-muted-foreground")} />
                 <input
                   className={cn(
                     "min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none",
@@ -153,7 +153,7 @@ function ProjectItem({ project }: Props) {
                   }}
                 />
                 {addingLoading && (
-                  <span className="text-xs text-muted-foreground animate-pulse shrink-0">
+                  <span className={cn("text-xs text-muted-foreground animate-pulse shrink-0")}>
                     Creating...
                   </span>
                 )}

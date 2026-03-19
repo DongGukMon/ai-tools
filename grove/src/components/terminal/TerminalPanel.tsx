@@ -7,6 +7,7 @@ import {
   getTerminalTheme,
   getAppConfig,
   getCommandErrorMessage,
+  pollPtyBells,
   saveTerminalSessionSnapshot,
 } from "../../lib/platform";
 import { runCommand } from "../../lib/command";
@@ -28,6 +29,7 @@ import { cn } from "../../lib/cn";
 import type { SplitNode } from "../../types";
 
 const SNAPSHOT_SAVE_DEBOUNCE_MS = 750;
+const PTY_BELL_POLL_MS = 1000;
 
 function buildPaneTopologySignatures(sessions: Record<string, SplitNode>) {
   const signatures = new Map<string, string>();
@@ -76,6 +78,7 @@ function TerminalPanel() {
   const loadTheme = useTerminalStore((s) => s.loadTheme);
   const setDetectedTheme = useTerminalStore((s) => s.setDetectedTheme);
   const setActiveWorktree = useTerminalStore((s) => s.setActiveWorktree);
+  const markBellPty = useTerminalStore((s) => s.markBellPty);
   const selectedWorktreePath = useProjectStore((s) => s.selectedWorktree?.path ?? null);
   const { createTerminal } = useTerminal();
   const [error, setError] = useState<string | null>(null);
@@ -220,6 +223,49 @@ function TerminalPanel() {
   useEffect(() => {
     setActiveWorktree(selectedWorktreePath);
   }, [selectedWorktreePath, setActiveWorktree]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let polling = false;
+
+    const pollBellEvents = async () => {
+      if (polling || cancelled || Object.keys(sessionsRef.current).length === 0) {
+        return;
+      }
+
+      polling = true;
+      try {
+        const bells = await pollPtyBells();
+        if (cancelled || bells.length === 0) {
+          return;
+        }
+
+        const activePath = useTerminalStore.getState().activeWorktree;
+        for (const { ptyId } of bells) {
+          const worktreePath = findWorktreePathForPtyId(sessionsRef.current, ptyId);
+          if (!worktreePath || worktreePath === activePath) {
+            continue;
+          }
+
+          markBellPty(ptyId);
+        }
+      } catch {
+        // Ignore bell polling errors to avoid noisy UI while sessions churn.
+      } finally {
+        polling = false;
+      }
+    };
+
+    void pollBellEvents();
+    const timer = window.setInterval(() => {
+      void pollBellEvents();
+    }, PTY_BELL_POLL_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [markBellPty]);
 
   // Create session for new worktree
   useEffect(() => {
