@@ -429,7 +429,7 @@ func (m DashboardModel) renderListFooter() string {
 	}
 
 	line1 := "  " + footerKey("↑↓", "navigate") + dot + footerKey("←/→", "expand/collapse")
-	line2 := "  " + footerKey("enter", "detail") + dot + footerKey("tab", m.toggleModeLabel())
+	line2 := "  " + footerKey("enter", "detail") + dot + footerKey("tab", m.toggleModeLabel()) + dot + footerKey("s", "stats")
 	if m.listMode == listModeActive {
 		line2 += dot + footerKey("i", "irc")
 	}
