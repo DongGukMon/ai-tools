@@ -196,6 +196,8 @@ class TerminalPaneRuntime {
       if (isTerminalCompositionEvent(event)) return true;
 
       if (isMacClearTerminalShortcut(event)) {
+        event.preventDefault();
+        event.stopPropagation();
         this.term.clear();
         if (this.ptyId) {
           clearPtyScrollback(this.ptyId).catch(() => {});
@@ -204,8 +206,15 @@ class TerminalPaneRuntime {
       }
 
       const sequence = getMacShortcutSequence(event);
-      if (!sequence || !this.ptyId) {
+      if (!sequence) {
         return true;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (!this.ptyId) {
+        return false;
       }
 
       const bytes = Array.from(new TextEncoder().encode(sequence));
