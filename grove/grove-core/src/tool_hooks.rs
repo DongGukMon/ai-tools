@@ -1,24 +1,13 @@
-use serde_json::{json, Map, Value};
-use std::io::ErrorKind;
 use std::path::Path;
 use std::sync::OnceLock;
 
 pub const TMUX_GROVE_CLAUDE_STATUS_OPTION: &str = "@grove_claude_status";
-const CLAUDE_HOOKS: [(&str, u64); 6] = [
-    ("SessionStart", 5),
-    ("Stop", 5),
-    ("StopFailure", 5),
-    ("Notification", 5),
-    ("UserPromptSubmit", 5),
-    ("SessionEnd", 1),
-];
-const CLAUDE_HOOK_MATCHER: &str = ".*";
 
 pub fn ensure_installed() {
     static INIT: OnceLock<()> = OnceLock::new();
     INIT.get_or_init(|| {
         if let Err(error) = install() {
-            eprintln!("Warning: failed to install Grove Claude hooks: {error}");
+            eprintln!("Warning: failed to install Grove CLI wrappers: {error}");
         }
     });
 }
@@ -36,8 +25,7 @@ fn install() -> Result<(), String> {
     write_executable(&grove_hook, grove_hook_script())?;
 
     let claude_wrapper = bin_dir.join("claude");
-    remove_file_if_exists(&claude_wrapper)?;
-    install_claude_hooks(&home, &grove_hook)?;
+    write_executable(&claude_wrapper, &claude_wrapper_script(&grove_hook))?;
 
     Ok(())
 }
@@ -52,45 +40,6 @@ fn write_executable(path: &Path, content: &str) -> Result<(), String> {
             .map_err(|error| format!("failed to chmod {}: {error}", path.display()))?;
     }
     Ok(())
-}
-
-fn remove_file_if_exists(path: &Path) -> Result<(), String> {
-    match std::fs::remove_file(path) {
-        Ok(()) => Ok(()),
-        Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(format!("failed to remove {}: {error}", path.display())),
-    }
-}
-
-fn install_claude_hooks(home: &Path, grove_hook_path: &Path) -> Result<(), String> {
-    let claude_dir = home.join(".claude");
-    std::fs::create_dir_all(&claude_dir)
-        .map_err(|error| format!("failed to create {}: {error}", claude_dir.display()))?;
-
-    let settings_path = claude_dir.join("settings.json");
-    let mut settings = load_settings_json(&settings_path)?;
-    if merge_grove_hooks(&mut settings, grove_hook_path)? {
-        write_json_file(&settings_path, &settings)?;
-    }
-
-    Ok(())
-}
-
-fn load_settings_json(path: &Path) -> Result<Value, String> {
-    match std::fs::read_to_string(path) {
-        Ok(content) if content.trim().is_empty() => Ok(Value::Object(Map::new())),
-        Ok(content) => serde_json::from_str(&content)
-            .map_err(|error| format!("failed to parse {}: {error}", path.display())),
-        Err(error) if error.kind() == ErrorKind::NotFound => Ok(Value::Object(Map::new())),
-        Err(error) => Err(format!("failed to read {}: {error}", path.display())),
-    }
-}
-
-fn write_json_file(path: &Path, value: &Value) -> Result<(), String> {
-    let content = serde_json::to_string_pretty(value)
-        .map_err(|error| format!("failed to serialize {}: {error}", path.display()))?;
-    std::fs::write(path, content)
-        .map_err(|error| format!("failed to write {}: {error}", path.display()))
 }
 
 fn grove_hook_script() -> &'static str {
@@ -117,90 +66,31 @@ esac
 "#
 }
 
-fn merge_grove_hooks(settings: &mut Value, grove_hook_path: &Path) -> Result<bool, String> {
-    let settings_obj = settings
-        .as_object_mut()
-        .ok_or_else(|| "Claude settings must be a JSON object".to_string())?;
-    let hooks_value = settings_obj
-        .entry("hooks".to_string())
-        .or_insert_with(|| Value::Object(Map::new()));
-    let hooks_obj = hooks_value
-        .as_object_mut()
-        .ok_or_else(|| "Claude settings \"hooks\" must be a JSON object".to_string())?;
-
-    let mut changed = false;
-    for (event, timeout) in CLAUDE_HOOKS {
-        let command = grove_hook_command(grove_hook_path, event);
-        changed |= upsert_grove_hook(hooks_obj, event, &command, timeout)?;
-    }
-
-    Ok(changed)
-}
-
-fn upsert_grove_hook(
-    hooks_obj: &mut Map<String, Value>,
-    event: &str,
-    command: &str,
-    timeout: u64,
-) -> Result<bool, String> {
-    let event_hooks = hooks_obj
-        .entry(event.to_string())
-        .or_insert_with(|| Value::Array(Vec::new()));
-    let event_hooks = event_hooks
-        .as_array_mut()
-        .ok_or_else(|| format!("Claude settings hooks.{event} must be an array"))?;
-    let desired_hook = json!({
-        "type": "command",
-        "command": command,
-        "timeout": timeout,
-    });
-
-    for hook_group in event_hooks.iter_mut() {
-        let Some(hook_group) = hook_group.as_object_mut() else {
-            continue;
-        };
-        let Some(hooks) = hook_group.get_mut("hooks").and_then(Value::as_array_mut) else {
-            continue;
-        };
-
-        for existing_hook in hooks.iter_mut() {
-            if managed_hook_matches(existing_hook, command) {
-                if *existing_hook != desired_hook {
-                    *existing_hook = desired_hook;
-                    return Ok(true);
-                }
-                return Ok(false);
-            }
-        }
-    }
-
-    event_hooks.push(json!({
-        "matcher": CLAUDE_HOOK_MATCHER,
-        "hooks": [desired_hook],
-    }));
-    Ok(true)
-}
-
-fn managed_hook_matches(hook: &Value, command: &str) -> bool {
-    hook.as_object()
-        .and_then(|hook| hook.get("command"))
-        .and_then(Value::as_str)
-        == Some(command)
-}
-
-fn grove_hook_command(grove_hook_path: &Path, event: &str) -> String {
+fn claude_wrapper_script(grove_hook_path: &Path) -> String {
     let grove_hook_path = grove_hook_path.to_string_lossy();
-    format!("{} claude {event}", shell_quote(grove_hook_path.as_ref()))
-}
-
-fn shell_quote(value: &str) -> String {
-    format!("'{}'", value.replace('\'', "'\"'\"'"))
+    format!(
+        r#"#!/usr/bin/env bash
+# Grove-managed Claude Code wrapper — injects hooks for status tracking.
+find_real_claude() {{
+  local self_dir; self_dir="$(cd "$(dirname "$0")" && pwd)"
+  local IFS=:; for d in $PATH; do
+    [[ "$d" == "$self_dir" ]] && continue
+    [[ -x "$d/claude" ]] && printf '%s' "$d/claude" && return 0
+  done; return 1
+}}
+REAL_CLAUDE="$(find_real_claude)" || {{ echo "claude: not found" >&2; exit 127; }}
+[ -z "$GROVE_TMUX_SESSION" ] && exec "$REAL_CLAUDE" "$@"
+GROVE_HOOK="{grove_hook_path}"
+trap '$GROVE_HOOK claude cleanup' EXIT
+HOOKS_JSON='{{"hooks":{{"SessionStart":[{{"type":"command","command":"'"'"'{grove_hook_path}'"'"' claude SessionStart","timeout":5}}],"Stop":[{{"type":"command","command":"'"'"'{grove_hook_path}'"'"' claude Stop","timeout":5}}],"StopFailure":[{{"type":"command","command":"'"'"'{grove_hook_path}'"'"' claude StopFailure","timeout":5}}],"Notification":[{{"type":"command","command":"'"'"'{grove_hook_path}'"'"' claude Notification","timeout":5}}],"UserPromptSubmit":[{{"type":"command","command":"'"'"'{grove_hook_path}'"'"' claude UserPromptSubmit","timeout":5}}],"SessionEnd":[{{"type":"command","command":"'"'"'{grove_hook_path}'"'"' claude SessionEnd","timeout":1}}]}}}}'
+exec "$REAL_CLAUDE" --settings "$HOOKS_JSON" "$@"
+"#
+    )
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{grove_hook_script, merge_grove_hooks, TMUX_GROVE_CLAUDE_STATUS_OPTION};
-    use serde_json::json;
+    use super::{claude_wrapper_script, grove_hook_script, TMUX_GROVE_CLAUDE_STATUS_OPTION};
     use std::path::Path;
 
     #[test]
@@ -213,86 +103,13 @@ mod tests {
     }
 
     #[test]
-    fn merge_grove_hooks_populates_expected_claude_events() {
-        let mut settings = json!({});
+    fn claude_wrapper_script_embeds_hook_path_and_cleanup_trap() {
         let hook_path = Path::new("/tmp/grove-hook");
-        let changed = merge_grove_hooks(&mut settings, hook_path).unwrap();
+        let script = claude_wrapper_script(hook_path);
 
-        assert!(changed);
-        assert_eq!(
-            settings["hooks"]["SessionStart"][0]["hooks"][0]["command"].as_str(),
-            Some("'/tmp/grove-hook' claude SessionStart")
-        );
-        assert_eq!(
-            settings["hooks"]["SessionEnd"][0]["hooks"][0]["timeout"].as_u64(),
-            Some(1)
-        );
-    }
-
-    #[test]
-    fn merge_grove_hooks_preserves_existing_hooks_and_is_idempotent() {
-        let mut settings = json!({
-            "model": "sonnet",
-            "hooks": {
-                "SessionStart": [
-                    {
-                        "matcher": "^git",
-                        "hooks": [
-                            {
-                                "type": "command",
-                                "command": "echo user-hook"
-                            }
-                        ]
-                    }
-                ]
-            }
-        });
-        let hook_path = Path::new("/tmp/grove-hook");
-
-        assert!(merge_grove_hooks(&mut settings, hook_path).unwrap());
-        assert!(!merge_grove_hooks(&mut settings, hook_path).unwrap());
-        assert_eq!(settings["model"].as_str(), Some("sonnet"));
-        assert_eq!(
-            settings["hooks"]["SessionStart"].as_array().unwrap().len(),
-            2
-        );
-        assert_eq!(
-            settings["hooks"]["SessionStart"][0]["hooks"][0]["command"].as_str(),
-            Some("echo user-hook")
-        );
-        assert_eq!(
-            settings["hooks"]["SessionStart"][1]["hooks"][0]["command"].as_str(),
-            Some("'/tmp/grove-hook' claude SessionStart")
-        );
-    }
-
-    #[test]
-    fn merge_grove_hooks_updates_existing_managed_hook_in_place() {
-        let mut settings = json!({
-            "hooks": {
-                "SessionStart": [
-                    {
-                        "matcher": ".*",
-                        "hooks": [
-                            {
-                                "type": "command",
-                                "command": "'/tmp/grove-hook' claude SessionStart",
-                                "timeout": 99
-                            }
-                        ]
-                    }
-                ]
-            }
-        });
-
-        assert!(merge_grove_hooks(&mut settings, Path::new("/tmp/grove-hook")).unwrap());
-        assert_eq!(
-            settings["hooks"]["SessionStart"].as_array().unwrap().len(),
-            1
-        );
-        assert_eq!(
-            settings["hooks"]["SessionStart"][0]["hooks"][0]["timeout"].as_u64(),
-            Some(5)
-        );
+        assert!(script.contains("GROVE_HOOK=\"/tmp/grove-hook\""));
+        assert!(script.contains("trap '$GROVE_HOOK claude cleanup' EXIT"));
+        assert!(script.contains("claude Notification"));
+        assert!(script.contains("--settings \"$HOOKS_JSON\""));
     }
 }
