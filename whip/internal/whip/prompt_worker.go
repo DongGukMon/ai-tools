@@ -34,8 +34,15 @@ Run these commands to initialize your session:
 	fmt.Fprintf(&b, "   claude-irc msg %s \"Acknowledged. Taking ownership of task %s: %s\"\n",
 		task.MasterIRCName, task.ID, task.Title)
 
+	b.WriteString(`
+4. Confirm your task type (auto-inferred at creation — correct if it doesn't match):
+`)
+	fmt.Fprintf(&b, "   whip task view %s   # check the type field\n", task.ID)
+	fmt.Fprintf(&b, "   # If wrong: whip task type %s <correct-type>\n", task.ID)
+	b.WriteString("   # Valid: coding, debugging, design, frontend, docs, testing, devops, refactor, review, simulation, general\n")
+
 	b.WriteString("\n")
-	writePromptMessageCheckStep(&b, 4, backend.messageCheckStep)
+	writePromptMessageCheckStep(&b, 5, backend.messageCheckStep)
 
 	b.WriteString(`
 ## Checkpoint: Share your plan

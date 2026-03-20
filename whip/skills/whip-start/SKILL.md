@@ -85,17 +85,6 @@ claude-irc inbox
 
 Apply the same stop condition: 10 consecutive empty checks with no active tasks under your master-irc.
 
-## Confirm Task Type
-
-After loading the task, check its type field (visible in `whip task view <id>`).
-The type was auto-inferred from the title and description at creation time.
-
-If the inferred type does not match the actual nature of the work:
-1. Run `whip task type <id> <correct-type>` to update it
-2. Valid types: coding, debugging, design, frontend, docs, testing, devops, refactor, review, simulation, general
-
-This takes 5 seconds and ensures accurate usage analytics. Do not skip this step.
-
 ## Master IRC Selection
 
 Resolve `resolved-master-irc` before any `whip task assign` command. Do not rely on the implicit `wp-master` fallback.
