@@ -79,6 +79,7 @@ function TerminalPanel() {
   const setDetectedTheme = useTerminalStore((s) => s.setDetectedTheme);
   const setActiveWorktree = useTerminalStore((s) => s.setActiveWorktree);
   const markBellPty = useTerminalStore((s) => s.markBellPty);
+  const updateClaudeStatus = useTerminalStore((s) => s.updateClaudeStatus);
   const selectedWorktreePath = useProjectStore((s) => s.selectedWorktree?.path ?? null);
   const { createTerminal } = useTerminal();
   const [error, setError] = useState<string | null>(null);
@@ -235,19 +236,20 @@ function TerminalPanel() {
 
       polling = true;
       try {
-        const bells = await pollPtyBells();
-        if (cancelled || bells.length === 0) {
+        const events = await pollPtyBells();
+        if (cancelled || events.length === 0) {
           return;
         }
 
         const activePath = useTerminalStore.getState().activeWorktree;
-        for (const { ptyId } of bells) {
-          const worktreePath = findWorktreePathForPtyId(sessionsRef.current, ptyId);
-          if (!worktreePath || worktreePath === activePath) {
-            continue;
+        for (const { ptyId, bell, claudeStatus } of events) {
+          if (bell) {
+            const worktreePath = findWorktreePathForPtyId(sessionsRef.current, ptyId);
+            if (worktreePath && worktreePath !== activePath) {
+              markBellPty(ptyId);
+            }
           }
-
-          markBellPty(ptyId);
+          updateClaudeStatus(ptyId, claudeStatus);
         }
       } catch {
         // Ignore bell polling errors to avoid noisy UI while sessions churn.
@@ -265,7 +267,7 @@ function TerminalPanel() {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [markBellPty]);
+  }, [markBellPty, updateClaudeStatus]);
 
   // Create session for new worktree
   useEffect(() => {

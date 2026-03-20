@@ -48,6 +48,8 @@ pub struct PtySession {
 #[serde(rename_all = "camelCase")]
 pub struct PtyBellEvent {
     pub pty_id: String,
+    pub bell: bool,
+    pub claude_status: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

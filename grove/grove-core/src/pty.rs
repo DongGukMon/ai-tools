@@ -29,6 +29,7 @@ const TMUX_MONITOR_BELL_OPTION: &str = "monitor-bell";
 const TMUX_MONITOR_BELL_ON_VALUE: &str = "on";
 const TMUX_ESCAPE_TIME_OPTION: &str = "escape-time";
 const TMUX_ESCAPE_TIME_VALUE: &str = "100";
+const TMUX_GROVE_CLAUDE_STATUS_OPTION: &str = "@grove_claude_status";
 const WORKTREE_HASH_LEN: usize = 12;
 const PANE_PREFIX_LEN: usize = 8;
 const PANE_HASH_LEN: usize = 4;
@@ -152,10 +153,83 @@ fn preferred_utf8_locale() -> String {
     "C.UTF-8".to_string()
 }
 
+fn ensure_grove_bin_scripts() {
+    static INIT: OnceLock<()> = OnceLock::new();
+    INIT.get_or_init(|| {
+        let Some(home) = dirs::home_dir() else {
+            return;
+        };
+        let bin_dir = home.join(".grove").join("bin");
+        let _ = std::fs::create_dir_all(&bin_dir);
+
+        let grove_hook = bin_dir.join("grove-hook");
+        let grove_hook_path = grove_hook.to_string_lossy().to_string();
+
+        // grove-hook: shared dispatcher for all CLI wrappers
+        let hook_script = r#"#!/usr/bin/env bash
+# Grove hook dispatcher. Usage: grove-hook <tool> <event>
+# Sets tmux user options that Grove polls for status badges.
+TOOL="$1"; EVENT="$2"
+[ -z "$GROVE_TMUX_SESSION" ] && exit 0
+case "$TOOL" in
+  claude)
+    case "$EVENT" in
+      SessionStart)
+        tmux set-option -q -t "$GROVE_TMUX_SESSION" @grove_claude_status idle 2>/dev/null ;;
+      UserPromptSubmit)
+        tmux set-option -q -t "$GROVE_TMUX_SESSION" @grove_claude_status running 2>/dev/null ;;
+      Stop)
+        tmux set-option -q -t "$GROVE_TMUX_SESSION" @grove_claude_status idle 2>/dev/null ;;
+      StopFailure|Notification)
+        tmux set-option -q -t "$GROVE_TMUX_SESSION" @grove_claude_status attention 2>/dev/null ;;
+      SessionEnd|cleanup)
+        tmux set-option -qu -t "$GROVE_TMUX_SESSION" @grove_claude_status 2>/dev/null ;;
+    esac ;;
+esac
+"#;
+        let _ = std::fs::write(&grove_hook, hook_script);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(&grove_hook, std::fs::Permissions::from_mode(0o755));
+        }
+
+        // claude wrapper: injects hooks for session status tracking
+        let claude_script = format!(
+            r#"#!/usr/bin/env bash
+# Grove-managed Claude Code wrapper — injects hooks for status tracking.
+find_real_claude() {{
+  local self_dir; self_dir="$(cd "$(dirname "$0")" && pwd)"
+  local IFS=:; for d in $PATH; do
+    [[ "$d" == "$self_dir" ]] && continue
+    [[ -x "$d/claude" ]] && printf '%s' "$d/claude" && return 0
+  done; return 1
+}}
+REAL_CLAUDE="$(find_real_claude)" || {{ echo "claude: not found" >&2; exit 127; }}
+[ -z "$GROVE_TMUX_SESSION" ] && exec "$REAL_CLAUDE" "$@"
+GROVE_HOOK="{grove_hook_path}"
+trap '$GROVE_HOOK claude cleanup' EXIT
+HOOKS_JSON='{{"hooks":{{"SessionStart":[{{"type":"command","command":"'"'"'{grove_hook_path}'"'"' claude SessionStart","timeout":5}}],"Stop":[{{"type":"command","command":"'"'"'{grove_hook_path}'"'"' claude Stop","timeout":5}}],"StopFailure":[{{"type":"command","command":"'"'"'{grove_hook_path}'"'"' claude StopFailure","timeout":5}}],"Notification":[{{"type":"command","command":"'"'"'{grove_hook_path}'"'"' claude Notification","timeout":5}}],"UserPromptSubmit":[{{"type":"command","command":"'"'"'{grove_hook_path}'"'"' claude UserPromptSubmit","timeout":5}}],"SessionEnd":[{{"type":"command","command":"'"'"'{grove_hook_path}'"'"' claude SessionEnd","timeout":1}}]}}}}'
+exec "$REAL_CLAUDE" --settings "$HOOKS_JSON" "$@"
+"#
+        );
+        let claude_wrapper = bin_dir.join("claude");
+        let _ = std::fs::write(&claude_wrapper, claude_script);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ =
+                std::fs::set_permissions(&claude_wrapper, std::fs::Permissions::from_mode(0o755));
+        }
+    });
+}
+
 pub fn create(
     request: CreatePtyRequest,
     sink: Arc<dyn PtyEventSink>,
 ) -> Result<CreatePtyResult, String> {
+    ensure_grove_bin_scripts();
+
     let CreatePtyRequest {
         pty_id,
         pane_id,
@@ -379,9 +453,20 @@ pub fn poll_bell_events() -> Result<Vec<PtyBellEvent>, String> {
             }
         };
 
+        let claude_status = match tmux_session_option(&session_name, TMUX_GROVE_CLAUDE_STATUS_OPTION)
+        {
+            Ok(value) => value,
+            Err(_) => None,
+        };
+
         let mut state = tracked.lock().map_err(|e| e.to_string())?;
-        if consume_bell_edge(&mut state.last_bell_flag, bell_flag) {
-            events.push(PtyBellEvent { pty_id });
+        let bell = consume_bell_edge(&mut state.last_bell_flag, bell_flag);
+        if bell || claude_status.is_some() {
+            events.push(PtyBellEvent {
+                pty_id,
+                bell,
+                claude_status,
+            });
         }
     }
 
@@ -764,6 +849,7 @@ fn set_grove_tmux_metadata(
     tmux_set_option(session_name, TMUX_GROVE_MANAGED_OPTION, "1")?;
     tmux_set_option(session_name, TMUX_GROVE_WORKTREE_OPTION, worktree_path)?;
     tmux_set_option(session_name, TMUX_GROVE_PANE_ID_OPTION, pane_id)?;
+    tmux_set_session_environment(session_name, "GROVE_TMUX_SESSION", session_name)?;
     enforce_grove_tmux_options(session_name)?;
     Ok(())
 }
@@ -858,6 +944,22 @@ fn tmux_set_option(session_name: &str, option: &str, value: &str) -> Result<(), 
 
     Err(format!(
         "failed to set tmux option {option} on {session_name}: {}",
+        tmux_output_message(&output)
+    ))
+}
+
+fn tmux_set_session_environment(
+    session_name: &str,
+    key: &str,
+    value: &str,
+) -> Result<(), String> {
+    let output = tmux_output(["set-environment", "-t", session_name, key, value])?;
+    if output.status.success() {
+        return Ok(());
+    }
+
+    Err(format!(
+        "failed to set tmux environment {key} on {session_name}: {}",
         tmux_output_message(&output)
     ))
 }

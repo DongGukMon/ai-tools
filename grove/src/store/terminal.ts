@@ -37,11 +37,14 @@ function saveLayouts(sessions: Record<string, SplitNode>) {
 
 // ── Store ──
 
+export type ClaudeSessionStatus = "running" | "idle" | "attention";
+
 interface TerminalState {
   sessions: Record<string, SplitNode>;
   activeWorktree: string | null;
   focusedPtyId: string | null;
   bellPtyIds: Set<string>;
+  claudeStatus: Record<string, ClaudeSessionStatus>;
   theme: TerminalTheme | null;
   detectedTheme: TerminalTheme | null;
   createSession: (worktreePath: string, paneId: string, ptyId: string) => void;
@@ -57,6 +60,10 @@ interface TerminalState {
   setActiveWorktree: (worktreePath: string | null) => void;
   setFocusedPtyId: (ptyId: string | null) => void;
   markBellPty: (ptyId: string) => void;
+  updateClaudeStatus: (
+    ptyId: string,
+    status: ClaudeSessionStatus | null,
+  ) => void;
   setDetectedTheme: (theme: TerminalTheme) => void;
   loadTheme: (theme: TerminalTheme) => void;
   removeSession: (worktreePath: string) => void;
@@ -70,6 +77,7 @@ export const useTerminalStore = create<TerminalState>((set) => ({
   activeWorktree: null,
   focusedPtyId: null,
   bellPtyIds: new Set<string>(),
+  claudeStatus: {},
   theme: null,
   detectedTheme: null,
 
@@ -123,11 +131,13 @@ export const useTerminalStore = create<TerminalState>((set) => ({
     set((state) => {
       const newSessions = { ...state.sessions };
       const nextBellPtyIds = new Set(state.bellPtyIds);
+      const nextClaudeStatus = { ...state.claudeStatus };
       const existingSession = state.sessions[worktreePath];
       if (existingSession) {
         for (const { ptyId } of collectTerminalPanes(existingSession)) {
           if (ptyId) {
             nextBellPtyIds.delete(ptyId);
+            delete nextClaudeStatus[ptyId];
           }
         }
       }
@@ -137,6 +147,7 @@ export const useTerminalStore = create<TerminalState>((set) => ({
       return {
         sessions: newSessions,
         bellPtyIds: nextBellPtyIds,
+        claudeStatus: nextClaudeStatus,
         focusedPtyId:
           state.activeWorktree === worktreePath ? null : state.focusedPtyId,
         activeWorktree:
@@ -164,10 +175,13 @@ export const useTerminalStore = create<TerminalState>((set) => ({
           : state.focusedPtyId;
       const nextBellPtyIds = new Set(state.bellPtyIds);
       nextBellPtyIds.delete(ptyId);
+      const nextClaudeStatus = { ...state.claudeStatus };
+      delete nextClaudeStatus[ptyId];
       return {
         sessions: newSessions,
         focusedPtyId: newFocused,
         bellPtyIds: nextBellPtyIds,
+        claudeStatus: nextClaudeStatus,
       };
     }),
 
@@ -204,6 +218,18 @@ export const useTerminalStore = create<TerminalState>((set) => ({
       return {
         bellPtyIds: new Set(state.bellPtyIds).add(ptyId),
       };
+    }),
+
+  updateClaudeStatus: (ptyId, status) =>
+    set((state) => {
+      if (status) {
+        if (state.claudeStatus[ptyId] === status) return state;
+        return { claudeStatus: { ...state.claudeStatus, [ptyId]: status } };
+      }
+      if (!(ptyId in state.claudeStatus)) return state;
+      const next = { ...state.claudeStatus };
+      delete next[ptyId];
+      return { claudeStatus: next };
     }),
 
   updateSizes: (worktreePath, nodePath, ratios) =>
