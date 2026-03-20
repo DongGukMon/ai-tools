@@ -1,7 +1,5 @@
 import { memo, useState } from "react";
 import {
-  ChevronRight,
-  ChevronDown,
   X,
   GitFork,
   GitBranch,
@@ -109,18 +107,13 @@ const ProjectItem = memo(function ProjectItem({ project }: Props) {
       {/* Project header */}
       <div
         className={cn(
-          "group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-foreground hover:bg-secondary/50 transition-colors cursor-pointer select-none",
+          "group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[13px] text-foreground hover:bg-secondary/50 transition-colors cursor-pointer select-none",
         )}
         onClick={() => setExpanded(!expanded)}
         {...attributes}
         {...listeners}
       >
-        {expanded ? (
-          <ChevronDown className={cn("h-3.5 w-3.5 shrink-0 text-muted-foreground")} />
-        ) : (
-          <ChevronRight className={cn("h-3.5 w-3.5 shrink-0 text-muted-foreground")} />
-        )}
-        <GitFork className={cn("h-4 w-4 shrink-0", {
+        <GitFork className={cn("h-[15px] w-[15px] shrink-0", {
           "text-accent": expanded,
           "text-muted-foreground": !expanded,
         })} />
@@ -132,14 +125,18 @@ const ProjectItem = memo(function ProjectItem({ project }: Props) {
             onClick={handleRemoveProject}
             title="Remove project"
           >
-            <X className={cn("h-3.5 w-3.5")} />
+            <X className={cn("h-[13px] w-[13px]")} />
           </IconButton>
         </div>
       </div>
 
       {/* Worktree list */}
-      {expanded && (
-        <div className={cn("ml-5 space-y-0.5 border-l border-border pl-3")}>
+      <div className={cn(
+        "grid transition-[grid-template-rows] duration-200 ease-out",
+        { "grid-rows-[1fr]": expanded, "grid-rows-[0fr]": !expanded },
+      )}>
+        <div className={cn("overflow-hidden")}>
+        <div className={cn("ml-3 border-l border-border pl-2")}>
           <DefaultBranchItem project={project} />
           {/* Phase 2: 드래그 재정렬 — <WorktreeItem>을 드래그 가능하게 만들고,
               드래그 완료 시 setWorktreeOrder(project.id, newOrder) 호출.
@@ -154,10 +151,10 @@ const ProjectItem = memo(function ProjectItem({ project }: Props) {
           {adding ? (
             <form onSubmit={handleAddWorktree}>
               <div className={cn("relative flex items-center gap-2 rounded-md px-2 py-1")}>
-                <GitBranch className={cn("h-3.5 w-3.5 shrink-0 text-muted-foreground")} />
+                <GitBranch className={cn("h-[13px] w-[13px] shrink-0 text-muted-foreground")} />
                 <input
                   className={cn(
-                    "min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none",
+                    "min-w-0 flex-1 bg-transparent text-[13px] text-foreground outline-none",
                     "placeholder:text-muted-foreground/50 disabled:opacity-50",
                   )}
                   type="text"
@@ -183,7 +180,7 @@ const ProjectItem = memo(function ProjectItem({ project }: Props) {
           ) : (
             <button
               className={cn(
-                "flex w-full items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors",
+                "flex w-full items-center gap-2 rounded-md px-2 py-1 text-[13px] transition-colors",
                 "text-muted-foreground hover:bg-secondary/50 hover:text-foreground",
               )}
               onClick={() => setAdding(true)}
@@ -192,7 +189,8 @@ const ProjectItem = memo(function ProjectItem({ project }: Props) {
             </button>
           )}
         </div>
-      )}
+        </div>
+      </div>
     </div>
   );
 });

@@ -37,7 +37,7 @@ export function AiStatusIcons({ sessions }: { sessions: AiSession[] }) {
           key={i}
           src={AI_ICON[tool]}
           alt={tool}
-          className={cn("h-3.5 w-3.5", {
+          className={cn("h-[13px] w-[13px]", {
             "animate-glow": status === "running",
             "animate-glow-claude": status === "running" && tool === "claude",
             "animate-glow-codex": status === "running" && tool === "codex",
@@ -99,7 +99,7 @@ function WorktreeItem({ worktree, projectId }: Props) {
   return (
     <div
       className={cn(
-        "group flex w-full items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors cursor-pointer select-none",
+        "group flex w-full items-center gap-2 rounded-md px-2 py-1 text-[13px] transition-colors cursor-pointer select-none",
         {
           "pointer-events-none opacity-50": removing,
           "bg-selected text-foreground": isSelected && !removing,
@@ -109,7 +109,7 @@ function WorktreeItem({ worktree, projectId }: Props) {
       onClick={() => !removing && selectWorktree(worktree)}
       title={worktree.path}
     >
-      <GitBranch className={cn("h-3.5 w-3.5 shrink-0", {
+      <GitBranch className={cn("h-[13px] w-[13px] shrink-0", {
         "text-orange-500": hasBell,
       })} />
       <span className={cn("min-w-0 flex-1 truncate")}>{displayName}</span>

@@ -42,7 +42,7 @@ function DefaultBranchItem({ project }: Props) {
   return (
     <div
       className={cn(
-        "group flex w-full items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors cursor-pointer select-none",
+        "group flex w-full items-center gap-2 rounded-md px-2 py-1 text-[13px] transition-colors cursor-pointer select-none",
         {
           "pointer-events-none opacity-50": refreshing,
           "bg-selected text-foreground": isSelected && !refreshing,
@@ -53,7 +53,7 @@ function DefaultBranchItem({ project }: Props) {
       onClick={() => !refreshing && selectWorktree(sourceWorktree)}
       title={project.sourcePath}
     >
-      <GitBranch className={cn("h-3.5 w-3.5 shrink-0", {
+      <GitBranch className={cn("h-[13px] w-[13px] shrink-0", {
         "text-orange-500": hasBell,
       })} />
       <span className={cn("min-w-0 flex-1 truncate")}>main</span>
