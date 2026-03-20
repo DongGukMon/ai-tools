@@ -1,5 +1,5 @@
 import { memo, useEffect, useLayoutEffect, useRef } from "react";
-import { Minus, Maximize2 } from "lucide-react";
+import { ChevronUp, ChevronDown } from "lucide-react";
 import { useTerminalStore } from "../../store/terminal";
 import { usePanelLayoutStore } from "../../store/panel-layout";
 import { acquireTerminalRuntime } from "../../lib/terminal-runtime";
@@ -66,17 +66,29 @@ function GlobalTerminalPanel({ paneId, ptyId }: Props) {
     <div className={cn("flex flex-col", { "h-full": !collapsed })}>
       <div
         className={cn(
-          "flex items-center justify-between border-t border-border bg-sidebar px-2 h-9 shrink-0",
+          "flex items-center justify-between border-t border-border bg-sidebar px-2 h-7 shrink-0",
         )}
       >
-        <span className={cn("text-xs text-muted-foreground select-none")}>
-          Terminal
-        </span>
+        <svg
+          className={cn("text-muted-foreground")}
+          width="16"
+          height="14"
+          viewBox="0 0 18 14"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <rect x="0.75" y="0.75" width="16.5" height="12.5" rx="2" />
+          <polyline points="5,5 7.5,7 5,9" />
+          <line x1="9.5" y1="9" x2="13" y2="9" />
+        </svg>
         <IconButton onClick={toggle} title={collapsed ? "Expand" : "Collapse"}>
           {collapsed ? (
-            <Maximize2 className={cn("size-3.5")} />
+            <ChevronUp className={cn("size-3.5")} />
           ) : (
-            <Minus className={cn("size-3.5")} />
+            <ChevronDown className={cn("size-3.5")} />
           )}
         </IconButton>
       </div>
