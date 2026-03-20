@@ -91,6 +91,7 @@ export interface WorkTypeReview {
   workType: WorkType;
   eventRange: [number, number];
   score: "good" | "fair" | "poor";
+  description: string;
   practices: WorkTypePractice[];
   summary: string;
 }

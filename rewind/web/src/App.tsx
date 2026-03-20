@@ -243,7 +243,7 @@ export default function App() {
       )}
       {activeTab === "analysis" && (
         <Suspense fallback={<PageLoader />}>
-          <AnalysisPage data={analysisData} backend={session.backend} />
+          <AnalysisPage data={analysisData} backend={session.backend} onJumpToEvent={jumpToTimelineEvent} />
         </Suspense>
       )}
     </div>

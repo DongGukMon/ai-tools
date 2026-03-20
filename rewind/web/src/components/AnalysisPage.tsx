@@ -12,6 +12,7 @@ import type { AnalysisData, WorkTypeReview } from "../types";
 interface Props {
   data: AnalysisData | null;
   backend?: string;
+  onJumpToEvent?: (eventIndex: number) => void;
 }
 
 const qualityColors = {
@@ -26,7 +27,25 @@ const impactColors = {
   negative: "text-red-600 dark:text-red-400",
 };
 
-export default function AnalysisPage({ data, backend }: Props) {
+const workTypeLabels: Record<string, string> = {
+  debugging: "Debugging",
+  feature: "Feature Implementation",
+  refactoring: "Refactoring",
+  planning: "Planning",
+  "code-review": "Code Review",
+  docs: "Documentation",
+};
+
+const workTypeIcons: Record<string, string> = {
+  debugging: "🔍",
+  feature: "🛠",
+  refactoring: "♻️",
+  planning: "📋",
+  "code-review": "👁",
+  docs: "📄",
+};
+
+export default function AnalysisPage({ data, backend, onJumpToEvent }: Props) {
   if (!data) {
     return (
       <div className="max-w-4xl mx-auto px-6 py-16 flex justify-center">
@@ -179,55 +198,75 @@ export default function AnalysisPage({ data, backend }: Props) {
 
       {/* Work Type Reviews */}
       {data.workTypeReviews && data.workTypeReviews.length > 0 && (
-        <div className="liquid-glass rounded-2xl p-5">
-          <div className="flex items-center gap-2 mb-4">
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 px-1">
             <ClipboardCheck className="w-4 h-4 text-sky-500" />
             <h3 className="text-sm font-semibold text-slate-800 dark:text-neutral-200">
               Work Type Reviews
             </h3>
           </div>
-          <div className="space-y-4">
-            {data.workTypeReviews.map((review: WorkTypeReview, i: number) => (
-              <div
-                key={i}
-                className="rounded-xl bg-white/30 dark:bg-white/5 border border-slate-200/40 dark:border-neutral-700/30 p-4"
-              >
-                <div className="flex items-center gap-2 mb-2">
+          {data.workTypeReviews.map((review: WorkTypeReview, i: number) => (
+            <div
+              key={i}
+              className="liquid-glass rounded-2xl overflow-hidden"
+            >
+              {/* Header */}
+              <div className="px-5 pt-4 pb-3 border-b border-slate-200/30 dark:border-neutral-700/20">
+                <div className="flex items-center gap-2.5 mb-1.5">
+                  <span className="text-base">{workTypeIcons[review.workType] || "📌"}</span>
+                  <h4 className="text-sm font-semibold text-slate-800 dark:text-neutral-200">
+                    {workTypeLabels[review.workType] || review.workType}
+                  </h4>
                   <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${qualityColors[review.score]}`}>
                     {review.score}
                   </span>
-                  <span className="text-xs font-semibold text-slate-700 dark:text-neutral-300">
-                    {review.workType}
-                  </span>
-                  <span className="text-[10px] text-slate-400 dark:text-neutral-600">
-                    lines {review.eventRange[0]}–{review.eventRange[1]}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-600 dark:text-neutral-400 mb-3">{review.summary}</p>
-                <div className="space-y-1.5">
-                  {review.practices.map((p, j) => (
-                    <div key={j} className="flex items-start gap-2 text-xs">
-                      <span className={`shrink-0 mt-0.5 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold ${
-                        p.followed === "yes"
-                          ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400"
-                          : p.followed === "partial"
-                            ? "bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400"
-                            : "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"
-                      }`}>
-                        {p.followed === "yes" ? "✓" : p.followed === "partial" ? "~" : "✗"}
+                  <span className="ml-auto">
+                    {onJumpToEvent ? (
+                      <button
+                        onClick={() => onJumpToEvent(review.eventRange[0])}
+                        className="text-[10px] text-indigo-500 dark:text-indigo-400 hover:underline cursor-pointer"
+                      >
+                        lines {review.eventRange[0]}–{review.eventRange[1]} →
+                      </button>
+                    ) : (
+                      <span className="text-[10px] text-slate-400 dark:text-neutral-600">
+                        lines {review.eventRange[0]}–{review.eventRange[1]}
                       </span>
-                      <div>
-                        <span className="font-medium text-slate-700 dark:text-neutral-300">{p.name}</span>
-                        {p.note && (
-                          <span className="text-slate-500 dark:text-neutral-500"> — {p.note}</span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                    )}
+                  </span>
                 </div>
+                {review.description && (
+                  <p className="text-xs text-slate-600 dark:text-neutral-400 mt-1">{review.description}</p>
+                )}
               </div>
-            ))}
-          </div>
+              {/* Practices */}
+              <div className="px-5 py-3 space-y-2">
+                {review.practices.map((p, j) => (
+                  <div key={j} className="flex items-start gap-2.5 text-xs">
+                    <span className={`shrink-0 mt-0.5 w-[18px] h-[18px] rounded-full flex items-center justify-center text-[9px] font-bold ${
+                      p.followed === "yes"
+                        ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400"
+                        : p.followed === "partial"
+                          ? "bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400"
+                          : "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"
+                    }`}>
+                      {p.followed === "yes" ? "✓" : p.followed === "partial" ? "~" : "✗"}
+                    </span>
+                    <div className="flex-1">
+                      <span className="font-medium text-slate-700 dark:text-neutral-300">{p.name}</span>
+                      {p.note && (
+                        <p className="text-slate-500 dark:text-neutral-500 mt-0.5">{p.note}</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {/* Summary footer */}
+              <div className="px-5 py-2.5 bg-slate-50/50 dark:bg-white/[0.02] border-t border-slate-200/20 dark:border-neutral-700/15">
+                <p className="text-[11px] text-slate-500 dark:text-neutral-500 italic">{review.summary}</p>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 

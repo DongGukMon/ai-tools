@@ -69,6 +69,7 @@ Produce a JSON file matching this exact schema:
       "workType": "debugging|feature|refactoring|planning|code-review|docs",
       "eventRange": [10, 85],
       "score": "good|fair|poor",
+      "description": "what was done in this segment (the actual work, not the evaluation)",
       "practices": [
         {
           "name": "practice name",
@@ -98,6 +99,7 @@ Output rules:
   - `description`: <= 140 chars
   - `reasoning`: <= 180 chars
   - each takeaway: <= 140 chars
+- `workTypeReviews` `description`: <= 200 chars
 - `workTypeReviews` `summary`: <= 200 chars
 - `workTypeReviews` `practices[].note`: <= 160 chars
 - Use only these enums:
@@ -126,7 +128,11 @@ Run `rewind claude <session-id>` to view it in the Analysis tab.
 
 ## Analysis Guidelines
 
-- **Prompt Reviews**: Review only user turns that materially shaped the session: initial task framing, major corrections, scope changes, or prompts that clearly helped or hurt execution. Skip low-signal turns such as acknowledgements, tiny clarifications, or routine follow-ups. Usually produce 3-8 reviews, not one for every user message. Mark as `good` if clear and decision-driving, `fair` if workable but underspecified, `poor` if ambiguous or costly. Always explain why. Add `suggestion` only for `fair` and `poor`.
+- **Prompt Reviews**: Focus on prompts that had measurable impact on session efficiency — turns that saved time, caused rework, or changed direction. Skip routine acknowledgements and trivial clarifications. Usually produce 3-8 reviews.
+  - `poor`: the prompt directly caused wasted effort — unnecessary retries, wrong direction, or ambiguity that took multiple turns to resolve. In `feedback`, state the concrete cost (e.g., "led to 3 rounds of debugging before the actual issue was clarified"). In `suggestion`, show exactly how to rephrase to avoid the cost.
+  - `fair`: the prompt worked but was inefficient — required follow-up clarification, left room for misinterpretation, or could have been resolved in fewer turns. In `suggestion`, show the one-shot version.
+  - `good`: the prompt demonstrably accelerated the session — clear scope, right level of detail, effective delegation. In `feedback`, state what made it effective and what outcome it enabled. Do NOT mark a prompt as `good` just because it was "clear" or "concise" — it must have driven a measurably positive result.
+  - Do NOT review prompts that had no meaningful impact on session flow. A prompt that says "ㅇㅇ" in agreement is not worth reviewing unless it caused ambiguity. Omit `suggestion` for `good` prompts.
 - **Strategy Critique**: Look at the overall session flow. Did the user explore before implementing? Did they test incrementally? Did they get stuck in loops? Be balanced — always find at least one strength.
 - **Key Decisions**: Identify 3-7 turning points where the session direction changed. A decision to use a specific tool, to refactor instead of patch, to ask for clarification — these are all key decisions.
 - **Takeaways**: Provide 3-5 concrete, actionable items. Not generic advice like "write better prompts" — specific like "When editing multiple files in the same module, use plan mode first to align on the change set."
