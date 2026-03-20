@@ -99,7 +99,7 @@ function WorktreeItem({ worktree, projectId }: Props) {
   return (
     <div
       className={cn(
-        "group flex w-full items-center gap-2 rounded-md px-2 py-1 text-[13px] transition-colors cursor-pointer select-none",
+        "group flex w-full items-center gap-2 rounded-md px-2 py-1 text-[13px] transition-all duration-150 cursor-pointer select-none",
         {
           "pointer-events-none opacity-50": removing,
           "bg-selected text-foreground": isSelected && !removing,

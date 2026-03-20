@@ -1,7 +1,7 @@
 import { memo, useState } from "react";
 import {
   X,
-  GitFork,
+  Sprout,
   GitBranch,
 } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
@@ -103,17 +103,17 @@ const ProjectItem = memo(function ProjectItem({ project }: Props) {
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="px-2">
+    <div ref={setNodeRef} style={style} className="pl-2 pr-2">
       {/* Project header */}
       <div
         className={cn(
-          "group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[13px] text-foreground hover:bg-secondary/50 transition-colors cursor-pointer select-none",
+          "group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[13px] text-foreground hover:bg-secondary/50 transition-all duration-150 cursor-pointer select-none",
         )}
         onClick={() => setExpanded(!expanded)}
         {...attributes}
         {...listeners}
       >
-        <GitFork className={cn("h-[15px] w-[15px] shrink-0", {
+        <Sprout className={cn("h-[15px] w-[15px] shrink-0", {
           "text-accent": expanded,
           "text-muted-foreground": !expanded,
         })} />
@@ -136,7 +136,7 @@ const ProjectItem = memo(function ProjectItem({ project }: Props) {
         { "grid-rows-[1fr]": expanded, "grid-rows-[0fr]": !expanded },
       )}>
         <div className={cn("overflow-hidden")}>
-        <div className={cn("ml-3 border-l border-border pl-2")}>
+        <div className={cn("ml-4 border-l border-border pl-1.5")}>
           <DefaultBranchItem project={project} />
           {/* Phase 2: 드래그 재정렬 — <WorktreeItem>을 드래그 가능하게 만들고,
               드래그 완료 시 setWorktreeOrder(project.id, newOrder) 호출.
