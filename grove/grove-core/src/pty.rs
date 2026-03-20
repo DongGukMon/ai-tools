@@ -751,45 +751,34 @@ fn ensure_grove_tmux_session(
     Ok(CreatePtySessionState::Attached)
 }
 
-/// On macOS, login shells run `/etc/zprofile` which invokes `path_helper`,
-/// reordering PATH and pushing `~/.grove/bin` behind `~/.local/bin`.
-/// This breaks the Grove claude wrapper.  When the user's shell is zsh,
-/// we start a non-login interactive shell (`zsh -i`) so `path_helper`
-/// is skipped while `.zshrc` still runs.
-fn non_login_shell_args() -> Option<(&'static str, &'static str)> {
-    #[cfg(target_os = "macos")]
-    {
-        let shell = env::var("SHELL").ok()?;
-        let basename = std::path::Path::new(&shell)
-            .file_name()
-            .and_then(|n| n.to_str())?;
-        if basename == "zsh" {
-            return Some(("zsh", "-i"));
-        }
+fn grove_tmux_environment(session_name: &str) -> Vec<(&'static str, String)> {
+    let mut vars = vec![
+        ("GROVE_TMUX_SESSION", session_name.to_string()),
+        ("PATH", enriched_path().to_string()),
+    ];
+    if let Some(zdotdir) = tool_hooks::grove_zdotdir() {
+        vars.push(("GROVE_REAL_ZDOTDIR", grove_real_zdotdir()));
+        vars.push(("ZDOTDIR", zdotdir));
     }
-    let _ = (); // suppress unused warning on non-macOS
-    None
+    vars
+}
+
+fn grove_real_zdotdir() -> String {
+    let real_zdotdir = env::var("ZDOTDIR").unwrap_or_default();
+    if !real_zdotdir.is_empty() {
+        return real_zdotdir;
+    }
+
+    dirs::home_dir()
+        .map(|home| home.to_string_lossy().into_owned())
+        .unwrap_or_default()
 }
 
 fn create_tmux_session(session_name: &str, cwd: &str) -> Result<bool, String> {
     let mut command = Command::new("tmux");
-    let enriched_path = enriched_path().to_string();
-    let grove_tmux_session = format!("GROVE_TMUX_SESSION={session_name}");
-    let path_env = format!("PATH={enriched_path}");
-    command.args([
-        "new-session",
-        "-d",
-        "-s",
-        session_name,
-        "-c",
-        cwd,
-        "-e",
-        &grove_tmux_session,
-        "-e",
-        &path_env,
-    ]);
-    if let Some((shell, flag)) = non_login_shell_args() {
-        command.args([shell, flag]);
+    command.args(["new-session", "-d", "-s", session_name, "-c", cwd]);
+    for (key, value) in grove_tmux_environment(session_name) {
+        command.arg("-e").arg(format!("{key}={value}"));
     }
     apply_tmux_command_env(&mut command);
     let output = command.output().map_err(tmux_command_error)?;
@@ -821,8 +810,9 @@ fn set_grove_tmux_metadata(
 }
 
 fn refresh_grove_tmux_environment(session_name: &str) -> Result<(), String> {
-    tmux_set_session_environment(session_name, "GROVE_TMUX_SESSION", session_name)?;
-    tmux_set_session_environment(session_name, "PATH", enriched_path())?;
+    for (key, value) in grove_tmux_environment(session_name) {
+        tmux_set_session_environment(session_name, key, &value)?;
+    }
     Ok(())
 }
 
@@ -838,10 +828,6 @@ fn enforce_grove_tmux_options(session_name: &str) -> Result<(), String> {
         TMUX_MONITOR_BELL_ON_VALUE,
     )?;
     tmux_set_server_option(TMUX_ESCAPE_TIME_OPTION, TMUX_ESCAPE_TIME_VALUE)?;
-    if let Some((shell, flag)) = non_login_shell_args() {
-        let default_cmd = format!("{shell} {flag}");
-        tmux_set_option(session_name, "default-command", &default_cmd)?;
-    }
     Ok(())
 }
 
@@ -1206,8 +1192,167 @@ fn consume_bell_edge(previous_flag: &mut bool, current_flag: bool) -> bool {
 mod tests {
     use super::*;
     use crate::TerminalPaneSnapshotInput;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+    use std::process::Output;
     use std::thread::sleep;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
+    use uuid::Uuid;
+
+    const ZDOTDIR_CHILD_ENV: &str = "GROVE_PTY_ZDOTDIR_CHILD";
+
+    fn unique_test_dir(prefix: &str) -> PathBuf {
+        std::env::temp_dir().join(format!("{prefix}-{}", Uuid::new_v4()))
+    }
+
+    fn assert_subprocess_success(output: &Output, context: &str) {
+        if output.status.success() {
+            return;
+        }
+
+        panic!(
+            "{context} failed\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    fn shell_single_quote(value: &str) -> String {
+        format!("'{}'", value.replace('\'', "'\"'\"'"))
+    }
+
+    fn wait_for_file_contents(path: &Path) -> String {
+        for _ in 0..20 {
+            if let Ok(contents) = fs::read_to_string(path) {
+                let trimmed = contents.trim().to_string();
+                if !trimmed.is_empty() {
+                    return trimmed;
+                }
+            }
+            sleep(Duration::from_millis(100));
+        }
+
+        panic!("timed out waiting for {}", path.display());
+    }
+
+    struct TmuxSessionGuard {
+        session_name: String,
+    }
+
+    impl TmuxSessionGuard {
+        fn new(session_name: String) -> Self {
+            Self { session_name }
+        }
+    }
+
+    impl Drop for TmuxSessionGuard {
+        fn drop(&mut self) {
+            let _ = kill_tmux_session_if_exists(&self.session_name);
+        }
+    }
+
+    fn run_zdotdir_tmux_child_assertions() {
+        if Command::new("tmux").arg("-V").output().is_err() {
+            return;
+        }
+
+        let home = dirs::home_dir().unwrap();
+        let real_zdotdir = PathBuf::from(env::var("ZDOTDIR").unwrap());
+        fs::create_dir_all(&home).unwrap();
+        fs::create_dir_all(&real_zdotdir).unwrap();
+
+        let grove_bin = home.join(".grove").join("bin");
+        fs::create_dir_all(&grove_bin).unwrap();
+        tool_hooks::install_zdotdir(&home).unwrap();
+
+        let real_bin = real_zdotdir.join("bin");
+        let real_bin_str = real_bin.to_string_lossy();
+        fs::write(
+            real_zdotdir.join(".zshrc"),
+            format!("export PATH=\"{real_bin_str}:$PATH\"\n"),
+        )
+        .unwrap();
+
+        let session_name = format!("grove-test-zdotdir-{}", Uuid::new_v4().simple());
+        let worktree_path = env::current_dir().unwrap();
+        let worktree_path = worktree_path.to_string_lossy().into_owned();
+        let pane_id = format!("pane-{}", Uuid::new_v4().simple());
+        let grove_zdotdir = home.join(".grove").join("zsh");
+        let grove_zdotdir_str = grove_zdotdir.to_string_lossy().into_owned();
+        let real_zdotdir_str = real_zdotdir.to_string_lossy().into_owned();
+
+        let _session_guard = TmuxSessionGuard::new(session_name.clone());
+
+        let first =
+            ensure_grove_tmux_session(&session_name, &worktree_path, &pane_id, &worktree_path)
+                .unwrap();
+        assert_eq!(first, CreatePtySessionState::Created);
+        assert_eq!(
+            tmux_session_environment_value(&session_name, "ZDOTDIR")
+                .unwrap()
+                .as_deref(),
+            Some(grove_zdotdir_str.as_str())
+        );
+        assert_eq!(
+            tmux_session_environment_value(&session_name, "GROVE_REAL_ZDOTDIR")
+                .unwrap()
+                .as_deref(),
+            Some(real_zdotdir_str.as_str())
+        );
+
+        tmux_set_session_environment(&session_name, "ZDOTDIR", "/tmp/stale-zdotdir").unwrap();
+        tmux_set_session_environment(
+            &session_name,
+            "GROVE_REAL_ZDOTDIR",
+            "/tmp/stale-real-zdotdir",
+        )
+        .unwrap();
+
+        let second =
+            ensure_grove_tmux_session(&session_name, &worktree_path, &pane_id, &worktree_path)
+                .unwrap();
+        assert_eq!(second, CreatePtySessionState::Attached);
+        assert_eq!(
+            tmux_session_environment_value(&session_name, "ZDOTDIR")
+                .unwrap()
+                .as_deref(),
+            Some(grove_zdotdir_str.as_str())
+        );
+        assert_eq!(
+            tmux_session_environment_value(&session_name, "GROVE_REAL_ZDOTDIR")
+                .unwrap()
+                .as_deref(),
+            Some(real_zdotdir_str.as_str())
+        );
+
+        let zsh = ["/bin/zsh", "/usr/bin/zsh"]
+            .into_iter()
+            .find(|path| Path::new(path).exists())
+            .unwrap_or("zsh");
+        if Command::new(zsh)
+            .arg("-i")
+            .arg("-c")
+            .arg("exit")
+            .output()
+            .is_err()
+        {
+            return;
+        }
+
+        let path_output = home.join("shell-path.txt");
+        let command = format!(
+            "OUTPUT={}; {zsh} -i -c 'print -r -- \"$PATH\"' > \"$OUTPUT\"",
+            shell_single_quote(path_output.to_string_lossy().as_ref()),
+        );
+        tmux_output(["send-keys", "-t", &session_name, &command, "Enter"]).unwrap();
+
+        let actual_path = wait_for_file_contents(&path_output);
+        let expected_prefix = format!("{}:{}", grove_bin.display(), real_bin.display());
+        assert!(
+            actual_path.starts_with(&expected_prefix),
+            "expected shell PATH to start with {expected_prefix}, got {actual_path}"
+        );
+    }
 
     #[test]
     fn detects_utf8_locale_variants() {
@@ -1448,6 +1593,11 @@ mod tests {
 
     #[test]
     fn ensure_grove_tmux_session_reports_created_then_attached_and_forces_status_off() {
+        if env::var_os(ZDOTDIR_CHILD_ENV).is_some() {
+            run_zdotdir_tmux_child_assertions();
+            return;
+        }
+
         if Command::new("tmux").arg("-V").output().is_err() {
             return;
         }
@@ -1526,6 +1676,25 @@ mod tests {
         );
 
         kill_tmux_session_if_exists(&session_name).unwrap();
+
+        let child_root = unique_test_dir("grove-pty-zdotdir");
+        let child_home = child_root.join("home");
+        let child_real_zdotdir = child_root.join("real-zdotdir");
+        fs::create_dir_all(&child_home).unwrap();
+        fs::create_dir_all(&child_real_zdotdir).unwrap();
+
+        let output = Command::new(env::current_exe().unwrap())
+            .arg("--exact")
+            .arg("pty::tests::ensure_grove_tmux_session_reports_created_then_attached_and_forces_status_off")
+            .arg("--nocapture")
+            .env(ZDOTDIR_CHILD_ENV, "1")
+            .env("HOME", &child_home)
+            .env("ZDOTDIR", &child_real_zdotdir)
+            .output()
+            .unwrap();
+
+        let _ = fs::remove_dir_all(&child_root);
+        assert_subprocess_success(&output, "zdotdir tmux assertions");
     }
 
     #[test]
