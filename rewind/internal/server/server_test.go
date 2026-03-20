@@ -39,7 +39,7 @@ func TestExportViewerWritesIndexAndAssets(t *testing.T) {
 		"index.html":     &fstest.MapFile{Data: []byte(`<!doctype html><html><head><link rel="stylesheet" href="./assets/app.css"></head><body><script type="module" src="./assets/app.js"></script></body></html>`)},
 		"assets/app.js":  &fstest.MapFile{Data: []byte("console.log('ok')")},
 		"assets/app.css": &fstest.MapFile{Data: []byte("body{color:black}")},
-	}, outputDir, []byte(`{"id":"session-1"}`))
+	}, outputDir, []byte(`{"id":"session-1"}`), nil)
 	if err != nil {
 		t.Fatalf("exportViewer returned error: %v", err)
 	}

@@ -25,11 +25,12 @@ import (
 var OpenBrowser = openBrowser
 
 const (
-	referrerMeta    = `<meta name="referrer" content="no-referrer" />`
-	cspMeta         = `<meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; connect-src 'none'; font-src 'self' data:; img-src 'self' data:; object-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'" />`
-	sessionDataID   = "rewind-session-data"
-	staleViewerTTL  = 30 * time.Minute
-	viewerDirPrefix = "rewind-view-"
+	referrerMeta     = `<meta name="referrer" content="no-referrer" />`
+	cspMeta          = `<meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; connect-src 'none'; font-src 'self' data:; img-src 'self' data:; object-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'" />`
+	sessionDataID    = "rewind-session-data"
+	analysisDataID   = "rewind-analysis-data"
+	staleViewerTTL   = 30 * time.Minute
+	viewerDirPrefix  = "rewind-view-"
 )
 
 var (
@@ -40,8 +41,10 @@ var (
 )
 
 type Options struct {
-	Port        int
-	OpenBrowser bool
+	Port         int
+	OpenBrowser  bool
+	AnalysisPath string // Optional path to analysis JSON sidecar file
+	SessionPath  string // Original session JSONL path (for auto-detecting sidecar)
 }
 
 // Run exports a static viewer bundle with the session data embedded into the
@@ -61,6 +64,8 @@ func Run(session *parser.Session, options Options) error {
 		return fmt.Errorf("failed to marshal session: %w", err)
 	}
 
+	analysisJSON := loadAnalysisJSON(options)
+
 	viewerRoot, err := prepareViewerExportRoot()
 	if err != nil {
 		return err
@@ -71,7 +76,7 @@ func Run(session *parser.Session, options Options) error {
 		return fmt.Errorf("failed to create viewer directory: %w", err)
 	}
 
-	viewerPath, err := exportViewer(distFS, viewerDir, sessionJSON)
+	viewerPath, err := exportViewer(distFS, viewerDir, sessionJSON, analysisJSON)
 	if err != nil {
 		_ = os.RemoveAll(viewerDir)
 		return err
@@ -105,7 +110,7 @@ func CleanupStaleViewerDirs() (int, error) {
 	return cleanupViewerDirs(root, time.Now(), staleViewerTTL)
 }
 
-func exportViewer(distFS fs.FS, outputDir string, sessionJSON []byte) (string, error) {
+func exportViewer(distFS fs.FS, outputDir string, sessionJSON []byte, analysisJSON []byte) (string, error) {
 	indexHTML, err := fs.ReadFile(distFS, "index.html")
 	if err != nil {
 		return "", fmt.Errorf("failed to read viewer index: %w", err)
@@ -120,6 +125,14 @@ func exportViewer(distFS fs.FS, outputDir string, sessionJSON []byte) (string, e
 	if err != nil {
 		return "", err
 	}
+
+	if len(analysisJSON) > 0 {
+		renderedIndex, err = injectAnalysisData(renderedIndex, analysisJSON)
+		if err != nil {
+			return "", err
+		}
+	}
+
 	renderedIndex, err = minifyHTMLDocument(renderedIndex)
 	if err != nil {
 		return "", err
@@ -253,6 +266,42 @@ func newViewerMinifier() *minify.M {
 	m.AddFunc("application/javascript", js.Minify)
 	m.AddFunc("text/javascript", js.Minify)
 	return m
+}
+
+func loadAnalysisJSON(options Options) []byte {
+	// Check explicit path first
+	if options.AnalysisPath != "" {
+		data, err := os.ReadFile(options.AnalysisPath)
+		if err == nil && json.Valid(data) {
+			return data
+		}
+		return nil
+	}
+	// Auto-detect sidecar: <session-path>.analysis.json
+	if options.SessionPath != "" {
+		sidecar := options.SessionPath + ".analysis.json"
+		data, err := os.ReadFile(sidecar)
+		if err == nil && json.Valid(data) {
+			return data
+		}
+	}
+	return nil
+}
+
+func injectAnalysisData(indexHTML, analysisJSON []byte) ([]byte, error) {
+	tag := `<script id="` + analysisDataID + `" type="application/json">` + escapeInlineJSON(analysisJSON) + `</script>`
+
+	html := string(indexHTML)
+	switch {
+	case strings.Contains(html, "<script"):
+		html = strings.Replace(html, "<script", tag+"<script", 1)
+	case strings.Contains(html, "</head>"):
+		html = strings.Replace(html, "</head>", tag+"</head>", 1)
+	default:
+		return nil, fmt.Errorf("viewer index is missing an injection point for analysis data")
+	}
+
+	return []byte(html), nil
 }
 
 func escapeInlineJSON(sessionJSON []byte) string {

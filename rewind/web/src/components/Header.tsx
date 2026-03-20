@@ -1,20 +1,26 @@
 import { Sun, Moon, ArrowUpDown } from "lucide-react";
-import type { Session } from "../types";
+import type { Session, TabId } from "../types";
 import { useTheme } from "../lib/ThemeContext";
 
 interface HeaderProps {
   session: Session;
   sortOrder: "newest" | "oldest";
   onToggleSort: () => void;
+  activeTab: TabId;
 }
 
-export function Header({ session, sortOrder, onToggleSort }: HeaderProps) {
+export function Header({
+  session,
+  sortOrder,
+  onToggleSort,
+  activeTab,
+}: HeaderProps) {
   const startTime = new Date(session.startedAt);
   const eventCount = session.events.length;
   const { theme, toggle } = useTheme();
 
   return (
-    <header className="sticky top-0 z-[9999] liquid-glass-header">
+    <header className="liquid-glass-header">
       <div className="max-w-4xl mx-auto px-6 py-4 relative z-[1]">
         <div className="flex items-center gap-3">
           <h1 className="text-lg font-semibold text-slate-900 dark:text-neutral-100 tracking-tight">
@@ -29,14 +35,16 @@ export function Header({ session, sortOrder, onToggleSort }: HeaderProps) {
             </span>
           )}
           <div className="flex-1" />
-          <button
-            onClick={onToggleSort}
-            className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-slate-500 dark:text-neutral-400 hover:text-slate-800 dark:hover:text-neutral-200 hover:bg-slate-200/50 dark:hover:bg-neutral-800/50 transition-colors duration-150"
-            aria-label={`Sort: ${sortOrder === "newest" ? "newest first" : "oldest first"}`}
-          >
-            <ArrowUpDown className="w-3.5 h-3.5" />
-            <span>{sortOrder === "newest" ? "Newest" : "Oldest"}</span>
-          </button>
+          {activeTab === "timeline" && (
+            <button
+              onClick={onToggleSort}
+              className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-slate-500 dark:text-neutral-400 hover:text-slate-800 dark:hover:text-neutral-200 hover:bg-slate-200/50 dark:hover:bg-neutral-800/50 transition-colors duration-150"
+              aria-label={`Sort: ${sortOrder === "newest" ? "newest first" : "oldest first"}`}
+            >
+              <ArrowUpDown className="w-3.5 h-3.5" />
+              <span>{sortOrder === "newest" ? "Newest" : "Oldest"}</span>
+            </button>
+          )}
           <button
             onClick={toggle}
             className="p-1.5 rounded-lg text-slate-500 dark:text-neutral-400 hover:text-slate-800 dark:hover:text-neutral-200 hover:bg-slate-200/50 dark:hover:bg-neutral-800/50 transition-colors duration-150"

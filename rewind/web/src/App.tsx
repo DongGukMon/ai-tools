@@ -9,11 +9,14 @@ import {
   useState,
 } from "react";
 import { ArrowUp, ArrowDown } from "lucide-react";
-import type { Session } from "./types";
+import type { Session, TabId, AnalysisData } from "./types";
 import { Timeline } from "./components/Timeline";
 import { Header } from "./components/Header";
+import { TabBar } from "./components/TabBar";
 
 const Minimap = lazy(() => import("./components/Minimap"));
+const StatsPage = lazy(() => import("./components/stats/StatsPage"));
+const AnalysisPage = lazy(() => import("./components/AnalysisPage"));
 
 type SortOrder = "newest" | "oldest";
 
@@ -24,7 +27,9 @@ declare global {
 }
 
 const SORT_KEY = "rewind-sort-order";
+const TAB_KEY = "rewind-active-tab";
 const SESSION_DATA_ID = "rewind-session-data";
+const ANALYSIS_DATA_ID = "rewind-analysis-data";
 
 function loadSortOrder(): SortOrder {
   try {
@@ -32,6 +37,14 @@ function loadSortOrder(): SortOrder {
     if (v === "oldest" || v === "newest") return v;
   } catch {}
   return "newest";
+}
+
+function loadActiveTab(): TabId {
+  try {
+    const v = localStorage.getItem(TAB_KEY);
+    if (v === "timeline" || v === "stats" || v === "analysis") return v;
+  } catch {}
+  return "timeline";
 }
 
 function loadInjectedSession(): Session | null {
@@ -52,12 +65,28 @@ function loadInjectedSession(): Session | null {
   return null;
 }
 
+function loadInjectedAnalysis(): AnalysisData | null {
+  const node = document.getElementById(ANALYSIS_DATA_ID);
+  if (node?.textContent) {
+    try {
+      node.remove();
+      return JSON.parse(node.textContent) as AnalysisData;
+    } catch {}
+  }
+  return null;
+}
+
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
+  const [analysisData, setAnalysisData] = useState<AnalysisData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [enhancementsReady, setEnhancementsReady] = useState(false);
   const [sortOrder, setSortOrder] = useState<SortOrder>(loadSortOrder);
+  const [activeTab, setActiveTab] = useState<TabId>(loadActiveTab);
   const scrollToIndexRef = useRef<((index: number) => void) | undefined>(undefined);
+  const scrollPositions = useRef<Record<string, number>>({});
+  const pendingJumpIndex = useRef<number | null>(null);
+  const [highlightIndex, setHighlightIndex] = useState<number | null>(null);
 
   const toggleSort = useCallback(() => {
     setSortOrder((prev) => {
@@ -67,12 +96,44 @@ export default function App() {
     });
   }, []);
 
+  const handleTabChange = useCallback((tab: TabId) => {
+    // Save current scroll position
+    scrollPositions.current[activeTab] = window.scrollY;
+    setActiveTab(tab);
+    try { localStorage.setItem(TAB_KEY, tab); } catch {}
+    // Restore scroll position for the target tab (after render)
+    requestAnimationFrame(() => {
+      window.scrollTo(0, scrollPositions.current[tab] || 0);
+    });
+  }, [activeTab]);
+
+  const jumpToTimelineEvent = useCallback((eventIndex: number) => {
+    scrollPositions.current[activeTab] = window.scrollY;
+    pendingJumpIndex.current = eventIndex;
+    setActiveTab("timeline");
+    try { localStorage.setItem(TAB_KEY, "timeline"); } catch {}
+  }, [activeTab]);
+
+  // Handle pending jump after timeline renders
+  useEffect(() => {
+    if (activeTab === "timeline" && pendingJumpIndex.current !== null) {
+      const idx = pendingJumpIndex.current;
+      pendingJumpIndex.current = null;
+      setHighlightIndex(idx);
+      // Wait for timeline to mount
+      setTimeout(() => {
+        scrollToIndexRef.current?.(idx);
+      }, 50);
+    }
+  }, [activeTab]);
+
   useEffect(() => {
     const injectedSession = loadInjectedSession();
     if (injectedSession) {
       startTransition(() => {
         setSession(injectedSession);
       });
+      setAnalysisData(loadInjectedAnalysis());
       return;
     }
 
@@ -146,7 +207,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen">
-      {enhancementsReady && (
+      {activeTab === "timeline" && enhancementsReady && (
         <Suspense fallback={null}>
           <Minimap
             events={session.events}
@@ -154,13 +215,45 @@ export default function App() {
           />
         </Suspense>
       )}
-      <Header
-        session={session}
-        sortOrder={sortOrder}
-        onToggleSort={toggleSort}
-      />
-      <Timeline events={sortedEvents} scrollToIndexRef={scrollToIndexRef} />
-      <ScrollButtons />
+      <div className="sticky top-0 z-[9999]">
+        <Header
+          session={session}
+          sortOrder={sortOrder}
+          onToggleSort={toggleSort}
+          activeTab={activeTab}
+        />
+        <div className="flex justify-center pb-3 pt-2">
+          <TabBar
+            activeTab={activeTab}
+            onTabChange={handleTabChange}
+            hasAnalysis={analysisData !== null}
+          />
+        </div>
+      </div>
+      {activeTab === "timeline" && (
+        <>
+          <Timeline events={sortedEvents} scrollToIndexRef={scrollToIndexRef} highlightIndex={highlightIndex} />
+          <ScrollButtons />
+        </>
+      )}
+      {activeTab === "stats" && (
+        <Suspense fallback={<PageLoader />}>
+          <StatsPage events={session.events} onJumpToEvent={jumpToTimelineEvent} />
+        </Suspense>
+      )}
+      {activeTab === "analysis" && (
+        <Suspense fallback={<PageLoader />}>
+          <AnalysisPage data={analysisData} />
+        </Suspense>
+      )}
+    </div>
+  );
+}
+
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center py-20">
+      <div className="text-slate-400 dark:text-neutral-500 text-sm">Loading...</div>
     </div>
   );
 }

@@ -20,6 +20,7 @@ import { cn } from "../lib/utils";
 interface TimelineProps {
   events: TimelineEvent[];
   scrollToIndexRef?: { current: ((index: number) => void) | undefined };
+  highlightIndex?: number | null;
 }
 
 type EventType = TimelineEvent["type"];
@@ -117,8 +118,16 @@ function buildTimelineRows(events: TimelineEvent[]): TimelineRow[] {
   }));
 }
 
-export function Timeline({ events, scrollToIndexRef }: TimelineProps) {
+export function Timeline({ events, scrollToIndexRef, highlightIndex }: TimelineProps) {
   const [expandedSet, setExpandedSet] = useState<Set<number>>(new Set());
+  const [flashIndex, setFlashIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (highlightIndex == null) return;
+    setFlashIndex(highlightIndex);
+    const timer = setTimeout(() => setFlashIndex(null), 2500);
+    return () => clearTimeout(timer);
+  }, [highlightIndex]);
   const listRef = useRef<HTMLDivElement>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
 
@@ -162,7 +171,6 @@ export function Timeline({ events, scrollToIndexRef }: TimelineProps) {
       if (index < 0 || index >= rows.length) return;
       virtualizer.scrollToIndex(index, {
         align: "center",
-        behavior: "smooth",
       });
     };
 
@@ -217,6 +225,7 @@ export function Timeline({ events, scrollToIndexRef }: TimelineProps) {
                   row={row}
                   expanded={expandedSet.has(item.index)}
                   onToggle={toggleExpanded}
+                  highlight={flashIndex === item.index}
                 />
               </div>
             </div>
@@ -232,6 +241,7 @@ interface TimelineItemProps {
   row: TimelineRow;
   expanded: boolean;
   onToggle: (index: number) => void;
+  highlight?: boolean;
 }
 
 const TimelineItem = memo(function TimelineItem({
@@ -239,6 +249,7 @@ const TimelineItem = memo(function TimelineItem({
   row,
   expanded,
   onToggle,
+  highlight,
 }: TimelineItemProps) {
   const { event, hasContent, timestampLabel } = row;
   const config = eventConfig[event.type] ?? eventConfig.system;
@@ -284,6 +295,7 @@ const TimelineItem = memo(function TimelineItem({
           "timeline-card flex-1 max-w-[calc(100%-40px)] rounded-xl liquid-glass",
           hasContent ? "cursor-pointer liquid-glass-hover" : "",
           expanded && config.expandedBg,
+          highlight && "highlight-flash",
         )}
         onClick={hasContent ? handleToggle : undefined}
       >

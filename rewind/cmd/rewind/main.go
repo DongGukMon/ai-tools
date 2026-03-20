@@ -153,6 +153,7 @@ func main() {
 	if err := server.Run(session, server.Options{
 		Port:        port,
 		OpenBrowser: openBrowser,
+		SessionPath: path,
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
