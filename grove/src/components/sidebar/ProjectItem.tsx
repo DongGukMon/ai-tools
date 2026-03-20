@@ -139,7 +139,7 @@ const ProjectItem = memo(function ProjectItem({ project }: Props) {
 
       {/* Worktree list */}
       {expanded && (
-        <div className={cn("ml-5 mt-1 space-y-0.5 border-l border-border pl-3")}>
+        <div className={cn("ml-5 space-y-0.5 border-l border-border pl-3")}>
           <DefaultBranchItem project={project} />
           {/* Phase 2: 드래그 재정렬 — <WorktreeItem>을 드래그 가능하게 만들고,
               드래그 완료 시 setWorktreeOrder(project.id, newOrder) 호출.
