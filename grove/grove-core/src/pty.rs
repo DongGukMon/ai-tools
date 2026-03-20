@@ -1,6 +1,7 @@
 use crate::{
     config,
     process_env::{enriched_path, preferred_ssh_auth_sock},
+    tool_hooks::{self, TMUX_GROVE_CLAUDE_STATUS_OPTION},
     worktree_lifecycle::WorktreeResource,
     CreatePtyInitialHydration, CreatePtyInitialHydrationSource, CreatePtyRequest, CreatePtyRestore,
     CreatePtyResult, CreatePtySessionState, PtyBellEvent, SaveTerminalSessionSnapshotRequest,
@@ -29,7 +30,6 @@ const TMUX_MONITOR_BELL_OPTION: &str = "monitor-bell";
 const TMUX_MONITOR_BELL_ON_VALUE: &str = "on";
 const TMUX_ESCAPE_TIME_OPTION: &str = "escape-time";
 const TMUX_ESCAPE_TIME_VALUE: &str = "100";
-const TMUX_GROVE_CLAUDE_STATUS_OPTION: &str = "@grove_claude_status";
 const WORKTREE_HASH_LEN: usize = 12;
 const PANE_PREFIX_LEN: usize = 8;
 const PANE_HASH_LEN: usize = 4;
@@ -153,82 +153,11 @@ fn preferred_utf8_locale() -> String {
     "C.UTF-8".to_string()
 }
 
-fn ensure_grove_bin_scripts() {
-    static INIT: OnceLock<()> = OnceLock::new();
-    INIT.get_or_init(|| {
-        let Some(home) = dirs::home_dir() else {
-            return;
-        };
-        let bin_dir = home.join(".grove").join("bin");
-        let _ = std::fs::create_dir_all(&bin_dir);
-
-        let grove_hook = bin_dir.join("grove-hook");
-        let grove_hook_path = grove_hook.to_string_lossy().to_string();
-
-        // grove-hook: shared dispatcher for all CLI wrappers
-        let hook_script = r#"#!/usr/bin/env bash
-# Grove hook dispatcher. Usage: grove-hook <tool> <event>
-# Sets tmux user options that Grove polls for status badges.
-TOOL="$1"; EVENT="$2"
-[ -z "$GROVE_TMUX_SESSION" ] && exit 0
-case "$TOOL" in
-  claude)
-    case "$EVENT" in
-      SessionStart)
-        tmux set-option -q -t "$GROVE_TMUX_SESSION" @grove_claude_status idle 2>/dev/null ;;
-      UserPromptSubmit)
-        tmux set-option -q -t "$GROVE_TMUX_SESSION" @grove_claude_status running 2>/dev/null ;;
-      Stop)
-        tmux set-option -q -t "$GROVE_TMUX_SESSION" @grove_claude_status idle 2>/dev/null ;;
-      StopFailure|Notification)
-        tmux set-option -q -t "$GROVE_TMUX_SESSION" @grove_claude_status attention 2>/dev/null ;;
-      SessionEnd|cleanup)
-        tmux set-option -qu -t "$GROVE_TMUX_SESSION" @grove_claude_status 2>/dev/null ;;
-    esac ;;
-esac
-"#;
-        let _ = std::fs::write(&grove_hook, hook_script);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let _ = std::fs::set_permissions(&grove_hook, std::fs::Permissions::from_mode(0o755));
-        }
-
-        // claude wrapper: injects hooks for session status tracking
-        let claude_script = format!(
-            r#"#!/usr/bin/env bash
-# Grove-managed Claude Code wrapper — injects hooks for status tracking.
-find_real_claude() {{
-  local self_dir; self_dir="$(cd "$(dirname "$0")" && pwd)"
-  local IFS=:; for d in $PATH; do
-    [[ "$d" == "$self_dir" ]] && continue
-    [[ -x "$d/claude" ]] && printf '%s' "$d/claude" && return 0
-  done; return 1
-}}
-REAL_CLAUDE="$(find_real_claude)" || {{ echo "claude: not found" >&2; exit 127; }}
-[ -z "$GROVE_TMUX_SESSION" ] && exec "$REAL_CLAUDE" "$@"
-GROVE_HOOK="{grove_hook_path}"
-trap '$GROVE_HOOK claude cleanup' EXIT
-HOOKS_JSON='{{"hooks":{{"SessionStart":[{{"type":"command","command":"'"'"'{grove_hook_path}'"'"' claude SessionStart","timeout":5}}],"Stop":[{{"type":"command","command":"'"'"'{grove_hook_path}'"'"' claude Stop","timeout":5}}],"StopFailure":[{{"type":"command","command":"'"'"'{grove_hook_path}'"'"' claude StopFailure","timeout":5}}],"Notification":[{{"type":"command","command":"'"'"'{grove_hook_path}'"'"' claude Notification","timeout":5}}],"UserPromptSubmit":[{{"type":"command","command":"'"'"'{grove_hook_path}'"'"' claude UserPromptSubmit","timeout":5}}],"SessionEnd":[{{"type":"command","command":"'"'"'{grove_hook_path}'"'"' claude SessionEnd","timeout":1}}]}}}}'
-exec "$REAL_CLAUDE" --settings "$HOOKS_JSON" "$@"
-"#
-        );
-        let claude_wrapper = bin_dir.join("claude");
-        let _ = std::fs::write(&claude_wrapper, claude_script);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let _ =
-                std::fs::set_permissions(&claude_wrapper, std::fs::Permissions::from_mode(0o755));
-        }
-    });
-}
-
 pub fn create(
     request: CreatePtyRequest,
     sink: Arc<dyn PtyEventSink>,
 ) -> Result<CreatePtyResult, String> {
-    ensure_grove_bin_scripts();
+    tool_hooks::ensure_installed();
 
     let CreatePtyRequest {
         pty_id,
@@ -453,11 +382,11 @@ pub fn poll_bell_events() -> Result<Vec<PtyBellEvent>, String> {
             }
         };
 
-        let claude_status = match tmux_session_option(&session_name, TMUX_GROVE_CLAUDE_STATUS_OPTION)
-        {
-            Ok(value) => value,
-            Err(_) => None,
-        };
+        let claude_status =
+            match tmux_session_option(&session_name, TMUX_GROVE_CLAUDE_STATUS_OPTION) {
+                Ok(value) => value,
+                Err(_) => None,
+            };
 
         let mut state = tracked.lock().map_err(|e| e.to_string())?;
         let bell = consume_bell_edge(&mut state.last_bell_flag, bell_flag);
@@ -824,7 +753,21 @@ fn ensure_grove_tmux_session(
 
 fn create_tmux_session(session_name: &str, cwd: &str) -> Result<bool, String> {
     let mut command = Command::new("tmux");
-    command.args(["new-session", "-d", "-s", session_name, "-c", cwd]);
+    let enriched_path = enriched_path().to_string();
+    let grove_tmux_session = format!("GROVE_TMUX_SESSION={session_name}");
+    let path_env = format!("PATH={enriched_path}");
+    command.args([
+        "new-session",
+        "-d",
+        "-s",
+        session_name,
+        "-c",
+        cwd,
+        "-e",
+        &grove_tmux_session,
+        "-e",
+        &path_env,
+    ]);
     apply_tmux_command_env(&mut command);
     let output = command.output().map_err(tmux_command_error)?;
     if output.status.success() {
@@ -849,8 +792,14 @@ fn set_grove_tmux_metadata(
     tmux_set_option(session_name, TMUX_GROVE_MANAGED_OPTION, "1")?;
     tmux_set_option(session_name, TMUX_GROVE_WORKTREE_OPTION, worktree_path)?;
     tmux_set_option(session_name, TMUX_GROVE_PANE_ID_OPTION, pane_id)?;
-    tmux_set_session_environment(session_name, "GROVE_TMUX_SESSION", session_name)?;
+    refresh_grove_tmux_environment(session_name)?;
     enforce_grove_tmux_options(session_name)?;
+    Ok(())
+}
+
+fn refresh_grove_tmux_environment(session_name: &str) -> Result<(), String> {
+    tmux_set_session_environment(session_name, "GROVE_TMUX_SESSION", session_name)?;
+    tmux_set_session_environment(session_name, "PATH", enriched_path())?;
     Ok(())
 }
 
@@ -895,6 +844,7 @@ fn verify_grove_tmux_session(
         ));
     }
 
+    refresh_grove_tmux_environment(session_name)?;
     enforce_grove_tmux_options(session_name)?;
 
     Ok(())
@@ -948,11 +898,7 @@ fn tmux_set_option(session_name: &str, option: &str, value: &str) -> Result<(), 
     ))
 }
 
-fn tmux_set_session_environment(
-    session_name: &str,
-    key: &str,
-    value: &str,
-) -> Result<(), String> {
+fn tmux_set_session_environment(session_name: &str, key: &str, value: &str) -> Result<(), String> {
     let output = tmux_output(["set-environment", "-t", session_name, key, value])?;
     if output.status.success() {
         return Ok(());
@@ -961,6 +907,38 @@ fn tmux_set_session_environment(
     Err(format!(
         "failed to set tmux environment {key} on {session_name}: {}",
         tmux_output_message(&output)
+    ))
+}
+
+#[cfg(test)]
+fn tmux_session_environment_value(session_name: &str, key: &str) -> Result<Option<String>, String> {
+    let output = tmux_output(["show-environment", "-t", session_name, key])?;
+    if output.status.success() {
+        let value = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if let Some((_, raw)) = value.split_once('=') {
+            return if raw.is_empty() {
+                Ok(None)
+            } else {
+                Ok(Some(raw.to_string()))
+            };
+        }
+
+        return if value.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(value))
+        };
+    }
+
+    let message = tmux_output_message(&output);
+    if output.status.code() == Some(1)
+        && (message.contains(format!("unknown variable: {key}").as_str()) || message.is_empty())
+    {
+        return Ok(None);
+    }
+
+    Err(format!(
+        "failed to query tmux environment {key} on {session_name}: {message}"
     ))
 }
 
@@ -1474,8 +1452,22 @@ mod tests {
                 .as_deref(),
             Some(TMUX_MOUSE_ON_VALUE)
         );
+        assert_eq!(
+            tmux_session_environment_value(&session_name, "GROVE_TMUX_SESSION")
+                .unwrap()
+                .as_deref(),
+            Some(session_name.as_str())
+        );
+        assert_eq!(
+            tmux_session_environment_value(&session_name, "PATH")
+                .unwrap()
+                .as_deref(),
+            Some(enriched_path())
+        );
 
         tmux_set_option(&session_name, TMUX_STATUS_OPTION, "on").unwrap();
+        tmux_set_session_environment(&session_name, "GROVE_TMUX_SESSION", "stale-session").unwrap();
+        tmux_set_session_environment(&session_name, "PATH", "/tmp/stale-path").unwrap();
 
         let second =
             ensure_grove_tmux_session(&session_name, &worktree_path, &pane_id, &worktree_path)
@@ -1492,6 +1484,18 @@ mod tests {
                 .unwrap()
                 .as_deref(),
             Some(TMUX_MOUSE_ON_VALUE)
+        );
+        assert_eq!(
+            tmux_session_environment_value(&session_name, "GROVE_TMUX_SESSION")
+                .unwrap()
+                .as_deref(),
+            Some(session_name.as_str())
+        );
+        assert_eq!(
+            tmux_session_environment_value(&session_name, "PATH")
+                .unwrap()
+                .as_deref(),
+            Some(enriched_path())
         );
 
         kill_tmux_session_if_exists(&session_name).unwrap();
