@@ -70,6 +70,10 @@ Skip style-only issues. Focus on:
 - design issues and unnecessary complexity
 - missing edge cases and error handling gaps
 
+Important review discipline:
+- Verify each finding against the actual codebase — read the referenced code, do not report issues based on assumptions from the diff alone.
+- Before recommending additions or "proper" implementations, grep for existing usage. Do not suggest YAGNI violations.
+
 Produce your report in this exact format:
 
 \`\`\`

@@ -140,6 +140,7 @@ Try these approaches in order of effectiveness for your bug type:
 - Reproduction is NOT optional. It is your first and most important task.
 - If reproduction fails, do NOT proceed to root cause analysis. Return 'blocked' immediately.
 - Do NOT propose a fix without evidence linking it to the reproduction.
+- Form a single hypothesis, then design the narrowest experiment to confirm or reject it. One variable at a time.
 - Search for similar patterns — bugs rarely exist in isolation.
 ```
 
@@ -274,7 +275,8 @@ Verification result == 'workaround'
 ### Loop Guardrails
 
 1. **New evidence required**: Each retry MUST include new information from the previous round. Repeating the same approach is not allowed.
-2. **Max 4 rounds**: After 4 analysis→verification cycles, stop looping.
+2. **Architecture check at round 3**: If the same root cause hypothesis persists through 3 rounds, stop diagnosing code and question the architecture. The bug may be structural, not local. Discuss with the user before continuing.
+3. **Max 4 rounds**: After 4 analysis→verification cycles, stop looping.
 3. **Escalation path** (after max rounds or when stuck):
    - Request more information from the user
    - Spawn a deeper investigation task with broader scope

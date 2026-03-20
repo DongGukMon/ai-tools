@@ -15,7 +15,7 @@ Planning is a conversation — not a mode switch. You use read-only tools natura
 ## Non-negotiables
 
 - Do not edit implementation files or start execution while planning.
-- Treat ambiguity as work to resolve, not something to hand-wave away.
+- Treat ambiguity as work to resolve, not something to hand-wave away. But do not stop at a question-only response — produce the plan with bounded assumptions, then append remaining questions.
 - Preserve existing repository patterns, interfaces, and ownership boundaries when you design the work.
 - Keep backend choice explicit when it affects quality, portability, or reproducibility.
 - Do not materialize a new workspace during planning. Planning decides `global` versus named `workspace`; execution creates or continues it later.

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Whip Docs"
+  short_description: "Write or update documentation with code-verified accuracy"
+  default_prompt: "Use $whip-docs to write or update documentation, verifying all claims against the current codebase."
