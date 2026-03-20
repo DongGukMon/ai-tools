@@ -60,12 +60,7 @@ const PATH_MARKER: &str = "__GROVE_PATH__";
 pub fn enriched_path() -> &'static str {
     static PATH: OnceLock<String> = OnceLock::new();
     PATH.get_or_init(|| {
-        let base =
-            resolve_login_shell_path().unwrap_or_else(|| env::var("PATH").unwrap_or_default());
-        match dirs::home_dir().and_then(|h| h.join(".grove/bin").to_str().map(String::from)) {
-            Some(grove_bin) => format!("{grove_bin}:{base}"),
-            None => base,
-        }
+        resolve_login_shell_path().unwrap_or_else(|| env::var("PATH").unwrap_or_default())
     })
     .as_str()
 }
