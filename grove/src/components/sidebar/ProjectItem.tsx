@@ -123,6 +123,9 @@ function ProjectItem({ project }: Props) {
       {expanded && (
         <div className={cn("ml-5 mt-1 space-y-0.5 border-l border-border pl-3")}>
           <DefaultBranchItem project={project} />
+          {/* Phase 2: 드래그 재정렬 — <WorktreeItem>을 드래그 가능하게 만들고,
+              드래그 완료 시 setWorktreeOrder(project.id, newOrder) 호출.
+              react-dnd 또는 @dnd-kit/sortable 권장. */}
           {project.worktrees.map((wt) => (
             <WorktreeItem
               key={wt.path}

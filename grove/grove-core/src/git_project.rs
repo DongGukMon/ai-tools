@@ -136,6 +136,7 @@ fn make_project_entry(
         org,
         repo,
         source_path,
+        worktree_order: Vec::new(),
     }
 }
 
@@ -325,6 +326,7 @@ fn project_from_entry(entry: ProjectEntry) -> Project {
         get_worktrees_for_project(&entry.source_path),
         &entry.source_path,
     );
+    let worktrees = apply_worktree_order(worktrees, &entry.worktree_order);
 
     let path = std::path::Path::new(&entry.source_path);
     let source_has_changes = path.exists() && has_local_source_changes(path);
@@ -510,6 +512,29 @@ fn make_worktree(path_str: &str, branch: &str, project_base: &Path) -> Worktree 
     }
 }
 
+fn sort_worktrees_by_creation_time(worktrees: &mut Vec<Worktree>) {
+    worktrees.sort_by_key(|wt| {
+        std::fs::metadata(&wt.path)
+            .and_then(|m| m.created())
+            .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
+    });
+}
+
+fn apply_worktree_order(worktrees: Vec<Worktree>, order: &[String]) -> Vec<Worktree> {
+    if order.is_empty() {
+        return worktrees;
+    }
+    let mut ordered = Vec::with_capacity(worktrees.len());
+    let mut remaining: Vec<Worktree> = worktrees;
+    for name in order {
+        if let Some(pos) = remaining.iter().position(|wt| &wt.name == name) {
+            ordered.push(remaining.remove(pos));
+        }
+    }
+    ordered.extend(remaining);
+    ordered
+}
+
 fn get_worktrees_for_project(source_path: &str) -> Vec<Worktree> {
     let source = Path::new(source_path);
     let project_base = source.parent().unwrap_or(source);
@@ -523,7 +548,9 @@ fn get_worktrees_for_project(source_path: &str) -> Vec<Worktree> {
         _ => return vec![],
     };
 
-    parse_worktree_list(&output, project_base)
+    let mut worktrees = parse_worktree_list(&output, project_base);
+    sort_worktrees_by_creation_time(&mut worktrees);
+    worktrees
 }
 
 fn managed_source_dir(entry: &ProjectEntry) -> Result<PathBuf, String> {
@@ -762,6 +789,17 @@ pub fn list_worktrees_impl(project_id: &str) -> Result<Vec<Worktree>, String> {
         get_worktrees_for_project(&entry.source_path),
         &entry.source_path,
     ))
+}
+
+pub fn set_worktree_order_impl(project_id: &str, order: Vec<String>) -> Result<(), String> {
+    let mut config = config::load_config();
+    let entry = config
+        .projects
+        .iter_mut()
+        .find(|p| p.id == project_id)
+        .ok_or_else(|| format!("Project not found: {project_id}"))?;
+    entry.worktree_order = order;
+    config::save_config(&config)
 }
 
 pub fn is_source_dirty_impl(project_id: &str) -> Result<bool, String> {
@@ -1083,6 +1121,7 @@ mod tests {
             org,
             repo,
             source_path: source_dir.to_string_lossy().to_string(),
+            worktree_order: Vec::new(),
         }
     }
 

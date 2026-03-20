@@ -17,6 +17,7 @@ interface ProjectState {
   addWorktree: (projectId: string, name: string) => Promise<Worktree>;
   removeWorktree: (projectId: string, name: string) => Promise<void>;
   selectWorktree: (worktree: Worktree | null) => void;
+  setWorktreeOrder: (projectId: string, order: string[]) => Promise<void>;
 }
 
 function normalizeProjectUrl(url: string): string {
@@ -75,6 +76,16 @@ function reconcileSelectedWorktree(
   }
 
   return null;
+}
+
+function reorderWorktrees(worktrees: Worktree[], order: string[]): Worktree[] {
+  const ordered: Worktree[] = [];
+  const remaining = [...worktrees];
+  for (const name of order) {
+    const idx = remaining.findIndex((wt) => wt.name === name);
+    if (idx !== -1) ordered.push(...remaining.splice(idx, 1));
+  }
+  return [...ordered, ...remaining];
 }
 
 export const useProjectStore = create<ProjectState>((set) => ({
@@ -207,5 +218,19 @@ export const useProjectStore = create<ProjectState>((set) => ({
 
   selectWorktree: (worktree: Worktree | null) => {
     set({ selectedWorktree: worktree });
+  },
+
+  // Phase 2: 드래그 재정렬 완료 시 호출. 순서를 config에 저장하고 즉시 UI에 반영.
+  setWorktreeOrder: async (projectId: string, order: string[]) => {
+    await runCommand(() => tauri.setWorktreeOrder(projectId, order), {
+      errorToast: "Failed to save worktree order",
+    });
+    set((state) => ({
+      projects: state.projects.map((p) =>
+        p.id === projectId
+          ? { ...p, worktrees: reorderWorktrees(p.worktrees, order) }
+          : p,
+      ),
+    }));
   },
 }));
