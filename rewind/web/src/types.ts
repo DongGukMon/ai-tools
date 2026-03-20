@@ -75,6 +75,24 @@ export interface AnalysisData {
   strategyCritique: StrategyCritique;
   keyDecisions: KeyDecision[];
   takeaways: string[];
+  workTypeReviews?: WorkTypeReview[];
+}
+
+export type WorkType = "debugging" | "feature" | "refactoring" | "planning" | "code-review" | "docs";
+export type PracticeVerdict = "yes" | "partial" | "no";
+
+export interface WorkTypePractice {
+  name: string;
+  followed: PracticeVerdict;
+  note: string;
+}
+
+export interface WorkTypeReview {
+  workType: WorkType;
+  eventRange: [number, number];
+  score: "good" | "fair" | "poor";
+  practices: WorkTypePractice[];
+  summary: string;
 }
 
 export interface PromptReview {

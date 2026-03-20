@@ -63,6 +63,21 @@ Produce a JSON file matching this exact schema:
   ],
   "takeaways": [
     "Specific, actionable improvement for next session"
+  ],
+  "workTypeReviews": [
+    {
+      "workType": "debugging|feature|refactoring|planning|code-review|docs",
+      "eventRange": [10, 85],
+      "score": "good|fair|poor",
+      "practices": [
+        {
+          "name": "practice name",
+          "followed": "yes|partial|no",
+          "note": "concrete evidence from the transcript"
+        }
+      ],
+      "summary": "one-line assessment of how well best practices were followed"
+    }
   ]
 }
 ```
@@ -83,9 +98,13 @@ Output rules:
   - `description`: <= 140 chars
   - `reasoning`: <= 180 chars
   - each takeaway: <= 140 chars
+- `workTypeReviews` `summary`: <= 200 chars
+- `workTypeReviews` `practices[].note`: <= 160 chars
 - Use only these enums:
-  - `quality`: `good`, `fair`, `poor`
+  - `quality` / `score`: `good`, `fair`, `poor`
   - `impact`: `positive`, `neutral`, `negative`
+  - `workType`: `debugging`, `feature`, `refactoring`, `planning`, `code-review`, `docs`
+  - `followed`: `yes`, `partial`, `no`
 
 ### Step 4: Write the analysis file
 
@@ -112,3 +131,44 @@ Run `rewind claude <session-id>` to view it in the Analysis tab.
 - **Key Decisions**: Identify 3-7 turning points where the session direction changed. A decision to use a specific tool, to refactor instead of patch, to ask for clarification — these are all key decisions.
 - **Takeaways**: Provide 3-5 concrete, actionable items. Not generic advice like "write better prompts" — specific like "When editing multiple files in the same module, use plan mode first to align on the change set."
 - **Evidence bar**: Anchor each review and decision to concrete events in the transcript. Do not infer hidden intent unless the transcript strongly supports it.
+- **Work Type Reviews**: Detect the dominant work types in the session and evaluate each against its domain-specific best practices. A session may contain multiple work types (e.g., debugging then feature implementation). Produce one review per detected work type with its JSONL line range. Use the checklists below — only include practices that are relevant to the actual session content. Mark `yes` when clearly followed with evidence, `partial` when attempted but incomplete, `no` when skipped or violated.
+
+### Work Type Practice Checklists
+
+**debugging**:
+- Reproduce first (gate) — was the bug reliably triggered before attempting fixes?
+- Root cause, not symptom — did the fix address WHY it broke, not just HOW to stop it?
+- One hypothesis at a time — were experiments focused on a single variable?
+- Fresh verification after fix — was the fix validated independently, not just "it compiles"?
+- Adjacent code path search — were similar patterns checked for the same bug?
+- 3 fails → question architecture — after repeated failures, was the approach itself questioned?
+
+**feature**:
+- Test before code — was a failing test written before production code?
+- Existing pattern reuse — were existing conventions and interfaces honored?
+- Small reviewable diffs — were changes incremental and easy to review?
+- Build/test verification — was there a final build, test, or typecheck pass?
+- No overbuilding (YAGNI) — was only the requested functionality implemented?
+
+**refactoring**:
+- Lock behavior with tests first — were existing tests confirmed passing before changes?
+- Deletion/simplification over addition — was complexity reduced, not shifted?
+- Interface/contract preservation — were public APIs and interfaces kept stable?
+- Verify behavior preservation — was identical behavior confirmed after refactoring?
+
+**planning**:
+- Concrete outcome defined — was the end state vivid and unambiguous?
+- Codebase explored sufficiently — was the plan grounded in actual code, not assumptions?
+- Shared contracts explicit — were cross-boundary types/interfaces named?
+- Task sizing appropriate — were tasks scoped for single-agent completion?
+
+**code-review**:
+- Verify findings against code — were findings confirmed by reading the actual code?
+- YAGNI check — were recommendations checked for real usage before suggesting?
+- Severity classification — were issues ranked by impact (blocking vs. important)?
+- Correctness over style — was the focus on logic/safety, not formatting?
+
+**docs**:
+- Verify against current code — were documented behaviors confirmed in source?
+- Concrete examples and commands — were actionable examples provided?
+- Executable without hidden context — can a reader follow the docs independently?

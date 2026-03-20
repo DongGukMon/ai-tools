@@ -5,8 +5,9 @@ import {
   ArrowRight,
   Lightbulb,
   MessageSquare,
+  ClipboardCheck,
 } from "lucide-react";
-import type { AnalysisData } from "../types";
+import type { AnalysisData, WorkTypeReview } from "../types";
 
 interface Props {
   data: AnalysisData | null;
@@ -170,6 +171,60 @@ export default function AnalysisPage({ data, backend }: Props) {
                 <span className="ml-auto text-[10px] text-slate-400 dark:text-neutral-600 shrink-0">
                   line #{d.eventIndex}
                 </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Work Type Reviews */}
+      {data.workTypeReviews && data.workTypeReviews.length > 0 && (
+        <div className="liquid-glass rounded-2xl p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <ClipboardCheck className="w-4 h-4 text-sky-500" />
+            <h3 className="text-sm font-semibold text-slate-800 dark:text-neutral-200">
+              Work Type Reviews
+            </h3>
+          </div>
+          <div className="space-y-4">
+            {data.workTypeReviews.map((review: WorkTypeReview, i: number) => (
+              <div
+                key={i}
+                className="rounded-xl bg-white/30 dark:bg-white/5 border border-slate-200/40 dark:border-neutral-700/30 p-4"
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${qualityColors[review.score]}`}>
+                    {review.score}
+                  </span>
+                  <span className="text-xs font-semibold text-slate-700 dark:text-neutral-300">
+                    {review.workType}
+                  </span>
+                  <span className="text-[10px] text-slate-400 dark:text-neutral-600">
+                    lines {review.eventRange[0]}–{review.eventRange[1]}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 dark:text-neutral-400 mb-3">{review.summary}</p>
+                <div className="space-y-1.5">
+                  {review.practices.map((p, j) => (
+                    <div key={j} className="flex items-start gap-2 text-xs">
+                      <span className={`shrink-0 mt-0.5 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold ${
+                        p.followed === "yes"
+                          ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400"
+                          : p.followed === "partial"
+                            ? "bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400"
+                            : "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"
+                      }`}>
+                        {p.followed === "yes" ? "✓" : p.followed === "partial" ? "~" : "✗"}
+                      </span>
+                      <div>
+                        <span className="font-medium text-slate-700 dark:text-neutral-300">{p.name}</span>
+                        {p.note && (
+                          <span className="text-slate-500 dark:text-neutral-500"> — {p.note}</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             ))}
           </div>
