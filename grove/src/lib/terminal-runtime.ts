@@ -198,9 +198,16 @@ class TerminalPaneRuntime {
       if (isMacClearTerminalShortcut(event)) {
         event.preventDefault();
         event.stopPropagation();
-        this.term.clear();
-        if (this.ptyId) {
-          clearPtyScrollback(this.ptyId).catch(() => {});
+        const ptyId = this.ptyId;
+        if (ptyId) {
+          // Send Ctrl+L (form feed) so the shell redraws the prompt at the top,
+          // then clear the scrollback buffer to mimic macOS Terminal Cmd+K.
+          const bytes = Array.from(new TextEncoder().encode("\x0c"));
+          writePty(ptyId, bytes).catch(() => {});
+          setTimeout(() => {
+            this.term.clear();
+            clearPtyScrollback(ptyId).catch(() => {});
+          }, 50);
         }
         return false;
       }
