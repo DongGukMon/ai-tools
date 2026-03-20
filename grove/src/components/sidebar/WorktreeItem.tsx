@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { GitBranch, Loader2, X } from "lucide-react";
 import type { Worktree } from "../../types";
 import { useProjectStore } from "../../store/project";
@@ -33,23 +34,25 @@ function useClaudeWorktreeStatus(worktreePath: string): {
   status: ClaudeSessionStatus | null;
   count: number;
 } {
-  return useTerminalStore((state) => {
-    const session = state.sessions[worktreePath];
-    if (!session) return { status: null, count: 0 };
+  return useTerminalStore(
+    useShallow((state) => {
+      const session = state.sessions[worktreePath];
+      if (!session) return { status: null, count: 0 };
 
-    const panes = collectTerminalPanes(session);
-    const statuses = panes
-      .map(({ ptyId }) => (ptyId ? state.claudeStatus[ptyId] : undefined))
-      .filter((s): s is ClaudeSessionStatus => !!s);
+      const panes = collectTerminalPanes(session);
+      const statuses = panes
+        .map(({ ptyId }) => (ptyId ? state.claudeStatus[ptyId] : undefined))
+        .filter((s): s is ClaudeSessionStatus => !!s);
 
-    if (statuses.length === 0) return { status: null, count: 0 };
+      if (statuses.length === 0) return { status: null, count: 0 };
 
-    let aggregated: ClaudeSessionStatus = "idle";
-    if (statuses.includes("running")) aggregated = "running";
-    if (statuses.includes("attention")) aggregated = "attention";
+      let aggregated: ClaudeSessionStatus = "idle";
+      if (statuses.includes("running")) aggregated = "running";
+      if (statuses.includes("attention")) aggregated = "attention";
 
-    return { status: aggregated, count: statuses.length };
-  });
+      return { status: aggregated, count: statuses.length };
+    }),
+  );
 }
 
 // ── Badge ──
