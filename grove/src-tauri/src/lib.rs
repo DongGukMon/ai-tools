@@ -110,6 +110,11 @@ async fn list_worktrees(project_id: String) -> Result<Vec<Worktree>, String> {
     blocking(move || grove_core::git_project::list_worktrees_impl(&project_id)).await
 }
 
+#[tauri::command]
+async fn set_worktree_order(project_id: String, order: Vec<String>) -> Result<(), String> {
+    blocking(move || grove_core::git_project::set_worktree_order_impl(&project_id, order)).await
+}
+
 // === PTY COMMANDS (W3) ===
 
 #[tauri::command]
@@ -306,6 +311,7 @@ pub fn run() {
             add_worktree,
             remove_worktree,
             list_worktrees,
+            set_worktree_order,
             // PTY (W3)
             create_pty,
             write_pty,

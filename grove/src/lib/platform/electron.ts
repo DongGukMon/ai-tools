@@ -222,6 +222,11 @@ export async function listWorktrees(projectId: string): Promise<Worktree[]> {
   return platform.invoke<Worktree[]>("list_worktrees", { projectId });
 }
 
+// Phase 2: 드래그 재정렬 완료 시 호출하여 커스텀 순서를 영속화
+export async function setWorktreeOrder(_projectId: string, _order: string[]): Promise<void> {
+  throw new Error("Not implemented");
+}
+
 // === PTY COMMANDS (W3) ===
 
 export async function createPty(

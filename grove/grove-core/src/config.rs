@@ -13,6 +13,8 @@ pub struct ProjectEntry {
     pub org: String,
     pub repo: String,
     pub source_path: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub worktree_order: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -383,6 +385,7 @@ mod tests {
             org: "bang9".into(),
             repo: "grove".into(),
             source_path: "/tmp/grove/source".into(),
+            worktree_order: Vec::new(),
         }
     }
 
