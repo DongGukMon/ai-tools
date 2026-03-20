@@ -16,6 +16,7 @@
     "viewer",
     "debug"
   ],
+  "skills": "./skills/",
   "hooks": {
     "SessionStart": [
       {

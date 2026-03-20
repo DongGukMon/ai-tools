@@ -3,11 +3,13 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 
 	"github.com/bang9/ai-tools/rewind/internal/parser"
 	"github.com/bang9/ai-tools/rewind/internal/server"
+	"github.com/bang9/ai-tools/rewind/internal/tui"
 	"github.com/bang9/ai-tools/shared/upgrade"
 )
 
@@ -22,6 +24,9 @@ func main() {
 	switch os.Args[1] {
 	case "version", "--version", "-v":
 		fmt.Printf("rewind %s\n", version)
+		return
+	case "ls", "list":
+		runLS()
 		return
 	case "cleanup":
 		if len(os.Args) != 2 {
@@ -154,10 +159,79 @@ func main() {
 		Port:        port,
 		OpenBrowser: openBrowser,
 		SessionPath: path,
+		SessionID:   session.ID,
 	}); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func runLS() {
+	sessions, err := parser.ListSessions()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error discovering sessions: %v\n", err)
+		os.Exit(1)
+	}
+	if len(sessions) == 0 {
+		fmt.Fprintln(os.Stderr, "No sessions found.")
+		return
+	}
+
+	result, err := tui.Run(sessions)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	switch result.Action {
+	case tui.ActionOpen:
+		openSession(result.Session)
+	case tui.ActionAnalyze:
+		analyzeSession(result.Session)
+	}
+}
+
+func openSession(info parser.SessionInfo) {
+	var session *parser.Session
+	var err error
+	switch info.Backend {
+	case "claude":
+		session, err = parser.ParseClaude(info.Path)
+	case "codex":
+		session, err = parser.ParseCodex(info.Path)
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing session: %v\n", err)
+		os.Exit(1)
+	}
+	if err := server.Run(session, server.Options{
+		OpenBrowser: true,
+		SessionPath: info.Path,
+		SessionID:   info.ID,
+	}); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func analyzeSession(info parser.SessionInfo) {
+	fmt.Fprintf(os.Stderr, "Analyzing session %s...\n", info.ID)
+
+	// Launch claude with the rewind-analyze skill
+	skillName := "/rewind-analyze"
+	cmd := exec.Command("claude", "-p", fmt.Sprintf("%s --path %s", skillName, info.Path))
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "Analysis failed: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Run manually: claude -p '%s --path %s'\n", skillName, info.Path)
+		os.Exit(1)
+	}
+
+	// Open the viewer with the fresh analysis
+	fmt.Fprintln(os.Stderr, "Opening viewer...")
+	openSession(info)
 }
 
 func printUsage() {
@@ -166,6 +240,7 @@ func printUsage() {
 Usage:
   rewind <backend> <session-id> [--no-open]
   rewind <backend> --path <session-file.jsonl> [--no-open]
+  rewind ls
   rewind cleanup
   rewind version
   rewind upgrade
@@ -173,6 +248,9 @@ Usage:
 Backends:
   claude    Claude Code session (~/.claude/projects/*/<id>.jsonl)
   codex     Codex session (~/.codex/sessions/YYYY/MM/DD/*-<id>.jsonl)
+
+Commands:
+  ls        Browse sessions interactively (enter: open, a: analyze)
 
 Options:
   --port    Deprecated. Ignored in static viewer mode
@@ -182,10 +260,12 @@ Options:
 
 Notes:
   Exports a self-contained HTML viewer to ~/.rewind/viewers
+  Analysis data is stored in ~/.rewind/analysis/
   Viewer directories older than 30 minutes are deleted on the next run
   Use 'rewind cleanup' to remove stale viewer directories on demand
 
 Examples:
+  rewind ls
   rewind claude abc12345-1234-1234-1234-1234567890ab
   rewind codex --path ~/.codex/sessions/2026/03/11/run-abc12345.jsonl --no-open
   rewind cleanup

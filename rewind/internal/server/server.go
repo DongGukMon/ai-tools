@@ -45,6 +45,7 @@ type Options struct {
 	OpenBrowser  bool
 	AnalysisPath string // Optional path to analysis JSON sidecar file
 	SessionPath  string // Original session JSONL path (for auto-detecting sidecar)
+	SessionID    string // Session ID (for ~/.rewind/analysis/<id>.json lookup)
 }
 
 // Run exports a static viewer bundle with the session data embedded into the
@@ -277,7 +278,16 @@ func loadAnalysisJSON(options Options) []byte {
 		}
 		return nil
 	}
-	// Auto-detect sidecar: <session-path>.analysis.json
+	// Check ~/.rewind/analysis/<session-id>.json
+	if options.SessionID != "" {
+		if p, err := AnalysisPath(options.SessionID); err == nil {
+			data, err := os.ReadFile(p)
+			if err == nil && json.Valid(data) {
+				return data
+			}
+		}
+	}
+	// Fallback: sidecar <session-path>.analysis.json
 	if options.SessionPath != "" {
 		sidecar := options.SessionPath + ".analysis.json"
 		data, err := os.ReadFile(sidecar)
@@ -286,6 +296,28 @@ func loadAnalysisJSON(options Options) []byte {
 		}
 	}
 	return nil
+}
+
+// AnalysisPath returns the canonical path for a session's analysis file.
+func AnalysisPath(sessionID string) (string, error) {
+	homeDir, err := userHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(homeDir, ".rewind", "analysis", sessionID+".json"), nil
+}
+
+// PrepareAnalysisDir ensures ~/.rewind/analysis/ exists.
+func PrepareAnalysisDir() (string, error) {
+	homeDir, err := userHomeDir()
+	if err != nil {
+		return "", err
+	}
+	dir := filepath.Join(homeDir, ".rewind", "analysis")
+	if err := ensurePrivateDirTree(homeDir, dir, 0o700); err != nil {
+		return "", err
+	}
+	return dir, nil
 }
 
 func injectAnalysisData(indexHTML, analysisJSON []byte) ([]byte, error) {

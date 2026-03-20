@@ -108,7 +108,9 @@ Output rules:
 
 ### Step 4: Write the analysis file
 
-Write the JSON to `<session-jsonl-path>.analysis.json` (sidecar file next to the original JSONL).
+Write the JSON to `~/.rewind/analysis/<session-id>.json`.
+
+Create the `~/.rewind/analysis/` directory if it does not exist (`mkdir -p`).
 
 Before writing:
 - Validate that the JSON parses cleanly.

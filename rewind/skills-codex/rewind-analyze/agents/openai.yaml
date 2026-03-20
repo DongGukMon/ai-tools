@@ -1,0 +1,4 @@
+interface:
+  display_name: "Rewind Analyze"
+  short_description: "Analyze a session transcript with AI and generate structured insights for the rewind viewer"
+  default_prompt: "Use $rewind-analyze to analyze a session transcript and generate prompt quality reviews, strategy critique, and actionable takeaways."
