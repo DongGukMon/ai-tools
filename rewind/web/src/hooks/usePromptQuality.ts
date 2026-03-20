@@ -1,15 +1,28 @@
 import { useMemo } from "react";
 import type { TimelineEvent, PromptSignal } from "../types";
+import { isToolErrorEvent } from "../lib/toolErrors";
 
-function hasError(ev: TimelineEvent): boolean {
-  const text = ev.toolResult || ev.content || "";
-  return /^Error:|Exit code [1-9]|ENOENT|Permission denied|panic:|command not found|No such file/m.test(text);
-}
+const CORRECTION_RE =
+  /\b(again|actually|clarify|correction|different|instead|meant|no,?|not|rather|retry|use)\b/i;
 
 function snippet(ev: TimelineEvent, maxLen = 100): string {
   const text = ev.content || ev.summary || "";
   const first = text.split("\n")[0] || text;
   return first.length > maxLen ? first.slice(0, maxLen) + "..." : first;
+}
+
+function getEventText(ev: TimelineEvent): string {
+  return ev.content || ev.summary || ev.toolResult || "";
+}
+
+function extractPrimaryTarget(input?: string): string | null {
+  if (!input) return null;
+  try {
+    const obj = JSON.parse(input);
+    return obj.file_path || obj.path || obj.file || obj.filename || null;
+  } catch {
+    return null;
+  }
 }
 
 export function usePromptQuality(events: TimelineEvent[]): PromptSignal[] {
@@ -25,14 +38,63 @@ export function usePromptQuality(events: TimelineEvent[]): PromptSignal[] {
 
       let toolCalls = 0;
       let failures = 0;
-      let hasAssistantAction = false;
       let nextUserIdx = -1;
+      let hasAssistantAction = false;
+      let lastMeaningfulIdx = userIdx;
+      let lastAssistantIdx = -1;
+      let lastFailureIdx = -1;
+      let repeatedTargetHits = 0;
+
+      let runTool = "";
+      let runLength = 0;
+      let maxRunLength = 0;
+      const toolCounts = new Map<string, number>();
+      const targetCounts = new Map<string, number>();
 
       while (j < events.length && events[j].type !== "user") {
-        if (events[j].type === "tool_call") toolCalls++;
-        if (events[j].type === "tool_result" && hasError(events[j])) failures++;
-        if (events[j].type === "assistant" || events[j].type === "tool_call") {
+        const ev = events[j];
+
+        if (ev.type !== "thinking" && ev.type !== "system") {
+          lastMeaningfulIdx = j;
+        }
+
+        if (ev.type === "tool_call") {
+          toolCalls++;
           hasAssistantAction = true;
+          if (ev.toolName) {
+            toolCounts.set(ev.toolName, (toolCounts.get(ev.toolName) || 0) + 1);
+            if (ev.toolName === runTool) {
+              runLength++;
+            } else {
+              runTool = ev.toolName;
+              runLength = 1;
+            }
+            maxRunLength = Math.max(maxRunLength, runLength);
+          }
+
+          const target = extractPrimaryTarget(ev.toolInput);
+          if (target) {
+            const nextCount = (targetCounts.get(target) || 0) + 1;
+            targetCounts.set(target, nextCount);
+            if (nextCount >= 2) {
+              repeatedTargetHits++;
+            }
+          }
+        } else if (ev.type !== "tool_result") {
+          runTool = "";
+          runLength = 0;
+        }
+
+        if (ev.type === "tool_result") {
+          if (isToolErrorEvent(ev)) {
+            failures++;
+            lastFailureIdx = j;
+          }
+        }
+
+        if (ev.type === "assistant") {
+          hasAssistantAction = true;
+          lastAssistantIdx = j;
         }
         j++;
       }
@@ -41,49 +103,82 @@ export function usePromptQuality(events: TimelineEvent[]): PromptSignal[] {
         nextUserIdx = j;
       }
 
-      // Spiral: 10+ tool calls with 2+ failures
-      if (toolCalls >= 10 && failures >= 2) {
+      const nextUser = nextUserIdx !== -1 ? events[nextUserIdx] : null;
+      const nextText = nextUser ? getEventText(nextUser).trim() : "";
+      const correctionCue = CORRECTION_RE.test(nextText);
+      const gapMs =
+        nextUserIdx !== -1
+          ? new Date(events[nextUserIdx].timestamp).getTime() -
+            new Date(events[userIdx].timestamp).getTime()
+          : Number.POSITIVE_INFINITY;
+      const endedWithAssistant =
+        lastAssistantIdx !== -1 && lastAssistantIdx === lastMeaningfulIdx;
+      const interruptedMidFlow =
+        nextUserIdx !== -1 &&
+        lastMeaningfulIdx > userIdx &&
+        lastMeaningfulIdx !== lastAssistantIdx &&
+        lastMeaningfulIdx === nextUserIdx - 1;
+      const recoveredAfterFailure =
+        lastFailureIdx !== -1 && lastAssistantIdx > lastFailureIdx;
+      const dominantToolUsage = [...toolCounts.values()].some((count) => count >= 4);
+
+      if (
+        toolCalls >= 12 ||
+        (toolCalls >= 8 && failures >= 2) ||
+        (toolCalls >= 6 && failures >= 1 && (dominantToolUsage || repeatedTargetHits >= 2))
+      ) {
         signals.push({
           type: "spiral",
+          confidence:
+            toolCalls >= 12 && failures >= 2
+              ? "high"
+              : failures >= 2 || repeatedTargetHits >= 2
+                ? "medium"
+                : "low",
           startIndex: userIdx,
           endIndex: j - 1,
-          description: `${toolCalls} tool calls, ${failures} failures`,
+          description: `${toolCalls} tool calls, ${failures} failures${
+            repeatedTargetHits > 0 ? `, ${repeatedTargetHits} repeated target hits` : ""
+          }`,
           promptSnippet: promptText,
         });
         continue;
       }
 
-      // Retry: quick user correction after assistant acted
-      if (nextUserIdx !== -1 && hasAssistantAction) {
-        const gap =
-          new Date(events[nextUserIdx].timestamp).getTime() -
-          new Date(events[userIdx].timestamp).getTime();
-        const nextContent = events[nextUserIdx].content || events[nextUserIdx].summary || "";
-        const isShort = nextContent.length < 200;
-        if (gap < 60_000 && isShort && toolCalls <= 3) {
+      if (nextUserIdx !== -1 && hasAssistantAction && gapMs < 90_000) {
+        const shortFollowUp = nextText.length > 0 && nextText.length < 240;
+        const missingClosure = !endedWithAssistant || interruptedMidFlow;
+        if ((correctionCue || (shortFollowUp && missingClosure)) && toolCalls <= 4) {
           signals.push({
             type: "retry",
+            confidence: correctionCue ? "high" : missingClosure ? "medium" : "low",
             startIndex: userIdx,
             endIndex: nextUserIdx,
-            description: `Corrected after ${Math.round(gap / 1000)}s`,
+            description: correctionCue
+              ? `Corrected after ${Math.round(gapMs / 1000)}s`
+              : `Follow-up retry after ${Math.round(gapMs / 1000)}s`,
             promptSnippet: promptText,
           });
           continue;
         }
       }
 
-      // Abandon: user interrupts mid-tool-execution
-      if (nextUserIdx !== -1 && toolCalls > 0) {
-        const lastBefore = events[nextUserIdx - 1];
-        if (
-          lastBefore &&
-          (lastBefore.type === "tool_call" || lastBefore.type === "tool_result")
-        ) {
+      if (nextUserIdx !== -1 && toolCalls > 0 && interruptedMidFlow && !recoveredAfterFailure) {
+        const lastBefore = events[lastMeaningfulIdx];
+        const endedDuringTooling =
+          lastBefore?.type === "tool_call" ||
+          lastBefore?.type === "tool_result" ||
+          lastBefore?.type === "thinking";
+        if (endedDuringTooling && !endedWithAssistant) {
           signals.push({
             type: "abandon",
+            confidence:
+              lastBefore?.type === "tool_call" || failures > 0 ? "high" : "medium",
             startIndex: userIdx,
             endIndex: nextUserIdx,
-            description: `Interrupted after ${toolCalls} tool calls`,
+            description: `Interrupted after ${toolCalls} tool calls${
+              failures > 0 ? ` and ${failures} failures` : ""
+            }`,
             promptSnippet: promptText,
           });
         }

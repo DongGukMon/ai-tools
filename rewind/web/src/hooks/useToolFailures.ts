@@ -1,38 +1,6 @@
 import { useMemo } from "react";
 import type { TimelineEvent, ToolFailure, RetryHotspot } from "../types";
-
-// Only match patterns that strongly indicate tool failure, not normal output
-// that happens to contain "error" or "failed" in code/logs.
-const STRONG_ERROR_PATTERNS = [
-  /^Error:/m,                      // Claude Code tool error prefix
-  /^error:/m,                      // Common error prefix at line start
-  /Exit code [1-9]/i,              // Non-zero exit code
-  /ENOENT/,                        // File not found (system-level)
-  /Permission denied/,             // FS permission error
-  /Traceback \(most recent/,       // Python traceback
-  /panic:/,                        // Go panic
-  /FATAL/,                         // Fatal errors
-  /command not found/,             // Shell command missing
-  /No such file or directory/,     // FS error
-  /Cannot find module/,            // Node module resolution
-  /SyntaxError:/,                  // Parse errors
-  /TypeError:/,                    // Runtime type errors
-  /ReferenceError:/,               // Undefined variable
-  /compilation failed/i,           // Build failure
-  /build failed/i,                 // Build failure
-];
-
-function isErrorResult(event: TimelineEvent): boolean {
-  const text = event.toolResult || event.content || "";
-  // Short results are more likely to be pure error messages
-  // Long results (>2000 chars) with "error" are often normal output containing that word
-  if (text.length > 2000) {
-    // For long output, only match if error appears in the first 200 chars
-    const head = text.slice(0, 200);
-    return STRONG_ERROR_PATTERNS.some((p) => p.test(head));
-  }
-  return STRONG_ERROR_PATTERNS.some((p) => p.test(text));
-}
+import { isToolErrorEvent } from "../lib/toolErrors";
 
 export function useToolFailures(events: TimelineEvent[]): {
   failures: ToolFailure[];
@@ -50,7 +18,7 @@ export function useToolFailures(events: TimelineEvent[]): {
       if (ev.type === "tool_call" && ev.toolName) {
         lastToolName = ev.toolName;
       }
-      if (ev.type === "tool_result" && isErrorResult(ev)) {
+      if (ev.type === "tool_result" && isToolErrorEvent(ev)) {
         const name = ev.toolName || lastToolName || "unknown";
         const text = ev.toolResult || ev.content || "";
         const firstLine = text.split("\n").find((l) => l.trim()) || text;

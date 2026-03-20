@@ -1,5 +1,9 @@
 import { RefreshCw, Tornado, SkipForward } from "lucide-react";
-import type { PromptSignal, PromptSignalType } from "../../types";
+import type {
+  PromptSignal,
+  PromptSignalConfidence,
+  PromptSignalType,
+} from "../../types";
 
 interface Props {
   signals: PromptSignal[];
@@ -33,6 +37,12 @@ const signalConfig: Record<
   },
 };
 
+const confidenceClass: Record<PromptSignalConfidence, string> = {
+  low: "text-slate-500 dark:text-neutral-500 bg-slate-100/70 dark:bg-neutral-800/60",
+  medium: "text-sky-700 dark:text-sky-300 bg-sky-100/70 dark:bg-sky-950/30",
+  high: "text-violet-700 dark:text-violet-300 bg-violet-100/70 dark:bg-violet-950/30",
+};
+
 export function PromptQualityCard({ signals, onJumpToEvent }: Props) {
   const grouped = {
     retry: signals.filter((s) => s.type === "retry"),
@@ -45,7 +55,7 @@ export function PromptQualityCard({ signals, onJumpToEvent }: Props) {
   return (
     <div className="liquid-glass rounded-2xl p-5">
       <h3 className="text-sm font-semibold text-slate-800 dark:text-neutral-200 mb-4">
-        Prompt Quality Signals
+        Turn Friction Signals
       </h3>
 
       {total === 0 ? (
@@ -77,6 +87,11 @@ export function PromptQualityCard({ signals, onJumpToEvent }: Props) {
                           "{s.promptSnippet}"
                         </p>
                         <div className="flex items-center gap-2">
+                          <span
+                            className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${confidenceClass[s.confidence]}`}
+                          >
+                            {s.confidence}
+                          </span>
                           <span className="text-slate-500 dark:text-neutral-500">
                             {s.description}
                           </span>

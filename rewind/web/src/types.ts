@@ -48,9 +48,11 @@ export interface FileHeat {
 }
 
 export type PromptSignalType = "retry" | "spiral" | "abandon";
+export type PromptSignalConfidence = "low" | "medium" | "high";
 
 export interface PromptSignal {
   type: PromptSignalType;
+  confidence: PromptSignalConfidence;
   startIndex: number;
   endIndex: number;
   description: string;
