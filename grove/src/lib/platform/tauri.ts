@@ -174,6 +174,10 @@ export async function removeProject(id: string): Promise<void> {
   return platform.invoke("remove_project", { id });
 }
 
+export async function reorderProjects(projectIds: string[]): Promise<void> {
+  return platform.invoke("reorder_projects", { projectIds });
+}
+
 export async function refreshProject(projectId: string): Promise<Project> {
   return platform.invoke<Project>("refresh_project", { projectId });
 }

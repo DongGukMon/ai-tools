@@ -145,6 +145,11 @@ pub async fn remove_project(id: String) -> Result<()> {
 }
 
 #[napi]
+pub async fn reorder_projects(project_ids: Vec<String>) -> Result<()> {
+    blocking_core(move || grove_core::git_project::reorder_projects_impl(project_ids)).await
+}
+
+#[napi]
 pub async fn is_source_dirty(project_id: String) -> Result<bool> {
     blocking_core(move || grove_core::git_project::is_source_dirty_impl(&project_id)).await
 }

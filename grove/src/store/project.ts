@@ -13,6 +13,7 @@ interface ProjectState {
   syncProjects: () => Promise<void>;
   refreshProject: (id: string) => Promise<Project>;
   addProject: (url: string) => Promise<Project>;
+  reorderProjects: (projectIds: string[]) => Promise<void>;
   removeProject: (id: string) => Promise<void>;
   addWorktree: (projectId: string, name: string) => Promise<Worktree>;
   removeWorktree: (projectId: string, name: string) => Promise<void>;
@@ -137,6 +138,19 @@ export const useProjectStore = create<ProjectState>((set) => ({
     });
     set((state) => ({ projects: upsertProject(state.projects, project) }));
     return project;
+  },
+
+  reorderProjects: async (projectIds: string[]) => {
+    set((state) => {
+      const projectMap = new Map(state.projects.map((p) => [p.id, p]));
+      const reordered = projectIds
+        .map((id) => projectMap.get(id))
+        .filter((p): p is Project => p != null);
+      return { projects: reordered };
+    });
+    await runCommandSafely(() => tauri.reorderProjects(projectIds), {
+      errorToast: false,
+    });
   },
 
   removeProject: async (id: string) => {

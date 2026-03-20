@@ -77,6 +77,11 @@ async fn remove_project(id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+async fn reorder_projects(project_ids: Vec<String>) -> Result<(), String> {
+    blocking(move || grove_core::git_project::reorder_projects_impl(project_ids)).await
+}
+
+#[tauri::command]
 async fn is_source_dirty(project_id: String) -> Result<bool, String> {
     blocking(move || grove_core::git_project::is_source_dirty_impl(&project_id)).await
 }
@@ -295,6 +300,7 @@ pub fn run() {
             add_project,
             create_project,
             remove_project,
+            reorder_projects,
             is_source_dirty,
             refresh_project,
             add_worktree,

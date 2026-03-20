@@ -655,6 +655,24 @@ pub fn remove_project_impl(project_id: &str) -> Result<(), String> {
     Ok(())
 }
 
+pub fn reorder_projects_impl(project_ids: Vec<String>) -> Result<(), String> {
+    let mut config = load_reconciled_config()?;
+    let mut reordered = Vec::with_capacity(config.projects.len());
+    for id in &project_ids {
+        if let Some(entry) = config.projects.iter().find(|e| &e.id == id) {
+            reordered.push(entry.clone());
+        }
+    }
+    // Append any projects not in the provided list (safety net)
+    for entry in &config.projects {
+        if !project_ids.contains(&entry.id) {
+            reordered.push(entry.clone());
+        }
+    }
+    config.projects = reordered;
+    config::save_config(&config)
+}
+
 pub fn add_worktree_impl(project_id: &str, name: &str) -> Result<Worktree, String> {
     validate_branch_name(name)?;
 

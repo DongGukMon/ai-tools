@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import {
   ChevronRight,
   ChevronDown,
@@ -6,6 +6,8 @@ import {
   GitFork,
   GitBranch,
 } from "lucide-react";
+import { useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import type { Project } from "../../types";
 import { useProjectStore } from "../../store/project";
 import { useToast } from "../../store/toast";
@@ -21,7 +23,21 @@ interface Props {
   project: Project;
 }
 
-function ProjectItem({ project }: Props) {
+const ProjectItem = memo(function ProjectItem({ project }: Props) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: project.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
   const [expanded, setExpanded] = useState(true);
   const [adding, setAdding] = useState(false);
   const [addingLoading, setAddingLoading] = useState(false);
@@ -89,13 +105,15 @@ function ProjectItem({ project }: Props) {
   };
 
   return (
-    <div className="px-2">
+    <div ref={setNodeRef} style={style} className="px-2">
       {/* Project header */}
       <div
         className={cn(
           "group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-foreground hover:bg-secondary/50 transition-colors cursor-pointer select-none",
         )}
         onClick={() => setExpanded(!expanded)}
+        {...attributes}
+        {...listeners}
       >
         {expanded ? (
           <ChevronDown className={cn("h-3.5 w-3.5 shrink-0 text-muted-foreground")} />
@@ -174,6 +192,6 @@ function ProjectItem({ project }: Props) {
       )}
     </div>
   );
-}
+});
 
 export default ProjectItem;
