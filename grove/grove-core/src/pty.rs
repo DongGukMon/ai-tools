@@ -751,6 +751,26 @@ fn ensure_grove_tmux_session(
     Ok(CreatePtySessionState::Attached)
 }
 
+/// On macOS, login shells run `/etc/zprofile` which invokes `path_helper`,
+/// reordering PATH and pushing `~/.grove/bin` behind `~/.local/bin`.
+/// This breaks the Grove claude wrapper.  When the user's shell is zsh,
+/// we start a non-login interactive shell (`zsh -i`) so `path_helper`
+/// is skipped while `.zshrc` still runs.
+fn non_login_shell_args() -> Option<(&'static str, &'static str)> {
+    #[cfg(target_os = "macos")]
+    {
+        let shell = env::var("SHELL").ok()?;
+        let basename = std::path::Path::new(&shell)
+            .file_name()
+            .and_then(|n| n.to_str())?;
+        if basename == "zsh" {
+            return Some(("zsh", "-i"));
+        }
+    }
+    let _ = (); // suppress unused warning on non-macOS
+    None
+}
+
 fn create_tmux_session(session_name: &str, cwd: &str) -> Result<bool, String> {
     let mut command = Command::new("tmux");
     let enriched_path = enriched_path().to_string();
@@ -768,6 +788,9 @@ fn create_tmux_session(session_name: &str, cwd: &str) -> Result<bool, String> {
         "-e",
         &path_env,
     ]);
+    if let Some((shell, flag)) = non_login_shell_args() {
+        command.args([shell, flag]);
+    }
     apply_tmux_command_env(&mut command);
     let output = command.output().map_err(tmux_command_error)?;
     if output.status.success() {
@@ -815,6 +838,10 @@ fn enforce_grove_tmux_options(session_name: &str) -> Result<(), String> {
         TMUX_MONITOR_BELL_ON_VALUE,
     )?;
     tmux_set_server_option(TMUX_ESCAPE_TIME_OPTION, TMUX_ESCAPE_TIME_VALUE)?;
+    if let Some((shell, flag)) = non_login_shell_args() {
+        let default_cmd = format!("{shell} {flag}");
+        tmux_set_option(session_name, "default-command", &default_cmd)?;
+    }
     Ok(())
 }
 
