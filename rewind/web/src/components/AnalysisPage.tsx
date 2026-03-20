@@ -10,6 +10,7 @@ import type { AnalysisData } from "../types";
 
 interface Props {
   data: AnalysisData | null;
+  backend?: string;
 }
 
 const qualityColors = {
@@ -24,7 +25,7 @@ const impactColors = {
   negative: "text-red-600 dark:text-red-400",
 };
 
-export default function AnalysisPage({ data }: Props) {
+export default function AnalysisPage({ data, backend }: Props) {
   if (!data) {
     return (
       <div className="max-w-4xl mx-auto px-6 py-16 flex justify-center">
@@ -38,10 +39,11 @@ export default function AnalysisPage({ data }: Props) {
             strategy critique, and actionable takeaways.
           </p>
           <div className="text-left bg-slate-100/80 dark:bg-neutral-900/60 rounded-xl p-4 font-mono text-xs text-slate-600 dark:text-neutral-400">
-            <span className="text-slate-400 dark:text-neutral-600">$</span> /rewind-analyze
+            <span className="text-slate-400 dark:text-neutral-600">$</span>{" "}
+            {backend === "codex" ? "$rewind-analyze" : "/rewind-analyze"}
           </div>
           <p className="mt-3 text-[10px] text-slate-400 dark:text-neutral-600">
-            Run this skill in Claude Code, then re-export the viewer to see results.
+            Run this skill in {backend === "codex" ? "Codex" : "Claude Code"}, then re-export the viewer to see results.
           </p>
         </div>
       </div>
@@ -72,7 +74,7 @@ export default function AnalysisPage({ data }: Props) {
                     {pr.quality}
                   </span>
                   <span className="text-[10px] text-slate-400 dark:text-neutral-600">
-                    event #{pr.eventIndex}
+                    line #{pr.eventIndex}
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 dark:text-neutral-400 font-mono mb-1.5 line-clamp-2">
@@ -166,7 +168,7 @@ export default function AnalysisPage({ data }: Props) {
                   <p className="mt-0.5 text-slate-500 dark:text-neutral-500">{d.reasoning}</p>
                 </div>
                 <span className="ml-auto text-[10px] text-slate-400 dark:text-neutral-600 shrink-0">
-                  #{d.eventIndex}
+                  line #{d.eventIndex}
                 </span>
               </div>
             ))}
