@@ -89,7 +89,7 @@ export interface CreatePtyResult {
 export interface PtyBellEvent {
   ptyId: string;
   bell: boolean;
-  claudeStatus: "running" | "idle" | "attention" | null;
+  aiStatus: string | null;
 }
 
 export interface TerminalPaneSnapshotInput {

@@ -1,38 +1,41 @@
 import { useShallow } from "zustand/react/shallow";
 import { collectTerminalPanes } from "../../lib/terminal-session";
 import type { SplitNode } from "../../types";
-import type { ClaudeSessionStatus } from "../../store/terminal";
+import type { AiSession } from "../../store/terminal";
 import { useTerminalStore } from "../../store/terminal";
 
-const EMPTY_STATUSES: ClaudeSessionStatus[] = [];
+const EMPTY_SESSIONS: AiSession[] = [];
 
 interface WorktreeStatusState {
   sessions: Record<string, SplitNode>;
   bellPtyIds: Set<string>;
-  claudeStatus: Record<string, ClaudeSessionStatus>;
+  aiSessions: Record<string, AiSession>;
 }
 
-export function selectClaudeWorktreeStatuses(
+export function selectAiWorktreeSessions(
   state: WorktreeStatusState,
   worktreePath: string,
-): ClaudeSessionStatus[] {
+): AiSession[] {
   const session = state.sessions[worktreePath];
   if (!session) {
-    return EMPTY_STATUSES;
+    return EMPTY_SESSIONS;
   }
 
   return collectTerminalPanes(session).flatMap(({ ptyId }) => {
-    const status = ptyId ? state.claudeStatus[ptyId] : undefined;
-    return status ? [status] : EMPTY_STATUSES;
+    const ai = ptyId ? state.aiSessions[ptyId] : undefined;
+    return ai ? [ai] : EMPTY_SESSIONS;
   });
 }
 
-export function useClaudeWorktreeStatus(
-  worktreePath: string,
-): ClaudeSessionStatus[] {
+export function useAiWorktreeSessions(worktreePath: string): AiSession[] {
   return useTerminalStore(
-    useShallow((state) => selectClaudeWorktreeStatuses(state, worktreePath)),
+    useShallow((state) => selectAiWorktreeSessions(state, worktreePath)),
   );
+}
+
+/** @deprecated Use useAiWorktreeSessions */
+export function useClaudeWorktreeStatus(worktreePath: string): AiSession[] {
+  return useAiWorktreeSessions(worktreePath);
 }
 
 export function selectWorktreeBell(

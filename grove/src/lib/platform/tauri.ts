@@ -70,7 +70,8 @@ export interface CreatePtyResult {
 export interface PtyBellEvent {
   ptyId: string;
   bell: boolean;
-  claudeStatus: "running" | "idle" | "attention" | null;
+  /** AI status in "tool:status" format (e.g. "claude:running", "codex:running"). */
+  aiStatus: string | null;
 }
 
 export interface TerminalPaneSnapshotInput {

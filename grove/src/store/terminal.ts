@@ -37,14 +37,19 @@ function saveLayouts(sessions: Record<string, SplitNode>) {
 
 // ── Store ──
 
-export type ClaudeSessionStatus = "running" | "idle" | "attention";
+export type AiTool = "claude" | "codex";
+export type AiStatus = "running" | "idle" | "attention";
+export interface AiSession { tool: AiTool; status: AiStatus; }
+
+/** @deprecated Use AiSession instead */
+export type ClaudeSessionStatus = AiStatus;
 
 interface TerminalState {
   sessions: Record<string, SplitNode>;
   activeWorktree: string | null;
   focusedPtyId: string | null;
   bellPtyIds: Set<string>;
-  claudeStatus: Record<string, ClaudeSessionStatus>;
+  aiSessions: Record<string, AiSession>;
   theme: TerminalTheme | null;
   detectedTheme: TerminalTheme | null;
   createSession: (worktreePath: string, paneId: string, ptyId: string) => void;
@@ -60,10 +65,7 @@ interface TerminalState {
   setActiveWorktree: (worktreePath: string | null) => void;
   setFocusedPtyId: (ptyId: string | null) => void;
   markBellPty: (ptyId: string) => void;
-  updateClaudeStatus: (
-    ptyId: string,
-    status: ClaudeSessionStatus | null,
-  ) => void;
+  updateAiStatus: (ptyId: string, raw: string | null) => void;
   setDetectedTheme: (theme: TerminalTheme) => void;
   loadTheme: (theme: TerminalTheme) => void;
   removeSession: (worktreePath: string) => void;
@@ -77,7 +79,7 @@ export const useTerminalStore = create<TerminalState>((set) => ({
   activeWorktree: null,
   focusedPtyId: null,
   bellPtyIds: new Set<string>(),
-  claudeStatus: {},
+  aiSessions: {},
   theme: null,
   detectedTheme: null,
 
@@ -131,13 +133,13 @@ export const useTerminalStore = create<TerminalState>((set) => ({
     set((state) => {
       const newSessions = { ...state.sessions };
       const nextBellPtyIds = new Set(state.bellPtyIds);
-      const nextClaudeStatus = { ...state.claudeStatus };
+      const nextAiSessions = { ...state.aiSessions };
       const existingSession = state.sessions[worktreePath];
       if (existingSession) {
         for (const { ptyId } of collectTerminalPanes(existingSession)) {
           if (ptyId) {
             nextBellPtyIds.delete(ptyId);
-            delete nextClaudeStatus[ptyId];
+            delete nextAiSessions[ptyId];
           }
         }
       }
@@ -147,7 +149,7 @@ export const useTerminalStore = create<TerminalState>((set) => ({
       return {
         sessions: newSessions,
         bellPtyIds: nextBellPtyIds,
-        claudeStatus: nextClaudeStatus,
+        aiSessions: nextAiSessions,
         focusedPtyId:
           state.activeWorktree === worktreePath ? null : state.focusedPtyId,
         activeWorktree:
@@ -175,13 +177,13 @@ export const useTerminalStore = create<TerminalState>((set) => ({
           : state.focusedPtyId;
       const nextBellPtyIds = new Set(state.bellPtyIds);
       nextBellPtyIds.delete(ptyId);
-      const nextClaudeStatus = { ...state.claudeStatus };
-      delete nextClaudeStatus[ptyId];
+      const nextAiSessions = { ...state.aiSessions };
+      delete nextAiSessions[ptyId];
       return {
         sessions: newSessions,
         focusedPtyId: newFocused,
         bellPtyIds: nextBellPtyIds,
-        claudeStatus: nextClaudeStatus,
+        aiSessions: nextAiSessions,
       };
     }),
 
@@ -193,10 +195,18 @@ export const useTerminalStore = create<TerminalState>((set) => ({
             : null)
         : null;
       const nextBellPtyIds = new Set(state.bellPtyIds);
+      let nextAiSessions = state.aiSessions;
       if (worktreePath && state.sessions[worktreePath]) {
         for (const { ptyId } of collectTerminalPanes(state.sessions[worktreePath])) {
           if (ptyId) {
             nextBellPtyIds.delete(ptyId);
+            const session = state.aiSessions[ptyId];
+            if (session?.status === "attention") {
+              if (nextAiSessions === state.aiSessions) {
+                nextAiSessions = { ...state.aiSessions };
+              }
+              nextAiSessions[ptyId] = { ...session, status: "idle" };
+            }
           }
         }
       }
@@ -204,6 +214,7 @@ export const useTerminalStore = create<TerminalState>((set) => ({
         activeWorktree: worktreePath,
         focusedPtyId: newFocused,
         bellPtyIds: nextBellPtyIds,
+        aiSessions: nextAiSessions,
       };
     }),
 
@@ -220,16 +231,19 @@ export const useTerminalStore = create<TerminalState>((set) => ({
       };
     }),
 
-  updateClaudeStatus: (ptyId, status) =>
+  updateAiStatus: (ptyId, raw) =>
     set((state) => {
-      if (status) {
-        if (state.claudeStatus[ptyId] === status) return state;
-        return { claudeStatus: { ...state.claudeStatus, [ptyId]: status } };
+      if (raw) {
+        const [tool, status] = raw.split(":") as [AiTool, AiStatus];
+        if (!tool || !status) return state;
+        const prev = state.aiSessions[ptyId];
+        if (prev && prev.tool === tool && prev.status === status) return state;
+        return { aiSessions: { ...state.aiSessions, [ptyId]: { tool, status } } };
       }
-      if (!(ptyId in state.claudeStatus)) return state;
-      const next = { ...state.claudeStatus };
+      if (!(ptyId in state.aiSessions)) return state;
+      const next = { ...state.aiSessions };
       delete next[ptyId];
-      return { claudeStatus: next };
+      return { aiSessions: next };
     }),
 
   updateSizes: (worktreePath, nodePath, ratios) =>

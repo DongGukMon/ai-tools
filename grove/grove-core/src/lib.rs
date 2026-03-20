@@ -50,7 +50,8 @@ pub struct PtySession {
 pub struct PtyBellEvent {
     pub pty_id: String,
     pub bell: bool,
-    pub claude_status: Option<String>,
+    /// AI tool status in "tool:status" format (e.g. "claude:running", "codex:running").
+    pub ai_status: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

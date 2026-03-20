@@ -1,7 +1,7 @@
 use crate::{
     config,
     process_env::{enriched_path, preferred_ssh_auth_sock},
-    tool_hooks::{self, TMUX_GROVE_CLAUDE_STATUS_OPTION},
+    tool_hooks::{self, TMUX_GROVE_AI_STATUS_OPTION},
     worktree_lifecycle::WorktreeResource,
     CreatePtyInitialHydration, CreatePtyInitialHydrationSource, CreatePtyRequest, CreatePtyRestore,
     CreatePtyResult, CreatePtySessionState, PtyBellEvent, SaveTerminalSessionSnapshotRequest,
@@ -47,6 +47,7 @@ struct PtyRuntimeState {
     scrollback: Vec<u8>,
     scrollback_truncated: bool,
     last_bell_flag: bool,
+    last_ai_status: Option<String>,
 }
 
 impl PtyRuntimeState {
@@ -65,6 +66,7 @@ impl PtyRuntimeState {
             scrollback: Vec::new(),
             scrollback_truncated: false,
             last_bell_flag: false,
+            last_ai_status: None,
         };
 
         if let Some(restore) = restore {
@@ -382,19 +384,23 @@ pub fn poll_bell_events() -> Result<Vec<PtyBellEvent>, String> {
             }
         };
 
-        let claude_status =
-            match tmux_session_option(&session_name, TMUX_GROVE_CLAUDE_STATUS_OPTION) {
+        let ai_status =
+            match tmux_session_option(&session_name, TMUX_GROVE_AI_STATUS_OPTION) {
                 Ok(value) => value,
                 Err(_) => None,
             };
 
         let mut state = tracked.lock().map_err(|e| e.to_string())?;
         let bell = consume_bell_edge(&mut state.last_bell_flag, bell_flag);
-        if bell || claude_status.is_some() {
+        let ai_changed = ai_status != state.last_ai_status;
+        if ai_changed {
+            state.last_ai_status = ai_status.clone();
+        }
+        if bell || ai_changed {
             events.push(PtyBellEvent {
                 pty_id,
                 bell,
-                claude_status,
+                ai_status,
             });
         }
     }
@@ -765,7 +771,10 @@ fn grove_tmux_environment(session_name: &str) -> Vec<(&'static str, String)> {
 
 fn grove_real_zdotdir() -> String {
     let real_zdotdir = env::var("ZDOTDIR").unwrap_or_default();
-    if !real_zdotdir.is_empty() {
+    let grove_zsh = tool_hooks::grove_zdotdir();
+
+    // If ZDOTDIR is set and it's NOT our own Grove zsh dir, honour it.
+    if !real_zdotdir.is_empty() && grove_zsh.as_deref() != Some(real_zdotdir.as_str()) {
         return real_zdotdir;
     }
 

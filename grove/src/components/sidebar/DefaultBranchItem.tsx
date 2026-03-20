@@ -4,14 +4,8 @@ import type { Project } from "../../types";
 import { useProjectStore } from "../../store/project";
 import { useToast } from "../../store/toast";
 import { cn } from "../../lib/cn";
-import {
-  ClaudeStatusIcons,
-  BellDot,
-} from "./WorktreeItem";
-import {
-  useClaudeWorktreeStatus,
-  useWorktreeBell,
-} from "./worktree-status";
+import { AiStatusIcons } from "./WorktreeItem";
+import { useAiWorktreeSessions, useWorktreeBell } from "./worktree-status";
 
 interface Props {
   project: Project;
@@ -30,7 +24,7 @@ function DefaultBranchItem({ project }: Props) {
   };
   const isSelected = selectedWorktree?.path === project.sourcePath;
   const hasBell = useWorktreeBell(project.sourcePath);
-  const statuses = useClaudeWorktreeStatus(project.sourcePath);
+  const aiSessions = useAiWorktreeSessions(project.sourcePath);
 
   const handleRefresh = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -59,10 +53,11 @@ function DefaultBranchItem({ project }: Props) {
       onClick={() => !refreshing && selectWorktree(sourceWorktree)}
       title={project.sourcePath}
     >
-      <GitBranch className={cn("h-3.5 w-3.5 shrink-0")} />
+      <GitBranch className={cn("h-3.5 w-3.5 shrink-0", {
+        "text-orange-500": hasBell,
+      })} />
       <span className={cn("min-w-0 flex-1 truncate")}>main</span>
-      <ClaudeStatusIcons statuses={statuses} />
-      {hasBell && <BellDot />}
+      <AiStatusIcons sessions={aiSessions} />
       {refreshing ? (
         <Loader2 className={cn("h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground")} />
       ) : (

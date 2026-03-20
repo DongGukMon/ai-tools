@@ -1,16 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { shallow } from "zustand/shallow";
 import type { SplitNode } from "../../types";
-import type { ClaudeSessionStatus } from "../../store/terminal";
+import type { AiSession } from "../../store/terminal";
 import {
-  selectClaudeWorktreeStatuses,
+  selectAiWorktreeSessions,
   selectWorktreeBell,
 } from "./worktree-status";
 
 interface WorktreeStatusState {
   sessions: Record<string, SplitNode>;
   bellPtyIds: Set<string>;
-  claudeStatus: Record<string, ClaudeSessionStatus>;
+  aiSessions: Record<string, AiSession>;
 }
 
 function makeLeaf(id: string, ptyId?: string): SplitNode {
@@ -27,23 +27,23 @@ function makeState(
   return {
     sessions: {},
     bellPtyIds: new Set<string>(),
-    claudeStatus: {},
+    aiSessions: {},
     ...overrides,
   };
 }
 
 describe("worktree status selectors", () => {
-  it("returns a stable empty statuses array when the worktree has no session", () => {
+  it("returns a stable empty sessions array when the worktree has no session", () => {
     const state = makeState();
 
-    const first = selectClaudeWorktreeStatuses(state, "/tmp/source");
-    const second = selectClaudeWorktreeStatuses(state, "/tmp/source");
+    const first = selectAiWorktreeSessions(state, "/tmp/source");
+    const second = selectAiWorktreeSessions(state, "/tmp/source");
 
     expect(first).toBe(second);
     expect(first).toEqual([]);
   });
 
-  it("stays shallow-equal for unchanged Claude statuses", () => {
+  it("stays shallow-equal for unchanged AI sessions", () => {
     const state = makeState({
       sessions: {
         "/tmp/source": {
@@ -56,17 +56,20 @@ describe("worktree status selectors", () => {
           ],
         },
       },
-      claudeStatus: {
-        "pty-a": "running",
-        "pty-b": "idle",
+      aiSessions: {
+        "pty-a": { tool: "claude", status: "running" },
+        "pty-b": { tool: "codex", status: "running" },
       },
     });
 
-    const first = selectClaudeWorktreeStatuses(state, "/tmp/source");
-    const second = selectClaudeWorktreeStatuses(state, "/tmp/source");
+    const first = selectAiWorktreeSessions(state, "/tmp/source");
+    const second = selectAiWorktreeSessions(state, "/tmp/source");
 
     expect(first).not.toBe(second);
-    expect(first).toEqual(["running", "idle"]);
+    expect(first).toEqual([
+      { tool: "claude", status: "running" },
+      { tool: "codex", status: "running" },
+    ]);
     expect(shallow(first, second)).toBe(true);
   });
 

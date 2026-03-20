@@ -82,7 +82,7 @@ function TerminalPanel() {
   const loadTheme = useTerminalStore((s) => s.loadTheme);
   const setDetectedTheme = useTerminalStore((s) => s.setDetectedTheme);
   const setActiveWorktree = useTerminalStore((s) => s.setActiveWorktree);
-  const updateClaudeStatus = useTerminalStore((s) => s.updateClaudeStatus);
+  const updateAiStatus = useTerminalStore((s) => s.updateAiStatus);
   const selectedWorktreePath = useProjectStore((s) => s.selectedWorktree?.path ?? null);
   const collapsed = usePanelLayoutStore((s) => s.globalTerminal.collapsed);
   const ratio = usePanelLayoutStore((s) => s.globalTerminal.ratio);
@@ -257,8 +257,8 @@ function TerminalPanel() {
           return;
         }
 
-        for (const { ptyId, claudeStatus } of events) {
-          updateClaudeStatus(ptyId, claudeStatus);
+        for (const { ptyId, aiStatus } of events) {
+          updateAiStatus(ptyId, aiStatus);
         }
       } catch {
         // Ignore bell polling errors to avoid noisy UI while sessions churn.
@@ -276,7 +276,7 @@ function TerminalPanel() {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [updateClaudeStatus]);
+  }, [updateAiStatus]);
 
   // Create session for new worktree
   useEffect(() => {

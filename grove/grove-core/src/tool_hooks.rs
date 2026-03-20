@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::sync::OnceLock;
 
-pub const TMUX_GROVE_CLAUDE_STATUS_OPTION: &str = "@grove_claude_status";
+pub const TMUX_GROVE_AI_STATUS_OPTION: &str = "@grove_ai_status";
 
 pub fn ensure_installed() {
     static INIT: OnceLock<()> = OnceLock::new();
@@ -26,6 +26,9 @@ fn install() -> Result<(), String> {
 
     let claude_wrapper = bin_dir.join("claude");
     write_executable(&claude_wrapper, &claude_wrapper_script(&grove_hook))?;
+
+    let codex_wrapper = bin_dir.join("codex");
+    write_executable(&codex_wrapper, &codex_wrapper_script())?;
 
     install_zdotdir(&home)?;
 
@@ -112,45 +115,75 @@ fn write_executable(path: &Path, content: &str) -> Result<(), String> {
 fn grove_hook_script() -> &'static str {
     r#"#!/usr/bin/env bash
 # Grove hook dispatcher. Usage: grove-hook <tool> <event>
-# Sets tmux user options that Grove polls for status badges.
+# Sets tmux @grove_ai_status in "tool:status" format.
 TOOL="$1"; EVENT="$2"
 [ -z "$GROVE_TMUX_SESSION" ] && exit 0
+grove_ai() { tmux set-option -q -t "$GROVE_TMUX_SESSION" @grove_ai_status "$1" 2>/dev/null; }
+grove_ai_clear() { tmux set-option -qu -t "$GROVE_TMUX_SESSION" @grove_ai_status 2>/dev/null; }
 case "$TOOL" in
   claude)
     case "$EVENT" in
-      SessionStart)
-        tmux set-option -q -t "$GROVE_TMUX_SESSION" @grove_claude_status idle 2>/dev/null ;;
-      UserPromptSubmit)
-        tmux set-option -q -t "$GROVE_TMUX_SESSION" @grove_claude_status running 2>/dev/null ;;
-      Stop)
-        tmux set-option -q -t "$GROVE_TMUX_SESSION" @grove_claude_status idle 2>/dev/null ;;
-      StopFailure|Notification)
-        tmux set-option -q -t "$GROVE_TMUX_SESSION" @grove_claude_status attention 2>/dev/null ;;
-      SessionEnd|cleanup)
-        tmux set-option -qu -t "$GROVE_TMUX_SESSION" @grove_claude_status 2>/dev/null ;;
+      SessionStart)          grove_ai "claude:idle" ;;
+      UserPromptSubmit)      grove_ai "claude:running" ;;
+      Stop)                  grove_ai "claude:idle" ;;
+      StopFailure|Notification) grove_ai "claude:attention" ;;
+      SessionEnd|cleanup)    grove_ai_clear ;;
     esac ;;
 esac
 "#
 }
 
-fn claude_wrapper_script(grove_hook_path: &Path) -> String {
-    let grove_hook_path = grove_hook_path.to_string_lossy();
+/// Common shell helper: find real binary by scanning PATH, skipping our own bin dir.
+fn find_real_binary_fn(tool: &str) -> String {
     format!(
-        r#"#!/usr/bin/env bash
-# Grove-managed Claude Code wrapper — injects hooks for status tracking.
-find_real_claude() {{
+        r#"find_real_{tool}() {{
   local self_dir; self_dir="$(cd "$(dirname "$0")" && pwd)"
   local IFS=:; for d in $PATH; do
     [[ "$d" == "$self_dir" ]] && continue
-    [[ -x "$d/claude" ]] && printf '%s' "$d/claude" && return 0
+    [[ -x "$d/{tool}" ]] && printf '%s' "$d/{tool}" && return 0
   done; return 1
-}}
+}}"#
+    )
+}
+
+/// Common lifecycle: set @grove_ai_status on start, clear on exit.
+fn grove_lifecycle_trap(tool: &str) -> String {
+    format!(
+        r#"grove_ai_cleanup() {{ tmux set-option -qu -t "$GROVE_TMUX_SESSION" @grove_ai_status 2>/dev/null; }}
+trap grove_ai_cleanup EXIT INT TERM HUP
+tmux set-option -q -t "$GROVE_TMUX_SESSION" @grove_ai_status "{tool}:idle" 2>/dev/null"#
+    )
+}
+
+fn claude_wrapper_script(grove_hook_path: &Path) -> String {
+    let grove_hook_path = grove_hook_path.to_string_lossy();
+    let find_fn = find_real_binary_fn("claude");
+    let lifecycle = grove_lifecycle_trap("claude");
+    format!(
+        r#"#!/usr/bin/env bash
+# Grove-managed Claude Code wrapper — lifecycle tracking + hooks for fine-grained status.
+{find_fn}
 REAL_CLAUDE="$(find_real_claude)" || {{ echo "claude: not found" >&2; exit 127; }}
 [ -z "$GROVE_TMUX_SESSION" ] && exec "$REAL_CLAUDE" "$@"
+{lifecycle}
 GROVE_HOOK="{grove_hook_path}"
-trap '$GROVE_HOOK claude cleanup' EXIT
 HOOKS_JSON='{{"hooks":{{"SessionStart":[{{"matcher":"","hooks":[{{"type":"command","command":"'"'"'{grove_hook_path}'"'"' claude SessionStart","timeout":5}}]}}],"Stop":[{{"matcher":"","hooks":[{{"type":"command","command":"'"'"'{grove_hook_path}'"'"' claude Stop","timeout":5}}]}}],"StopFailure":[{{"matcher":"","hooks":[{{"type":"command","command":"'"'"'{grove_hook_path}'"'"' claude StopFailure","timeout":5}}]}}],"Notification":[{{"matcher":"","hooks":[{{"type":"command","command":"'"'"'{grove_hook_path}'"'"' claude Notification","timeout":5}}]}}],"UserPromptSubmit":[{{"matcher":"","hooks":[{{"type":"command","command":"'"'"'{grove_hook_path}'"'"' claude UserPromptSubmit","timeout":5}}]}}],"SessionEnd":[{{"matcher":"","hooks":[{{"type":"command","command":"'"'"'{grove_hook_path}'"'"' claude SessionEnd","timeout":1}}]}}]}}}}'
-exec "$REAL_CLAUDE" --settings "$HOOKS_JSON" "$@"
+"$REAL_CLAUDE" --settings "$HOOKS_JSON" "$@"
+"#
+    )
+}
+
+fn codex_wrapper_script() -> String {
+    let find_fn = find_real_binary_fn("codex");
+    let lifecycle = grove_lifecycle_trap("codex");
+    format!(
+        r#"#!/usr/bin/env bash
+# Grove-managed Codex wrapper — lifecycle tracking.
+{find_fn}
+REAL_CODEX="$(find_real_codex)" || {{ echo "codex: not found" >&2; exit 127; }}
+[ -z "$GROVE_TMUX_SESSION" ] && exec "$REAL_CODEX" "$@"
+{lifecycle}
+"$REAL_CODEX" "$@"
 "#
     )
 }
@@ -158,8 +191,8 @@ exec "$REAL_CLAUDE" --settings "$HOOKS_JSON" "$@"
 #[cfg(test)]
 mod tests {
     use super::{
-        claude_wrapper_script, ensure_installed, grove_hook_script, grove_zdotdir,
-        TMUX_GROVE_CLAUDE_STATUS_OPTION,
+        claude_wrapper_script, codex_wrapper_script, ensure_installed, grove_hook_script,
+        grove_zdotdir, TMUX_GROVE_AI_STATUS_OPTION,
     };
     use std::env;
     use std::fs;
@@ -186,23 +219,42 @@ mod tests {
     }
 
     #[test]
-    fn grove_hook_script_updates_claude_status_option() {
+    fn grove_hook_script_updates_ai_status_option() {
         let script = grove_hook_script();
 
-        assert!(script.contains(TMUX_GROVE_CLAUDE_STATUS_OPTION));
+        assert!(script.contains(TMUX_GROVE_AI_STATUS_OPTION));
+        assert!(script.contains("claude:idle"));
+        assert!(script.contains("claude:running"));
+        assert!(script.contains("claude:attention"));
         assert!(script.contains("StopFailure|Notification"));
         assert!(script.contains("SessionEnd|cleanup"));
     }
 
     #[test]
-    fn claude_wrapper_script_embeds_hook_path_and_cleanup_trap() {
+    fn claude_wrapper_script_uses_lifecycle_trap_and_hooks() {
         let hook_path = Path::new("/tmp/grove-hook");
         let script = claude_wrapper_script(hook_path);
 
         assert!(script.contains("GROVE_HOOK=\"/tmp/grove-hook\""));
-        assert!(script.contains("trap '$GROVE_HOOK claude cleanup' EXIT"));
+        assert!(script.contains("grove_ai_cleanup"));
+        assert!(script.contains("trap grove_ai_cleanup EXIT INT TERM HUP"));
+        assert!(script.contains("claude:running"));
         assert!(script.contains("claude Notification"));
         assert!(script.contains("--settings \"$HOOKS_JSON\""));
+        // Should NOT use exec — run as child process
+        assert!(!script.contains("exec \"$REAL_CLAUDE\" --settings"));
+    }
+
+    #[test]
+    fn codex_wrapper_script_uses_lifecycle_trap() {
+        let script = codex_wrapper_script();
+
+        assert!(script.contains("find_real_codex"));
+        assert!(script.contains("grove_ai_cleanup"));
+        assert!(script.contains("trap grove_ai_cleanup EXIT INT TERM HUP"));
+        assert!(script.contains("codex:running"));
+        // Should NOT use exec when in Grove session
+        assert!(!script.contains("exec \"$REAL_CODEX\" \"$@\"\n\"#"));
     }
 
     #[test]
