@@ -1,0 +1,84 @@
+import { describe, expect, it } from "vitest";
+import { shallow } from "zustand/shallow";
+import type { SplitNode } from "../../types";
+import type { ClaudeSessionStatus } from "../../store/terminal";
+import {
+  selectClaudeWorktreeStatuses,
+  selectWorktreeBell,
+} from "./worktree-status";
+
+interface WorktreeStatusState {
+  sessions: Record<string, SplitNode>;
+  bellPtyIds: Set<string>;
+  claudeStatus: Record<string, ClaudeSessionStatus>;
+}
+
+function makeLeaf(id: string, ptyId?: string): SplitNode {
+  return {
+    id,
+    type: "leaf",
+    ptyId,
+  };
+}
+
+function makeState(
+  overrides: Partial<WorktreeStatusState> = {},
+): WorktreeStatusState {
+  return {
+    sessions: {},
+    bellPtyIds: new Set<string>(),
+    claudeStatus: {},
+    ...overrides,
+  };
+}
+
+describe("worktree status selectors", () => {
+  it("returns a stable empty statuses array when the worktree has no session", () => {
+    const state = makeState();
+
+    const first = selectClaudeWorktreeStatuses(state, "/tmp/source");
+    const second = selectClaudeWorktreeStatuses(state, "/tmp/source");
+
+    expect(first).toBe(second);
+    expect(first).toEqual([]);
+  });
+
+  it("stays shallow-equal for unchanged Claude statuses", () => {
+    const state = makeState({
+      sessions: {
+        "/tmp/source": {
+          id: "root",
+          type: "horizontal",
+          sizes: [1, 1],
+          children: [
+            makeLeaf("pane-a", "pty-a"),
+            makeLeaf("pane-b", "pty-b"),
+          ],
+        },
+      },
+      claudeStatus: {
+        "pty-a": "running",
+        "pty-b": "idle",
+      },
+    });
+
+    const first = selectClaudeWorktreeStatuses(state, "/tmp/source");
+    const second = selectClaudeWorktreeStatuses(state, "/tmp/source");
+
+    expect(first).not.toBe(second);
+    expect(first).toEqual(["running", "idle"]);
+    expect(shallow(first, second)).toBe(true);
+  });
+
+  it("detects terminal bell state for panes in the worktree", () => {
+    const state = makeState({
+      sessions: {
+        "/tmp/source": makeLeaf("pane-a", "pty-a"),
+      },
+      bellPtyIds: new Set(["pty-a"]),
+    });
+
+    expect(selectWorktreeBell(state, "/tmp/source")).toBe(true);
+    expect(selectWorktreeBell(state, "/tmp/other")).toBe(false);
+  });
+});

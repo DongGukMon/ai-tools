@@ -82,7 +82,6 @@ function TerminalPanel() {
   const loadTheme = useTerminalStore((s) => s.loadTheme);
   const setDetectedTheme = useTerminalStore((s) => s.setDetectedTheme);
   const setActiveWorktree = useTerminalStore((s) => s.setActiveWorktree);
-  const markBellPty = useTerminalStore((s) => s.markBellPty);
   const updateClaudeStatus = useTerminalStore((s) => s.updateClaudeStatus);
   const selectedWorktreePath = useProjectStore((s) => s.selectedWorktree?.path ?? null);
   const collapsed = usePanelLayoutStore((s) => s.globalTerminal.collapsed);
@@ -258,14 +257,7 @@ function TerminalPanel() {
           return;
         }
 
-        const activePath = useTerminalStore.getState().activeWorktree;
-        for (const { ptyId, bell, claudeStatus } of events) {
-          if (bell) {
-            const worktreePath = findWorktreePathForPtyId(sessionsRef.current, ptyId);
-            if (worktreePath && worktreePath !== activePath) {
-              markBellPty(ptyId);
-            }
-          }
+        for (const { ptyId, claudeStatus } of events) {
           updateClaudeStatus(ptyId, claudeStatus);
         }
       } catch {
@@ -284,7 +276,7 @@ function TerminalPanel() {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [markBellPty, updateClaudeStatus]);
+  }, [updateClaudeStatus]);
 
   // Create session for new worktree
   useEffect(() => {

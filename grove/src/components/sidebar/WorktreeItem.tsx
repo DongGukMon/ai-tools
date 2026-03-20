@@ -1,97 +1,63 @@
 import { useState } from "react";
-import { useShallow } from "zustand/react/shallow";
 import { GitBranch, Loader2, X } from "lucide-react";
 import type { Worktree } from "../../types";
 import { useProjectStore } from "../../store/project";
-import { useTerminalStore } from "../../store/terminal";
 import type { ClaudeSessionStatus } from "../../store/terminal";
 import { useToast } from "../../store/toast";
 import { overlay } from "../../lib/overlay";
-import { collectTerminalPanes } from "../../lib/terminal-session";
 import { Button } from "../ui/button";
 import { Dialog } from "../ui/dialog";
 import { cn } from "../../lib/cn";
+import claudeCodeColor from "../../assets/claudecode-color.png";
+import claudeCodeMono from "../../assets/claudecode.png";
+import {
+  useClaudeWorktreeStatus,
+  useWorktreeBell,
+} from "./worktree-status";
 
-// ── Claude sparkle icon ──
-// A compact 4-point sparkle that reads as "AI activity" at small sizes.
+// ── Claude Code icon badge ──
 
-function ClaudeSparkle({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 16 16"
-      fill="currentColor"
-      className={cn(className)}
-      aria-hidden="true"
-    >
-      <path d="M8 1.5l1.6 4.9L14.5 8l-4.9 1.6L8 14.5 6.4 9.6 1.5 8l4.9-1.6z" />
-    </svg>
-  );
+function claudeIconSrc(status: ClaudeSessionStatus): string {
+  return status === "idle" ? claudeCodeMono : claudeCodeColor;
 }
 
-// ── Status aggregation ──
-
-function useClaudeWorktreeStatus(worktreePath: string): {
-  status: ClaudeSessionStatus | null;
-  count: number;
-} {
-  return useTerminalStore(
-    useShallow((state) => {
-      const session = state.sessions[worktreePath];
-      if (!session) return { status: null, count: 0 };
-
-      const panes = collectTerminalPanes(session);
-      const statuses = panes
-        .map(({ ptyId }) => (ptyId ? state.claudeStatus[ptyId] : undefined))
-        .filter((s): s is ClaudeSessionStatus => !!s);
-
-      if (statuses.length === 0) return { status: null, count: 0 };
-
-      let aggregated: ClaudeSessionStatus = "idle";
-      if (statuses.includes("running")) aggregated = "running";
-      if (statuses.includes("attention")) aggregated = "attention";
-
-      return { status: aggregated, count: statuses.length };
-    }),
-  );
-}
-
-// ── Badge ──
-
-function ClaudeStatusBadge({
-  status,
-  count,
+export function ClaudeStatusIcons({
+  statuses,
 }: {
-  status: ClaudeSessionStatus;
-  count: number;
+  statuses: ClaudeSessionStatus[];
 }) {
+  if (statuses.length === 0) return null;
+
   return (
     <span
-      className={cn("relative flex shrink-0 items-center gap-0.5")}
-      aria-label={`Claude: ${status}`}
-      title={`Claude: ${status}${count > 1 ? ` (${count} sessions)` : ""}`}
+      className={cn("flex shrink-0 items-center -space-x-0.5")}
+      aria-label={`Claude: ${statuses.length} session(s)`}
+      title={`Claude: ${statuses.join(", ")}`}
     >
-      <ClaudeSparkle
-        className={cn("h-3.5 w-3.5 transition-colors", {
-          "text-amber-400 animate-pulse": status === "running",
-          "text-yellow-400": status === "attention",
-          "text-muted-foreground/60": status === "idle",
-        })}
-      />
-      {count > 1 && (
-        <span
-          className={cn(
-            "text-[9px] font-medium leading-none tabular-nums",
-            {
-              "text-amber-400": status === "running",
-              "text-yellow-400": status === "attention",
-              "text-muted-foreground/60": status === "idle",
-            },
-          )}
-        >
-          {count}
-        </span>
-      )}
+      {statuses.map((status, i) => (
+        <img
+          key={i}
+          src={claudeIconSrc(status)}
+          alt=""
+          className={cn("h-3.5 w-3.5", {
+            "animate-pulse": status === "running",
+            "opacity-40": status === "idle",
+          })}
+        />
+      ))}
     </span>
+  );
+}
+
+// ── Bell indicator ──
+
+export function BellDot() {
+  return (
+    <span
+      className={cn("h-2 w-2 shrink-0 rounded-full bg-orange-500")}
+      aria-label="Terminal bell pending"
+      title="Terminal bell pending"
+    />
   );
 }
 
@@ -108,18 +74,8 @@ function WorktreeItem({ worktree, projectId }: Props) {
     useProjectStore();
   const { toast } = useToast();
   const isSelected = selectedWorktree?.path === worktree.path;
-  const hasBell = useTerminalStore((state) => {
-    const session = state.sessions[worktree.path];
-    if (!session || state.bellPtyIds.size === 0) {
-      return false;
-    }
-
-    return collectTerminalPanes(session).some(
-      ({ ptyId }) => !!ptyId && state.bellPtyIds.has(ptyId),
-    );
-  });
-  const { status: claudeStatus, count: claudeCount } =
-    useClaudeWorktreeStatus(worktree.path);
+  const hasBell = useWorktreeBell(worktree.path);
+  const statuses = useClaudeWorktreeStatus(worktree.path);
   const displayName = worktree.branch || worktree.name;
 
   const handleRemoveClick = async (e: React.MouseEvent) => {
@@ -166,16 +122,8 @@ function WorktreeItem({ worktree, projectId }: Props) {
     >
       <GitBranch className={cn("h-3.5 w-3.5 shrink-0")} />
       <span className={cn("min-w-0 flex-1 truncate")}>{displayName}</span>
-      {claudeStatus && (
-        <ClaudeStatusBadge status={claudeStatus} count={claudeCount} />
-      )}
-      {hasBell && (
-        <span
-          className={cn("h-2 w-2 shrink-0 rounded-full bg-orange-500")}
-          aria-label="Terminal bell pending"
-          title="Terminal bell pending"
-        />
-      )}
+      <ClaudeStatusIcons statuses={statuses} />
+      {hasBell && <BellDot />}
       {removing ? (
         <Loader2 className={cn("h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground")} />
       ) : (

@@ -94,6 +94,14 @@ Available: `Button`, `Input`, `Badge`, `Dialog`, `Toast` (via `useToast()`)
 { "sizes": [0.3, 0.7] }
 ```
 
+### Zustand selectors — snapshots must be stable
+
+- `useShallow(...)` selectors must return a top-level primitive or array/object whose shallow members stay stable for unchanged state
+- Do not return `{ items: [] }`, `{ statuses: computedArray }`, or other object-wrapped freshly allocated arrays from store selectors
+- If a selector naturally produces a list, return the list directly and let `useShallow(...)` compare that array
+- For empty results, prefer a shared constant like `EMPTY_*` when the selector may run before any data exists
+- When adding a selector around `useTerminalStore` or another Zustand store, add a regression test if an unchanged store state could still allocate new snapshot values
+
 ### Tests — write alongside features
 
 Before closing work, run `pnpm lint && pnpm test`.

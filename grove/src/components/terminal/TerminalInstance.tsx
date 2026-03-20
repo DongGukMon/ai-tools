@@ -15,6 +15,7 @@ function TerminalInstance({ paneId, ptyId }: Props) {
   const theme = useTerminalStore((s) => s.theme);
   const isFocused = useTerminalStore((s) => s.focusedPtyId === ptyId);
   const setFocusedPtyId = useTerminalStore((s) => s.setFocusedPtyId);
+  const markBellPty = useTerminalStore((s) => s.markBellPty);
   const [error, setError] = useState<string | null>(null);
 
   const handleClick = useCallback(() => {
@@ -33,11 +34,13 @@ function TerminalInstance({ paneId, ptyId }: Props) {
       setFocusedPtyId(nextPtyId);
     });
     runtime.setErrorHandler(setError);
+    runtime.setBellHandler(markBellPty);
     runtime.attach(container);
 
     return () => {
       runtime.setFocusHandler(null);
       runtime.setErrorHandler(null);
+      runtime.setBellHandler(null);
       runtime.detach();
       runtime.release();
       runtimeRef.current = null;

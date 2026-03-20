@@ -21,6 +21,7 @@ export interface TerminalPaneSeed {
 
 type FocusHandler = (ptyId: string) => void;
 type ErrorHandler = (message: string | null) => void;
+type BellHandler = (ptyId: string) => void;
 type ActivitySource = "output" | "tmuxCapture";
 
 export interface TerminalPaneActivity {
@@ -130,6 +131,7 @@ class TerminalPaneRuntime {
   private resizeObserver: ResizeObserver | null = null;
   private focusHandler: FocusHandler | null = null;
   private errorHandler: ErrorHandler | null = null;
+  private bellHandler: BellHandler | null = null;
   private releaseTimer: number | null = null;
   private frameId: number | null = null;
   private refCount = 0;
@@ -152,6 +154,7 @@ class TerminalPaneRuntime {
 
   private readonly unlistenPromise: Promise<() => void>;
   private readonly dataDisposable: { dispose(): void };
+  private readonly bellDisposable: { dispose(): void };
 
   constructor(
     paneId: string,
@@ -227,6 +230,12 @@ class TerminalPaneRuntime {
       const bytes = Array.from(new TextEncoder().encode(sequence));
       writePty(this.ptyId, bytes).catch(() => {});
       return false;
+    });
+
+    this.bellDisposable = this.term.onBell(() => {
+      if (this.ptyId) {
+        this.bellHandler?.(this.ptyId);
+      }
     });
 
     this.unlistenPromise = platform.listen<{ id: string; data: string }>(
@@ -316,6 +325,10 @@ class TerminalPaneRuntime {
   setErrorHandler(handler: ErrorHandler | null) {
     this.errorHandler = handler;
     this.errorHandler?.(this.lastError);
+  }
+
+  setBellHandler(handler: BellHandler | null) {
+    this.bellHandler = handler;
   }
 
   attach(container: HTMLDivElement) {
@@ -565,6 +578,7 @@ class TerminalPaneRuntime {
     this.disposed = true;
     this.detach();
     this.dataDisposable.dispose();
+    this.bellDisposable.dispose();
     this.unlistenPromise.then((unlisten) => {
       if (typeof unlisten === "function") {
         unlisten();
