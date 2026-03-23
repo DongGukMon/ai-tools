@@ -26,7 +26,7 @@ export function registerSyncJob(
     key,
     fn,
     intervalMs,
-    lastRun: 0,
+    lastRun: Date.now(),
     running: false,
   });
 }
