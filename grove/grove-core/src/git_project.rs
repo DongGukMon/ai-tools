@@ -723,16 +723,17 @@ pub fn add_worktree_impl(project_id: &str, name: &str) -> Result<Worktree, Strin
         .join(name);
 
     let worktree_path_str = worktree_path.to_string_lossy().to_string();
+    let local_branches = local_branch_names(source)?;
 
-    let local_exists = run_git_output(
-        source,
-        &["rev-parse", "--verify", &format!("refs/heads/{name}")],
-    )
-    .is_ok();
+    if let Some(conflicting_branch) = find_branch_prefix_conflict(&local_branches, name) {
+        return Err(format_branch_prefix_conflict(name, conflicting_branch));
+    }
+
+    let local_exists = local_branches.iter().any(|branch| branch == name);
 
     if local_exists {
         // Branch already exists locally — just check it out in a new worktree
-        run_git(source, &["worktree", "add", &worktree_path_str, name])?;
+        run_worktree_add(source, &["worktree", "add", &worktree_path_str, name], name)?;
     } else {
         let remote_branch = format!("origin/{name}");
         let remote_exists =
@@ -740,7 +741,7 @@ pub fn add_worktree_impl(project_id: &str, name: &str) -> Result<Worktree, Strin
 
         if remote_exists {
             // Track existing remote branch
-            run_git(
+            run_worktree_add(
                 source,
                 &[
                     "worktree",
@@ -750,13 +751,15 @@ pub fn add_worktree_impl(project_id: &str, name: &str) -> Result<Worktree, Strin
                     name,
                     &remote_branch,
                 ],
+                name,
             )?;
         } else {
             // Create new branch from default branch
             let base_ref = format!("origin/{default_branch}");
-            run_git(
+            run_worktree_add(
                 source,
                 &["worktree", "add", &worktree_path_str, "-b", name, &base_ref],
+                name,
             )?;
         }
     }
@@ -766,6 +769,10 @@ pub fn add_worktree_impl(project_id: &str, name: &str) -> Result<Worktree, Strin
         path: worktree_path_str,
         branch: name.to_string(),
     })
+}
+
+fn run_worktree_add(cwd: &Path, args: &[&str], branch_name: &str) -> Result<(), String> {
+    run_git(cwd, args).map_err(|err| humanize_worktree_add_error(branch_name, &err))
 }
 
 pub fn remove_worktree_impl(project_id: &str, worktree_name: &str) -> Result<(), String> {
@@ -945,6 +952,56 @@ fn local_branch_names(source: &Path) -> Result<Vec<String>, String> {
         .filter(|line| !line.is_empty())
         .map(|line| line.to_string())
         .collect())
+}
+
+fn find_branch_prefix_conflict<'a>(branches: &'a [String], requested: &str) -> Option<&'a str> {
+    branches
+        .iter()
+        .find(|branch| {
+            branch.as_str() != requested
+                && (requested.starts_with(&format!("{branch}/"))
+                    || branch.starts_with(&format!("{requested}/")))
+        })
+        .map(|branch| branch.as_str())
+}
+
+fn format_branch_prefix_conflict(requested: &str, conflicting: &str) -> String {
+    format!(
+        "Cannot create branch '{requested}' because branch '{conflicting}' already exists. Git cannot keep both '{requested}' and '{conflicting}' because one name is a prefix of the other. Use a different branch name, or rename/delete the existing branch."
+    )
+}
+
+fn humanize_worktree_add_error(branch_name: &str, err: &str) -> String {
+    if let Some(conflicting_branch) = parse_branch_prefix_conflict_from_git_error(err) {
+        return format_branch_prefix_conflict(branch_name, &conflicting_branch);
+    }
+    err.to_string()
+}
+
+fn parse_branch_prefix_conflict_from_git_error(err: &str) -> Option<String> {
+    let needle = "cannot create 'refs/heads/";
+    let start = err.find(needle)? + needle.len();
+    let rest = &err[start..];
+    let end = rest.find('\'')?;
+    let requested = &rest[..end];
+
+    let exists_marker = "'refs/heads/";
+    let exists_start = err.find(exists_marker)? + exists_marker.len();
+    let exists_rest = &err[exists_start..];
+    let exists_end = exists_rest.find("' exists;")?;
+    let existing = &exists_rest[..exists_end];
+
+    if requested == existing {
+        return None;
+    }
+
+    let requested_prefix = format!("{requested}/");
+    let existing_prefix = format!("{existing}/");
+    if requested.starts_with(&existing_prefix) || existing.starts_with(&requested_prefix) {
+        return Some(existing.to_string());
+    }
+
+    None
 }
 
 fn remote_branch_names(source: &Path) -> Result<Vec<String>, String> {
@@ -1591,6 +1648,55 @@ mod tests {
             run_git_output(&source_dir, &["rev-parse", "origin/trunk"]).unwrap()
         );
         assert_eq!(list_worktrees_impl("project-1").unwrap().len(), 1);
+    }
+
+    #[test]
+    fn add_worktree_reports_human_readable_branch_prefix_conflict() {
+        let _lock = env_lock();
+        let home = TestHome::new();
+        let base_dir = home.root.join("grove-data");
+        let source_dir = base_dir
+            .join("github.com")
+            .join("bang9")
+            .join("grove")
+            .join("source");
+        let remotes_dir = home.root.join("remotes");
+        let (remote_dir, seed_dir) =
+            create_bare_remote(&remotes_dir, "grove-prefix-conflict", "main");
+
+        commit_and_push(
+            &seed_dir,
+            &remote_dir,
+            "main",
+            "README.md",
+            "# Grove\n",
+            "Initial commit",
+        );
+
+        fs::create_dir_all(source_dir.parent().unwrap()).unwrap();
+        let remote_dir_str = remote_dir.to_string_lossy().to_string();
+        let source_dir_str = source_dir.to_string_lossy().to_string();
+        run_git_ok(
+            source_dir.parent().unwrap(),
+            &["clone", &remote_dir_str, &source_dir_str],
+        );
+        run_git_ok(&source_dir, &["branch", "whip"]);
+
+        save_test_config(
+            &base_dir,
+            vec![project_entry(
+                "project-1",
+                "https://github.com/bang9/grove.git",
+                &source_dir,
+            )],
+        );
+
+        let error = add_worktree_impl("project-1", "whip/scroll-bug-fix").unwrap_err();
+
+        assert_eq!(
+            error,
+            "Cannot create branch 'whip/scroll-bug-fix' because branch 'whip' already exists. Git cannot keep both 'whip/scroll-bug-fix' and 'whip' because one name is a prefix of the other. Use a different branch name, or rename/delete the existing branch."
+        );
     }
 
     #[test]
