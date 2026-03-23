@@ -88,7 +88,12 @@ function TerminalPanel() {
   const ratio = usePanelLayoutStore((s) => s.globalTerminal.ratio);
   const updateGlobalTerminal = usePanelLayoutStore((s) => s.updateGlobalTerminal);
   const { createTerminal } = useTerminal();
-  const { paneId: globalPaneId, ptyId: globalPtyId, ready: globalReady } = useGlobalTerminal();
+  const {
+    paneId: globalPaneId,
+    ptyId: globalPtyId,
+    ready: globalReady,
+    reset: resetGlobalTerminal,
+  } = useGlobalTerminal();
   const [error, setError] = useState<string | null>(null);
 
   const handleRatioCommit = useCallback(
@@ -331,7 +336,13 @@ function TerminalPanel() {
   );
 
   const globalPanel = globalReady ? (
-    <GlobalTerminalPanel paneId={globalPaneId} ptyId={globalPtyId} />
+    <GlobalTerminalPanel
+      paneId={globalPaneId}
+      ptyId={globalPtyId}
+      onReset={() => {
+        void resetGlobalTerminal();
+      }}
+    />
   ) : null;
 
   return (
