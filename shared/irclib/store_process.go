@@ -3,6 +3,7 @@ package irclib
 import (
 	"context"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -23,17 +24,31 @@ func getParentPID(pid int) int {
 	return ppid
 }
 
+// sessionBinaries lists process names that identify an AI coding session.
+var sessionBinaries = map[string]bool{
+	"claude": true,
+	"codex":  true,
+}
+
+// commFunc is the function used to resolve a PID's command name.
+// Override in tests to avoid real process lookups.
+var commFunc = getProcessComm
+
+// parentFunc is the function used to resolve a PID's parent.
+// Override in tests to avoid real process lookups.
+var parentFunc = getParentPID
+
 // FindSessionPID walks up the process tree from the given PID to find the
-// most appropriate PID to use as session identifier. It looks for a "claude"
-// process in the ancestry (Claude Code), falling back to the given PID.
+// most appropriate PID to use as session identifier. It looks for a known
+// session binary (claude, codex) in the ancestry, falling back to the given PID.
 func FindSessionPID(startPID int) int {
 	current := startPID
 	for i := 0; i < 10; i++ {
-		comm := getProcessComm(current)
-		if comm == "claude" {
+		comm := filepath.Base(commFunc(current))
+		if sessionBinaries[comm] {
 			return current
 		}
-		parent := getParentPID(current)
+		parent := parentFunc(current)
 		if parent <= 1 || parent == current {
 			break
 		}
