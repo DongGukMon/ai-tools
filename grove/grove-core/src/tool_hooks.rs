@@ -304,7 +304,8 @@ mod tests {
         assert!(script.contains("GROVE_HOOK=\"/tmp/grove-hook\""));
         assert!(script.contains("grove_ai_cleanup"));
         assert!(script.contains("trap grove_ai_cleanup EXIT INT TERM HUP"));
-        assert!(script.contains("claude:running"));
+        assert!(script.contains("claude:idle"));
+        assert!(script.contains("claude UserPromptSubmit"));
         assert!(script.contains("claude Notification"));
         assert!(script.contains("--settings \"$HOOKS_JSON\""));
         // Should NOT use exec — run as child process
@@ -318,7 +319,7 @@ mod tests {
         assert!(script.contains("find_real_codex"));
         assert!(script.contains("grove_ai_cleanup"));
         assert!(script.contains("trap grove_ai_cleanup EXIT INT TERM HUP"));
-        assert!(script.contains("codex:running"));
+        assert!(script.contains("codex:idle"));
         // Should NOT use exec when in Grove session
         assert!(!script.contains("exec \"$REAL_CODEX\" \"$@\"\n\"#"));
     }
