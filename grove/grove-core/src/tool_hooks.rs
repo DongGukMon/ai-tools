@@ -3,6 +3,37 @@ use std::sync::OnceLock;
 
 pub const TMUX_GROVE_AI_STATUS_OPTION: &str = "@grove_ai_status";
 
+/// Tools that lack a hook system and need PTY idle timeout detection.
+/// Tools with hooks (e.g. Claude Code via `--settings`) report status directly.
+const HOOKLESS_TOOLS: &[&str] = &["codex"];
+
+/// Returns true if the given AI status belongs to a tool without hooks.
+pub fn needs_idle_detection(ai_status: Option<&str>) -> bool {
+    ai_status.is_some_and(|s| HOOKLESS_TOOLS.iter().any(|t| s.starts_with(t)))
+}
+
+/// Returns true if the status suffix is `:running`.
+pub fn is_running(ai_status: Option<&str>) -> bool {
+    ai_status.is_some_and(|s| s.ends_with(":running"))
+}
+
+/// Returns true if the status suffix is `:idle`.
+pub fn is_idle(ai_status: Option<&str>) -> bool {
+    ai_status.is_some_and(|s| s.ends_with(":idle"))
+}
+
+/// Converts a status to its `:running` variant (e.g. "codex:idle" → "codex:running").
+pub fn to_running(ai_status: &str) -> String {
+    let tool = ai_status.split(':').next().unwrap_or(ai_status);
+    format!("{tool}:running")
+}
+
+/// Converts a status to its `:idle` variant (e.g. "codex:running" → "codex:idle").
+pub fn to_idle(ai_status: &str) -> String {
+    let tool = ai_status.split(':').next().unwrap_or(ai_status);
+    format!("{tool}:idle")
+}
+
 pub fn ensure_installed() {
     static INIT: OnceLock<()> = OnceLock::new();
     INIT.get_or_init(|| {
@@ -216,6 +247,41 @@ mod tests {
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr)
         );
+    }
+
+    #[test]
+    fn needs_idle_detection_only_for_hookless_tools() {
+        use super::{is_idle, is_running, needs_idle_detection, to_idle, to_running};
+
+        // Codex — hookless, needs idle detection
+        assert!(needs_idle_detection(Some("codex:idle")));
+        assert!(needs_idle_detection(Some("codex:running")));
+        assert!(needs_idle_detection(Some("codex:attention")));
+
+        // Claude — has hooks, does NOT need idle detection
+        assert!(!needs_idle_detection(Some("claude:idle")));
+        assert!(!needs_idle_detection(Some("claude:running")));
+
+        // None
+        assert!(!needs_idle_detection(None));
+    }
+
+    #[test]
+    fn status_predicates_and_conversions() {
+        use super::{is_idle, is_running, to_idle, to_running};
+
+        assert!(is_running(Some("codex:running")));
+        assert!(!is_running(Some("codex:idle")));
+        assert!(!is_running(None));
+
+        assert!(is_idle(Some("codex:idle")));
+        assert!(!is_idle(Some("codex:running")));
+        assert!(!is_idle(None));
+
+        assert_eq!(to_running("codex:idle"), "codex:running");
+        assert_eq!(to_running("codex:attention"), "codex:running");
+        assert_eq!(to_idle("codex:running"), "codex:idle");
+        assert_eq!(to_idle("newtool:running"), "newtool:idle");
     }
 
     #[test]

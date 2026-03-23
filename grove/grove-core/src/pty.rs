@@ -35,6 +35,7 @@ const WORKTREE_HASH_LEN: usize = 12;
 const PANE_PREFIX_LEN: usize = 8;
 const PANE_HASH_LEN: usize = 4;
 const CODEX_OUTPUT_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
+const HOOKLESS_ATTENTION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
 pub trait PtyEventSink: Send + Sync + 'static {
     fn on_output(&self, pty_id: &str, data: &[u8]);
@@ -51,6 +52,8 @@ struct PtyRuntimeState {
     last_bell_flag: bool,
     last_ai_status: Option<String>,
     last_output_at: Option<Instant>,
+    /// Set when a hookless tool transitions running→idle. Used for attention timeout.
+    idle_since: Option<Instant>,
 }
 
 impl PtyRuntimeState {
@@ -71,6 +74,7 @@ impl PtyRuntimeState {
             last_bell_flag: false,
             last_ai_status: None,
             last_output_at: None,
+            idle_since: None,
         };
 
         if let Some(restore) = restore {
@@ -290,14 +294,16 @@ pub fn write(id: &str, data: &[u8]) -> Result<(), String> {
             .ok_or_else(|| format!("PTY not found: {}", id))?;
         instance.writer.write_all(data).map_err(|e| e.to_string())?;
 
-        // Detect Enter for Codex idle→running transition.
+        // Detect Enter for hookless-tool idle→running transition.
         // Also reset last_output_at so the idle timeout starts from Enter,
         // not from the previous output (which could be minutes ago).
         if data.contains(&b'\r') {
             instance.tracked.lock().ok().and_then(|mut state| {
-                if state.last_ai_status.as_deref() == Some("codex:idle") {
+                let status = state.last_ai_status.clone();
+                let s = status.as_deref();
+                if tool_hooks::needs_idle_detection(s) && tool_hooks::is_idle(s) {
                     state.last_output_at = Some(Instant::now());
-                    Some(state.session_name.clone())
+                    Some((state.session_name.clone(), tool_hooks::to_running(s.unwrap())))
                 } else {
                     None
                 }
@@ -308,11 +314,11 @@ pub fn write(id: &str, data: &[u8]) -> Result<(), String> {
     };
 
     // Set tmux option outside of registry lock to avoid holding locks during shell-out.
-    if let Some(session_name) = transition_session {
+    if let Some((session_name, running_status)) = transition_session {
         let _ = tmux_set_option(
             &session_name,
             TMUX_GROVE_AI_STATUS_OPTION,
-            "codex:running",
+            &running_status,
         );
     }
 
@@ -423,32 +429,36 @@ pub fn poll_bell_events() -> Result<Vec<PtyBellEvent>, String> {
             Err(_) => None,
         };
 
-        // Codex idle timeout: if output has been idle for CODEX_OUTPUT_IDLE_TIMEOUT
-        // while status is "codex:running", transition back to "codex:idle".
-        // TUI apps like Codex produce periodic screen refreshes (cursor blink,
-        // status bar) so we don't revalidate after the transition — the next
-        // Enter keystroke will re-assert running.
-        let idle_snapshot = if ai_status.as_deref() == Some("codex:running") {
-            tracked.lock().ok().and_then(|state| match state.last_output_at {
-                Some(t) if t.elapsed() >= CODEX_OUTPUT_IDLE_TIMEOUT => Some(t),
-                // No output tracked (e.g. after app restart) — treat as idle.
-                None => Some(Instant::now()),
-                _ => None,
-            })
-        } else {
-            None
-        };
+        // Hookless tool idle/attention state machine:
+        // running → [output idle > 3s] → idle → [30s elapsed] → attention
+        // TUI apps produce periodic screen refreshes so we don't revalidate
+        // after transitions — the next Enter re-asserts running.
+        let ai_ref = ai_status.as_deref();
+        let is_hookless = tool_hooks::needs_idle_detection(ai_ref);
 
-        let ai_status = if idle_snapshot.is_some() {
-            let _ = tmux_set_option(
-                &session_name,
-                TMUX_GROVE_AI_STATUS_OPTION,
-                "codex:idle",
-            );
-            // No revalidation — TUI apps like Codex produce periodic screen
-            // refreshes (~2KB every ~4s) that would always trigger a false
-            // revert. The next Enter keystroke will re-assert running.
-            Some("codex:idle".to_string())
+        let ai_status = if is_hookless && tool_hooks::is_running(ai_ref) {
+            let should_idle = tracked.lock().ok().is_some_and(|state| match state.last_output_at {
+                Some(t) => t.elapsed() >= CODEX_OUTPUT_IDLE_TIMEOUT,
+                None => true, // no output tracked (e.g. after app restart)
+            });
+            if should_idle {
+                let idle_status = tool_hooks::to_idle(ai_ref.unwrap());
+                let _ = tmux_set_option(&session_name, TMUX_GROVE_AI_STATUS_OPTION, &idle_status);
+                Some(idle_status)
+            } else {
+                ai_status
+            }
+        } else if is_hookless && tool_hooks::is_idle(ai_ref) {
+            let should_attention = tracked.lock().ok().is_some_and(|state| {
+                state.idle_since.is_some_and(|t| t.elapsed() >= HOOKLESS_ATTENTION_TIMEOUT)
+            });
+            if should_attention {
+                let attn_status = format!("{}:attention", ai_ref.unwrap().split(':').next().unwrap());
+                let _ = tmux_set_option(&session_name, TMUX_GROVE_AI_STATUS_OPTION, &attn_status);
+                Some(attn_status)
+            } else {
+                ai_status
+            }
         } else {
             ai_status
         };
@@ -457,6 +467,17 @@ pub fn poll_bell_events() -> Result<Vec<PtyBellEvent>, String> {
         let bell = consume_bell_edge(&mut state.last_bell_flag, bell_flag);
         let ai_changed = ai_status != state.last_ai_status;
         if ai_changed {
+            // Track running→idle transition for attention timeout.
+            let prev = state.last_ai_status.as_deref();
+            let next = ai_status.as_deref();
+            if tool_hooks::needs_idle_detection(next)
+                && tool_hooks::is_idle(next)
+                && tool_hooks::is_running(prev)
+            {
+                state.idle_since = Some(Instant::now());
+            } else {
+                state.idle_since = None;
+            }
             state.last_ai_status = ai_status.clone();
         }
         if bell || ai_changed {
