@@ -85,3 +85,18 @@ shared/global
 - **Password never stored**: Only the PBKDF2 salt is persisted
 
 Even if `vault.json` is exposed, secrets cannot be decrypted without the password.
+
+## GitHub Actions
+
+Use [`vaultkey-action`](../vaultkey-action) to install vaultkey and load secrets in CI workflows:
+
+```yaml
+- uses: bang9/ai-tools/vaultkey-action@v2
+  with:
+    gh-pat: ${{ secrets.VAULT_GH_PAT }}
+    vault-repo: your-org/your-secrets-repo
+    password: ${{ secrets.VAULTKEY_PASSWORD }}
+    secrets: |
+      CLOUDFLARE_API_TOKEN=cloudflare CLOUDFLARE_API_TOKEN
+      DB_PASSWORD=myapp/prod DB_PASSWORD
+```
