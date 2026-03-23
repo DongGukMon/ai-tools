@@ -84,6 +84,12 @@ Description template:
 ## Focus
 <optional focus area>
 
+## Dismissed Findings
+<omit this section entirely in round 1>
+- "<original finding text>" — Reason: <why it was dismissed>
+
+Do NOT re-report these. They have been verified as false alarms or intentional design decisions.
+
 ## Instructions
 You are a code reviewer. Review the changes described above. Do not fix anything — only report findings.
 
@@ -96,6 +102,7 @@ Skip style-only issues. Focus on:
 Important review discipline:
 - Verify each finding against the actual codebase — read the referenced code, do not report issues based on assumptions from the diff alone.
 - Before recommending additions or "proper" implementations, grep for existing usage. Do not suggest YAGNI violations.
+- If a "Dismissed Findings" section is present, do not re-report those issues. They have been verified and intentionally kept as-is.
 
 Produce your report in this exact format:
 
@@ -140,9 +147,16 @@ If the reviewer failed or produced malformed output, retry once with a fresh tas
 Read each finding. For each blocking or important issue:
 1. Read the referenced file and line
 2. Understand the issue in context
-3. Apply the fix directly
+3. Decide: fix, or dismiss
 
-Do not blindly apply suggestions. Understand the issue first, then write the correct fix. If a finding is wrong, skip it and note why.
+If fixing: apply the fix directly.
+If dismissing (false alarm or intentional design decision): add to the **dismissed findings list** (maintained in your session context across rounds) with the original finding text and a concrete reason why it was dismissed.
+
+Do not blindly apply suggestions. Understand the issue first, then write the correct fix.
+
+After processing all findings, present a brief summary of what was fixed and what was dismissed (with reasons) so the user can intervene if they disagree with any dismissal.
+
+When dispatching the next review (Step 1), include all accumulated dismissed findings in the Review Task Spec's "Dismissed Findings" section.
 
 After all fixes are applied, go back to Step 1.
 
@@ -153,6 +167,7 @@ When the reviewer reports LGTM:
 1. Summarize to the user:
    - Number of rounds completed
    - Total findings fixed across all rounds
+   - Total findings dismissed (count only; full list available on request)
    - Final LGTM confirmation
 2. Follow `/whip-start` cleanup conventions (stop polling, disconnect IRC)
 
