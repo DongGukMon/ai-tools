@@ -85,6 +85,123 @@ func TestRenderListViewPlacesUsageStripAboveFooter(t *testing.T) {
 	}
 }
 
+func TestUsageCacheRoundTrip(t *testing.T) {
+	tmpDir := t.TempDir()
+	now := time.Date(2026, 3, 23, 12, 0, 0, 0, time.UTC)
+	claudeToday := 50.0
+	claudeWeek := 200.0
+
+	state := dashboardUsageState{
+		UpdatedAt: now,
+		Claude: dashboardUsageProviderSummary{
+			Provider:  "Claude",
+			Primary:   &dashboardUsageWindow{LeftPercent: 36, ResetAt: &now},
+			TodayCost: &claudeToday,
+			WeekCost:  &claudeWeek,
+		},
+	}
+
+	if err := writeUsageCache(tmpDir, state); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	loaded, err := readUsageCache(tmpDir)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if loaded.UpdatedAt.Unix() != now.Unix() {
+		t.Fatalf("UpdatedAt mismatch: got %v, want %v", loaded.UpdatedAt, now)
+	}
+	if loaded.Claude.Provider != "Claude" {
+		t.Fatalf("Claude provider mismatch: got %q", loaded.Claude.Provider)
+	}
+	if *loaded.Claude.TodayCost != 50.0 {
+		t.Fatalf("TodayCost mismatch: got %v", *loaded.Claude.TodayCost)
+	}
+}
+
+func TestUsageCacheReturnsErrWhenStale(t *testing.T) {
+	tmpDir := t.TempDir()
+	staleTime := time.Now().Add(-11 * time.Minute)
+
+	state := dashboardUsageState{UpdatedAt: staleTime}
+	if err := writeUsageCache(tmpDir, state); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	_, err := readUsageCache(tmpDir)
+	if err == nil {
+		t.Fatal("expected error for stale cache, got nil")
+	}
+}
+
+func TestUsageCacheReturnsErrWhenMissing(t *testing.T) {
+	tmpDir := t.TempDir()
+	_, err := readUsageCache(tmpDir)
+	if err == nil {
+		t.Fatal("expected error for missing cache, got nil")
+	}
+}
+
+func TestDashboardWritesCacheAfterFetch(t *testing.T) {
+	store := tempStore(t)
+	now := time.Now()
+	todayCost := 77.0
+
+	state := dashboardUsageState{
+		UpdatedAt: now,
+		Claude: dashboardUsageProviderSummary{
+			Provider:  "Claude",
+			TodayCost: &todayCost,
+		},
+	}
+
+	model := NewDashboardModel(store, "test")
+	msg := dashboardUsageLoadedMsg{state: state}
+	updated, _ := model.Update(msg)
+	m := updated.(DashboardModel)
+
+	if m.usageLoading {
+		t.Fatal("expected usageLoading=false after load")
+	}
+
+	cached, err := readUsageCache(store.BaseDir)
+	if err != nil {
+		t.Fatalf("expected cache to be written: %v", err)
+	}
+	if *cached.Claude.TodayCost != 77.0 {
+		t.Fatalf("cached TodayCost mismatch: got %v", *cached.Claude.TodayCost)
+	}
+}
+
+func TestDashboardInitUsesCachedUsage(t *testing.T) {
+	store := tempStore(t)
+	now := time.Now()
+	todayCost := 10.0
+
+	state := dashboardUsageState{
+		UpdatedAt: now,
+		Claude: dashboardUsageProviderSummary{
+			Provider:  "Claude",
+			TodayCost: &todayCost,
+		},
+	}
+	if err := writeUsageCache(store.BaseDir, state); err != nil {
+		t.Fatalf("write cache: %v", err)
+	}
+
+	model := NewDashboardModel(store, "test")
+	if model.usageLoading {
+		t.Fatal("expected usageLoading=false when cache is fresh")
+	}
+	if model.usageState.UpdatedAt.IsZero() {
+		t.Fatal("expected usageState to be populated from cache")
+	}
+	if *model.usageState.Claude.TodayCost != 10.0 {
+		t.Fatalf("cached TodayCost mismatch: got %v", *model.usageState.Claude.TodayCost)
+	}
+}
+
 func TestRenderHeaderIncludesInlineSummaryForListView(t *testing.T) {
 	store := tempStore(t)
 	model := NewDashboardModel(store, "test")

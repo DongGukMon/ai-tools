@@ -29,23 +29,23 @@ const (
 )
 
 type dashboardUsageState struct {
-	UpdatedAt time.Time
-	Claude    dashboardUsageProviderSummary
-	Codex     dashboardUsageProviderSummary
+	UpdatedAt time.Time                     `json:"updated_at"`
+	Claude    dashboardUsageProviderSummary `json:"claude"`
+	Codex     dashboardUsageProviderSummary `json:"codex"`
 }
 
 type dashboardUsageProviderSummary struct {
-	Provider  string
-	Primary   *dashboardUsageWindow
-	Weekly    *dashboardUsageWindow
-	TodayCost *float64
-	WeekCost  *float64
-	LastError string
+	Provider  string                `json:"provider"`
+	Primary   *dashboardUsageWindow `json:"primary,omitempty"`
+	Weekly    *dashboardUsageWindow `json:"weekly,omitempty"`
+	TodayCost *float64              `json:"today_cost,omitempty"`
+	WeekCost  *float64              `json:"week_cost,omitempty"`
+	LastError string                `json:"last_error,omitempty"`
 }
 
 type dashboardUsageWindow struct {
-	LeftPercent int
-	ResetAt     *time.Time
+	LeftPercent int        `json:"left_percent"`
+	ResetAt     *time.Time `json:"reset_at,omitempty"`
 }
 
 type dashboardCostSummary struct {
@@ -1066,4 +1066,33 @@ func float64Ptr(value float64) *float64 {
 func intPtr(value int) *int {
 	v := value
 	return &v
+}
+
+const usageCacheFile = "usage-cache.json"
+
+func usageCachePath(baseDir string) string {
+	return filepath.Join(baseDir, "cache", usageCacheFile)
+}
+
+func writeUsageCache(baseDir string, state dashboardUsageState) error {
+	data, err := json.Marshal(state)
+	if err != nil {
+		return err
+	}
+	return atomicWriteFile(usageCachePath(baseDir), data, privateFilePerm)
+}
+
+func readUsageCache(baseDir string) (dashboardUsageState, error) {
+	data, err := os.ReadFile(usageCachePath(baseDir))
+	if err != nil {
+		return dashboardUsageState{}, err
+	}
+	var state dashboardUsageState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return dashboardUsageState{}, err
+	}
+	if state.needsRefresh(time.Now()) {
+		return dashboardUsageState{}, fmt.Errorf("cache stale")
+	}
+	return state, nil
 }

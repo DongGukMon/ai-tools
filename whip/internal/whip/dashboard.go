@@ -183,7 +183,7 @@ func (m DashboardModel) Cleanup() {
 
 func NewDashboardModel(store *Store, version string) DashboardModel {
 	cwd, _ := os.Getwd()
-	return DashboardModel{
+	m := DashboardModel{
 		store:              store,
 		version:            version,
 		width:              120,
@@ -194,16 +194,26 @@ func NewDashboardModel(store *Store, version string) DashboardModel {
 		expandedWorkspaces: map[string]bool{},
 		usageLoading:       true,
 	}
+
+	if cached, err := readUsageCache(store.BaseDir); err == nil {
+		m.usageState = cached
+		m.usageLoading = false
+	}
+
+	return m
 }
 
 func (m DashboardModel) Init() tea.Cmd {
-	return tea.Batch(
+	cmds := []tea.Cmd{
 		m.loadTasks(),
 		loadPeers(),
-		loadDashboardUsageCmd(),
 		tickCmd(),
 		spinnerTickCmd(),
-	)
+	}
+	if m.usageLoading {
+		cmds = append(cmds, loadDashboardUsageCmd())
+	}
+	return tea.Batch(cmds...)
 }
 
 func tickCmd() tea.Cmd {
@@ -335,6 +345,7 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case dashboardUsageLoadedMsg:
 		m.usageState = msg.state
 		m.usageLoading = false
+		_ = writeUsageCache(m.store.BaseDir, msg.state)
 		return m, nil
 
 	case error:
