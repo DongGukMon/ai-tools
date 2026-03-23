@@ -26,6 +26,9 @@ Installs the `rewind` CLI automatically in Claude Code sessions:
 ## Quick Start
 
 ```bash
+# Browse sessions interactively
+rewind ls
+
 # Claude Code session
 rewind claude <session-id>
 
@@ -53,16 +56,17 @@ Discover commands: `rewind --help`
 
 ## What It Shows
 
-- User and assistant messages
-- Tool calls and tool results
-- Reasoning / thinking summaries
-- Session metadata such as backend, model, cwd, start time, and event count
-- Interactive timeline features including sort toggle, minimap, and expandable event content
+The viewer has three tabs:
+
+- **Timeline** — User and assistant messages, tool calls and results, reasoning summaries, session metadata, sort toggle, minimap, and expandable event content
+- **Stats** — Session analytics: tool usage, time allocation, prompt quality, iteration heatmap, skill usage, and tool failures
+- **Analysis** — AI-generated session analysis with work type reviews and clickable line range links that jump to timeline events
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
+| `rewind ls` | Browse sessions interactively (enter: open, a: analyze with AI) |
 | `rewind <backend> <session-id> [--no-open]` | Parse a discovered session and open the browser timeline |
 | `rewind <backend> --path <session-file.jsonl> [--no-open]` | Parse an explicit session file without auto-discovery |
 | `rewind cleanup` | Delete stale exported viewer directories from `~/.rewind/viewers` |
@@ -75,6 +79,8 @@ Each launch writes a static viewer bundle to `~/.rewind/viewers` with the parsed
 
 `--port` remains accepted for compatibility but is ignored in static viewer mode.
 Viewer directories older than 30 minutes are deleted on the next run, or immediately via `rewind cleanup`.
+
+Analysis data from the AI analyze feature is stored in `~/.rewind/analysis/<session-id>.json` and loaded automatically when opening the viewer.
 
 ## Build from Source
 
