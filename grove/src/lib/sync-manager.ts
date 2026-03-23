@@ -6,6 +6,10 @@ type SyncJob = {
   running: boolean;
 };
 
+type StartSyncManagerOptions = {
+  runImmediately?: boolean;
+};
+
 const jobs = new Map<string, SyncJob>();
 let tickTimer: ReturnType<typeof setInterval> | null = null;
 let started = false;
@@ -65,13 +69,17 @@ function tick() {
 }
 
 /** Start the global sync tick. Call once at app init. */
-export function startSyncManager() {
+export function startSyncManager(options: StartSyncManagerOptions = {}) {
   if (started) return;
   started = true;
-  // Run all jobs immediately on first start
-  for (const job of jobs.values()) {
-    executeJob(job);
+
+  if (options.runImmediately ?? true) {
+    // Run all jobs immediately on first start
+    for (const job of jobs.values()) {
+      executeJob(job);
+    }
   }
+
   tickTimer = setInterval(tick, TICK_MS);
 }
 
