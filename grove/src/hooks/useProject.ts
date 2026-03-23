@@ -14,7 +14,7 @@ export function useProject() {
 
     // Initial load (blocking for first render)
     store.loadProjects().then(() => {
-      startSyncManager();
+      startSyncManager({ runImmediately: false });
     });
 
     return () => {

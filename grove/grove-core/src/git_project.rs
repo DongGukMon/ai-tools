@@ -6,11 +6,13 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::Mutex;
 use std::time::{Duration, SystemTime};
 use uuid::Uuid;
 
 const SOURCE_WORKTREE_NAME: &str = "source";
 const SOURCE_REMOTE_REFRESH_INTERVAL: Duration = Duration::from_secs(60);
+const MAX_PROJECT_LOAD_WORKERS: usize = 4;
 
 fn base_dir() -> PathBuf {
     PathBuf::from(config::load_app_config().base_dir)
@@ -345,6 +347,57 @@ fn project_from_entry(entry: ProjectEntry) -> Project {
     }
 }
 
+fn projects_from_entries(entries: Vec<ProjectEntry>) -> Vec<Project> {
+    if entries.len() <= 1 {
+        return entries.into_iter().map(project_from_entry).collect();
+    }
+
+    let len = entries.len();
+    let worker_count = project_load_worker_count(len);
+    let tasks = Mutex::new(entries.into_iter().enumerate());
+    let results = Mutex::new(
+        std::iter::repeat_with(|| None)
+            .take(len)
+            .collect::<Vec<Option<Project>>>(),
+    );
+
+    std::thread::scope(|scope| {
+        for _ in 0..worker_count {
+            let tasks = &tasks;
+            let results = &results;
+
+            scope.spawn(move || loop {
+                let next = tasks
+                    .lock()
+                    .expect("project task queue lock poisoned")
+                    .next();
+                let Some((idx, entry)) = next else {
+                    break;
+                };
+
+                let project = project_from_entry(entry);
+                results.lock().expect("project result lock poisoned")[idx] = Some(project);
+            });
+        }
+    });
+
+    results
+        .into_inner()
+        .expect("project result lock poisoned")
+        .into_iter()
+        .map(|project| project.expect("missing project load result"))
+        .collect()
+}
+
+fn project_load_worker_count(project_count: usize) -> usize {
+    std::thread::available_parallelism()
+        .map(usize::from)
+        .unwrap_or(1)
+        .min(MAX_PROJECT_LOAD_WORKERS)
+        .min(project_count)
+        .max(1)
+}
+
 fn check_source_behind_remote(source_path: &str) -> bool {
     let path = std::path::Path::new(source_path);
     if !path.exists() {
@@ -570,11 +623,7 @@ fn managed_source_dir(entry: &ProjectEntry) -> Result<PathBuf, String> {
 
 pub fn list_projects_impl() -> Result<Vec<Project>, String> {
     let config = load_reconciled_config()?;
-    Ok(config
-        .projects
-        .into_iter()
-        .map(project_from_entry)
-        .collect())
+    Ok(projects_from_entries(config.projects))
 }
 
 pub fn add_project_impl(url: &str) -> Result<Project, String> {
@@ -1506,6 +1555,66 @@ mod tests {
         let saved = config::load_config();
         assert_eq!(saved.projects.len(), 1);
         assert_eq!(saved.projects[0].id, "project-1");
+    }
+
+    #[test]
+    fn list_projects_preserves_config_order_when_loaded_in_parallel() {
+        let _lock = env_lock();
+        let home = TestHome::new();
+        let base_dir = home.root.join("grove-data");
+        let remotes_dir = home.root.join("remotes");
+
+        let project_specs = [
+            ("project-1", "alpha"),
+            ("project-2", "beta"),
+            ("project-3", "gamma"),
+        ];
+        let mut entries = Vec::new();
+
+        for (id, repo) in project_specs {
+            let source_dir = base_dir
+                .join("github.com")
+                .join("bang9")
+                .join(repo)
+                .join("source");
+            let (remote_dir, seed_dir) = create_bare_remote(&remotes_dir, repo, "main");
+
+            commit_and_push(
+                &seed_dir,
+                &remote_dir,
+                "main",
+                "README.md",
+                &format!("# {repo}\n"),
+                &format!("Initial {repo} commit"),
+            );
+
+            fs::create_dir_all(source_dir.parent().unwrap()).unwrap();
+            let remote_dir_str = remote_dir.to_string_lossy().to_string();
+            let source_dir_str = source_dir.to_string_lossy().to_string();
+            run_git_ok(
+                source_dir.parent().unwrap(),
+                &["clone", &remote_dir_str, &source_dir_str],
+            );
+
+            entries.push(project_entry(
+                id,
+                &format!("https://github.com/bang9/{repo}.git"),
+                &source_dir,
+            ));
+        }
+
+        save_test_config(
+            &base_dir,
+            vec![entries[1].clone(), entries[2].clone(), entries[0].clone()],
+        );
+
+        let project_ids = list_projects_impl()
+            .unwrap()
+            .into_iter()
+            .map(|project| project.id)
+            .collect::<Vec<_>>();
+
+        assert_eq!(project_ids, vec!["project-2", "project-3", "project-1"]);
     }
 
     #[test]
