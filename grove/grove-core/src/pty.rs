@@ -301,7 +301,7 @@ pub fn write(id: &str, data: &[u8]) -> Result<(), String> {
             instance.tracked.lock().ok().and_then(|mut state| {
                 let status = state.last_ai_status.clone();
                 let s = status.as_deref();
-                if tool_hooks::needs_idle_detection(s) && tool_hooks::is_idle(s) {
+                if tool_hooks::needs_idle_detection(s) && !tool_hooks::is_running(s) {
                     state.last_output_at = Some(Instant::now());
                     Some((state.session_name.clone(), tool_hooks::to_running(s.unwrap())))
                 } else {

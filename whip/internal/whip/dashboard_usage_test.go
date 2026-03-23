@@ -87,7 +87,7 @@ func TestRenderListViewPlacesUsageStripAboveFooter(t *testing.T) {
 
 func TestUsageCacheRoundTrip(t *testing.T) {
 	tmpDir := t.TempDir()
-	now := time.Date(2026, 3, 23, 12, 0, 0, 0, time.UTC)
+	now := time.Now().UTC()
 	claudeToday := 50.0
 	claudeWeek := 200.0
 
