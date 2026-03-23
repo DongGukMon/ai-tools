@@ -9,9 +9,10 @@ import { IconButton } from "../ui/button";
 interface Props {
   paneId: string;
   ptyId: string;
+  onReset: () => void;
 }
 
-function GlobalTerminalPanel({ paneId, ptyId }: Props) {
+function GlobalTerminalPanel({ paneId, ptyId, onReset }: Props) {
   const theme = useTerminalStore((s) => s.theme);
   const collapsed = usePanelLayoutStore((s) => s.globalTerminal.collapsed);
   const updateGlobalTerminal = usePanelLayoutStore(
@@ -69,21 +70,27 @@ function GlobalTerminalPanel({ paneId, ptyId }: Props) {
           "flex items-center justify-between border-t border-border bg-sidebar px-2 h-7 shrink-0",
         )}
       >
-        <svg
-          className={cn("text-muted-foreground")}
-          width="16"
-          height="14"
-          viewBox="0 0 18 14"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
+        <IconButton
+          onClick={onReset}
+          title="Reset Main Terminal"
+          aria-label="Reset Main Terminal"
         >
-          <rect x="0.75" y="0.75" width="16.5" height="12.5" rx="2" />
-          <polyline points="5,5 7.5,7 5,9" />
-          <line x1="9.5" y1="9" x2="13" y2="9" />
-        </svg>
+          <svg
+            className={cn("text-muted-foreground")}
+            width="16"
+            height="14"
+            viewBox="0 0 18 14"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <rect x="0.75" y="0.75" width="16.5" height="12.5" rx="2" />
+            <polyline points="5,5 7.5,7 5,9" />
+            <line x1="9.5" y1="9" x2="13" y2="9" />
+          </svg>
+        </IconButton>
         <IconButton onClick={toggle} title={collapsed ? "Expand" : "Collapse"}>
           {collapsed ? (
             <ChevronUp className={cn("size-3.5")} />
