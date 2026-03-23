@@ -103,7 +103,7 @@ const ProjectItem = memo(function ProjectItem({ project }: Props) {
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="pl-2 pr-2">
+    <div ref={setNodeRef} style={style} className={cn("pl-2 pr-2")}>
       {/* Project header */}
       <div
         className={cn(
