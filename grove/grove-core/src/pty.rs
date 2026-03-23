@@ -291,9 +291,12 @@ pub fn write(id: &str, data: &[u8]) -> Result<(), String> {
         instance.writer.write_all(data).map_err(|e| e.to_string())?;
 
         // Detect Enter for Codex idle→running transition.
+        // Also reset last_output_at so the idle timeout starts from Enter,
+        // not from the previous output (which could be minutes ago).
         if data.contains(&b'\r') {
-            instance.tracked.lock().ok().and_then(|state| {
+            instance.tracked.lock().ok().and_then(|mut state| {
                 if state.last_ai_status.as_deref() == Some("codex:idle") {
+                    state.last_output_at = Some(Instant::now());
                     Some(state.session_name.clone())
                 } else {
                     None
@@ -422,43 +425,30 @@ pub fn poll_bell_events() -> Result<Vec<PtyBellEvent>, String> {
 
         // Codex idle timeout: if output has been idle for CODEX_OUTPUT_IDLE_TIMEOUT
         // while status is "codex:running", transition back to "codex:idle".
-        //
-        // To avoid a TOCTOU race (output arriving between the idle check and
-        // the tmux write), we snapshot last_output_at before the tmux call,
-        // then revalidate after reacquiring the lock. If output arrived in
-        // the gap, we revert to running so the state machine self-heals.
+        // TUI apps like Codex produce periodic screen refreshes (cursor blink,
+        // status bar) so we don't revalidate after the transition — the next
+        // Enter keystroke will re-assert running.
         let idle_snapshot = if ai_status.as_deref() == Some("codex:running") {
-            tracked
-                .lock()
-                .ok()
-                .and_then(|state| state.last_output_at)
-                .filter(|t| t.elapsed() >= CODEX_OUTPUT_IDLE_TIMEOUT)
+            tracked.lock().ok().and_then(|state| match state.last_output_at {
+                Some(t) if t.elapsed() >= CODEX_OUTPUT_IDLE_TIMEOUT => Some(t),
+                // No output tracked (e.g. after app restart) — treat as idle.
+                None => Some(Instant::now()),
+                _ => None,
+            })
         } else {
             None
         };
 
-        let ai_status = if let Some(snapshot_at) = idle_snapshot {
+        let ai_status = if idle_snapshot.is_some() {
             let _ = tmux_set_option(
                 &session_name,
                 TMUX_GROVE_AI_STATUS_OPTION,
                 "codex:idle",
             );
-            // Revalidate: if output arrived after our snapshot, revert to running.
-            let output_arrived = tracked
-                .lock()
-                .ok()
-                .and_then(|state| state.last_output_at)
-                .is_some_and(|t| t > snapshot_at);
-            if output_arrived {
-                let _ = tmux_set_option(
-                    &session_name,
-                    TMUX_GROVE_AI_STATUS_OPTION,
-                    "codex:running",
-                );
-                ai_status // keep original "codex:running"
-            } else {
-                Some("codex:idle".to_string())
-            }
+            // No revalidation — TUI apps like Codex produce periodic screen
+            // refreshes (~2KB every ~4s) that would always trigger a false
+            // revert. The next Enter keystroke will re-assert running.
+            Some("codex:idle".to_string())
         } else {
             ai_status
         };
