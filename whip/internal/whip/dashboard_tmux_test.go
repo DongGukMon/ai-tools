@@ -3,6 +3,7 @@ package whip
 import (
 	"os/exec"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -154,5 +155,81 @@ func TestDetailScrollResetOnEnter(t *testing.T) {
 	dm := model.(DashboardModel)
 	if dm.detailScroll != 0 {
 		t.Errorf("expected detailScroll reset to 0, got %d", dm.detailScroll)
+	}
+}
+
+func TestNoteHistoryScrollBound(t *testing.T) {
+	store := tempStore(t)
+	task := NewTask("Notes", "desc", "/tmp")
+	for i := 0; i < 8; i++ {
+		task.Notes = append(task.Notes, Note{
+			Timestamp: time.Date(2026, time.March, 20, 10, i, 0, 0, time.Local),
+			Status:    string(StatusInProgress),
+			Content:   "line one for note\nline two for note\nline three for note",
+		})
+	}
+
+	m := NewDashboardModel(store, "test")
+	m.selectedTask = task
+	m.view = viewNoteHistory
+	m.height = 12
+
+	maxScroll := m.noteHistoryMaxScroll()
+	if maxScroll <= 0 {
+		t.Fatal("expected note history to overflow")
+	}
+
+	dm := m
+	for i := 0; i < maxScroll+10; i++ {
+		model, _ := dm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+		dm = model.(DashboardModel)
+	}
+
+	if dm.noteHistoryScroll != maxScroll {
+		t.Fatalf("noteHistoryScroll = %d, want clamped %d", dm.noteHistoryScroll, maxScroll)
+	}
+
+	model, _ := dm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	dm = model.(DashboardModel)
+	if dm.noteHistoryScroll != maxScroll-1 {
+		t.Fatalf("noteHistoryScroll = %d, want %d after one up", dm.noteHistoryScroll, maxScroll-1)
+	}
+}
+
+func TestMsgHistoryScrollBound(t *testing.T) {
+	store := tempStore(t)
+	task := NewTask("Messages", "desc", "/tmp")
+
+	m := NewDashboardModel(store, "test")
+	m.selectedTask = task
+	m.view = viewMsgHistory
+	m.height = 12
+	for i := 0; i < 8; i++ {
+		m.msgHistoryLines = append(m.msgHistoryLines, ircMessage{
+			From:      "peer",
+			Content:   "message line one\nmessage line two\nmessage line three",
+			Timestamp: time.Date(2026, time.March, 20, 10, i, 0, 0, time.Local),
+		})
+	}
+
+	maxScroll := m.msgHistoryMaxScroll()
+	if maxScroll <= 0 {
+		t.Fatal("expected message history to overflow")
+	}
+
+	dm := m
+	for i := 0; i < maxScroll+10; i++ {
+		model, _ := dm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+		dm = model.(DashboardModel)
+	}
+
+	if dm.msgHistoryScroll != maxScroll {
+		t.Fatalf("msgHistoryScroll = %d, want clamped %d", dm.msgHistoryScroll, maxScroll)
+	}
+
+	model, _ := dm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	dm = model.(DashboardModel)
+	if dm.msgHistoryScroll != maxScroll-1 {
+		t.Fatalf("msgHistoryScroll = %d, want %d after one up", dm.msgHistoryScroll, maxScroll-1)
 	}
 }

@@ -145,13 +145,13 @@ type DashboardModel struct {
 	remoteWorkspace string
 	serveNotices    []string
 
-	noteHistoryScroll    int
-	msgHistoryScroll     int
-	msgHistoryLines      []ircMessage
-	statsScroll int
-	statsSections        []statsSection
-	usageState           dashboardUsageState
-	usageLoading         bool
+	noteHistoryScroll int
+	msgHistoryScroll  int
+	msgHistoryLines   []ircMessage
+	statsScroll       int
+	statsSections     []statsSection
+	usageState        dashboardUsageState
+	usageLoading      bool
 
 	programRef *programHolder
 
@@ -257,6 +257,10 @@ func (m DashboardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		m.detailScroll = clampScrollOffset(m.detailScroll, m.detailMaxScroll())
+		m.noteHistoryScroll = clampScrollOffset(m.noteHistoryScroll, m.noteHistoryMaxScroll())
+		m.msgHistoryScroll = clampScrollOffset(m.msgHistoryScroll, m.msgHistoryMaxScroll())
+		m.statsScroll = clampScrollOffset(m.statsScroll, m.statsMaxScroll())
 
 	case tasksLoadedMsg:
 		if msg.mode != m.listMode {

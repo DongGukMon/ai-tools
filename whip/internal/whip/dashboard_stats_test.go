@@ -53,7 +53,7 @@ func TestDashboardStatsViewIncludesAllTasks(t *testing.T) {
 		t.Fatalf("completion percent = %.0f, want 75", got)
 	}
 	if got := statsRowByLabel(t, overview, "Avg Duration").Count; got != int((2 * time.Hour).Seconds()) {
-		t.Fatalf("avg duration seconds = %d, want %d", got, int((2*time.Hour).Seconds()))
+		t.Fatalf("avg duration seconds = %d, want %d", got, int((2 * time.Hour).Seconds()))
 	}
 
 	typeRows := statsSectionByTitle(t, dm.statsSections, "Type").Rows
@@ -124,6 +124,49 @@ func TestDashboardStatsViewScrollAndBack(t *testing.T) {
 	dm = updated.(DashboardModel)
 	if dm.view != viewList {
 		t.Fatalf("view = %v, want list after esc", dm.view)
+	}
+}
+
+func TestDashboardStatsViewClampsOverscroll(t *testing.T) {
+	store := tempStore(t)
+	model := NewDashboardModel(store, "test")
+	model.view = viewStats
+	model.height = 12
+
+	for idx, taskType := range AllTaskTypes() {
+		task := statsTestTask(
+			"Task "+taskType,
+			taskType,
+			"claude",
+			"medium",
+			GlobalWorkspaceName,
+			StatusCompleted,
+			time.Date(2026, time.March, 20, 8, idx, 0, 0, time.Local),
+			time.Duration(idx+1)*time.Hour,
+		)
+		model.tasks = append(model.tasks, task)
+	}
+	model.statsSections = model.computeStatsSections()
+
+	maxScroll := model.statsMaxScroll()
+	if maxScroll <= 0 {
+		t.Fatal("expected stats view to overflow")
+	}
+
+	dm := model
+	for i := 0; i < maxScroll+10; i++ {
+		updated, _ := dm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+		dm = updated.(DashboardModel)
+	}
+
+	if dm.statsScroll != maxScroll {
+		t.Fatalf("statsScroll = %d, want clamped %d", dm.statsScroll, maxScroll)
+	}
+
+	updated, _ := dm.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	dm = updated.(DashboardModel)
+	if dm.statsScroll != maxScroll-1 {
+		t.Fatalf("statsScroll = %d, want %d after one up", dm.statsScroll, maxScroll-1)
 	}
 }
 

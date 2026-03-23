@@ -190,28 +190,23 @@ func (m DashboardModel) renderDetailView(w int) string {
 		}
 
 		totalDesc := len(wrappedLines)
-		maxScroll := totalDesc - maxDescLines
-		if maxScroll < 0 {
-			maxScroll = 0
-		}
-		if m.detailScroll > maxScroll {
-			m.detailScroll = maxScroll
-		}
+		maxScroll := scrollMax(totalDesc, maxDescLines)
+		detailScroll := clampScrollOffset(m.detailScroll, maxScroll)
 
 		if totalDesc > maxDescLines {
 			scrollInfo := lipgloss.NewStyle().Foreground(colorSubtle).Render(
-				fmt.Sprintf(" (%d-%d/%d ↑↓)", m.detailScroll+1, min(m.detailScroll+maxDescLines, totalDesc), totalDesc))
+				fmt.Sprintf(" (%d-%d/%d ↑↓)", detailScroll+1, min(detailScroll+maxDescLines, totalDesc), totalDesc))
 			descLabel += scrollInfo
 		}
 
 		b.WriteString("  " + lipgloss.NewStyle().Bold(true).Foreground(colorAccent).Render("Description") + descLabel[len("Description"):] + "\n")
 		b.WriteString("  " + dimStyle.Render(strings.Repeat("─", w-4)) + "\n")
 
-		end := m.detailScroll + maxDescLines
+		end := detailScroll + maxDescLines
 		if end > totalDesc {
 			end = totalDesc
 		}
-		visible := wrappedLines[m.detailScroll:end]
+		visible := wrappedLines[detailScroll:end]
 		for _, line := range visible {
 			b.WriteString("  " + lipgloss.NewStyle().Foreground(colorMuted).Render(line) + "\n")
 		}

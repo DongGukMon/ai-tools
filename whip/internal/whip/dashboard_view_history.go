@@ -25,51 +25,9 @@ func (m DashboardModel) renderNoteHistoryView(w int) string {
 		lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render("Notes")
 	b.WriteString(breadcrumb + "\n\n")
 
-	// Reverse: newest first
-	notes := make([]Note, len(t.Notes))
-	for i, n := range t.Notes {
-		notes[len(t.Notes)-1-i] = n
-	}
-
-	// Build rendered lines (flat, one entry per display line for correct scrolling)
-	var lines []string
-	for _, n := range notes {
-		ts := lipgloss.NewStyle().Foreground(colorSubtle).Render(n.Timestamp.Format("01/02 15:04"))
-		st := renderNoteStatus(TaskStatus(n.Status))
-
-		prefixWidth := 2 + 11 + 2 + lipgloss.Width(st) + 2
-		contentWidth := w - prefixWidth
-		indent := strings.Repeat(" ", prefixWidth)
-
-		wrappedContent := wrapWithIndent(
-			lipgloss.NewStyle().Foreground(colorText).Render(n.Content),
-			contentWidth,
-			indent,
-		)
-		entry := fmt.Sprintf("  %s  %s  %s", ts, st, wrappedContent)
-		// Flatten multi-line entries for correct scrolling
-		for _, l := range strings.Split(entry, "\n") {
-			lines = append(lines, l)
-		}
-	}
-
-	if len(lines) == 0 {
-		lines = append(lines, lipgloss.NewStyle().Foreground(colorSubtle).Italic(true).Render("  (no notes)"))
-	}
-
-	// Scrolling
-	maxLines := m.height - 8
-	if maxLines < 3 {
-		maxLines = 3
-	}
-	maxScroll := len(lines) - maxLines
-	if maxScroll < 0 {
-		maxScroll = 0
-	}
-	scroll := m.noteHistoryScroll
-	if scroll > maxScroll {
-		scroll = maxScroll
-	}
+	lines := m.noteHistoryLines(w)
+	maxLines := m.historyMaxLines()
+	scroll := clampScrollOffset(m.noteHistoryScroll, scrollMax(len(lines), maxLines))
 
 	end := scroll + maxLines
 	if end > len(lines) {
@@ -105,46 +63,9 @@ func (m DashboardModel) renderMsgHistoryView(w int) string {
 		lipgloss.NewStyle().Foreground(colorSecondary).Bold(true).Render("Messages")
 	b.WriteString(breadcrumb + "\n\n")
 
-	msgs := m.msgHistoryLines
-
-	// Build rendered lines (flat, one entry per display line for correct scrolling)
-	var lines []string
-	for _, msg := range msgs {
-		ts := lipgloss.NewStyle().Foreground(colorSubtle).Render(msg.Timestamp.Format("01/02 15:04"))
-		from := lipgloss.NewStyle().Foreground(colorAccent).Render(msg.From)
-
-		prefixWidth := 2 + 11 + 2 + lipgloss.Width(from) + 2
-		contentWidth := w - prefixWidth
-		indent := strings.Repeat(" ", prefixWidth)
-
-		wrappedContent := wrapWithIndent(
-			lipgloss.NewStyle().Foreground(colorText).Render(msg.Content),
-			contentWidth,
-			indent,
-		)
-		entry := fmt.Sprintf("  %s  %s: %s", ts, from, wrappedContent)
-		for _, l := range strings.Split(entry, "\n") {
-			lines = append(lines, l)
-		}
-	}
-
-	if len(lines) == 0 {
-		lines = append(lines, lipgloss.NewStyle().Foreground(colorSubtle).Italic(true).Render("  (no messages)"))
-	}
-
-	// Scrolling
-	maxLines := m.height - 8
-	if maxLines < 3 {
-		maxLines = 3
-	}
-	maxScroll := len(lines) - maxLines
-	if maxScroll < 0 {
-		maxScroll = 0
-	}
-	scroll := m.msgHistoryScroll
-	if scroll > maxScroll {
-		scroll = maxScroll
-	}
+	lines := m.buildMsgHistoryLines(w)
+	maxLines := m.historyMaxLines()
+	scroll := clampScrollOffset(m.msgHistoryScroll, scrollMax(len(lines), maxLines))
 
 	end := scroll + maxLines
 	if end > len(lines) {

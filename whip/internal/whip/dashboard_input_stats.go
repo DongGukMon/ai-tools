@@ -8,11 +8,9 @@ func (m DashboardModel) updateStats(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.view = viewList
 		m.statsScroll = 0
 	case "up", "k":
-		if m.statsScroll > 0 {
-			m.statsScroll--
-		}
+		m.statsScroll = stepScrollOffset(m.statsScroll, -1, m.statsMaxScroll())
 	case "down", "j":
-		m.statsScroll++
+		m.statsScroll = stepScrollOffset(m.statsScroll, 1, m.statsMaxScroll())
 	case "r":
 		return m, m.loadTasks()
 	case "ctrl+c":

@@ -212,22 +212,8 @@ func (m DashboardModel) renderStatsView(w int) string {
 	}
 
 	lines := m.renderStatsContentLines(w)
-	maxLines := m.height - 8
-	if maxLines < 4 {
-		maxLines = 4
-	}
-
-	maxScroll := len(lines) - maxLines
-	if maxScroll < 0 {
-		maxScroll = 0
-	}
-	scroll := m.statsScroll
-	if scroll > maxScroll {
-		scroll = maxScroll
-	}
-	if scroll < 0 {
-		scroll = 0
-	}
+	maxLines := m.statsMaxLines()
+	scroll := clampScrollOffset(m.statsScroll, scrollMax(len(lines), maxLines))
 
 	end := scroll + maxLines
 	if end > len(lines) {

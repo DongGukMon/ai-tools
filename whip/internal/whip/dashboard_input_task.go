@@ -145,13 +145,9 @@ func (m DashboardModel) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.selectedTask = nil
 		m.detailScroll = 0
 	case "up", "k":
-		if m.detailScroll > 0 {
-			m.detailScroll--
-		}
+		m.detailScroll = stepScrollOffset(m.detailScroll, -1, m.detailMaxScroll())
 	case "down", "j":
-		if m.selectedTask != nil && m.detailScroll < m.detailMaxScroll() {
-			m.detailScroll++
-		}
+		m.detailScroll = stepScrollOffset(m.detailScroll, 1, m.detailMaxScroll())
 	case "a":
 		if m.canArchiveSelectedTask() {
 			return m, m.archiveSelectedTask()
@@ -217,11 +213,9 @@ func (m DashboardModel) updateNoteHistory(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.view = viewDetail
 		m.noteHistoryScroll = 0
 	case "up", "k":
-		if m.noteHistoryScroll > 0 {
-			m.noteHistoryScroll--
-		}
+		m.noteHistoryScroll = stepScrollOffset(m.noteHistoryScroll, -1, m.noteHistoryMaxScroll())
 	case "down", "j":
-		m.noteHistoryScroll++
+		m.noteHistoryScroll = stepScrollOffset(m.noteHistoryScroll, 1, m.noteHistoryMaxScroll())
 	case "ctrl+c":
 		return m, tea.Quit
 	}
@@ -235,11 +229,9 @@ func (m DashboardModel) updateMsgHistory(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.msgHistoryScroll = 0
 		m.msgHistoryLines = nil
 	case "up", "k":
-		if m.msgHistoryScroll > 0 {
-			m.msgHistoryScroll--
-		}
+		m.msgHistoryScroll = stepScrollOffset(m.msgHistoryScroll, -1, m.msgHistoryMaxScroll())
 	case "down", "j":
-		m.msgHistoryScroll++
+		m.msgHistoryScroll = stepScrollOffset(m.msgHistoryScroll, 1, m.msgHistoryMaxScroll())
 	case "ctrl+c":
 		return m, tea.Quit
 	}
