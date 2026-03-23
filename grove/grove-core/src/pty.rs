@@ -16,6 +16,7 @@ use std::fmt::Write as _;
 use std::io::{Read, Write};
 use std::process::{Command, Output};
 use std::sync::{Arc, Mutex, OnceLock};
+use std::time::Instant;
 
 const MAX_SCROLLBACK_BYTES: usize = 256 * 1024;
 const TMUX_NOT_FOUND_ERROR: &str = "tmux is required but was not found in PATH";
@@ -33,6 +34,7 @@ const TMUX_ESCAPE_TIME_VALUE: &str = "100";
 const WORKTREE_HASH_LEN: usize = 12;
 const PANE_PREFIX_LEN: usize = 8;
 const PANE_HASH_LEN: usize = 4;
+const CODEX_OUTPUT_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
 
 pub trait PtyEventSink: Send + Sync + 'static {
     fn on_output(&self, pty_id: &str, data: &[u8]);
@@ -48,6 +50,7 @@ struct PtyRuntimeState {
     scrollback_truncated: bool,
     last_bell_flag: bool,
     last_ai_status: Option<String>,
+    last_output_at: Option<Instant>,
 }
 
 impl PtyRuntimeState {
@@ -67,6 +70,7 @@ impl PtyRuntimeState {
             scrollback_truncated: false,
             last_bell_flag: false,
             last_ai_status: None,
+            last_output_at: None,
         };
 
         if let Some(restore) = restore {
@@ -269,6 +273,7 @@ fn read_pty_output(
             Ok(n) => {
                 if let Ok(mut state) = tracked.lock() {
                     state.append_scrollback(&buf[..n]);
+                    state.last_output_at = Some(Instant::now());
                 }
                 sink.on_output(&id, &buf[..n]);
             }
@@ -278,11 +283,37 @@ fn read_pty_output(
 }
 
 pub fn write(id: &str, data: &[u8]) -> Result<(), String> {
-    let mut reg = registry().lock().map_err(|e| e.to_string())?;
-    let instance = reg
-        .get_mut(id)
-        .ok_or_else(|| format!("PTY not found: {}", id))?;
-    instance.writer.write_all(data).map_err(|e| e.to_string())
+    let transition_session = {
+        let mut reg = registry().lock().map_err(|e| e.to_string())?;
+        let instance = reg
+            .get_mut(id)
+            .ok_or_else(|| format!("PTY not found: {}", id))?;
+        instance.writer.write_all(data).map_err(|e| e.to_string())?;
+
+        // Detect Enter for Codex idle→running transition.
+        if data.contains(&b'\r') {
+            instance.tracked.lock().ok().and_then(|state| {
+                if state.last_ai_status.as_deref() == Some("codex:idle") {
+                    Some(state.session_name.clone())
+                } else {
+                    None
+                }
+            })
+        } else {
+            None
+        }
+    };
+
+    // Set tmux option outside of registry lock to avoid holding locks during shell-out.
+    if let Some(session_name) = transition_session {
+        let _ = tmux_set_option(
+            &session_name,
+            TMUX_GROVE_AI_STATUS_OPTION,
+            "codex:running",
+        );
+    }
+
+    Ok(())
 }
 
 pub fn resize(id: &str, cols: u16, rows: u16) -> Result<(), String> {
@@ -384,11 +415,53 @@ pub fn poll_bell_events() -> Result<Vec<PtyBellEvent>, String> {
             }
         };
 
-        let ai_status =
-            match tmux_session_option(&session_name, TMUX_GROVE_AI_STATUS_OPTION) {
-                Ok(value) => value,
-                Err(_) => None,
-            };
+        let ai_status = match tmux_session_option(&session_name, TMUX_GROVE_AI_STATUS_OPTION) {
+            Ok(value) => value,
+            Err(_) => None,
+        };
+
+        // Codex idle timeout: if output has been idle for CODEX_OUTPUT_IDLE_TIMEOUT
+        // while status is "codex:running", transition back to "codex:idle".
+        //
+        // To avoid a TOCTOU race (output arriving between the idle check and
+        // the tmux write), we snapshot last_output_at before the tmux call,
+        // then revalidate after reacquiring the lock. If output arrived in
+        // the gap, we revert to running so the state machine self-heals.
+        let idle_snapshot = if ai_status.as_deref() == Some("codex:running") {
+            tracked
+                .lock()
+                .ok()
+                .and_then(|state| state.last_output_at)
+                .filter(|t| t.elapsed() >= CODEX_OUTPUT_IDLE_TIMEOUT)
+        } else {
+            None
+        };
+
+        let ai_status = if let Some(snapshot_at) = idle_snapshot {
+            let _ = tmux_set_option(
+                &session_name,
+                TMUX_GROVE_AI_STATUS_OPTION,
+                "codex:idle",
+            );
+            // Revalidate: if output arrived after our snapshot, revert to running.
+            let output_arrived = tracked
+                .lock()
+                .ok()
+                .and_then(|state| state.last_output_at)
+                .is_some_and(|t| t > snapshot_at);
+            if output_arrived {
+                let _ = tmux_set_option(
+                    &session_name,
+                    TMUX_GROVE_AI_STATUS_OPTION,
+                    "codex:running",
+                );
+                ai_status // keep original "codex:running"
+            } else {
+                Some("codex:idle".to_string())
+            }
+        } else {
+            ai_status
+        };
 
         let mut state = tracked.lock().map_err(|e| e.to_string())?;
         let bell = consume_bell_edge(&mut state.last_bell_flag, bell_flag);
@@ -913,10 +986,12 @@ fn tmux_set_option(session_name: &str, option: &str, value: &str) -> Result<(), 
     if output.status.success() {
         return Ok(());
     }
-
+    let message = tmux_output_message(&output);
+    if tmux_session_missing(&message) {
+        return Ok(());
+    }
     Err(format!(
-        "failed to set tmux option {option} on {session_name}: {}",
-        tmux_output_message(&output)
+        "failed to set tmux option {option} on {session_name}: {message}"
     ))
 }
 
