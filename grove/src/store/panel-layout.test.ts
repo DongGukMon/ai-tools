@@ -35,7 +35,7 @@ describe("usePanelLayoutStore", () => {
   });
 
   it("generates and persists a pane id when loading legacy layouts", async () => {
-    vi.spyOn(crypto, "randomUUID").mockReturnValue("pane-generated");
+    vi.spyOn(crypto, "randomUUID").mockReturnValue("00000000-0000-0000-0000-000000000001" as `${string}-${string}-${string}-${string}-${string}`);
     loadPanelLayoutsMock.mockResolvedValue(
       JSON.stringify({
         main: [0.2, 0.5, 0.3],
@@ -53,7 +53,7 @@ describe("usePanelLayoutStore", () => {
     expect(usePanelLayoutStore.getState().globalTerminal).toEqual({
       collapsed: false,
       ratio: 0.4,
-      paneId: "pane-generated",
+      paneId: "00000000-0000-0000-0000-000000000001",
     });
     expect(savePanelLayoutsMock).toHaveBeenCalledWith(
       JSON.stringify({
@@ -62,23 +62,23 @@ describe("usePanelLayoutStore", () => {
         globalTerminal: {
           collapsed: false,
           ratio: 0.4,
-          paneId: "pane-generated",
+          paneId: "00000000-0000-0000-0000-000000000001",
         },
       }),
     );
   });
 
   it("resets the global terminal pane id without changing layout state", () => {
-    vi.spyOn(crypto, "randomUUID").mockReturnValue("pane-reset");
+    vi.spyOn(crypto, "randomUUID").mockReturnValue("00000000-0000-0000-0000-000000000002" as `${string}-${string}-${string}-${string}-${string}`);
 
     const paneId = usePanelLayoutStore.getState().resetGlobalTerminalPaneId();
     vi.advanceTimersByTime(500);
 
-    expect(paneId).toBe("pane-reset");
+    expect(paneId).toBe("00000000-0000-0000-0000-000000000002");
     expect(usePanelLayoutStore.getState().globalTerminal).toEqual({
       collapsed: true,
       ratio: 0.3,
-      paneId: "pane-reset",
+      paneId: "00000000-0000-0000-0000-000000000002",
     });
     expect(savePanelLayoutsMock).toHaveBeenCalledWith(
       JSON.stringify({
@@ -87,7 +87,7 @@ describe("usePanelLayoutStore", () => {
         globalTerminal: {
           collapsed: true,
           ratio: 0.3,
-          paneId: "pane-reset",
+          paneId: "00000000-0000-0000-0000-000000000002",
         },
       }),
     );
