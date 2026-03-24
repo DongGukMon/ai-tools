@@ -2,6 +2,10 @@
 
 Tauri v2 macOS app — Git project manager + split terminal + diff viewer.
 
+## Feature Docs
+
+- [Terminal Broadcast](docs/terminal-broadcast.md) — PiP, Mirror, consumer model, persistence policy
+
 ## Stack
 
 - **Backend**: Rust (Tauri v2, portable-pty, git2, plist)
