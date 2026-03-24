@@ -7,12 +7,14 @@ import {
   createPty as ipcCreatePty,
   getAppConfig,
 } from "../lib/platform";
+import { useBroadcastStore } from "../store/broadcast";
 import { runCommand, runCommandSafely } from "../lib/command";
 import { log, error as logError } from "../lib/logger";
 
 interface TabPtyState {
   ptyId: string;
   ready: boolean;
+  mirror: boolean;
 }
 
 export function useGlobalTerminal() {
@@ -65,7 +67,7 @@ export function useGlobalTerminal() {
           return;
         }
 
-        tabPtyMapRef.current.set(tab.id, { ptyId, ready: true });
+        tabPtyMapRef.current.set(tab.id, { ptyId, ready: true, mirror: false });
         setTabPtyMap(new Map(tabPtyMapRef.current));
         log("global-terminal", "pty created for tab", { tabId: tab.id });
       } catch (e) {
@@ -82,19 +84,25 @@ export function useGlobalTerminal() {
     if (!theme) return;
 
     for (const tab of tabs) {
-      if (!tabPtyMapRef.current.has(tab.id) && !pendingRef.current.has(tab.id)) {
-        void createPtyForTab(tab);
+      if (tabPtyMapRef.current.has(tab.id) || pendingRef.current.has(tab.id)) continue;
+      // Mirror tabs use an existing PTY — no need to spawn a new one
+      if (tab.mirrorPtyId) {
+        tabPtyMapRef.current.set(tab.id, { ptyId: tab.mirrorPtyId, ready: true, mirror: true });
+        continue;
       }
+      void createPtyForTab(tab);
     }
 
-    // Clean up PTYs for removed tabs
+    // Clean up PTYs for removed tabs (don't close mirror PTYs — they belong to worktree)
     const tabIds = new Set(tabs.map((t) => t.id));
     for (const [tabId, state] of tabPtyMapRef.current) {
       if (!tabIds.has(tabId)) {
         tabPtyMapRef.current.delete(tabId);
-        void runCommandSafely(() => ipcClosePty(state.ptyId), {
-          errorToast: false,
-        });
+        if (!state.mirror) {
+          void runCommandSafely(() => ipcClosePty(state.ptyId), {
+            errorToast: false,
+          });
+        }
       }
     }
     // Only update state if map actually changed
@@ -108,9 +116,30 @@ export function useGlobalTerminal() {
     usePanelLayoutStore.getState().addGlobalTerminalTab();
   }, []);
 
+  const addMirrorTab = useCallback((title: string, ptyId: string) => {
+    return usePanelLayoutStore.getState().addGlobalTerminalMirrorTab(title, ptyId);
+  }, []);
+
+  const removeMirrorTabs = useCallback(() => {
+    const gt = usePanelLayoutStore.getState().globalTerminal;
+    for (const tab of gt.tabs) {
+      if (tab.mirrorPtyId) {
+        usePanelLayoutStore.getState().removeGlobalTerminalTab(tab.id);
+      }
+    }
+  }, []);
+
   const removeTab = useCallback((tabId: string) => {
+    // If removing a mirror tab, stop the broadcast so the original pane can re-attach.
+    const gt = usePanelLayoutStore.getState().globalTerminal;
+    const tab = gt.tabs.find((t) => t.id === tabId);
+    if (tab?.mirrorPtyId) {
+      const { active, stopBroadcast } = useBroadcastStore.getState();
+      if (active?.ptyId === tab.mirrorPtyId && active.target === "mirror") {
+        stopBroadcast();
+      }
+    }
     usePanelLayoutStore.getState().removeGlobalTerminalTab(tabId);
-    // PTY cleanup handled by the effect above
   }, []);
 
   const selectTab = useCallback((tabId: string) => {
@@ -131,6 +160,8 @@ export function useGlobalTerminal() {
     tabs,
     activeTabId,
     addTab,
+    addMirrorTab,
+    removeMirrorTabs,
     removeTab,
     selectTab,
     getTabPtyId,

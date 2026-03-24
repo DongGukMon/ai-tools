@@ -1,8 +1,9 @@
 import { memo, useEffect, useLayoutEffect, useRef } from "react";
 import { ChevronUp, ChevronDown } from "lucide-react";
 import { useTerminalStore } from "../../store/terminal";
+import { useBroadcastStore } from "../../store/broadcast";
 import { usePanelLayoutStore, type GlobalTerminalTab } from "../../store/panel-layout";
-import { acquireTerminalRuntime } from "../../lib/terminal-runtime";
+import { acquireTerminalRuntime, getRuntime } from "../../lib/terminal-runtime";
 import { cn } from "../../lib/cn";
 import { IconButton } from "../ui/button";
 import GlobalTerminalTabBar from "./GlobalTerminalTabBar";
@@ -21,6 +22,7 @@ const TerminalTabContent = memo(function TerminalTabContent({
   direction,
 }: TerminalTabContentProps) {
   const theme = useTerminalStore((s) => s.theme);
+  const broadcastActive = useBroadcastStore((s) => s.active);
   const termRef = useRef<HTMLDivElement>(null);
   const runtimeRef = useRef<ReturnType<
     typeof acquireTerminalRuntime
@@ -30,17 +32,33 @@ const TerminalTabContent = memo(function TerminalTabContent({
     const container = termRef.current;
     if (!container || !ptyId) return;
 
-    const runtime = acquireTerminalRuntime(tab.paneId, theme);
+    const isMirror = Boolean(tab.mirrorPtyId);
+    const runtime = isMirror
+      ? broadcastActive?.target === "mirror" && broadcastActive.ptyId === tab.mirrorPtyId
+        ? getRuntime(broadcastActive.paneId)
+        : null
+      : acquireTerminalRuntime(tab.paneId, theme);
+    if (!runtime) return;
+
     runtimeRef.current = runtime;
     runtime.setPtyId(ptyId);
     runtime.attach(container);
 
     return () => {
       runtime.detach();
-      runtime.release();
+      if (!isMirror) {
+        runtime.release();
+      }
       runtimeRef.current = null;
     };
-  }, [tab.paneId, ptyId, theme]);
+  }, [
+    broadcastActive?.paneId,
+    broadcastActive?.ptyId,
+    broadcastActive?.target,
+    ptyId,
+    tab.mirrorPtyId,
+    tab.paneId,
+  ]);
 
   // Refit when becoming active
   useEffect(() => {

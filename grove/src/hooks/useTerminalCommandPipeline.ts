@@ -7,6 +7,11 @@ import {
   type TerminalCommandDefinition,
 } from "../lib/terminal-command-pipeline";
 import { useTerminalStore } from "../store/terminal";
+import { useProjectStore } from "../store/project";
+import { usePanelLayoutStore } from "../store/panel-layout";
+import { useBroadcastStore } from "../store/broadcast";
+import { getRuntimeSize } from "../lib/terminal-runtime";
+import { collectTerminalPanes } from "../lib/terminal-session";
 import { TERMINAL_TOOLBAR_COMMANDS } from "../lib/terminal-command-registry";
 import { useTerminal } from "./useTerminal";
 import { countLeaves } from "../lib/split-tree";
@@ -44,6 +49,37 @@ export function useTerminalCommandPipeline({ openThemeSettings }: Options) {
     [focusedPtyId],
   );
 
+  const mirrorTerminal = useCallback(() => {
+    const ptyId = useTerminalStore.getState().focusedPtyId;
+    if (!ptyId) return;
+
+    const { active, isBroadcasting, startBroadcast } = useBroadcastStore.getState();
+    if (active || isBroadcasting(ptyId)) return;
+
+    // Find paneId for the focused pty
+    const sessions = useTerminalStore.getState().sessions;
+    let paneId = "";
+    for (const node of Object.values(sessions)) {
+      for (const pane of collectTerminalPanes(node)) {
+        if (pane.ptyId === ptyId) { paneId = pane.paneId; break; }
+      }
+      if (paneId) break;
+    }
+    if (!paneId) return;
+
+    const worktree = useProjectStore.getState().selectedWorktree;
+    const projects = useProjectStore.getState().projects;
+    const project = worktree
+      ? projects.find((p) => p.worktrees.some((w) => w.path === worktree.path))
+      : null;
+    const label = project ? `${project.org}/${project.repo}` : "Terminal";
+    const title = worktree ? `${label} > ${worktree.branch}` : label;
+
+    const { cols, rows } = getRuntimeSize(paneId);
+    startBroadcast(ptyId, paneId, "mirror", cols, rows);
+    usePanelLayoutStore.getState().addGlobalTerminalMirrorTab(title, ptyId);
+  }, []);
+
   const context = useMemo(
     () => ({
       activeWorktree,
@@ -52,12 +88,14 @@ export function useTerminalCommandPipeline({ openThemeSettings }: Options) {
       openThemeSettings,
       splitTerminal: splitCurrent,
       closeTerminal: closeCurrent,
+      mirrorTerminal,
       sendText,
     }),
     [
       activeWorktree,
       closeCurrent,
       focusedPtyId,
+      mirrorTerminal,
       terminalCount,
       openThemeSettings,
       sendText,

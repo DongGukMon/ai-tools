@@ -116,6 +116,16 @@ export function acquireTerminalRuntime(
   return runtime;
 }
 
+export function getRuntime(paneId: string) {
+  return runtimes.get(paneId) ?? null;
+}
+
+export function getRuntimeSize(paneId: string): { cols: number; rows: number } {
+  const runtime = runtimes.get(paneId);
+  if (!runtime) return { cols: 80, rows: 24 };
+  return { cols: runtime.term.cols, rows: runtime.term.rows };
+}
+
 export function getTerminalPaneLaunchCwd(paneId: string): string | undefined {
   return runtimes.get(paneId)?.launchCwd ?? paneSeeds.get(paneId)?.launchCwd;
 }
