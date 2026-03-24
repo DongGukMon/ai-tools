@@ -73,7 +73,7 @@ export function useTerminalCommandPipeline({ openThemeSettings }: Options) {
       ? projects.find((p) => p.worktrees.some((w) => w.path === worktree.path))
       : null;
     const label = project ? `${project.org}/${project.repo}` : "Terminal";
-    const title = worktree ? `${label} > ${worktree.branch}` : label;
+    const title = worktree ? `${label} > ${worktree.name}` : label;
 
     const { cols, rows } = getRuntimeSize(paneId);
     const snapshot = captureRuntimeSnapshot(paneId);
