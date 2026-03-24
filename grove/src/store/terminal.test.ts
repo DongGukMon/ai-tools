@@ -61,4 +61,32 @@ describe("useTerminalStore bell state", () => {
 
     expect(useTerminalStore.getState().bellPtyIds).toEqual(new Set(["pty-b"]));
   });
+
+  it("switches active worktree without a null gap when removing the active session", () => {
+    useTerminalStore.setState({
+      sessions: {
+        "/tmp/source": makeLeaf("pane-source", "pty-source"),
+        "/tmp/feature": makeLeaf("pane-feature", "pty-feature"),
+      },
+      activeWorktree: "/tmp/feature",
+      focusedPtyId: "pty-feature",
+      bellPtyIds: new Set(["pty-feature", "pty-source"]),
+      aiSessions: {
+        "pty-source": { tool: "codex", status: "attention" },
+      },
+    });
+
+    useTerminalStore
+      .getState()
+      .removeSession("/tmp/feature", "/tmp/source");
+
+    expect(useTerminalStore.getState().sessions["/tmp/feature"]).toBeUndefined();
+    expect(useTerminalStore.getState().activeWorktree).toBe("/tmp/source");
+    expect(useTerminalStore.getState().focusedPtyId).toBe("pty-source");
+    expect(useTerminalStore.getState().bellPtyIds).toEqual(new Set());
+    expect(useTerminalStore.getState().aiSessions["pty-source"]).toEqual({
+      tool: "codex",
+      status: "idle",
+    });
+  });
 });

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Project, Worktree } from "../types";
+import type { Project, SplitNode, Worktree } from "../types";
 
 const runCommandMock = vi.fn();
 const runCommandSafelyMock = vi.fn();
@@ -22,6 +22,7 @@ vi.mock("../lib/platform", () => ({
 
 import * as tauri from "../lib/platform";
 import { useProjectStore } from "./project";
+import { useTerminalStore } from "./terminal";
 
 function makeWorktree(name: string, branch = name): Worktree {
   return {
@@ -42,6 +43,14 @@ function makeProject(worktrees: Worktree[]): Project {
     sourceHasChanges: false,
     sourceBehindRemote: false,
     worktrees,
+  };
+}
+
+function makeLeaf(id: string, ptyId: string): SplitNode {
+  return {
+    id,
+    type: "leaf",
+    ptyId,
   };
 }
 
@@ -69,6 +78,15 @@ describe("useProjectStore", () => {
       projects: [],
       selectedWorktree: null,
       loading: false,
+    });
+    useTerminalStore.setState({
+      sessions: {},
+      activeWorktree: null,
+      focusedPtyId: null,
+      bellPtyIds: new Set<string>(),
+      aiSessions: {},
+      theme: null,
+      detectedTheme: null,
     });
   });
 
@@ -134,5 +152,51 @@ describe("useProjectStore", () => {
     await useProjectStore.getState().addProject("git@github.com:bang9/grove.git");
 
     expect(useProjectStore.getState().projects).toEqual([returnedProject]);
+  });
+
+  it("selects source worktree after removing the selected worktree", async () => {
+    const selectedWorktree = makeWorktree("feature-a");
+    useProjectStore.setState({
+      projects: [makeProject([selectedWorktree])],
+      selectedWorktree,
+      loading: false,
+    });
+
+    useTerminalStore.setState({
+      sessions: {
+        [selectedWorktree.path]: makeLeaf("pane-feature", "pty-feature"),
+        "/tmp/source": makeLeaf("pane-source", "pty-source"),
+      },
+      activeWorktree: selectedWorktree.path,
+      focusedPtyId: "pty-feature",
+    });
+    vi.mocked(tauri.removeWorktree).mockResolvedValue();
+
+    await useProjectStore.getState().removeWorktree("project-1", "feature-a");
+
+    expect(useProjectStore.getState().selectedWorktree).toEqual({
+      name: "source",
+      path: "/tmp/source",
+      branch: "main",
+    });
+    expect(useTerminalStore.getState().sessions[selectedWorktree.path]).toBeUndefined();
+    expect(useTerminalStore.getState().activeWorktree).toBe("/tmp/source");
+    expect(useTerminalStore.getState().focusedPtyId).toBe("pty-source");
+  });
+
+  it("keeps the current selection when removing a different worktree", async () => {
+    const selectedWorktree = makeWorktree("feature-a");
+    const otherWorktree = makeWorktree("feature-b");
+    useProjectStore.setState({
+      projects: [makeProject([selectedWorktree, otherWorktree])],
+      selectedWorktree,
+      loading: false,
+    });
+
+    vi.mocked(tauri.removeWorktree).mockResolvedValue();
+
+    await useProjectStore.getState().removeWorktree("project-1", "feature-b");
+
+    expect(useProjectStore.getState().selectedWorktree).toEqual(selectedWorktree);
   });
 });
