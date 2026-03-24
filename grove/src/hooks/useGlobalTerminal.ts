@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { useTerminalStore } from "../store/terminal";
-import { usePanelLayoutStore } from "../store/panel-layout";
+import { usePanelLayoutStore, type GlobalTerminalTab } from "../store/panel-layout";
 import {
   closePty as ipcClosePty,
   createPty as ipcCreatePty,
@@ -9,101 +10,130 @@ import {
 import { runCommand, runCommandSafely } from "../lib/command";
 import { log, error as logError } from "../lib/logger";
 
-interface GlobalTerminalIds {
-  paneId: string;
+interface TabPtyState {
   ptyId: string;
+  ready: boolean;
 }
 
 export function useGlobalTerminal() {
   const theme = useTerminalStore((s) => s.theme);
-  const paneId = usePanelLayoutStore((s) => s.globalTerminal.paneId);
-  const resetGlobalTerminalPaneId = usePanelLayoutStore(
-    (s) => s.resetGlobalTerminalPaneId,
+  const tabs = usePanelLayoutStore(useShallow((s) => s.globalTerminal.tabs));
+  const activeTabId = usePanelLayoutStore((s) => s.globalTerminal.activeTabId);
+
+  const tabPtyMapRef = useRef(new Map<string, TabPtyState>());
+  const pendingRef = useRef(new Set<string>());
+  const [tabPtyMap, setTabPtyMap] = useState<Map<string, TabPtyState>>(new Map());
+
+  const createPtyForTab = useCallback(
+    async (tab: GlobalTerminalTab) => {
+      if (!theme) return;
+      if (pendingRef.current.has(tab.id)) return;
+      pendingRef.current.add(tab.id);
+
+      const ptyId = crypto.randomUUID();
+
+      log("global-terminal", "creating pty for tab", {
+        tabId: tab.id,
+        paneId: tab.paneId,
+        ptyId,
+      });
+
+      try {
+        const config = await runCommand(() => getAppConfig(), {
+          errorToast: false,
+        });
+
+        await runCommand(
+          () =>
+            ipcCreatePty({
+              ptyId,
+              paneId: tab.paneId,
+              worktreePath: config.baseDir,
+              cwd: config.baseDir,
+              cols: 80,
+              rows: 24,
+            }),
+          { errorToast: false },
+        );
+
+        // Tab may have been removed while PTY was being created
+        const currentTabs = usePanelLayoutStore.getState().globalTerminal.tabs;
+        if (!currentTabs.some((t) => t.id === tab.id)) {
+          await runCommandSafely(() => ipcClosePty(ptyId), {
+            errorToast: false,
+          });
+          return;
+        }
+
+        tabPtyMapRef.current.set(tab.id, { ptyId, ready: true });
+        setTabPtyMap(new Map(tabPtyMapRef.current));
+        log("global-terminal", "pty created for tab", { tabId: tab.id });
+      } catch (e) {
+        logError("global-terminal", "failed to create pty for tab", e);
+      } finally {
+        pendingRef.current.delete(tab.id);
+      }
+    },
+    [theme],
   );
-  const idsRef = useRef<GlobalTerminalIds | null>(null);
-  const [ready, setReady] = useState(false);
-  const [ptyId, setPtyId] = useState("");
-  const operationRef = useRef(0);
 
-  const createGlobalPty = useCallback(async (nextPaneId: string) => {
-    if (!theme) {
-      return;
-    }
-
-    const nextPtyId = crypto.randomUUID();
-    const operationId = ++operationRef.current;
-    idsRef.current = { paneId: nextPaneId, ptyId: nextPtyId };
-    setPtyId(nextPtyId);
-    setReady(false);
-
-    try {
-      const config = await runCommand(() => getAppConfig(), {
-        errorToast: false,
-      });
-      const groveHome = config.baseDir;
-
-      log("global-terminal", "creating pty", {
-        paneId: nextPaneId,
-        ptyId: nextPtyId,
-        cwd: groveHome,
-      });
-      await runCommand(
-        () =>
-          ipcCreatePty({
-            ptyId: nextPtyId,
-            paneId: nextPaneId,
-            worktreePath: groveHome,
-            cwd: groveHome,
-            cols: 80,
-            rows: 24,
-          }),
-        { errorToast: false },
-      );
-
-      if (operationRef.current !== operationId) {
-        await runCommandSafely(() => ipcClosePty(nextPtyId), { errorToast: false });
-        return;
-      }
-
-      idsRef.current = { paneId: nextPaneId, ptyId: nextPtyId };
-      log("global-terminal", "pty created");
-      setReady(true);
-    } catch (e) {
-      if (operationRef.current === operationId) {
-        idsRef.current = null;
-        setPtyId("");
-        setReady(false);
-      }
-      logError("global-terminal", "failed to create pty", e);
-    }
-  }, [theme]);
-
+  // Create PTYs for new tabs, clean up PTYs for removed tabs
   useEffect(() => {
-    if (!theme || !paneId) return;
-    if (idsRef.current?.paneId === paneId) return;
-    void createGlobalPty(paneId);
-  }, [createGlobalPty, paneId, theme]);
+    if (!theme) return;
 
-  const reset = useCallback(async () => {
-    const currentPtyId = idsRef.current?.ptyId;
-    operationRef.current += 1;
-    idsRef.current = null;
-    setReady(false);
-    setPtyId("");
-
-    if (currentPtyId) {
-      await runCommandSafely(() => ipcClosePty(currentPtyId), {
-        errorToast: false,
-      });
+    for (const tab of tabs) {
+      if (!tabPtyMapRef.current.has(tab.id) && !pendingRef.current.has(tab.id)) {
+        void createPtyForTab(tab);
+      }
     }
 
-    resetGlobalTerminalPaneId();
-  }, [resetGlobalTerminalPaneId]);
+    // Clean up PTYs for removed tabs
+    const tabIds = new Set(tabs.map((t) => t.id));
+    for (const [tabId, state] of tabPtyMapRef.current) {
+      if (!tabIds.has(tabId)) {
+        tabPtyMapRef.current.delete(tabId);
+        void runCommandSafely(() => ipcClosePty(state.ptyId), {
+          errorToast: false,
+        });
+      }
+    }
+    // Only update state if map actually changed
+    if (tabPtyMapRef.current.size !== tabPtyMap.size ||
+        [...tabPtyMapRef.current].some(([k, v]) => tabPtyMap.get(k)?.ptyId !== v.ptyId)) {
+      setTabPtyMap(new Map(tabPtyMapRef.current));
+    }
+  }, [tabs, theme, createPtyForTab]);
+
+  const addTab = useCallback(() => {
+    usePanelLayoutStore.getState().addGlobalTerminalTab();
+  }, []);
+
+  const removeTab = useCallback((tabId: string) => {
+    usePanelLayoutStore.getState().removeGlobalTerminalTab(tabId);
+    // PTY cleanup handled by the effect above
+  }, []);
+
+  const selectTab = useCallback((tabId: string) => {
+    usePanelLayoutStore.getState().setActiveGlobalTerminalTab(tabId);
+  }, []);
+
+  const getTabPtyId = useCallback(
+    (tabId: string) => tabPtyMap.get(tabId)?.ptyId ?? "",
+    [tabPtyMap],
+  );
+
+  const isTabReady = useCallback(
+    (tabId: string) => tabPtyMap.get(tabId)?.ready ?? false,
+    [tabPtyMap],
+  );
 
   return {
-    paneId,
-    ptyId,
-    ready,
-    reset,
+    tabs,
+    activeTabId,
+    addTab,
+    removeTab,
+    selectTab,
+    getTabPtyId,
+    isTabReady,
   };
 }

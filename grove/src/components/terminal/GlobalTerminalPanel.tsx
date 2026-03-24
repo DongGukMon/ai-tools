@@ -1,41 +1,36 @@
 import { memo, useEffect, useLayoutEffect, useRef } from "react";
 import { ChevronUp, ChevronDown } from "lucide-react";
 import { useTerminalStore } from "../../store/terminal";
-import { usePanelLayoutStore } from "../../store/panel-layout";
+import { usePanelLayoutStore, type GlobalTerminalTab } from "../../store/panel-layout";
 import { acquireTerminalRuntime } from "../../lib/terminal-runtime";
 import { cn } from "../../lib/cn";
 import { IconButton } from "../ui/button";
+import GlobalTerminalTabBar from "./GlobalTerminalTabBar";
 
-interface Props {
-  paneId: string;
+interface TerminalTabContentProps {
+  tab: GlobalTerminalTab;
   ptyId: string;
-  onReset: () => void;
+  isActive: boolean;
+  direction: "left" | "right" | "none";
 }
 
-function GlobalTerminalPanel({ paneId, ptyId, onReset }: Props) {
+const TerminalTabContent = memo(function TerminalTabContent({
+  tab,
+  ptyId,
+  isActive,
+  direction,
+}: TerminalTabContentProps) {
   const theme = useTerminalStore((s) => s.theme);
-  const collapsed = usePanelLayoutStore((s) => s.globalTerminal.collapsed);
-  const updateGlobalTerminal = usePanelLayoutStore(
-    (s) => s.updateGlobalTerminal,
-  );
-
   const termRef = useRef<HTMLDivElement>(null);
   const runtimeRef = useRef<ReturnType<
     typeof acquireTerminalRuntime
   > | null>(null);
 
-  const toggle = () => {
-    updateGlobalTerminal({ collapsed: !collapsed });
-  };
-
-  // Acquire / release xterm runtime
   useLayoutEffect(() => {
-    if (collapsed) return;
-
     const container = termRef.current;
-    if (!container) return;
+    if (!container || !ptyId) return;
 
-    const runtime = acquireTerminalRuntime(paneId, theme);
+    const runtime = acquireTerminalRuntime(tab.paneId, theme);
     runtimeRef.current = runtime;
     runtime.setPtyId(ptyId);
     runtime.attach(container);
@@ -45,23 +40,70 @@ function GlobalTerminalPanel({ paneId, ptyId, onReset }: Props) {
       runtime.release();
       runtimeRef.current = null;
     };
-  }, [paneId, ptyId, theme, collapsed]);
+  }, [tab.paneId, ptyId, theme]);
 
-  // Refit on expand
+  // Refit when becoming active
   useEffect(() => {
-    if (collapsed) return;
+    if (!isActive) return;
     const runtime = runtimeRef.current;
     if (!runtime) return;
 
     requestAnimationFrame(() => {
       runtime.fitAddon.fit();
     });
-  }, [collapsed]);
+  }, [isActive]);
 
-  // Update theme on runtime
+  // Update theme
   useEffect(() => {
     runtimeRef.current?.setTheme(theme);
   }, [theme]);
+
+  const translateX = isActive
+    ? "translateX(0)"
+    : direction === "left"
+      ? "translateX(-100%)"
+      : "translateX(100%)";
+
+  return (
+    <div
+      className={cn("absolute inset-0 p-4 transition-transform duration-300 ease-out")}
+      style={{ transform: translateX }}
+    >
+      <div ref={termRef} className={cn("h-full w-full")} />
+    </div>
+  );
+});
+
+interface Props {
+  tabs: GlobalTerminalTab[];
+  activeTabId: string;
+  getTabPtyId: (tabId: string) => string;
+  isTabReady: (tabId: string) => boolean;
+  onAdd: () => void;
+  onRemove: (tabId: string) => void;
+  onSelect: (tabId: string) => void;
+}
+
+function GlobalTerminalPanel({
+  tabs,
+  activeTabId,
+  getTabPtyId,
+  isTabReady,
+  onAdd,
+  onRemove,
+  onSelect,
+}: Props) {
+  const theme = useTerminalStore((s) => s.theme);
+  const collapsed = usePanelLayoutStore((s) => s.globalTerminal.collapsed);
+  const updateGlobalTerminal = usePanelLayoutStore(
+    (s) => s.updateGlobalTerminal,
+  );
+
+  const toggle = () => {
+    updateGlobalTerminal({ collapsed: !collapsed });
+  };
+
+  const activeIdx = tabs.findIndex((t) => t.id === activeTabId);
 
   return (
     <div className={cn("flex flex-col", { "h-full": !collapsed })}>
@@ -70,27 +112,17 @@ function GlobalTerminalPanel({ paneId, ptyId, onReset }: Props) {
           "flex items-center justify-between border-t border-border bg-sidebar px-2 h-7 shrink-0",
         )}
       >
-        <IconButton
-          onClick={onReset}
-          title="Reset Main Terminal"
-          aria-label="Reset Main Terminal"
-        >
-          <svg
-            className={cn("text-muted-foreground")}
-            width="16"
-            height="14"
-            viewBox="0 0 18 14"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <rect x="0.75" y="0.75" width="16.5" height="12.5" rx="2" />
-            <polyline points="5,5 7.5,7 5,9" />
-            <line x1="9.5" y1="9" x2="13" y2="9" />
-          </svg>
-        </IconButton>
+        <div className={cn("flex items-center gap-1 min-w-0 flex-1")}>
+          {!collapsed && (
+            <GlobalTerminalTabBar
+              tabs={tabs}
+              activeTabId={activeTabId}
+              onSelect={onSelect}
+              onAdd={onAdd}
+              onClose={onRemove}
+            />
+          )}
+        </div>
         <IconButton onClick={toggle} title={collapsed ? "Expand" : "Collapse"}>
           {collapsed ? (
             <ChevronUp className={cn("size-3.5")} />
@@ -101,10 +133,28 @@ function GlobalTerminalPanel({ paneId, ptyId, onReset }: Props) {
       </div>
       {!collapsed && (
         <div
-          className={cn("flex-1 relative overflow-hidden p-4")}
+          className={cn("flex-1 relative overflow-hidden")}
           style={{ backgroundColor: theme?.background ?? "#000" }}
         >
-          <div ref={termRef} className={cn("h-full w-full")} />
+          {tabs.map((tab, idx) => {
+            const ptyId = getTabPtyId(tab.id);
+            if (!isTabReady(tab.id) || !ptyId) return null;
+            const isActive = tab.id === activeTabId;
+            const direction = isActive
+              ? "none" as const
+              : idx < activeIdx
+                ? "left" as const
+                : "right" as const;
+            return (
+              <TerminalTabContent
+                key={tab.id}
+                tab={tab}
+                ptyId={ptyId}
+                isActive={isActive}
+                direction={direction}
+              />
+            );
+          })}
         </div>
       )}
     </div>

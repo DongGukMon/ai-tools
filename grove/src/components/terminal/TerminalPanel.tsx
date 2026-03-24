@@ -89,10 +89,13 @@ function TerminalPanel() {
   const updateGlobalTerminal = usePanelLayoutStore((s) => s.updateGlobalTerminal);
   const { createTerminal } = useTerminal();
   const {
-    paneId: globalPaneId,
-    ptyId: globalPtyId,
-    ready: globalReady,
-    reset: resetGlobalTerminal,
+    tabs: globalTabs,
+    activeTabId: globalActiveTabId,
+    addTab: addGlobalTab,
+    removeTab: removeGlobalTab,
+    selectTab: selectGlobalTab,
+    getTabPtyId: getGlobalTabPtyId,
+    isTabReady: isGlobalTabReady,
   } = useGlobalTerminal();
   const [error, setError] = useState<string | null>(null);
 
@@ -335,13 +338,15 @@ function TerminalPanel() {
     </div>
   );
 
-  const globalPanel = globalReady ? (
+  const globalPanel = globalTabs.length > 0 ? (
     <GlobalTerminalPanel
-      paneId={globalPaneId}
-      ptyId={globalPtyId}
-      onReset={() => {
-        void resetGlobalTerminal();
-      }}
+      tabs={globalTabs}
+      activeTabId={globalActiveTabId}
+      getTabPtyId={getGlobalTabPtyId}
+      isTabReady={isGlobalTabReady}
+      onAdd={addGlobalTab}
+      onRemove={removeGlobalTab}
+      onSelect={selectGlobalTab}
     />
   ) : null;
 
