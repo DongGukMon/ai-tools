@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { unstable_batchedUpdates } from "react-dom";
 import type { Project, Worktree } from "../types";
 import * as tauri from "../lib/platform";
 import { runCommand, runCommandSafely } from "../lib/command";
@@ -87,6 +88,14 @@ function reorderWorktrees(worktrees: Worktree[], order: string[]): Worktree[] {
     if (idx !== -1) ordered.push(...remaining.splice(idx, 1));
   }
   return [...ordered, ...remaining];
+}
+
+function sourceWorktreeForProject(project: Project): Worktree {
+  return {
+    name: "source",
+    path: project.sourcePath,
+    branch: "main",
+  };
 }
 
 export const useProjectStore = create<ProjectState>((set) => ({
@@ -200,34 +209,43 @@ export const useProjectStore = create<ProjectState>((set) => ({
   },
 
   removeWorktree: async (projectId: string, name: string) => {
-    const worktreePath = useProjectStore
+    const project = useProjectStore
       .getState()
-      .projects.find((p) => p.id === projectId)
-      ?.worktrees.find((w) => w.name === name)?.path;
+      .projects.find((p) => p.id === projectId);
+    const removedWorktree = project?.worktrees.find((w) => w.name === name);
+    const worktreePath = removedWorktree?.path;
 
     await runCommand(() => tauri.removeWorktree(projectId, name), {
       errorToast: "Failed to remove worktree",
     });
 
-    if (worktreePath) {
-      useTerminalStore.getState().removeSession(worktreePath);
-    }
+    const currentState = useProjectStore.getState();
+    const nextProjects = currentState.projects.map((p) =>
+      p.id === projectId
+        ? { ...p, worktrees: p.worktrees.filter((w) => w.name !== name) }
+        : p,
+    );
+    const nextProject = nextProjects.find((p) => p.id === projectId);
+    const removedSelected =
+      currentState.selectedWorktree != null &&
+      currentState.selectedWorktree.path === worktreePath;
+    const nextSelectedWorktree =
+      removedSelected && nextProject
+        ? sourceWorktreeForProject(nextProject)
+        : reconcileSelectedWorktree(nextProjects, currentState.selectedWorktree);
 
-    set((state) => ({
-      projects: state.projects.map((p) =>
-        p.id === projectId
-          ? { ...p, worktrees: p.worktrees.filter((w) => w.name !== name) }
-          : p,
-      ),
-      selectedWorktree: reconcileSelectedWorktree(
-        state.projects.map((p) =>
-          p.id === projectId
-            ? { ...p, worktrees: p.worktrees.filter((w) => w.name !== name) }
-            : p,
-        ),
-        state.selectedWorktree,
-      ),
-    }));
+    unstable_batchedUpdates(() => {
+      if (worktreePath) {
+        useTerminalStore
+          .getState()
+          .removeSession(worktreePath, nextSelectedWorktree?.path ?? null);
+      }
+
+      set({
+        projects: nextProjects,
+        selectedWorktree: nextSelectedWorktree,
+      });
+    });
   },
 
   selectWorktree: (worktree: Worktree | null) => {

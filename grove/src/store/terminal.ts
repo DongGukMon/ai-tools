@@ -68,7 +68,7 @@ interface TerminalState {
   updateAiStatus: (ptyId: string, raw: string | null) => void;
   setDetectedTheme: (theme: TerminalTheme) => void;
   loadTheme: (theme: TerminalTheme) => void;
-  removeSession: (worktreePath: string) => void;
+  removeSession: (worktreePath: string, nextActiveWorktree?: string | null) => void;
   updateSizes: (worktreePath: string, nodePath: number[], ratios: number[]) => void;
   getSavedLayout: (worktreePath: string) => SplitNode | null;
   initLayouts: () => Promise<void>;
@@ -129,11 +129,11 @@ export const useTerminalStore = create<TerminalState>((set) => ({
       return { sessions: newSessions, focusedPtyId: newPtyId };
     }),
 
-  removeSession: (worktreePath) =>
+  removeSession: (worktreePath, nextActiveWorktree = null) =>
     set((state) => {
       const newSessions = { ...state.sessions };
       const nextBellPtyIds = new Set(state.bellPtyIds);
-      const nextAiSessions = { ...state.aiSessions };
+      let nextAiSessions = { ...state.aiSessions };
       const existingSession = state.sessions[worktreePath];
       if (existingSession) {
         for (const { ptyId } of collectTerminalPanes(existingSession)) {
@@ -146,14 +146,36 @@ export const useTerminalStore = create<TerminalState>((set) => ({
       delete newSessions[worktreePath];
       delete layoutCache[worktreePath];
       saveLayouts(newSessions);
+
+      const shouldSwitchActiveWorktree = state.activeWorktree === worktreePath;
+      const resolvedActiveWorktree = shouldSwitchActiveWorktree
+        ? nextActiveWorktree
+        : state.activeWorktree;
+      const activeSession = resolvedActiveWorktree
+        ? newSessions[resolvedActiveWorktree]
+        : undefined;
+
+      if (activeSession) {
+        for (const { ptyId } of collectTerminalPanes(activeSession)) {
+          if (!ptyId) {
+            continue;
+          }
+          nextBellPtyIds.delete(ptyId);
+          const session = nextAiSessions[ptyId];
+          if (session?.status === "attention") {
+            nextAiSessions[ptyId] = { ...session, status: "idle" };
+          }
+        }
+      }
+
       return {
         sessions: newSessions,
         bellPtyIds: nextBellPtyIds,
         aiSessions: nextAiSessions,
-        focusedPtyId:
-          state.activeWorktree === worktreePath ? null : state.focusedPtyId,
-        activeWorktree:
-          state.activeWorktree === worktreePath ? null : state.activeWorktree,
+        focusedPtyId: shouldSwitchActiveWorktree
+          ? (activeSession ? findFirstLeaf(activeSession) : null)
+          : state.focusedPtyId,
+        activeWorktree: resolvedActiveWorktree,
       };
     }),
 
