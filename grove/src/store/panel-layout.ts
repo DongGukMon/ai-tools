@@ -20,6 +20,7 @@ interface PanelLayouts {
   main: number[];
   diff: number[];
   changes: number[];
+  pipWidth: number;
   globalTerminal: GlobalTerminalLayout;
 }
 
@@ -27,12 +28,14 @@ interface PanelLayoutStore {
   main: number[];
   diff: number[];
   changes: number[];
+  pipWidth: number;
   globalTerminal: GlobalTerminalLayout;
   loaded: boolean;
   init: () => Promise<void>;
   updateMain: (ratios: number[]) => void;
   updateDiff: (ratios: number[]) => void;
   updateChanges: (ratios: number[]) => void;
+  updatePipWidth: (width: number) => void;
   updateGlobalTerminal: (layout: Partial<GlobalTerminalLayout>) => void;
   addGlobalTerminalTab: () => GlobalTerminalTab;
   addGlobalTerminalMirrorTab: (title: string, ptyId: string) => GlobalTerminalTab;
@@ -45,6 +48,7 @@ const DEFAULTS: PanelLayouts = {
   main: [0.2, 0.65, 0.15],
   diff: [0.3, 0.2, 0.5],
   changes: [0.35, 0.65],
+  pipWidth: 360,
   globalTerminal: { collapsed: true, ratio: 0.3, tabs: [], activeTabId: "" },
 };
 
@@ -64,7 +68,7 @@ function debouncedSave(layouts: PanelLayouts) {
 }
 
 function getFullLayouts(get: () => PanelLayoutStore): PanelLayouts {
-  return { main: get().main, diff: get().diff, changes: get().changes, globalTerminal: get().globalTerminal };
+  return { main: get().main, diff: get().diff, changes: get().changes, pipWidth: get().pipWidth, globalTerminal: get().globalTerminal };
 }
 
 // Accept legacy shape with optional paneId
@@ -106,6 +110,7 @@ function resolvePanelLayouts(parsed?: Partial<PanelLayouts>): PanelLayouts {
     main,
     diff: parsed?.diff ?? DEFAULTS.diff,
     changes: parsed?.changes ?? DEFAULTS.changes,
+    pipWidth: parsed?.pipWidth ?? DEFAULTS.pipWidth,
     globalTerminal: resolveGlobalTerminalLayout(
       parsed?.globalTerminal as LegacyGlobalTerminalLayout | undefined,
     ),
@@ -116,6 +121,7 @@ export const usePanelLayoutStore = create<PanelLayoutStore>((set, get) => ({
   main: DEFAULTS.main,
   diff: DEFAULTS.diff,
   changes: DEFAULTS.changes,
+  pipWidth: DEFAULTS.pipWidth,
   globalTerminal: resolveGlobalTerminalLayout(DEFAULTS.globalTerminal),
   loaded: false,
 
@@ -146,6 +152,11 @@ export const usePanelLayoutStore = create<PanelLayoutStore>((set, get) => ({
   updateChanges: (ratios) => {
     set({ changes: ratios });
     debouncedSave({ ...getFullLayouts(get), changes: ratios });
+  },
+
+  updatePipWidth: (width) => {
+    set({ pipWidth: width });
+    debouncedSave({ ...getFullLayouts(get), pipWidth: width });
   },
 
   updateGlobalTerminal: (layout) => {

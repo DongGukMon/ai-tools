@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Globe, ChevronLeft } from "lucide-react";
+import { Globe } from "lucide-react";
 import { useTabStore, selectCurrentActiveTabId } from "../../store/tab";
 import { useProjectStore } from "../../store/project";
 import { useTerminalStore } from "../../store/terminal";
@@ -11,6 +11,7 @@ import { collectTerminalPanes } from "../../lib/terminal-session";
 import { cn } from "../../lib/cn";
 import TerminalPanel from "../terminal/TerminalPanel";
 import ChangesPanel from "./ChangesPanel";
+import PipTerminal from "./PipTerminal";
 import GlobalTerminalPanel from "../terminal/GlobalTerminalPanel";
 import { ResizablePanelGroup } from "../ui/resizable-panel-group";
 
@@ -47,13 +48,12 @@ function AppTabContent() {
   const isChanges = activeTabId === "changes";
 
   const focusedPtyId = useTerminalStore((s) => s.focusedPtyId);
-  const theme = useTerminalStore((s) => s.theme);
   const broadcastActive = useBroadcastStore((s) => s.active);
   const startBroadcast = useBroadcastStore((s) => s.startBroadcast);
   const stopBroadcast = useBroadcastStore((s) => s.stopBroadcast);
 
   const [pipPtyId, setPipPtyId] = useState<string | null>(null);
-  const [pipDismissed, setPipDismissed] = useState(false);
+  const [pipDismissed, setPipDismissed] = useState(true);
   const prevIsTerminalRef = useRef(isTerminal);
   const pipContainerRef = useRef<HTMLDivElement>(null);
 
@@ -68,7 +68,6 @@ function AppTabContent() {
         stopBroadcast();
       }
       setPipPtyId(null);
-      setPipDismissed(false);
     } else if (wasTerminal && focusedPtyId && !broadcastActive) {
       const paneId = findPaneIdForPty(focusedPtyId);
       if (paneId) {
@@ -76,20 +75,18 @@ function AppTabContent() {
         const snapshot = captureRuntimeSnapshot(paneId);
         startBroadcast(focusedPtyId, paneId, "pip", cols, rows, snapshot);
         setPipPtyId(focusedPtyId);
-        setPipDismissed(false);
       }
     }
   }, [isTerminal, focusedPtyId, broadcastActive, startBroadcast, stopBroadcast]);
 
-  const showPip =
+  const hasPipBroadcast =
     !isTerminal &&
-    !pipDismissed &&
     !!pipPtyId &&
     broadcastActive?.target === "pip" &&
     broadcastActive.ptyId === pipPtyId;
 
   useEffect(() => {
-    if (!showPip || broadcastActive?.target !== "pip") {
+    if (!hasPipBroadcast || broadcastActive?.target !== "pip") {
       return;
     }
 
@@ -103,7 +100,7 @@ function AppTabContent() {
     requestAnimationFrame(() => {
       runtime.fitAddon.fit();
     });
-  }, [broadcastActive?.paneId, broadcastActive?.target, showPip]);
+  }, [broadcastActive?.paneId, broadcastActive?.target, hasPipBroadcast]);
 
   const {
     tabs: globalTabs,
@@ -145,81 +142,20 @@ function AppTabContent() {
 
   const handlePipDismiss = useCallback(() => {
     setPipDismissed(true);
-    if (broadcastActive?.target === "pip") {
-      stopBroadcast();
-    }
-  }, [broadcastActive, stopBroadcast]);
+  }, []);
 
   const handlePipRestore = useCallback(() => {
     setPipDismissed(false);
-    if (focusedPtyId && !broadcastActive) {
-      const paneId = findPaneIdForPty(focusedPtyId);
-      if (paneId) {
-        const { cols, rows } = getRuntimeSize(paneId);
-        const snapshot = captureRuntimeSnapshot(paneId);
-        startBroadcast(focusedPtyId, paneId, "pip", cols, rows, snapshot);
-        setPipPtyId(focusedPtyId);
-      }
-    }
-  }, [focusedPtyId, broadcastActive, startBroadcast]);
+  }, []);
 
-  // PiP overlay
-  const pipOverlay = showPip && pipPtyId && (
-    <div
-      className={cn(
-        "absolute right-3 bottom-3 w-[360px] h-[200px] z-50 rounded-xl overflow-hidden",
-        "shadow-[0_8px_32px_rgba(0,0,0,0.5)] border border-white/10",
-        "flex flex-col transition-all duration-300 ease-out",
-      )}
-    >
-      <div
-        className={cn(
-          "flex items-center justify-between px-2 h-6 shrink-0 bg-sidebar/90 backdrop-blur-sm border-b border-white/10 cursor-pointer",
-        )}
-        onClick={() => setActiveTab("terminal")}
-      >
-        <span className={cn("text-[10px] font-medium text-muted-foreground truncate")}>
-          Terminal
-        </span>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            handlePipDismiss();
-          }}
-          className={cn(
-            "flex items-center justify-center size-4 rounded-sm text-muted-foreground hover:text-foreground hover:bg-white/10 transition-colors",
-          )}
-          title="Dismiss"
-        >
-          <ChevronLeft className={cn("size-3 rotate-180")} />
-        </button>
-      </div>
-      <div className={cn("flex-1 min-h-0")}>
-        <div
-          ref={pipContainerRef}
-          className={cn("h-full w-full")}
-          style={{ backgroundColor: theme?.background ?? "#000" }}
-        />
-      </div>
-    </div>
-  );
-
-  // Restore button when PiP is dismissed
-  const restoreButton = !isTerminal && pipDismissed && (
-    <button
-      type="button"
-      onClick={handlePipRestore}
-      className={cn(
-        "absolute right-0 bottom-6 z-50 flex items-center justify-center w-6 h-10 rounded-l-md",
-        "bg-sidebar/90 border border-r-0 border-white/10 shadow-lg backdrop-blur-sm",
-        "text-muted-foreground hover:text-foreground hover:bg-sidebar transition-colors",
-        "animate-pulse",
-      )}
-      title="Show terminal"
-    >
-      <ChevronLeft className={cn("size-3.5")} />
-    </button>
+  const pipElement = hasPipBroadcast && (
+    <PipTerminal
+      containerRef={pipContainerRef}
+      dismissed={pipDismissed}
+      onDismiss={handlePipDismiss}
+      onRestore={handlePipRestore}
+      onClickHeader={() => setActiveTab("terminal")}
+    />
   );
 
   const tabContent = (
@@ -244,8 +180,7 @@ function AppTabContent() {
         </div>
       )}
 
-      {pipOverlay}
-      {restoreButton}
+      {pipElement}
     </>
   );
 
