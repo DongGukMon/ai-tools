@@ -102,12 +102,12 @@ function TerminalInstance({ paneId, ptyId }: Props) {
               className={cn("absolute inset-4 pointer-events-none")}
             />
           )}
-          {/* Semi-transparent overlay on top of snapshot */}
+          {/* Blurred overlay on top of snapshot */}
           <div
-            className={cn("absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/50")}
+            className={cn("absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/40 backdrop-blur-[1.3px]")}
           >
-            <Radio className={cn("size-6 text-white animate-pulse")} />
-            <span className={cn("text-xs text-white")}>Broadcasting</span>
+            <Radio className={cn("size-10 text-white animate-pulse")} />
+            <span className={cn("text-sm font-medium text-white")}>Broadcasting</span>
             <button
               type="button"
               onClick={() => {
