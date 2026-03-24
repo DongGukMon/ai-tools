@@ -72,6 +72,7 @@ function TerminalInstance({ paneId, ptyId }: Props) {
       onClick={handleClick}
     >
       <div ref={termRef} className={cn("terminal-instance h-full w-full")} />
+      <div className={cn("terminal-pane-dim", { "terminal-pane-dim-active": !isFocused })} />
     </div>
   );
 }
