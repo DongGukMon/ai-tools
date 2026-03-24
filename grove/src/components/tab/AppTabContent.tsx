@@ -6,7 +6,7 @@ import { useTerminalStore } from "../../store/terminal";
 import { usePanelLayoutStore } from "../../store/panel-layout";
 import { useBroadcastStore } from "../../store/broadcast";
 import { useGlobalTerminal } from "../../hooks/useGlobalTerminal";
-import { getRuntime, getRuntimeSize } from "../../lib/terminal-runtime";
+import { getRuntime, getRuntimeSize, captureRuntimeSnapshot } from "../../lib/terminal-runtime";
 import { collectTerminalPanes } from "../../lib/terminal-session";
 import { cn } from "../../lib/cn";
 import TerminalPanel from "../terminal/TerminalPanel";
@@ -73,7 +73,8 @@ function AppTabContent() {
       const paneId = findPaneIdForPty(focusedPtyId);
       if (paneId) {
         const { cols, rows } = getRuntimeSize(paneId);
-        startBroadcast(focusedPtyId, paneId, "pip", cols, rows);
+        const snapshot = captureRuntimeSnapshot(paneId);
+        startBroadcast(focusedPtyId, paneId, "pip", cols, rows, snapshot);
         setPipPtyId(focusedPtyId);
         setPipDismissed(false);
       }
@@ -155,7 +156,8 @@ function AppTabContent() {
       const paneId = findPaneIdForPty(focusedPtyId);
       if (paneId) {
         const { cols, rows } = getRuntimeSize(paneId);
-        startBroadcast(focusedPtyId, paneId, "pip", cols, rows);
+        const snapshot = captureRuntimeSnapshot(paneId);
+        startBroadcast(focusedPtyId, paneId, "pip", cols, rows, snapshot);
         setPipPtyId(focusedPtyId);
       }
     }

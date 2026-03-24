@@ -8,6 +8,7 @@ export interface BroadcastSession {
   target: BroadcastTarget;
   originalCols: number;
   originalRows: number;
+  snapshot: string | null;
 }
 
 interface BroadcastState {
@@ -23,6 +24,7 @@ interface BroadcastState {
     target: BroadcastTarget,
     originalCols: number,
     originalRows: number,
+    snapshot?: string | null,
   ) => void;
 
   /**
@@ -41,9 +43,9 @@ interface BroadcastState {
 export const useBroadcastStore = create<BroadcastState>((set, get) => ({
   active: null,
 
-  startBroadcast: (ptyId, paneId, target, originalCols, originalRows) => {
+  startBroadcast: (ptyId, paneId, target, originalCols, originalRows, snapshot = null) => {
     set({
-      active: { ptyId, paneId, target, originalCols, originalRows },
+      active: { ptyId, paneId, target, originalCols, originalRows, snapshot },
     });
   },
 

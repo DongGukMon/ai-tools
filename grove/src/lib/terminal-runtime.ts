@@ -120,6 +120,28 @@ export function getRuntime(paneId: string) {
   return runtimes.get(paneId) ?? null;
 }
 
+export function captureRuntimeSnapshot(paneId: string): string | null {
+  const runtime = runtimes.get(paneId);
+  if (!runtime?.term.element) return null;
+  const canvases = runtime.term.element.querySelectorAll("canvas");
+  if (canvases.length === 0) return null;
+  try {
+    const first = canvases[0] as HTMLCanvasElement;
+    const composite = document.createElement("canvas");
+    composite.width = first.width;
+    composite.height = first.height;
+    const ctx = composite.getContext("2d");
+    if (!ctx) return null;
+    // Composite all canvas layers (background + text + cursor)
+    for (const canvas of canvases) {
+      ctx.drawImage(canvas as HTMLCanvasElement, 0, 0);
+    }
+    return composite.toDataURL("image/png");
+  } catch {
+    return null;
+  }
+}
+
 export function getRuntimeSize(paneId: string): { cols: number; rows: number } {
   const runtime = runtimes.get(paneId);
   if (!runtime) return { cols: 80, rows: 24 };
@@ -491,7 +513,7 @@ class TerminalPaneRuntime {
     }
 
     try {
-      const webglAddon = new WebglAddon();
+      const webglAddon = new WebglAddon(true);
       webglAddon.onContextLoss(() => webglAddon.dispose());
       this.term.loadAddon(webglAddon);
       this.hasLoadedWebgl = true;

@@ -20,6 +20,7 @@ describe("BroadcastStore", () => {
         target: "mirror",
         originalCols: 120,
         originalRows: 30,
+        snapshot: null,
       });
     });
 
@@ -38,6 +39,7 @@ describe("BroadcastStore", () => {
         target: "mirror",
         originalCols: 120,
         originalRows: 30,
+        snapshot: null,
       });
     });
 

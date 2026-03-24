@@ -10,7 +10,7 @@ import { useTerminalStore } from "../store/terminal";
 import { useProjectStore } from "../store/project";
 import { usePanelLayoutStore } from "../store/panel-layout";
 import { useBroadcastStore } from "../store/broadcast";
-import { getRuntimeSize } from "../lib/terminal-runtime";
+import { getRuntimeSize, captureRuntimeSnapshot } from "../lib/terminal-runtime";
 import { collectTerminalPanes } from "../lib/terminal-session";
 import { TERMINAL_TOOLBAR_COMMANDS } from "../lib/terminal-command-registry";
 import { useTerminal } from "./useTerminal";
@@ -76,7 +76,8 @@ export function useTerminalCommandPipeline({ openThemeSettings }: Options) {
     const title = worktree ? `${label} > ${worktree.branch}` : label;
 
     const { cols, rows } = getRuntimeSize(paneId);
-    startBroadcast(ptyId, paneId, "mirror", cols, rows);
+    const snapshot = captureRuntimeSnapshot(paneId);
+    startBroadcast(ptyId, paneId, "mirror", cols, rows, snapshot);
     usePanelLayoutStore.getState().addGlobalTerminalMirrorTab(title, ptyId);
   }, []);
 

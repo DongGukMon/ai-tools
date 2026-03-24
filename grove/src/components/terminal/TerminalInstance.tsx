@@ -19,6 +19,7 @@ function TerminalInstance({ paneId, ptyId }: Props) {
   const isFocused = useTerminalStore((s) => s.focusedPtyId === ptyId);
   const setFocusedPtyId = useTerminalStore((s) => s.setFocusedPtyId);
   const isBroadcasting = useBroadcastStore((s) => s.active?.ptyId === ptyId);
+  const snapshot = useBroadcastStore((s) => s.active?.ptyId === ptyId ? s.active.snapshot : null);
   const markBellPty = useTerminalStore((s) => s.markBellPty);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,14 +60,17 @@ function TerminalInstance({ paneId, ptyId }: Props) {
     runtimeRef.current?.setTheme(theme);
   }, [theme]);
 
+  // Re-attach runtime when broadcast ends
   useEffect(() => {
-    const runtime = runtimeRef.current;
-    const container = termRef.current;
-    if (!isBroadcasting && runtime && container) {
-      runtime.attach(container);
-      requestAnimationFrame(() => {
-        runtime.fitAddon.fit();
-      });
+    if (!isBroadcasting) {
+      const runtime = runtimeRef.current;
+      const container = termRef.current;
+      if (runtime && container) {
+        runtime.attach(container);
+        requestAnimationFrame(() => {
+          runtime.fitAddon.fit();
+        });
+      }
     }
   }, [isBroadcasting]);
 
@@ -89,30 +93,40 @@ function TerminalInstance({ paneId, ptyId }: Props) {
       <div ref={termRef} className={cn("terminal-instance h-full w-full")} />
       <div className={cn("terminal-pane-dim", { "terminal-pane-dim-active": !isFocused })} />
       {isBroadcasting && (
-        <div
-          className={cn("absolute inset-0 flex flex-col items-center justify-center gap-3 z-10")}
-          style={{ backgroundColor: "rgba(0, 0, 0, 0.6)" }}
-        >
-          <Radio className={cn("size-6 text-white animate-pulse")} />
-          <span className={cn("text-xs text-white")}>Broadcasting</span>
-          <button
-            type="button"
-            onClick={() => {
-              const ended = useBroadcastStore.getState().stopBroadcast();
-              if (ended?.target === "mirror") {
-                const gt = usePanelLayoutStore.getState().globalTerminal;
-                const mirrorTab = gt.tabs.find((t) => t.mirrorPtyId === ended.ptyId);
-                if (mirrorTab) {
-                  usePanelLayoutStore.getState().removeGlobalTerminalTab(mirrorTab.id);
-                }
-              }
-            }}
-            className={cn(
-              "mt-1 text-xs text-white/60 hover:text-white transition-colors",
-            )}
+        <div className={cn("absolute inset-0 z-10")}>
+          {/* Frozen terminal snapshot */}
+          {snapshot && (
+            <img
+              src={snapshot}
+              alt=""
+              className={cn("absolute inset-4 pointer-events-none")}
+            />
+          )}
+          {/* Semi-transparent overlay on top of snapshot */}
+          <div
+            className={cn("absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/50")}
           >
-            Stop
-          </button>
+            <Radio className={cn("size-6 text-white animate-pulse")} />
+            <span className={cn("text-xs text-white")}>Broadcasting</span>
+            <button
+              type="button"
+              onClick={() => {
+                const ended = useBroadcastStore.getState().stopBroadcast();
+                if (ended?.target === "mirror") {
+                  const gt = usePanelLayoutStore.getState().globalTerminal;
+                  const mirrorTab = gt.tabs.find((t) => t.mirrorPtyId === ended.ptyId);
+                  if (mirrorTab) {
+                    usePanelLayoutStore.getState().removeGlobalTerminalTab(mirrorTab.id);
+                  }
+                }
+              }}
+              className={cn(
+                "mt-1 text-xs text-white/60 hover:text-white transition-colors",
+              )}
+            >
+              Stop
+            </button>
+          </div>
         </div>
       )}
     </div>
