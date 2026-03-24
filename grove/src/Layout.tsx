@@ -2,7 +2,8 @@ import { useEffect } from "react";
 import { Command } from "lucide-react";
 import { cn } from "./lib/cn";
 import Sidebar from "./components/sidebar/Sidebar";
-import TerminalPanel from "./components/terminal/TerminalPanel";
+import AppTabBar from "./components/tab/AppTabBar";
+import AppTabContent from "./components/tab/AppTabContent";
 import DiffPanel from "./components/diff/DiffPanel";
 import ResizablePanelGroup from "./components/ui/resizable-panel-group";
 import { windowDragRegionProps } from "./lib/platform";
@@ -65,7 +66,10 @@ function Layout() {
           <Sidebar />
         </ResizablePanelGroup.Pane>
         <ResizablePanelGroup.Pane>
-          <TerminalPanel />
+          <div className={cn("flex flex-col h-full")}>
+            <AppTabBar />
+            <AppTabContent />
+          </div>
         </ResizablePanelGroup.Pane>
         <ResizablePanelGroup.Pane minSize={280}>
           <DiffPanel />
