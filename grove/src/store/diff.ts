@@ -167,14 +167,22 @@ export const useDiffStore = create<DiffState>((set, get) => ({
   },
 
   selectView: (view) => {
-    set({
-      selectedView: view,
-      selectedFile: null,
-      currentDiff: null,
-      commitDiffs: [],
-      selectedLines: new Set(),
-    });
-    if (view !== "changes") {
+    if (view === "changes") {
+      set({
+        selectedView: view,
+        selectedFile: null,
+        currentDiff: null,
+        commitDiffs: [],
+        selectedLines: new Set(),
+      });
+      // Auto-select first file
+      const { fileStatuses } = get();
+      if (fileStatuses.length > 0) {
+        get().selectFile(fileStatuses[0].path, fileStatuses[0].staged);
+      }
+    } else {
+      // Switch view immediately but keep previous data visible until load completes
+      set({ selectedView: view, selectedLines: new Set() });
       get().loadCommitDiff(view.hash);
     }
   },

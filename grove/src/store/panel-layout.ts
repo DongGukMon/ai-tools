@@ -17,17 +17,20 @@ interface GlobalTerminalLayout {
 interface PanelLayouts {
   main: number[];
   diff: number[];
+  changes: number[];
   globalTerminal: GlobalTerminalLayout;
 }
 
 interface PanelLayoutStore {
   main: number[];
   diff: number[];
+  changes: number[];
   globalTerminal: GlobalTerminalLayout;
   loaded: boolean;
   init: () => Promise<void>;
   updateMain: (ratios: number[]) => void;
   updateDiff: (ratios: number[]) => void;
+  updateChanges: (ratios: number[]) => void;
   updateGlobalTerminal: (layout: Partial<GlobalTerminalLayout>) => void;
   addGlobalTerminalTab: () => GlobalTerminalTab;
   removeGlobalTerminalTab: (tabId: string) => void;
@@ -36,8 +39,9 @@ interface PanelLayoutStore {
 }
 
 const DEFAULTS: PanelLayouts = {
-  main: [0.18, 0.52, 0.30],
-  diff: [0.25, 0.20, 0.55],
+  main: [0.2, 0.65, 0.15],
+  diff: [0.3, 0.2, 0.5],
+  changes: [0.35, 0.65],
   globalTerminal: { collapsed: true, ratio: 0.3, tabs: [], activeTabId: "" },
 };
 
@@ -51,7 +55,7 @@ function debouncedSave(layouts: PanelLayouts) {
 }
 
 function getFullLayouts(get: () => PanelLayoutStore): PanelLayouts {
-  return { main: get().main, diff: get().diff, globalTerminal: get().globalTerminal };
+  return { main: get().main, diff: get().diff, changes: get().changes, globalTerminal: get().globalTerminal };
 }
 
 // Accept legacy shape with optional paneId
@@ -102,9 +106,12 @@ function resolveGlobalTerminalLayout(
 }
 
 function resolvePanelLayouts(parsed?: Partial<PanelLayouts>): PanelLayouts {
+  // Ensure main ratios match expected pane count (3)
+  const main = parsed?.main?.length === 3 ? parsed.main : DEFAULTS.main;
   return {
-    main: parsed?.main ?? DEFAULTS.main,
+    main,
     diff: parsed?.diff ?? DEFAULTS.diff,
+    changes: parsed?.changes ?? DEFAULTS.changes,
     globalTerminal: resolveGlobalTerminalLayout(
       parsed?.globalTerminal as LegacyGlobalTerminalLayout | undefined,
     ),
@@ -114,6 +121,7 @@ function resolvePanelLayouts(parsed?: Partial<PanelLayouts>): PanelLayouts {
 export const usePanelLayoutStore = create<PanelLayoutStore>((set, get) => ({
   main: DEFAULTS.main,
   diff: DEFAULTS.diff,
+  changes: DEFAULTS.changes,
   globalTerminal: resolveGlobalTerminalLayout(DEFAULTS.globalTerminal),
   loaded: false,
 
@@ -139,6 +147,11 @@ export const usePanelLayoutStore = create<PanelLayoutStore>((set, get) => ({
   updateDiff: (ratios) => {
     set({ diff: ratios });
     debouncedSave({ ...getFullLayouts(get), diff: ratios });
+  },
+
+  updateChanges: (ratios) => {
+    set({ changes: ratios });
+    debouncedSave({ ...getFullLayouts(get), changes: ratios });
   },
 
   updateGlobalTerminal: (layout) => {
