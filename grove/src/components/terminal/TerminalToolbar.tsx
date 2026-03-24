@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Columns2, Copy, Play, Rows2, Settings, X } from "lucide-react";
+import { Columns2, Play, Rows2, ScreenShare, Settings, X } from "lucide-react";
 import { useTerminalCommandPipeline } from "../../hooks/useTerminalCommandPipeline";
 import type { TerminalCommandDefinition } from "../../lib/terminal-command-pipeline";
 import ThemeSettings from "./ThemeSettings";
@@ -9,7 +9,7 @@ import { cn } from "../../lib/cn";
 
 const terminalCommandIcons = {
   settings: Settings,
-  mirror: Copy,
+  mirror: ScreenShare,
   "split-horizontal": Columns2,
   "split-vertical": Rows2,
   close: X,
