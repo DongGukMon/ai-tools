@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	dashboardUsageRefreshInterval = 10 * time.Minute
+	dashboardUsageRefreshInterval = 15 * time.Minute
 	dashboardUsageTimeout         = 15 * time.Second
 	dashboardUsageWeekDays        = 7
 )
