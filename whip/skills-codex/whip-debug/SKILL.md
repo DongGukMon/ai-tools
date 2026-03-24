@@ -32,6 +32,23 @@ Phase 4: Loop decision
     └─→ Workaround detected → Phase 1 (max 4 rounds, then escalate)
 ```
 
+## Execution Mode (mutually exclusive)
+
+`$ARGUMENTS` determines which dispatch mode this skill uses. The two modes are **mutually exclusive**:
+
+| Mode | Activates when | Dispatch mechanism |
+|------|---------------|-------------------|
+| **Tracked** *(default)* | `--agent` is **absent** from `$ARGUMENTS` | `$whip-start` Solo Flow — task lifecycle, IRC, review gates |
+| **Inline** | `--agent` is **present** in `$ARGUMENTS` | Agent tool directly — no whip, no IRC, no lifecycle |
+
+**Strict rules:**
+1. No `--agent` in arguments → **tracked mode**. No exceptions, no inference.
+2. `--agent` in arguments → **inline mode**. All `$whip-start` dispatch, IRC, and lifecycle steps are skipped.
+3. `--backend` specification (e.g., user says "use codex") → **implies tracked mode**. Backend selection is a whip concept and is incompatible with `--agent`.
+4. Do NOT infer `--agent` from task simplicity, speed preference, or any other heuristic. The flag must be explicitly present in the user's input.
+
+The rest of this skill describes the workflow in **tracked mode**. When `--agent` is active, replace every `$whip-start` dispatch with an equivalent agent spawn and skip IRC/lifecycle steps.
+
 ## Dispatch
 
 This skill uses `$whip-start` Solo Flow for Phase 1 (analysis) and Phase 3 (verification) task dispatch.

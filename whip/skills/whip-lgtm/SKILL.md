@@ -37,28 +37,32 @@ Default scope when nothing is specified:
 git diff $(git merge-base HEAD main)..HEAD
 ```
 
-## Dispatch
+## Execution Mode (mutually exclusive)
 
-This skill uses `/whip-start` Solo Flow for all task dispatch.
+`$ARGUMENTS` determines which dispatch mode this skill uses. The two modes are **mutually exclusive**:
+
+| Mode | Activates when | Dispatch mechanism | Backend / Difficulty |
+|------|---------------|-------------------|---------------------|
+| **Tracked** *(default)* | `--agent` is **absent** from `$ARGUMENTS` | `/whip-start` Solo Flow | `--backend codex --difficulty hard` (non-negotiable) |
+| **Inline** | `--agent` is **present** in `$ARGUMENTS` | Agent tool directly | N/A — whip is bypassed entirely |
+
+**Strict rules:**
+1. No `--agent` in arguments → **tracked mode**. No exceptions, no inference.
+2. `--agent` in arguments → **inline mode**. `/whip-start`, IRC, and lifecycle steps are all skipped.
+3. `--backend` specification (e.g., user says "use codex") → **implies tracked mode**. Backend selection is a whip concept and is incompatible with `--agent`.
+4. Do NOT infer `--agent` from task simplicity, scope size, or any other heuristic. The flag must be explicitly present in the user's input.
+
+### Tracked mode dispatch
 
 - IRC selection, task creation, assignment, and polling follow `/whip-start` conventions.
 - Backend: always `codex` — non-negotiable for review quality.
 - Difficulty: always `hard` — non-negotiable for review depth.
-- These two overrides are the only deviation from `/whip-start` defaults.
 
 Prepare the task spec per the Review Task Spec below, then dispatch through `/whip-start` Solo Flow.
 
-## Dual execution mode
+### Inline mode dispatch
 
-Two ways to run the review loop:
-
-### Default: `/whip-start` Solo Flow (tracked)
-
-Full lifecycle tracking via `/whip-start`. Use for thorough multi-round reviews where history matters.
-
-### `--agent` flag: Agent tool (lightweight)
-
-No tracking, no lifecycle. Use for a quick one-off review when you do not need history.
+Spawn an Agent tool call per review round. No tracking, no lifecycle.
 
 ```
 Agent tool with subagent_type=Explore:
@@ -69,7 +73,7 @@ Agent tool with subagent_type=Explore:
            Report in the findings format specified below."
 ```
 
-Choose `--agent` when the scope is small and you expect one round. Switch to tracked mode when you expect multiple rounds or want audit trail.
+The rest of this skill describes the step-by-step workflow for **tracked mode**. In inline mode, replace every `/whip-start` dispatch with the Agent tool call above and skip IRC/lifecycle steps.
 
 ## Review task spec
 

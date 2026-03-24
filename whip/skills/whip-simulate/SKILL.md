@@ -12,14 +12,24 @@ Run multi-agent simulations from a user-provided scenario. Concretize the scenar
 Extract from `$ARGUMENTS`:
 - **Scenario**: what to simulate, compare, or verify
 - **`--runs N`**: number of simulation runs (default: 5)
-- **`--agent`**: use Agent tool directly instead of `whip task create` (lightweight, faster, good for quick sims)
+- **`--agent`**: use inline mode (see Execution Mode below)
 
-## Dispatch
+## Execution Mode (mutually exclusive)
 
-- **Whip mode (default)**: dispatches through `/whip-start` Team Flow. Each simulation run becomes one task spec handed to `/whip-start`. IRC selection, workspace, and polling follow `/whip-start` conventions.
-- **Agent mode (`--agent`)**: bypasses `/whip-start` entirely — uses Agent tool directly for lightweight single-shot runs.
+`$ARGUMENTS` determines which dispatch mode this skill uses. The two modes are **mutually exclusive**:
 
-If running inside an active whip workspace, use `whip workspace view <workspace-name>` to get the worktree path for reading code artifacts referenced in the scenario. In whip mode, simulation tasks go in the `global` workspace (ephemeral — do not pollute the active workspace).
+| Mode | Activates when | Dispatch mechanism |
+|------|---------------|-------------------|
+| **Tracked** *(default)* | `--agent` is **absent** from `$ARGUMENTS` | `/whip-start` Team Flow — IRC, workspace, polling |
+| **Inline** | `--agent` is **present** in `$ARGUMENTS` | Agent tool directly — no whip, no IRC, no lifecycle |
+
+**Strict rules:**
+1. No `--agent` in arguments → **tracked mode**. No exceptions, no inference.
+2. `--agent` in arguments → **inline mode**. `/whip-start`, IRC, and lifecycle steps are all skipped.
+3. `--backend` specification (e.g., user says "use codex") → **implies tracked mode**. Backend selection is a whip concept and is incompatible with `--agent`.
+4. Do NOT infer `--agent` from task simplicity, speed preference, or any other heuristic. The flag must be explicitly present in the user's input.
+
+If running inside an active whip workspace, use `whip workspace view <workspace-name>` to get the worktree path for reading code artifacts referenced in the scenario. In tracked mode, simulation tasks go in the `global` workspace (ephemeral — do not pollute the active workspace).
 
 ## Workflow
 
@@ -55,7 +65,7 @@ For A/B comparisons, choose a strategy:
 
 Present the test plan including:
 - Test cases with output contracts
-- Execution mode (whip or agent)
+- Execution mode (tracked or inline)
 - A/B strategy if applicable
 - Total agent count
 
@@ -63,7 +73,7 @@ Present the test plan including:
 
 ### 2. Execute
 
-#### Whip mode (default)
+#### Tracked mode (default)
 
 Hand off dispatch to `/whip-start`. Prepare one task spec per simulation run and let `/whip-start` handle IRC, creation, assignment, and monitoring.
 
@@ -75,7 +85,7 @@ Each simulation run becomes one task:
 
 After all tasks complete, collect outputs and proceed to analysis.
 
-#### Agent mode (`--agent`)
+#### Inline mode (`--agent`)
 
 Spawn one Agent tool call per run, named `sim-{test-case}-{run}`.
 
@@ -135,6 +145,6 @@ Save the full report with raw agent outputs to `/tmp/simulate-{slug}-{timestamp}
 - Embed all context inline in prompts — no shared state assumptions
 - For A/B comparisons, both versions receive identical inputs
 - Use real file contents from the codebase — never fabricate code
-- In whip mode, use `global` workspace and delegate dispatch to `/whip-start`
-- In whip mode, clean up simulation tasks after collecting results: `whip task clean`
-- In agent mode, each run is single-shot — no follow-up messages or shared state
+- In tracked mode, use `global` workspace and delegate dispatch to `/whip-start`
+- In tracked mode, clean up simulation tasks after collecting results: `whip task clean`
+- In inline mode, each run is single-shot — no follow-up messages or shared state
