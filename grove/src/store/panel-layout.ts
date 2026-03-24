@@ -5,6 +5,8 @@ export interface GlobalTerminalTab {
   id: string;
   paneId: string;
   title: string;
+  /** When set, this tab mirrors an existing PTY instead of spawning a new one */
+  mirrorPtyId?: string;
 }
 
 interface GlobalTerminalLayout {
@@ -33,6 +35,7 @@ interface PanelLayoutStore {
   updateChanges: (ratios: number[]) => void;
   updateGlobalTerminal: (layout: Partial<GlobalTerminalLayout>) => void;
   addGlobalTerminalTab: () => GlobalTerminalTab;
+  addGlobalTerminalMirrorTab: (title: string, ptyId: string) => GlobalTerminalTab;
   removeGlobalTerminalTab: (tabId: string) => void;
   setActiveGlobalTerminalTab: (tabId: string) => void;
   switchGlobalTerminalTab: (direction: "next" | "prev") => void;
@@ -175,6 +178,37 @@ export const usePanelLayoutStore = create<PanelLayoutStore>((set, get) => ({
       ...gt,
       tabs: [...gt.tabs, tab],
       activeTabId: tab.id,
+    };
+    set({ globalTerminal: updated });
+    debouncedSave({ ...getFullLayouts(get), globalTerminal: updated });
+    return tab;
+  },
+
+  addGlobalTerminalMirrorTab: (title, ptyId) => {
+    const gt = get().globalTerminal;
+    // If a mirror for this ptyId already exists, just activate it
+    const existing = gt.tabs.find((t) => t.mirrorPtyId === ptyId);
+    if (existing) {
+      const updated: GlobalTerminalLayout = {
+        ...gt,
+        activeTabId: existing.id,
+        collapsed: false,
+      };
+      set({ globalTerminal: updated });
+      debouncedSave({ ...getFullLayouts(get), globalTerminal: updated });
+      return existing;
+    }
+    const tab: GlobalTerminalTab = {
+      id: crypto.randomUUID(),
+      paneId: crypto.randomUUID(),
+      title,
+      mirrorPtyId: ptyId,
+    };
+    const updated: GlobalTerminalLayout = {
+      ...gt,
+      tabs: [...gt.tabs, tab],
+      activeTabId: tab.id,
+      collapsed: false,
     };
     set({ globalTerminal: updated });
     debouncedSave({ ...getFullLayouts(get), globalTerminal: updated });

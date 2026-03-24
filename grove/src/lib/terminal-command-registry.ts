@@ -13,6 +13,14 @@ export const TERMINAL_TOOLBAR_COMMANDS = [
     steps: [{ type: "ui", action: "open-theme-settings" }],
   },
   {
+    id: "terminal-mirror",
+    label: "Mirror to Global Terminal",
+    title: "Mirror to Global Terminal",
+    icon: "mirror",
+    when: "focused-pty",
+    steps: [{ type: "session", action: "mirror" }],
+  },
+  {
     id: "terminal-split-vertical",
     label: "Split vertical",
     title: "Split Vertical",
