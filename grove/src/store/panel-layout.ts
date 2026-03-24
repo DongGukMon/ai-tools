@@ -53,7 +53,13 @@ let saveTimer: ReturnType<typeof setTimeout> | null = null;
 function debouncedSave(layouts: PanelLayouts) {
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    savePanelLayouts(JSON.stringify(layouts)).catch(() => {});
+    // Strip mirror tabs from persistence — they're ephemeral
+    const gt = layouts.globalTerminal;
+    const cleanGt = {
+      ...gt,
+      tabs: gt.tabs.filter((t) => !t.mirrorPtyId),
+    };
+    savePanelLayouts(JSON.stringify({ ...layouts, globalTerminal: cleanGt })).catch(() => {});
   }, 500);
 }
 
@@ -70,42 +76,27 @@ interface LegacyGlobalTerminalLayout {
   activeTabId?: string;
 }
 
+function makeDefaultTab(): GlobalTerminalTab {
+  return { id: crypto.randomUUID(), paneId: crypto.randomUUID(), title: "Terminal 1" };
+}
+
 function resolveGlobalTerminalLayout(
   layout?: LegacyGlobalTerminalLayout,
 ): GlobalTerminalLayout {
   const collapsed = layout?.collapsed ?? DEFAULTS.globalTerminal.collapsed;
   const ratio = layout?.ratio ?? DEFAULTS.globalTerminal.ratio;
 
-  // Migration: legacy paneId -> single tab
-  if (layout?.paneId && (!layout.tabs || layout.tabs.length === 0)) {
-    const tabId = crypto.randomUUID();
-    return {
-      collapsed,
-      ratio,
-      tabs: [{ id: tabId, paneId: layout.paneId, title: "Terminal 1" }],
-      activeTabId: tabId,
-    };
-  }
+  // Collect tabs: legacy single paneId, persisted tabs, or fresh default
+  const rawTabs = layout?.paneId && !layout.tabs?.length
+    ? [{ id: crypto.randomUUID(), paneId: layout.paneId, title: "Terminal 1" }]
+    : layout?.tabs?.filter((t) => !t.mirrorPtyId);
 
-  // Normal: use tabs if present
-  if (layout?.tabs && layout.tabs.length > 0) {
-    const activeTabId =
-      layout.activeTabId &&
-      layout.tabs.some((t) => t.id === layout.activeTabId)
-        ? layout.activeTabId
-        : layout.tabs[0].id;
-    return { collapsed, ratio, tabs: layout.tabs, activeTabId };
-  }
+  const tabs = rawTabs?.length ? rawTabs : [makeDefaultTab()];
+  const activeTabId = layout?.activeTabId && tabs.some((t) => t.id === layout.activeTabId)
+    ? layout.activeTabId
+    : tabs[0].id;
 
-  // Default: create single tab
-  const tabId = crypto.randomUUID();
-  const paneId = crypto.randomUUID();
-  return {
-    collapsed,
-    ratio,
-    tabs: [{ id: tabId, paneId, title: "Terminal 1" }],
-    activeTabId: tabId,
-  };
+  return { collapsed, ratio, tabs, activeTabId };
 }
 
 function resolvePanelLayouts(parsed?: Partial<PanelLayouts>): PanelLayouts {
