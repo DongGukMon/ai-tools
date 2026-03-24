@@ -194,7 +194,6 @@ export const usePanelLayoutStore = create<PanelLayoutStore>((set, get) => ({
       const updated: GlobalTerminalLayout = {
         ...gt,
         activeTabId: existing.id,
-        collapsed: false,
       };
       set({ globalTerminal: updated });
       debouncedSave({ ...getFullLayouts(get), globalTerminal: updated });
@@ -210,7 +209,6 @@ export const usePanelLayoutStore = create<PanelLayoutStore>((set, get) => ({
       ...gt,
       tabs: [...gt.tabs, tab],
       activeTabId: tab.id,
-      collapsed: false,
     };
     set({ globalTerminal: updated });
     debouncedSave({ ...getFullLayouts(get), globalTerminal: updated });

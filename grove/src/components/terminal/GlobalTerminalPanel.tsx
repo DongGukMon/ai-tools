@@ -131,15 +131,16 @@ function GlobalTerminalPanel({
         )}
       >
         <div className={cn("flex items-center gap-1 min-w-0 flex-1")}>
-          {!collapsed && (
-            <GlobalTerminalTabBar
-              tabs={tabs}
-              activeTabId={activeTabId}
-              onSelect={onSelect}
-              onAdd={onAdd}
-              onClose={onRemove}
-            />
-          )}
+          <GlobalTerminalTabBar
+            tabs={tabs}
+            activeTabId={activeTabId}
+            onSelect={(tabId) => {
+              onSelect(tabId);
+              updateGlobalTerminal({ collapsed: false });
+            }}
+            onAdd={onAdd}
+            onClose={onRemove}
+          />
         </div>
         <IconButton onClick={toggle} title={collapsed ? "Expand" : "Collapse"}>
           {collapsed ? (
