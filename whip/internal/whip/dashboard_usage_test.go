@@ -122,7 +122,7 @@ func TestUsageCacheRoundTrip(t *testing.T) {
 
 func TestUsageCacheReturnsErrWhenStale(t *testing.T) {
 	tmpDir := t.TempDir()
-	staleTime := time.Now().Add(-11 * time.Minute)
+	staleTime := time.Now().Add(-(dashboardUsageRefreshInterval + time.Minute))
 
 	state := dashboardUsageState{UpdatedAt: staleTime}
 	if err := writeUsageCache(tmpDir, state); err != nil {
