@@ -13,20 +13,6 @@ export const TERMINAL_TOOLBAR_COMMANDS = [
     steps: [{ type: "ui", action: "open-theme-settings" }],
   },
   {
-    id: "terminal-split-horizontal",
-    label: "Split horizontal",
-    title: "Split Horizontal",
-    icon: "split-horizontal",
-    when: "focused-pty",
-    steps: [
-      {
-        type: "session",
-        action: "split",
-        direction: "horizontal",
-      },
-    ],
-  },
-  {
     id: "terminal-split-vertical",
     label: "Split vertical",
     title: "Split Vertical",
@@ -37,6 +23,20 @@ export const TERMINAL_TOOLBAR_COMMANDS = [
         type: "session",
         action: "split",
         direction: "vertical",
+      },
+    ],
+  },
+  {
+    id: "terminal-split-horizontal",
+    label: "Split horizontal",
+    title: "Split Horizontal",
+    icon: "split-horizontal",
+    when: "focused-pty",
+    steps: [
+      {
+        type: "session",
+        action: "split",
+        direction: "horizontal",
       },
     ],
   },
