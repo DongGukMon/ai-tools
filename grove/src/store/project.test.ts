@@ -84,6 +84,7 @@ describe("useProjectStore", () => {
       sessions: {},
       activeWorktree: null,
       focusedPtyId: null,
+      focusedPaneIdByWorktree: {},
       bellPtyIds: new Set<string>(),
       aiSessions: {},
       theme: null,

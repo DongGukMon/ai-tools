@@ -6,10 +6,15 @@ import {
   splitNode,
   removeNode,
   setSizesAtPath,
-  findFirstLeaf,
   normalizeSplitTree,
 } from "../lib/split-tree";
-import { collectTerminalPanes } from "../lib/terminal-session";
+import {
+  collectTerminalPanes,
+  findFirstTerminalPane,
+  findTerminalPaneByPaneId,
+  findTerminalPaneByPtyId,
+  findWorktreePathForPtyId,
+} from "../lib/terminal-session";
 import { loadTerminalLayouts, saveTerminalLayouts } from "../lib/platform";
 
 // In-memory cache populated at startup via initLayouts()
@@ -48,6 +53,7 @@ interface TerminalState {
   sessions: Record<string, SplitNode>;
   activeWorktree: string | null;
   focusedPtyId: string | null;
+  focusedPaneIdByWorktree: Record<string, string | null>;
   bellPtyIds: Set<string>;
   aiSessions: Record<string, AiSession>;
   theme: TerminalTheme | null;
@@ -74,10 +80,72 @@ interface TerminalState {
   initLayouts: () => Promise<void>;
 }
 
+interface WorktreeFocus {
+  paneId: string | null;
+  ptyId: string | null;
+}
+
+function setFocusedPaneForWorktree(
+  focusedPaneIdByWorktree: Record<string, string | null>,
+  worktreePath: string,
+  paneId: string | null,
+): Record<string, string | null> {
+  if (paneId === null) {
+    if (!(worktreePath in focusedPaneIdByWorktree)) {
+      return focusedPaneIdByWorktree;
+    }
+    const next = { ...focusedPaneIdByWorktree };
+    delete next[worktreePath];
+    return next;
+  }
+
+  if (focusedPaneIdByWorktree[worktreePath] === paneId) {
+    return focusedPaneIdByWorktree;
+  }
+
+  return {
+    ...focusedPaneIdByWorktree,
+    [worktreePath]: paneId,
+  };
+}
+
+function resolveWorktreeFocus(
+  node: SplitNode | undefined,
+  rememberedPaneId: string | null | undefined,
+): WorktreeFocus {
+  if (!node) {
+    return { paneId: null, ptyId: null };
+  }
+
+  if (rememberedPaneId) {
+    const rememberedPane = findTerminalPaneByPaneId(node, rememberedPaneId);
+    if (rememberedPane?.ptyId) {
+      return {
+        paneId: rememberedPane.paneId,
+        ptyId: rememberedPane.ptyId,
+      };
+    }
+  }
+
+  const firstPane = findFirstTerminalPane(node);
+  return {
+    paneId: firstPane?.paneId ?? null,
+    ptyId: firstPane?.ptyId ?? null,
+  };
+}
+
+function shouldSyncActiveFocus(
+  activeWorktree: string | null,
+  targetWorktree: string,
+): boolean {
+  return activeWorktree === null || activeWorktree === targetWorktree;
+}
+
 export const useTerminalStore = create<TerminalState>((set) => ({
   sessions: {},
   activeWorktree: null,
   focusedPtyId: null,
+  focusedPaneIdByWorktree: {},
   bellPtyIds: new Set<string>(),
   aiSessions: {},
   theme: null,
@@ -91,6 +159,7 @@ export const useTerminalStore = create<TerminalState>((set) => ({
 
   createSession: (worktreePath, paneId, ptyId) =>
     set((state) => {
+      const focus = { paneId, ptyId };
       const newSessions = {
         ...state.sessions,
         [worktreePath]: { id: paneId, type: "leaf" as const, ptyId },
@@ -98,18 +167,33 @@ export const useTerminalStore = create<TerminalState>((set) => ({
       saveLayouts(newSessions);
       return {
         sessions: newSessions,
-        focusedPtyId: ptyId,
+        focusedPaneIdByWorktree: setFocusedPaneForWorktree(
+          state.focusedPaneIdByWorktree,
+          worktreePath,
+          focus.paneId,
+        ),
+        focusedPtyId: shouldSyncActiveFocus(state.activeWorktree, worktreePath)
+          ? focus.ptyId
+          : state.focusedPtyId,
       };
     }),
 
   restoreSession: (worktreePath, node) =>
     set((state) => {
       const restored = normalizeSplitTree(node, () => crypto.randomUUID());
+      const focus = resolveWorktreeFocus(restored, state.focusedPaneIdByWorktree[worktreePath]);
       const newSessions = { ...state.sessions, [worktreePath]: restored };
       saveLayouts(newSessions);
       return {
         sessions: newSessions,
-        focusedPtyId: findFirstLeaf(restored),
+        focusedPaneIdByWorktree: setFocusedPaneForWorktree(
+          state.focusedPaneIdByWorktree,
+          worktreePath,
+          focus.paneId,
+        ),
+        focusedPtyId: shouldSyncActiveFocus(state.activeWorktree, worktreePath)
+          ? focus.ptyId
+          : state.focusedPtyId,
       };
     }),
 
@@ -117,6 +201,7 @@ export const useTerminalStore = create<TerminalState>((set) => ({
     set((state) => {
       const root = state.sessions[worktreePath];
       if (!root) return state;
+      const focus = { paneId: newPaneId, ptyId: newPtyId };
       const newSessions = {
         ...state.sessions,
         [worktreePath]: splitNode(root, ptyId, direction, {
@@ -126,7 +211,17 @@ export const useTerminalStore = create<TerminalState>((set) => ({
         }),
       };
       saveLayouts(newSessions);
-      return { sessions: newSessions, focusedPtyId: newPtyId };
+      return {
+        sessions: newSessions,
+        focusedPaneIdByWorktree: setFocusedPaneForWorktree(
+          state.focusedPaneIdByWorktree,
+          worktreePath,
+          focus.paneId,
+        ),
+        focusedPtyId: shouldSyncActiveFocus(state.activeWorktree, worktreePath)
+          ? focus.ptyId
+          : state.focusedPtyId,
+      };
     }),
 
   removeSession: (worktreePath, nextActiveWorktree = null) =>
@@ -147,6 +242,12 @@ export const useTerminalStore = create<TerminalState>((set) => ({
       delete layoutCache[worktreePath];
       saveLayouts(newSessions);
 
+      let nextFocusedPaneIdByWorktree = setFocusedPaneForWorktree(
+        state.focusedPaneIdByWorktree,
+        worktreePath,
+        null,
+      );
+
       const shouldSwitchActiveWorktree = state.activeWorktree === worktreePath;
       const resolvedActiveWorktree = shouldSwitchActiveWorktree
         ? nextActiveWorktree
@@ -154,6 +255,20 @@ export const useTerminalStore = create<TerminalState>((set) => ({
       const activeSession = resolvedActiveWorktree
         ? newSessions[resolvedActiveWorktree]
         : undefined;
+      const nextActiveFocus = resolveWorktreeFocus(
+        activeSession,
+        resolvedActiveWorktree
+          ? nextFocusedPaneIdByWorktree[resolvedActiveWorktree]
+          : null,
+      );
+
+      if (resolvedActiveWorktree) {
+        nextFocusedPaneIdByWorktree = setFocusedPaneForWorktree(
+          nextFocusedPaneIdByWorktree,
+          resolvedActiveWorktree,
+          nextActiveFocus.paneId,
+        );
+      }
 
       if (activeSession) {
         for (const { ptyId } of collectTerminalPanes(activeSession)) {
@@ -172,8 +287,9 @@ export const useTerminalStore = create<TerminalState>((set) => ({
         sessions: newSessions,
         bellPtyIds: nextBellPtyIds,
         aiSessions: nextAiSessions,
+        focusedPaneIdByWorktree: nextFocusedPaneIdByWorktree,
         focusedPtyId: shouldSwitchActiveWorktree
-          ? (activeSession ? findFirstLeaf(activeSession) : null)
+          ? nextActiveFocus.ptyId
           : state.focusedPtyId,
         activeWorktree: resolvedActiveWorktree,
       };
@@ -191,19 +307,24 @@ export const useTerminalStore = create<TerminalState>((set) => ({
         delete newSessions[worktreePath];
       }
       saveLayouts(newSessions);
-      const newFocused =
-        state.focusedPtyId === ptyId
-          ? updated
-            ? findFirstLeaf(updated)
-            : null
-          : state.focusedPtyId;
+      const nextFocus = resolveWorktreeFocus(
+        updated ?? undefined,
+        state.focusedPaneIdByWorktree[worktreePath],
+      );
       const nextBellPtyIds = new Set(state.bellPtyIds);
       nextBellPtyIds.delete(ptyId);
       const nextAiSessions = { ...state.aiSessions };
       delete nextAiSessions[ptyId];
       return {
         sessions: newSessions,
-        focusedPtyId: newFocused,
+        focusedPaneIdByWorktree: setFocusedPaneForWorktree(
+          state.focusedPaneIdByWorktree,
+          worktreePath,
+          nextFocus.paneId,
+        ),
+        focusedPtyId: state.activeWorktree === worktreePath
+          ? nextFocus.ptyId
+          : state.focusedPtyId,
         bellPtyIds: nextBellPtyIds,
         aiSessions: nextAiSessions,
       };
@@ -211,11 +332,20 @@ export const useTerminalStore = create<TerminalState>((set) => ({
 
   setActiveWorktree: (worktreePath) =>
     set((state) => {
-      const newFocused = worktreePath
-        ? (state.sessions[worktreePath]
-            ? findFirstLeaf(state.sessions[worktreePath])
-            : null)
-        : null;
+      const nextFocus = worktreePath
+        ? resolveWorktreeFocus(
+            state.sessions[worktreePath],
+            state.focusedPaneIdByWorktree[worktreePath],
+          )
+        : { paneId: null, ptyId: null };
+      let nextFocusedPaneIdByWorktree = state.focusedPaneIdByWorktree;
+      if (worktreePath) {
+        nextFocusedPaneIdByWorktree = setFocusedPaneForWorktree(
+          state.focusedPaneIdByWorktree,
+          worktreePath,
+          nextFocus.paneId,
+        );
+      }
       const nextBellPtyIds = new Set(state.bellPtyIds);
       let nextAiSessions = state.aiSessions;
       if (worktreePath && state.sessions[worktreePath]) {
@@ -234,13 +364,45 @@ export const useTerminalStore = create<TerminalState>((set) => ({
       }
       return {
         activeWorktree: worktreePath,
-        focusedPtyId: newFocused,
+        focusedPaneIdByWorktree: nextFocusedPaneIdByWorktree,
+        focusedPtyId: nextFocus.ptyId,
         bellPtyIds: nextBellPtyIds,
         aiSessions: nextAiSessions,
       };
     }),
 
-  setFocusedPtyId: (ptyId) => set({ focusedPtyId: ptyId }),
+  setFocusedPtyId: (ptyId) =>
+    set((state) => {
+      if (!ptyId) {
+        return state.focusedPtyId === null ? state : { focusedPtyId: null };
+      }
+
+      const activeSession = state.activeWorktree
+        ? state.sessions[state.activeWorktree]
+        : undefined;
+      const activePane = activeSession ? findTerminalPaneByPtyId(activeSession, ptyId) : null;
+      const worktreePath = activePane
+        ? state.activeWorktree
+        : findWorktreePathForPtyId(state.sessions, ptyId);
+
+      if (!worktreePath) {
+        return state.focusedPtyId === ptyId ? state : { focusedPtyId: ptyId };
+      }
+
+      const pane = findTerminalPaneByPtyId(state.sessions[worktreePath], ptyId);
+      if (!pane) {
+        return state.focusedPtyId === ptyId ? state : { focusedPtyId: ptyId };
+      }
+
+      return {
+        focusedPtyId: ptyId,
+        focusedPaneIdByWorktree: setFocusedPaneForWorktree(
+          state.focusedPaneIdByWorktree,
+          worktreePath,
+          pane.paneId,
+        ),
+      };
+    }),
 
   markBellPty: (ptyId) =>
     set((state) => {
