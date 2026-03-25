@@ -6,6 +6,8 @@ pub mod mission;
 pub mod process_env;
 pub mod pty;
 pub mod terminal_theme;
+#[cfg(test)]
+mod test_support;
 pub mod tool_hooks;
 pub mod worktree_lifecycle;
 

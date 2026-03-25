@@ -2,6 +2,7 @@ use crate::config::{grove_data_path, load_json_file_or_default, save_json_file};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::HashSet,
     fs,
     path::{Path, PathBuf},
 };
@@ -55,11 +56,64 @@ pub(crate) fn missions_dir() -> Result<PathBuf, String> {
 pub fn load_missions() -> MissionStore {
     let path = missions_path().unwrap_or_default();
     let dir = missions_dir().unwrap_or_default();
-    let mut store = load_missions_from_path(&path);
+    let config = crate::config::load_config();
+    let project_ids: HashSet<String> = config
+        .projects
+        .into_iter()
+        .map(|project| project.id)
+        .collect();
+    load_missions_with_paths(&path, &dir, &project_ids)
+}
+
+fn load_missions_with_paths(
+    path: &Path,
+    dir: &Path,
+    project_ids: &HashSet<String>,
+) -> MissionStore {
+    let mut store = load_missions_from_path(path);
+    let changed = reconcile_missions(&mut store, dir, project_ids);
+
+    if changed {
+        let _ = save_missions_to_path(path, &store);
+    }
+
     for mission in &mut store.missions {
         mission.mission_dir = dir.join(&mission.id).to_string_lossy().to_string();
     }
+
     store
+}
+
+fn reconcile_missions(store: &mut MissionStore, dir: &Path, project_ids: &HashSet<String>) -> bool {
+    let mut changed = false;
+
+    for mission in &mut store.missions {
+        let before = mission.projects.len();
+        mission
+            .projects
+            .retain(|project| project_ids.contains(project.project_id.as_str()));
+        if mission.projects.len() != before {
+            changed = true;
+        }
+    }
+
+    if dir.exists() {
+        if let Ok(entries) = fs::read_dir(&dir) {
+            let known_ids: HashSet<&str> = store
+                .missions
+                .iter()
+                .map(|mission| mission.id.as_str())
+                .collect();
+            for entry in entries.flatten() {
+                let name = entry.file_name().to_string_lossy().to_string();
+                if !known_ids.contains(name.as_str()) {
+                    let _ = fs::remove_dir_all(entry.path());
+                }
+            }
+        }
+    }
+
+    changed
 }
 
 pub(crate) fn load_missions_from_path(path: &Path) -> MissionStore {
@@ -301,20 +355,13 @@ fn delete_mission_with_paths(
 mod tests {
     use super::*;
     use crate::config::{GroveConfig, ProjectEntry};
-    use std::sync::{Mutex, OnceLock};
+    use crate::test_support::env_lock;
     use uuid::Uuid;
 
     fn temp_missions_path() -> PathBuf {
         std::env::temp_dir()
             .join(format!("grove-mission-tests-{}", Uuid::new_v4()))
             .join("missions.json")
-    }
-
-    fn env_lock() -> std::sync::MutexGuard<'static, ()> {
-        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(()))
-            .lock()
-            .unwrap_or_else(|error| error.into_inner())
     }
 
     struct TestHome {
@@ -480,6 +527,72 @@ mod tests {
 
         let store = load_missions_from_path(&path);
         assert!(store.missions.is_empty());
+
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn load_missions_reconciles_orphaned_projects_and_stale_directories() {
+        let path = temp_missions_path();
+        let missions_dir = path.parent().unwrap().join("missions");
+        let mission_id = "abcd1234";
+        let stale_dir_name = "deadbeef";
+        let mission_dir = missions_dir.join(mission_id);
+        let stale_dir = missions_dir.join(stale_dir_name);
+        fs::create_dir_all(&mission_dir).unwrap();
+        fs::create_dir_all(&stale_dir).unwrap();
+
+        save_missions_to_path(
+            &path,
+            &MissionStore {
+                missions: vec![Mission {
+                    id: mission_id.into(),
+                    name: "Mission".into(),
+                    projects: vec![
+                        MissionProject {
+                            project_id: "project-1".into(),
+                            branch: format!("mission/{mission_id}"),
+                            path: mission_dir.join("grove").to_string_lossy().to_string(),
+                        },
+                        MissionProject {
+                            project_id: "project-2".into(),
+                            branch: format!("mission/{mission_id}"),
+                            path: mission_dir.join("other").to_string_lossy().to_string(),
+                        },
+                    ],
+                    mission_dir: String::new(),
+                }],
+            },
+        )
+        .unwrap();
+
+        let store = load_missions_with_paths(
+            &path,
+            &missions_dir,
+            &HashSet::from([String::from("project-1")]),
+        );
+        let mission = store
+            .missions
+            .iter()
+            .find(|mission| mission.id == mission_id)
+            .unwrap();
+
+        assert_eq!(mission.projects.len(), 1);
+        assert_eq!(mission.projects[0].project_id, "project-1");
+        assert_eq!(
+            mission.mission_dir,
+            mission_dir.to_string_lossy().to_string()
+        );
+        assert!(!stale_dir.exists());
+
+        let saved_store = load_missions_from_path(&path);
+        let saved_mission = saved_store
+            .missions
+            .iter()
+            .find(|mission| mission.id == mission_id)
+            .unwrap();
+        assert_eq!(saved_mission.projects.len(), 1);
+        assert_eq!(saved_mission.projects[0].project_id, "project-1");
 
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }

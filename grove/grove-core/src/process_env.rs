@@ -183,13 +183,8 @@ mod tests {
         enriched_path, is_posix_like_shell, normalize_env_value, parse_path_marker,
         preferred_ssh_auth_sock, resolve_with, resolve_with_retry,
     };
-    use std::sync::{Mutex, OnceLock};
+    use crate::test_support::env_lock;
     use std::time::Duration;
-
-    fn env_lock() -> std::sync::MutexGuard<'static, ()> {
-        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(())).lock().unwrap()
-    }
 
     #[test]
     fn preferred_ssh_auth_sock_prefers_process_env() {

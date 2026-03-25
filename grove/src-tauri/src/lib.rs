@@ -115,6 +115,37 @@ async fn set_worktree_order(project_id: String, order: Vec<String>) -> Result<()
     blocking(move || grove_core::git_project::set_worktree_order_impl(&project_id, order)).await
 }
 
+// === MISSION COMMANDS (W5) ===
+
+#[tauri::command]
+async fn list_missions() -> Result<Vec<grove_core::mission::Mission>, String> {
+    blocking(|| Ok(grove_core::mission::load_missions().missions)).await
+}
+
+#[tauri::command]
+async fn create_mission(name: String) -> Result<grove_core::mission::Mission, String> {
+    blocking(move || grove_core::mission::create_mission(&name)).await
+}
+
+#[tauri::command]
+async fn delete_mission(id: String) -> Result<(), String> {
+    blocking(move || grove_core::mission::delete_mission(&id)).await
+}
+
+#[tauri::command]
+async fn add_project_to_mission(
+    mission_id: String,
+    project_id: String,
+) -> Result<grove_core::mission::MissionProject, String> {
+    blocking(move || grove_core::mission::add_project_to_mission(&mission_id, &project_id)).await
+}
+
+#[tauri::command]
+async fn remove_project_from_mission(mission_id: String, project_id: String) -> Result<(), String> {
+    blocking(move || grove_core::mission::remove_project_from_mission(&mission_id, &project_id))
+        .await
+}
+
 // === PTY COMMANDS (W3) ===
 
 #[tauri::command]
@@ -312,6 +343,12 @@ pub fn run() {
             remove_worktree,
             list_worktrees,
             set_worktree_order,
+            // Mission (W5)
+            list_missions,
+            create_mission,
+            delete_mission,
+            add_project_to_mission,
+            remove_project_from_mission,
             // PTY (W3)
             create_pty,
             write_pty,
