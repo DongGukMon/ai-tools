@@ -123,7 +123,7 @@ function FileSection({
   const marquee = useMarqueeSelection(sectionRef, itemRefsMap, onMarqueeSelect ?? noop);
 
   return (
-    <div className={cn("flex flex-col min-h-0")}>
+    <div className={cn("flex flex-col min-h-0 flex-1")}>
       <div
         className={cn(
           "flex items-center gap-2 px-2 h-7 shrink-0 border-b border-border",
@@ -146,7 +146,7 @@ function FileSection({
       </div>
       <div
         ref={sectionRef}
-        className={cn("flex-1 overflow-y-auto relative select-none cursor-default")}
+        className={cn("flex-1 min-h-0 overflow-y-auto relative select-none cursor-default")}
         {...marquee.handlers}
       >
         {files.map((file) => (
