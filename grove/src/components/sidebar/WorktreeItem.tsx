@@ -4,7 +4,9 @@ import type { Worktree } from "../../types";
 import { useProjectStore } from "../../store/project";
 import type { AiSession, AiTool } from "../../store/terminal";
 import { useToast } from "../../store/toast";
+import { runCommand } from "../../lib/command";
 import { overlay } from "../../lib/overlay";
+import { openExternal } from "../../lib/platform";
 import { cn } from "../../lib/cn";
 import claudeCodeColor from "../../assets/claudecode-color.png";
 import codexColor from "../../assets/codex-color.png";
@@ -14,6 +16,7 @@ import {
   useAiWorktreeSessions,
   useWorktreeBell,
 } from "./worktree-status";
+import { useWorktreePrUrl } from "./worktree-pr";
 
 // ── Icon mapping ──
 
@@ -49,15 +52,21 @@ export function AiStatusIcons({ sessions }: { sessions: AiSession[] }) {
   );
 }
 
-
 // ── WorktreeItem ──
 
 interface Props {
   worktree: Worktree;
   projectId: string;
+  projectOrg: string;
+  projectRepo: string;
 }
 
-function WorktreeItem({ worktree, projectId }: Props) {
+function WorktreeItem({
+  worktree,
+  projectId,
+  projectOrg,
+  projectRepo,
+}: Props) {
   const [removing, setRemoving] = useState(false);
   const { selectedWorktree, selectWorktree, removeWorktree } =
     useProjectStore();
@@ -66,6 +75,17 @@ function WorktreeItem({ worktree, projectId }: Props) {
   const hasBell = useWorktreeBell(worktree.path);
   const aiSessions = useAiWorktreeSessions(worktree.path);
   const displayName = worktree.branch || worktree.name;
+  const { isLoading: prLookupLoading, url: prUrl } = useWorktreePrUrl({
+    projectOrg,
+    projectRepo,
+    worktreeBranch: worktree.branch,
+    worktreePath: worktree.path,
+  });
+  const prButtonTitle = prLookupLoading
+    ? "Checking for open pull request"
+    : prUrl
+      ? "Open pull request"
+      : "No open pull request";
   const handleActivate = useSidebarLeafActivation({
     disabled: removing,
     isSelected,
@@ -98,12 +118,43 @@ function WorktreeItem({ worktree, projectId }: Props) {
     }
   };
 
+  const handlePrClick = async (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    if (!prUrl) return;
+
+    try {
+      await runCommand(() => openExternal(prUrl), {
+        errorToast: "Failed to open pull request",
+      });
+    } catch {
+      // Toasts are handled by the command layer.
+    }
+  };
+
   return (
     <SidebarLeafItem
       icon={(
-        <GitBranch className={cn("h-[13px] w-[13px] shrink-0", {
-          "text-orange-500": hasBell,
-        })} />
+        <button
+          type="button"
+          disabled={removing || !prUrl}
+          className={cn(
+            "flex h-4 w-4 shrink-0 items-center justify-center rounded-sm transition-colors",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70",
+            "disabled:cursor-default",
+            {
+              "text-orange-500 disabled:text-orange-500": hasBell,
+              "text-muted-foreground": !hasBell,
+              "opacity-40": !prUrl && !hasBell,
+              "hover:bg-accent/10 hover:text-foreground": prUrl && !hasBell,
+              "hover:bg-orange-500/10 hover:text-orange-500": prUrl && hasBell,
+            },
+          )}
+          onClick={handlePrClick}
+          title={prButtonTitle}
+          aria-label={prButtonTitle}
+        >
+          <GitBranch className={cn("h-[13px] w-[13px]")} />
+        </button>
       )}
       label={displayName}
       title={worktree.path}
@@ -115,6 +166,7 @@ function WorktreeItem({ worktree, projectId }: Props) {
         <Loader2 className={cn("h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground")} />
       ) : (
         <button
+          type="button"
           className={cn(
             "h-4 w-4 flex items-center justify-center rounded-sm transition-colors",
             {

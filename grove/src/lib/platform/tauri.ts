@@ -206,9 +206,19 @@ export async function listWorktrees(projectId: string): Promise<Worktree[]> {
   return platform.invoke<Worktree[]>("list_worktrees", { projectId });
 }
 
+export async function getWorktreePrUrl(
+  worktreePath: string,
+): Promise<string | null> {
+  return platform.invoke<string | null>("get_worktree_pr_url", { worktreePath });
+}
+
 // Phase 2: 드래그 재정렬 완료 시 호출하여 커스텀 순서를 영속화
 export async function setWorktreeOrder(projectId: string, order: string[]): Promise<void> {
   return platform.invoke<void>("set_worktree_order", { projectId, order });
+}
+
+export async function openExternal(url: string): Promise<void> {
+  return platform.invoke("open_external", { url });
 }
 
 // === PTY COMMANDS (W3) ===

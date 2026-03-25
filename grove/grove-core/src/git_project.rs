@@ -1,7 +1,7 @@
 use crate::config::{self, ProjectEntry};
 use crate::process_env::{enriched_path, preferred_ssh_auth_sock};
 use crate::{Project, Worktree};
-use git2::Repository;
+use git2::{Oid, Repository};
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -62,6 +62,56 @@ fn parse_git_url(url: &str) -> Result<(String, String, String), String> {
         segments[1].to_string(),
         segments[2].to_string(),
     ))
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PullRequestHeadRef {
+    number: u64,
+    oid: Oid,
+}
+
+fn is_github_host(host: &str) -> bool {
+    let normalized = host.trim().to_ascii_lowercase();
+    normalized == "github.com" || normalized.contains("github")
+}
+
+fn github_remote(url: &str) -> Option<(String, String, String)> {
+    let (host, org, repo) = parse_git_url(url).ok()?;
+    if !is_github_host(&host) {
+        return None;
+    }
+
+    Some((host, org, repo))
+}
+
+fn parse_pull_request_head_ref(line: &str) -> Option<PullRequestHeadRef> {
+    let mut parts = line.split_whitespace();
+    let oid = Oid::from_str(parts.next()?).ok()?;
+    let ref_name = parts.next()?;
+    let number = ref_name
+        .strip_prefix("refs/pull/")?
+        .strip_suffix("/head")?
+        .parse()
+        .ok()?;
+
+    Some(PullRequestHeadRef { number, oid })
+}
+
+fn parse_pull_request_head_refs(output: &str) -> Vec<PullRequestHeadRef> {
+    output
+        .lines()
+        .filter_map(parse_pull_request_head_ref)
+        .collect()
+}
+
+fn find_pull_request_number_for_head(refs: &[PullRequestHeadRef], head_oid: Oid) -> Option<u64> {
+    refs.iter()
+        .find(|pull_ref| pull_ref.oid == head_oid)
+        .map(|pull_ref| pull_ref.number)
+}
+
+fn canonical_pull_request_url(host: &str, org: &str, repo: &str, number: u64) -> String {
+    format!("https://{host}/{org}/{repo}/pull/{number}")
 }
 
 fn project_dir(host: &str, org: &str, repo: &str) -> PathBuf {
@@ -865,6 +915,52 @@ pub fn list_worktrees_impl(project_id: &str) -> Result<Vec<Worktree>, String> {
     ))
 }
 
+pub fn get_worktree_pr_url_impl(worktree_path: &str) -> Result<Option<String>, String> {
+    let worktree = Path::new(worktree_path);
+    let repo = Repository::open(worktree).map_err(|e| {
+        format!(
+            "Failed to open git repository at {}: {e}",
+            worktree.display()
+        )
+    })?;
+    let head = repo.head().map_err(|e| {
+        format!(
+            "Failed to read HEAD for {}: {e}",
+            worktree.display()
+        )
+    })?;
+    if !head.is_branch() || head.shorthand().filter(|name| !name.is_empty()).is_none() {
+        return Ok(None);
+    }
+
+    let head_oid = head
+        .peel_to_commit()
+        .map_err(|e| {
+            format!(
+                "Failed to resolve HEAD commit for {}: {e}",
+                worktree.display()
+            )
+        })?
+        .id();
+
+    let remote_url = remote_url_for_repo(worktree)?;
+    let Some((host, org, repo_name)) = github_remote(&remote_url) else {
+        return Ok(None);
+    };
+
+    let pull_refs = parse_pull_request_head_refs(&run_git_output(
+        worktree,
+        &["ls-remote", "origin", "refs/pull/*/head"],
+    )?);
+    let Some(number) = find_pull_request_number_for_head(&pull_refs, head_oid) else {
+        return Ok(None);
+    };
+
+    Ok(Some(canonical_pull_request_url(
+        &host, &org, &repo_name, number,
+    )))
+}
+
 pub fn set_worktree_order_impl(project_id: &str, order: Vec<String>) -> Result<(), String> {
     let mut config = config::load_config();
     let entry = config
@@ -1181,6 +1277,64 @@ fn refresh_source_repo(source: &Path) -> Result<(), String> {
 mod tests {
     use super::*;
     use crate::test_support::env_lock;
+
+    #[test]
+    fn github_remote_accepts_github_urls_and_rejects_others() {
+        assert_eq!(
+            github_remote("https://github.com/bang9/grove.git"),
+            Some((
+                "github.com".to_string(),
+                "bang9".to_string(),
+                "grove".to_string(),
+            ))
+        );
+        assert_eq!(
+            github_remote("git@github.sendbird.com:product/grove.git"),
+            Some((
+                "github.sendbird.com".to_string(),
+                "product".to_string(),
+                "grove".to_string(),
+            ))
+        );
+        assert_eq!(github_remote("https://gitlab.com/bang9/grove.git"), None);
+    }
+
+    #[test]
+    fn parse_pull_request_head_refs_matches_head_oid() {
+        let head_oid = Oid::from_str("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb").unwrap();
+        let refs = parse_pull_request_head_refs(
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\trefs/pull/11/head\n\
+             bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\trefs/pull/42/head\n\
+             invalid\trefs/pull/not-a-number/head\n",
+        );
+
+        assert_eq!(
+            refs,
+            vec![
+                PullRequestHeadRef {
+                    number: 11,
+                    oid: Oid::from_str("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap(),
+                },
+                PullRequestHeadRef {
+                    number: 42,
+                    oid: head_oid,
+                },
+            ]
+        );
+        assert_eq!(find_pull_request_number_for_head(&refs, head_oid), Some(42));
+    }
+
+    #[test]
+    fn canonical_pull_request_url_uses_remote_identity() {
+        assert_eq!(
+            canonical_pull_request_url("github.com", "bang9", "grove", 42),
+            "https://github.com/bang9/grove/pull/42"
+        );
+        assert_eq!(
+            canonical_pull_request_url("github.sendbird.com", "product", "grove", 7),
+            "https://github.sendbird.com/product/grove/pull/7"
+        );
+    }
 
     struct TestHome {
         root: PathBuf,

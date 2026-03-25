@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, ipcMain, shell } from "electron";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
@@ -22,6 +22,7 @@ const JSON_RESPONSE_COMMANDS = new Set([
   "refresh_project",
   "add_worktree",
   "list_worktrees",
+  "get_worktree_pr_url",
   "create_pty",
   "poll_pty_bells",
   "save_terminal_session_snapshot",
@@ -309,6 +310,12 @@ function registerIpcHandlers() {
 
       if (command === "is_fullscreen") {
         return targetWindow.isFullScreen();
+      }
+
+      if (command === "open_external") {
+        const url = requireStringArg(args, "url");
+        await shell.openExternal(url);
+        return;
       }
 
       return invokeNative(targetWindow, command, args);

@@ -111,6 +111,11 @@ async fn list_worktrees(project_id: String) -> Result<Vec<Worktree>, String> {
 }
 
 #[tauri::command]
+async fn get_worktree_pr_url(worktree_path: String) -> Result<Option<String>, String> {
+    blocking(move || grove_core::git_project::get_worktree_pr_url_impl(&worktree_path)).await
+}
+
+#[tauri::command]
 async fn set_worktree_order(project_id: String, order: Vec<String>) -> Result<(), String> {
     blocking(move || grove_core::git_project::set_worktree_order_impl(&project_id, order)).await
 }
@@ -144,6 +149,16 @@ async fn add_project_to_mission(
 async fn remove_project_from_mission(mission_id: String, project_id: String) -> Result<(), String> {
     blocking(move || grove_core::mission::remove_project_from_mission(&mission_id, &project_id))
         .await
+}
+
+#[tauri::command]
+async fn open_external(url: String) -> Result<(), String> {
+    blocking(move || {
+        webbrowser::open(&url)
+            .map(|_| ())
+            .map_err(|e| format!("Failed to open URL: {e}"))
+    })
+    .await
 }
 
 // === PTY COMMANDS (W3) ===
@@ -342,6 +357,7 @@ pub fn run() {
             add_worktree,
             remove_worktree,
             list_worktrees,
+            get_worktree_pr_url,
             set_worktree_order,
             // Mission (W5)
             list_missions,
@@ -349,6 +365,7 @@ pub fn run() {
             delete_mission,
             add_project_to_mission,
             remove_project_from_mission,
+            open_external,
             // PTY (W3)
             create_pty,
             write_pty,
