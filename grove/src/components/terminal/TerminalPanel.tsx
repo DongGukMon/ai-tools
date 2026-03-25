@@ -1,8 +1,10 @@
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { TerminalSquare } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { useTerminalStore } from "../../store/terminal";
 import { useProjectStore } from "../../store/project";
+import { usePanelLayoutStore } from "../../store/panel-layout";
+import { useMissionStore } from "../../store/mission";
 import {
   getTerminalTheme,
   getAppConfig,
@@ -79,7 +81,22 @@ function TerminalPanel() {
   const setDetectedTheme = useTerminalStore((s) => s.setDetectedTheme);
   const setActiveWorktree = useTerminalStore((s) => s.setActiveWorktree);
   const updateAiStatus = useTerminalStore((s) => s.updateAiStatus);
+  const sidebarMode = usePanelLayoutStore((s) => s.sidebarMode);
   const selectedWorktreePath = useProjectStore((s) => s.selectedWorktree?.path ?? null);
+  const missionSelectedItem = useMissionStore((s) => s.selectedItem);
+  const missions = useMissionStore((s) => s.missions);
+
+  const missionSelectedPath = useMemo(() => {
+    if (!missionSelectedItem) return null;
+    const mission = missions.find((m) => m.id === missionSelectedItem.missionId);
+    if (!mission) return null;
+    if (missionSelectedItem.projectId) {
+      return mission.projects.find((p) => p.projectId === missionSelectedItem.projectId)?.path ?? null;
+    }
+    return mission.missionDir || null;
+  }, [missionSelectedItem, missions]);
+
+  const activePath = sidebarMode === "projects" ? selectedWorktreePath : missionSelectedPath;
   const { createTerminal } = useTerminal();
   const [error, setError] = useState<string | null>(null);
   const previousPaneTopologyRef = useRef(new Map<string, string>());
@@ -219,10 +236,10 @@ function TerminalPanel() {
     init();
   }, []);
 
-  // Sync sidebar -> terminal
+  // Sync sidebar selection -> terminal session target
   useEffect(() => {
-    setActiveWorktree(selectedWorktreePath);
-  }, [selectedWorktreePath, setActiveWorktree]);
+    setActiveWorktree(activePath);
+  }, [activePath, setActiveWorktree]);
 
   useEffect(() => {
     let cancelled = false;
