@@ -79,8 +79,7 @@ export default function DiffHunk({
             {isStaged ? (
               <button
                 type="button"
-                className={cn("px-2 py-0.5 text-[10px] rounded cursor-pointer hover:bg-white/10 transition-colors")}
-                style={{ border: "1px solid rgba(255, 255, 255, 0.12)", color: "rgba(255, 255, 255, 0.5)", background: "rgba(255, 255, 255, 0.03)" }}
+                className={cn("px-2 py-0.5 text-[10px] rounded cursor-pointer border border-border bg-secondary/50 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors")}
                 onClick={(e) => { e.stopPropagation(); onUnstageHunk?.(filePath, hunkIndex); }}
               >
                 Unstage
@@ -89,16 +88,14 @@ export default function DiffHunk({
               <>
                 <button
                   type="button"
-                  className={cn("px-1.5 py-0.5 text-[9px] rounded cursor-pointer")}
-                  style={{ border: "1px solid rgba(255, 255, 255, 0.08)", color: "rgba(255, 255, 255, 0.4)" }}
+                  className={cn("px-2 py-0.5 text-[10px] rounded cursor-pointer border border-border bg-secondary/50 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors")}
                   onClick={(e) => { e.stopPropagation(); onStageHunk?.(filePath, hunkIndex); }}
                 >
                   Stage
                 </button>
                 <button
                   type="button"
-                  className={cn("px-1.5 py-0.5 text-[9px] rounded cursor-pointer")}
-                  style={{ border: "1px solid rgba(255, 255, 255, 0.08)", color: "rgba(255, 255, 255, 0.4)" }}
+                  className={cn("px-2 py-0.5 text-[10px] rounded cursor-pointer border border-border bg-secondary/50 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors")}
                   onClick={(e) => { e.stopPropagation(); onDiscardHunk?.(filePath, hunkIndex); }}
                 >
                   Discard
