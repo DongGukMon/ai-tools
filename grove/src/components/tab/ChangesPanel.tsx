@@ -315,7 +315,7 @@ function WorkingChangesView({
         </div>
       </ResizablePanelGroup.Pane>
       <ResizablePanelGroup.Pane minSize={200}>
-        <DiffViewer diff={store.currentDiff} selectedFile={store.selectedFile} isStaged={store.isViewingStaged} />
+        <DiffViewer diffs={store.currentDiff ? [store.currentDiff] : []} isStaged={store.isViewingStaged} />
       </ResizablePanelGroup.Pane>
     </ResizablePanelGroup>
   );
@@ -363,7 +363,7 @@ function CommitChangesView({
         </div>
       </ResizablePanelGroup.Pane>
       <ResizablePanelGroup.Pane minSize={200}>
-        <DiffViewer diff={store.currentDiff} selectedFile={store.selectedFile} isStaged={false} isCommitView />
+        <DiffViewer diffs={store.currentDiff ? [store.currentDiff] : store.commitDiffs} isStaged={false} isCommitView />
       </ResizablePanelGroup.Pane>
     </ResizablePanelGroup>
   );

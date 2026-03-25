@@ -5,122 +5,155 @@ import { cn } from "../../lib/cn";
 import { useDiffStore } from "../../store/diff";
 import { useLineSelection } from "../../hooks/useLineSelection";
 
-
 const EMPTY_SET = new Set<number>();
 
 interface Props {
-  diff: FileDiff | null;
-  selectedFile: string | null;
+  diffs: FileDiff[];
   isStaged: boolean;
   isCommitView?: boolean;
 }
 
-export default function DiffViewer({ diff, selectedFile, isStaged, isCommitView }: Props) {
+export default function DiffViewer({ diffs, isStaged, isCommitView }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const selectedLines = useDiffStore((s) => s.selectedLines);
-  const { handleGutterClick: rawGutterClick, handleGutterMouseDown, handleGutterMouseEnter, handleGutterMouseUp } = useLineSelection(selectedFile ?? "");
-
-  // Auto-focus container after gutter click so keyboard shortcuts work
-  const handleGutterClick = useCallback(
-    (lineIndex: number, shiftKey: boolean) => {
-      rawGutterClick(lineIndex, shiftKey);
-      containerRef.current?.focus();
-    },
-    [rawGutterClick],
-  );
-  const stageHunk = useDiffStore((s) => s.stageHunk);
-  const unstageHunk = useDiffStore((s) => s.unstageHunk);
-  const discardHunk = useDiffStore((s) => s.discardHunk);
   const stageLines = useDiffStore((s) => s.stageLines);
   const unstageLines = useDiffStore((s) => s.unstageLines);
   const clearSelection = useDiffStore((s) => s.clearSelection);
 
-  const handleStageHunk = useCallback(
-    (filePath: string, hunkIndex: number) => stageHunk(filePath, hunkIndex),
-    [stageHunk],
-  );
-  const handleUnstageHunk = useCallback(
-    (filePath: string, hunkIndex: number) => unstageHunk(filePath, hunkIndex),
-    [unstageHunk],
-  );
-  const handleDiscardHunk = useCallback(
-    (filePath: string, hunkIndex: number) => discardHunk(filePath, hunkIndex),
-    [discardHunk],
-  );
-
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (!selectedFile) return;
-
       if (e.key === " ") {
         e.preventDefault();
-        const fileLines = selectedFile ? (selectedLines.get(selectedFile) ?? EMPTY_SET) : EMPTY_SET;
-        if (fileLines.size > 0) {
-          // Group selected lines by hunk index
-          const linesByHunk = new Map<number, number[]>();
-          for (const lineIdx of fileLines) {
-            if (!diff) continue;
-            for (let hi = 0; hi < diff.hunks.length; hi++) {
-              const hunk = diff.hunks[hi];
-              if (hunk.lines.some((l) => l.index === lineIdx)) {
-                const arr = linesByHunk.get(hi) ?? [];
-                arr.push(lineIdx);
-                linesByHunk.set(hi, arr);
-                break;
+        // Find first file with selected lines and act on those
+        for (const diff of diffs) {
+          const fileLines = selectedLines.get(diff.path);
+          if (fileLines && fileLines.size > 0) {
+            const linesByHunk = new Map<number, number[]>();
+            for (const lineIdx of fileLines) {
+              for (let hi = 0; hi < diff.hunks.length; hi++) {
+                if (diff.hunks[hi].lines.some((l) => l.index === lineIdx)) {
+                  const arr = linesByHunk.get(hi) ?? [];
+                  arr.push(lineIdx);
+                  linesByHunk.set(hi, arr);
+                  break;
+                }
               }
             }
+            const action = isStaged ? unstageLines : stageLines;
+            for (const [hunkIdx, lines] of linesByHunk) {
+              action(diff.path, hunkIdx, lines);
+            }
+            break;
           }
-          const action = isStaged ? unstageLines : stageLines;
-          for (const [hunkIdx, lines] of linesByHunk) {
-            action(selectedFile, hunkIdx, lines);
-          }
-        } else if (diff && diff.hunks.length > 0) {
-          const action = isStaged ? unstageHunk : stageHunk;
-          action(selectedFile, 0);
         }
       }
-
       if (e.key === "Escape") {
         clearSelection();
       }
     },
-    [selectedFile, selectedLines, diff, isStaged, stageLines, unstageLines, stageHunk, unstageHunk, clearSelection],
+    [diffs, selectedLines, isStaged, stageLines, unstageLines, clearSelection],
   );
 
-  if (!diff || !selectedFile) {
+  if (diffs.length === 0) {
     return (
       <div className={cn("flex items-center justify-center h-full")}>
-        <span className={cn("text-sm text-muted-foreground")}>
-          Select a file to view diff
-        </span>
-      </div>
-    );
-  }
-
-  if (diff.hunks.length === 0) {
-    return (
-      <div className={cn("flex items-center justify-center h-full")}>
-        <span className={cn("text-sm text-muted-foreground")}>
-          No changes
-        </span>
+        <span className={cn("text-sm text-muted-foreground")}>Select files to view diff</span>
       </div>
     );
   }
 
   return (
     <div ref={containerRef} className={cn("h-full overflow-y-auto outline-none")} tabIndex={0} onKeyDown={handleKeyDown}>
+      {diffs.map((diff, fi) => (
+        <FileDiffSection
+          key={diff.path}
+          diff={diff}
+          isFirst={fi === 0}
+          isStaged={isStaged}
+          isCommitView={isCommitView}
+          selectedLines={selectedLines.get(diff.path) ?? EMPTY_SET}
+          containerRef={containerRef}
+        />
+      ))}
+    </div>
+  );
+}
+
+function FileDiffSection({
+  diff,
+  isFirst,
+  isStaged,
+  isCommitView,
+  selectedLines,
+  containerRef,
+}: {
+  diff: FileDiff;
+  isFirst: boolean;
+  isStaged: boolean;
+  isCommitView?: boolean;
+  selectedLines: Set<number>;
+  containerRef: React.RefObject<HTMLDivElement | null>;
+}) {
+  const { handleGutterClick: rawGutterClick, handleGutterMouseDown, handleGutterMouseEnter, handleGutterMouseUp } =
+    useLineSelection(diff.path);
+
+  const handleGutterClick = useCallback(
+    (lineIndex: number, shiftKey: boolean) => {
+      rawGutterClick(lineIndex, shiftKey);
+      containerRef.current?.focus();
+    },
+    [rawGutterClick, containerRef],
+  );
+
+  const stageHunk = useDiffStore((s) => s.stageHunk);
+  const unstageHunk = useDiffStore((s) => s.unstageHunk);
+  const discardHunk = useDiffStore((s) => s.discardHunk);
+
+  const added = diff.hunks.reduce((s, h) => s + h.lines.filter((l) => l.type === "add").length, 0);
+  const removed = diff.hunks.reduce((s, h) => s + h.lines.filter((l) => l.type === "remove").length, 0);
+
+  const statusColor: Record<string, string> = {
+    modified: "rgba(234, 179, 8, 0.7)",
+    added: "rgba(63, 185, 80, 0.7)",
+    deleted: "rgba(248, 81, 73, 0.7)",
+    renamed: "rgba(99, 163, 255, 0.7)",
+    untracked: "rgba(63, 185, 80, 0.7)",
+  };
+
+  return (
+    <div className={cn({ "mt-2": !isFirst })}>
+      {/* File header */}
+      <div
+        className={cn("flex items-center gap-1.5 px-3 py-1.5 sticky top-0 z-10")}
+        style={{ background: "rgba(99, 163, 255, 0.06)", borderBottom: "1px solid rgba(255, 255, 255, 0.06)" }}
+      >
+        <span
+          className={cn("text-[10px] font-semibold uppercase")}
+          style={{ color: statusColor[diff.status] ?? "rgba(255, 255, 255, 0.4)" }}
+        >
+          {diff.status[0]}
+        </span>
+        <span className={cn("text-[11px] text-muted-foreground truncate flex-1 font-sans")}>
+          {diff.path}
+        </span>
+        <span className={cn("text-[10px] text-muted-foreground/40 shrink-0")}>
+          {added > 0 && `+${added}`}{added > 0 && removed > 0 && " "}{removed > 0 && `-${removed}`}
+        </span>
+      </div>
+
+      {/* Hunks */}
       {diff.hunks.map((hunk, i) => (
         <DiffHunk
           key={`${hunk.header}-${i}`}
           hunk={hunk}
           hunkIndex={i}
-          filePath={selectedFile!}
-          isFirst={i === 0}
-          selectedLines={selectedLines.get(selectedFile!) ?? EMPTY_SET}
+          filePath={diff.path}
+          isFirst={false}
+          selectedLines={selectedLines}
           isStaged={isStaged}
-          onStageHunk={isCommitView ? undefined : handleStageHunk}
-          onUnstageHunk={isCommitView ? undefined : handleUnstageHunk}
-          onDiscardHunk={isCommitView ? undefined : handleDiscardHunk}
+          onStageHunk={isCommitView ? undefined : stageHunk}
+          onUnstageHunk={isCommitView ? undefined : unstageHunk}
+          onDiscardHunk={isCommitView ? undefined : discardHunk}
           onGutterClick={handleGutterClick}
           onGutterMouseDown={handleGutterMouseDown}
           onGutterMouseEnter={handleGutterMouseEnter}
