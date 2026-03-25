@@ -9,6 +9,7 @@ use crate::{
     TerminalSessionSnapshot,
 };
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
+use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::env;
@@ -397,10 +398,15 @@ pub fn close_ptys_for_worktree(worktree_path: &str) -> Result<(), String> {
 }
 
 pub fn cleanup_stale_tmux_sessions_on_startup() -> Result<(), String> {
-    cleanup_stale_tmux_sessions(list_grove_tmux_sessions()?)
+    let preserved_sessions =
+        restorable_grove_tmux_sessions_from_layouts(&config::load_terminal_layouts_impl()?)?;
+    cleanup_stale_tmux_sessions(list_grove_tmux_sessions()?, &preserved_sessions)
 }
 
-fn cleanup_stale_tmux_sessions<I>(session_names: I) -> Result<(), String>
+fn cleanup_stale_tmux_sessions<I>(
+    session_names: I,
+    preserved_sessions: &HashSet<String>,
+) -> Result<(), String>
 where
     I: IntoIterator<Item = String>,
 {
@@ -412,7 +418,7 @@ where
     };
 
     for session_name in session_names {
-        if live_sessions.contains(&session_name) {
+        if live_sessions.contains(&session_name) || preserved_sessions.contains(&session_name) {
             continue;
         }
 
@@ -452,6 +458,42 @@ where
     }
 
     Ok(())
+}
+
+fn restorable_grove_tmux_sessions_from_layouts(raw: &str) -> Result<HashSet<String>, String> {
+    let layouts: serde_json::Map<String, Value> = serde_json::from_str(raw)
+        .map_err(|error| format!("Failed to parse terminal-layouts.json: {error}"))?;
+    let mut session_names = HashSet::new();
+
+    for (worktree_path, layout) in layouts {
+        collect_restorable_tmux_sessions(&worktree_path, &layout, &mut session_names);
+    }
+
+    Ok(session_names)
+}
+
+fn collect_restorable_tmux_sessions(
+    worktree_path: &str,
+    node: &Value,
+    session_names: &mut HashSet<String>,
+) {
+    let Some(object) = node.as_object() else {
+        return;
+    };
+
+    let node_type = object.get("type").and_then(Value::as_str);
+    if node_type == Some("horizontal") || node_type == Some("vertical") {
+        if let Some(children) = object.get("children").and_then(Value::as_array) {
+            for child in children {
+                collect_restorable_tmux_sessions(worktree_path, child, session_names);
+            }
+        }
+        return;
+    }
+
+    if let Some(pane_id) = object.get("id").and_then(Value::as_str) {
+        session_names.insert(grove_tmux_session_name(worktree_path, pane_id));
+    }
 }
 
 pub fn poll_bell_events() -> Result<Vec<PtyBellEvent>, String> {
@@ -1966,7 +2008,7 @@ mod tests {
         ensure_grove_tmux_session(&session_name, &worktree_path, &pane_id, &worktree_path).unwrap();
         assert!(tmux_session_exists(&session_name).unwrap());
 
-        cleanup_stale_tmux_sessions(vec![session_name.clone()]).unwrap();
+        cleanup_stale_tmux_sessions(vec![session_name.clone()], &HashSet::new()).unwrap();
 
         assert!(!tmux_session_exists(&session_name).unwrap());
 
@@ -2007,11 +2049,49 @@ mod tests {
         .unwrap();
         assert!(tmux_session_exists(&session_name).unwrap());
 
-        cleanup_stale_tmux_sessions(vec![session_name.clone()]).unwrap();
+        cleanup_stale_tmux_sessions(vec![session_name.clone()], &HashSet::new()).unwrap();
 
         assert!(tmux_session_exists(&session_name).unwrap());
 
         close(&pty_id).unwrap();
+        let _ = std::fs::remove_dir_all(&worktree_path);
+    }
+
+    #[test]
+    fn startup_cleanup_preserves_detached_sessions_present_in_saved_layouts() {
+        if Command::new("tmux").arg("-V").output().is_err() {
+            return;
+        }
+
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let worktree_path =
+            env::temp_dir().join(format!("grove-worktree-startup-restorable-{nonce}"));
+        std::fs::create_dir_all(&worktree_path).unwrap();
+        let worktree_path = worktree_path.to_string_lossy().into_owned();
+        let pane_id = format!("pane-{nonce}");
+        let session_name = grove_tmux_session_name(&worktree_path, &pane_id);
+
+        let _ = kill_tmux_session_if_exists(&session_name);
+        ensure_grove_tmux_session(&session_name, &worktree_path, &pane_id, &worktree_path).unwrap();
+        assert!(tmux_session_exists(&session_name).unwrap());
+
+        let layouts = serde_json::json!({
+            worktree_path.clone(): {
+                "id": pane_id,
+                "type": "leaf"
+            }
+        });
+        let preserved_sessions =
+            restorable_grove_tmux_sessions_from_layouts(&layouts.to_string()).unwrap();
+
+        cleanup_stale_tmux_sessions(vec![session_name.clone()], &preserved_sessions).unwrap();
+
+        assert!(tmux_session_exists(&session_name).unwrap());
+
+        kill_tmux_session_if_exists(&session_name).unwrap();
         let _ = std::fs::remove_dir_all(&worktree_path);
     }
 

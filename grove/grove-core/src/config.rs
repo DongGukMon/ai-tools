@@ -3,8 +3,8 @@ use crate::worktree_lifecycle::WorktreeResource;
 use crate::TerminalSessionSnapshotStore;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::fs;
-use std::sync::{Mutex, OnceLock};
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectEntry {
