@@ -2,7 +2,6 @@ import { useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import type { DiffHunk as DiffHunkType, DiffLine as DiffLineType } from "../../types";
 import { cn } from "../../lib/cn";
-import { Button } from "../ui/button";
 
 type GroupType = "add" | "remove" | "context";
 type LineGroup = { type: GroupType; lines: DiffLineType[] };
@@ -57,7 +56,10 @@ export default function DiffHunk({
   return (
     <div className={cn({ "border-t border-border": !isFirst })}>
       {/* Hunk header */}
-      <div className={cn("flex items-center gap-2 px-3 h-[30px] bg-secondary/50 border-b border-border select-none")}>
+      <div
+        className={cn("flex items-center gap-2 px-3 h-[30px] select-none")}
+        style={{ background: "rgba(99, 163, 255, 0.04)", borderBottom: "1px solid rgba(255, 255, 255, 0.04)" }}
+      >
         <button
           className={cn("flex items-center justify-center w-[18px] h-[18px] shrink-0 rounded hover:bg-secondary transition-colors cursor-pointer text-muted-foreground")}
           onClick={() => setCollapsed((prev) => !prev)}
@@ -75,32 +77,32 @@ export default function DiffHunk({
         {(onStageHunk || onUnstageHunk || onDiscardHunk) && (
           <div className={cn("flex items-center gap-1 shrink-0")}>
             {isStaged ? (
-              <Button
+              <button
                 type="button"
-                variant="ghost"
-                className={cn("h-auto px-1.5 py-0.5 text-[10px]")}
+                className={cn("px-1.5 py-0.5 text-[9px] rounded cursor-pointer")}
+                style={{ border: "1px solid rgba(255, 255, 255, 0.08)", color: "rgba(255, 255, 255, 0.4)" }}
                 onClick={(e) => { e.stopPropagation(); onUnstageHunk?.(filePath, hunkIndex); }}
               >
-                Unstage Hunk
-              </Button>
+                Unstage
+              </button>
             ) : (
               <>
-                <Button
+                <button
                   type="button"
-                  variant="ghost"
-                  className={cn("h-auto px-1.5 py-0.5 text-[10px]")}
+                  className={cn("px-1.5 py-0.5 text-[9px] rounded cursor-pointer")}
+                  style={{ border: "1px solid rgba(255, 255, 255, 0.08)", color: "rgba(255, 255, 255, 0.4)" }}
                   onClick={(e) => { e.stopPropagation(); onStageHunk?.(filePath, hunkIndex); }}
                 >
-                  Stage Hunk
-                </Button>
-                <Button
+                  Stage
+                </button>
+                <button
                   type="button"
-                  variant="ghost"
-                  className={cn("h-auto px-1.5 py-0.5 text-[10px]")}
+                  className={cn("px-1.5 py-0.5 text-[9px] rounded cursor-pointer")}
+                  style={{ border: "1px solid rgba(255, 255, 255, 0.08)", color: "rgba(255, 255, 255, 0.4)" }}
                   onClick={(e) => { e.stopPropagation(); onDiscardHunk?.(filePath, hunkIndex); }}
                 >
                   Discard
-                </Button>
+                </button>
               </>
             )}
           </div>
@@ -147,27 +149,27 @@ function LineGroupView({
   const isContext = type === "context";
 
   const containerBg = isAdd
-    ? "var(--diff-add-bg)"
+    ? "rgba(63, 185, 80, 0.07)"
     : isRemove
-      ? "var(--diff-remove-bg)"
+      ? "rgba(248, 81, 73, 0.07)"
       : undefined;
 
   const gutterBg = isAdd
-    ? "var(--diff-add-gutter-bg)"
+    ? "rgba(63, 185, 80, 0.04)"
     : isRemove
-      ? "var(--diff-remove-gutter-bg)"
+      ? "rgba(248, 81, 73, 0.04)"
       : undefined;
 
   const prefixColor = isAdd
-    ? "var(--color-success)"
+    ? "rgba(63, 185, 80, 0.7)"
     : isRemove
-      ? "var(--color-danger)"
+      ? "rgba(248, 81, 73, 0.7)"
       : "transparent";
 
   const prefix = isAdd ? "+" : isRemove ? "-" : " ";
 
   const borderColor = isAdd
-    ? "rgba(46, 160, 67, 0.3)"
+    ? "rgba(63, 185, 80, 0.3)"
     : isRemove
       ? "rgba(248, 81, 73, 0.3)"
       : "transparent";
@@ -177,7 +179,7 @@ function LineGroupView({
       className="flex"
       style={{
         backgroundColor: containerBg,
-        borderLeft: `3px solid ${borderColor}`,
+        borderLeft: `2px solid ${borderColor}`,
       }}
     >
       {/* Fixed gutter */}
@@ -198,16 +200,16 @@ function LineGroupView({
               onMouseEnter={isSelectable ? (e) => onGutterMouseEnter(line.index, e.buttons) : undefined}
               onMouseUp={isSelectable ? onGutterMouseUp : undefined}
             >
-              <span className={cn("w-[40px] text-right pr-2 text-[11px] select-none", {
-                "text-muted-foreground/50": isContext,
-                "text-muted-foreground": !isContext,
-              })}>
+              <span
+                className={cn("w-[32px] text-right pr-1.5 text-[11px] select-none")}
+                style={{ color: "rgba(255, 255, 255, 0.15)" }}
+              >
                 {line.oldLineNumber ?? ""}
               </span>
-              <span className={cn("w-[40px] text-right pr-2 text-[11px] select-none", {
-                "text-muted-foreground/50": isContext,
-                "text-muted-foreground": !isContext,
-              })}>
+              <span
+                className={cn("w-[32px] text-right pr-1.5 text-[11px] select-none")}
+                style={{ color: "rgba(255, 255, 255, 0.15)" }}
+              >
                 {line.newLineNumber ?? ""}
               </span>
               <span
