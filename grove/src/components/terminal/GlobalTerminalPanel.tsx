@@ -22,7 +22,9 @@ const TerminalTabContent = memo(function TerminalTabContent({
   direction,
 }: TerminalTabContentProps) {
   const theme = useTerminalStore((s) => s.theme);
-  const broadcastActive = useBroadcastStore((s) => s.active);
+  const mirrorSession = useBroadcastStore((s) =>
+    tab.mirrorPtyId ? (s.mirrors[tab.mirrorPtyId] ?? null) : null,
+  );
   const termRef = useRef<HTMLDivElement>(null);
   const runtimeRef = useRef<ReturnType<
     typeof acquireTerminalRuntime
@@ -34,8 +36,8 @@ const TerminalTabContent = memo(function TerminalTabContent({
 
     const isMirror = Boolean(tab.mirrorPtyId);
     const runtime = isMirror
-      ? broadcastActive?.target === "mirror" && broadcastActive.ptyId === tab.mirrorPtyId
-        ? getRuntime(broadcastActive.paneId)
+      ? mirrorSession
+        ? getRuntime(mirrorSession.paneId)
         : null
       : acquireTerminalRuntime(tab.paneId, theme);
     if (!runtime) return;
@@ -52,9 +54,7 @@ const TerminalTabContent = memo(function TerminalTabContent({
       runtimeRef.current = null;
     };
   }, [
-    broadcastActive?.paneId,
-    broadcastActive?.ptyId,
-    broadcastActive?.target,
+    mirrorSession?.paneId,
     ptyId,
     tab.mirrorPtyId,
     tab.paneId,

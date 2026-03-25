@@ -53,8 +53,8 @@ export function useTerminalCommandPipeline({ openThemeSettings }: Options) {
     const ptyId = useTerminalStore.getState().focusedPtyId;
     if (!ptyId) return;
 
-    const { active, isBroadcasting, startBroadcast } = useBroadcastStore.getState();
-    if (active || isBroadcasting(ptyId)) return;
+    const { isMirroring, startMirror } = useBroadcastStore.getState();
+    if (isMirroring(ptyId)) return;
 
     // Find paneId for the focused pty
     const sessions = useTerminalStore.getState().sessions;
@@ -77,7 +77,7 @@ export function useTerminalCommandPipeline({ openThemeSettings }: Options) {
 
     const { cols, rows } = getRuntimeSize(paneId);
     const snapshot = captureRuntimeSnapshot(paneId);
-    startBroadcast(ptyId, paneId, "mirror", cols, rows, snapshot);
+    startMirror(ptyId, paneId, cols, rows, snapshot);
     usePanelLayoutStore.getState().addGlobalTerminalMirrorTab(title, ptyId);
   }, []);
 

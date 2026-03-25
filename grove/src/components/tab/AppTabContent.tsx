@@ -48,9 +48,9 @@ function AppTabContent() {
   const isChanges = activeTabId === "changes";
 
   const focusedPtyId = useTerminalStore((s) => s.focusedPtyId);
-  const broadcastActive = useBroadcastStore((s) => s.active);
-  const startBroadcast = useBroadcastStore((s) => s.startBroadcast);
-  const stopBroadcast = useBroadcastStore((s) => s.stopBroadcast);
+  const pip = useBroadcastStore((s) => s.pip);
+  const startPip = useBroadcastStore((s) => s.startPip);
+  const stopPip = useBroadcastStore((s) => s.stopPip);
 
   const [pipPtyId, setPipPtyId] = useState<string | null>(null);
   const [pipDismissed, setPipDismissed] = useState(true);
@@ -64,34 +64,33 @@ function AppTabContent() {
 
     if (isTerminal) {
       // Returning to Terminal tab — stop PiP broadcast if active
-      if (broadcastActive?.target === "pip") {
-        stopBroadcast();
+      if (pip) {
+        stopPip();
       }
       setPipPtyId(null);
-    } else if (wasTerminal && focusedPtyId && !broadcastActive) {
+    } else if (wasTerminal && focusedPtyId && !pip) {
       const paneId = findPaneIdForPty(focusedPtyId);
       if (paneId) {
         const { cols, rows } = getRuntimeSize(paneId);
         const snapshot = captureRuntimeSnapshot(paneId);
-        startBroadcast(focusedPtyId, paneId, "pip", cols, rows, snapshot);
+        startPip(focusedPtyId, paneId, cols, rows, snapshot);
         setPipPtyId(focusedPtyId);
       }
     }
-  }, [isTerminal, focusedPtyId, broadcastActive, startBroadcast, stopBroadcast]);
+  }, [isTerminal, focusedPtyId, pip, startPip, stopPip]);
 
   const hasPipBroadcast =
     !isTerminal &&
     !!pipPtyId &&
-    broadcastActive?.target === "pip" &&
-    broadcastActive.ptyId === pipPtyId;
+    pip?.ptyId === pipPtyId;
 
   useEffect(() => {
-    if (!hasPipBroadcast || broadcastActive?.target !== "pip") {
+    if (!hasPipBroadcast || !pip) {
       return;
     }
 
     const container = pipContainerRef.current;
-    const runtime = getRuntime(broadcastActive.paneId);
+    const runtime = getRuntime(pip.paneId);
     if (!container || !runtime) {
       return;
     }
@@ -100,7 +99,7 @@ function AppTabContent() {
     requestAnimationFrame(() => {
       runtime.fitAddon.fit();
     });
-  }, [broadcastActive?.paneId, broadcastActive?.target, hasPipBroadcast]);
+  }, [hasPipBroadcast, pip?.paneId]);
 
   const {
     tabs: globalTabs,

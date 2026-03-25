@@ -6,6 +6,7 @@ import { usePanelLayoutStore } from "../../store/panel-layout";
 import "@xterm/xterm/css/xterm.css";
 import { cn } from "../../lib/cn";
 import { acquireTerminalRuntime } from "../../lib/terminal-runtime";
+import { Button } from "../ui/button";
 
 interface Props {
   paneId: string;
@@ -18,8 +19,10 @@ function TerminalInstance({ paneId, ptyId }: Props) {
   const theme = useTerminalStore((s) => s.theme);
   const isFocused = useTerminalStore((s) => s.focusedPtyId === ptyId);
   const setFocusedPtyId = useTerminalStore((s) => s.setFocusedPtyId);
-  const isBroadcasting = useBroadcastStore((s) => s.active?.ptyId === ptyId);
-  const snapshot = useBroadcastStore((s) => s.active?.ptyId === ptyId ? s.active.snapshot : null);
+  const mirrorSession = useBroadcastStore((s) => s.mirrors[ptyId] ?? null);
+  const pipSession = useBroadcastStore((s) => (s.pip?.ptyId === ptyId ? s.pip : null));
+  const isBroadcasting = Boolean(mirrorSession || pipSession);
+  const snapshot = mirrorSession?.snapshot ?? pipSession?.snapshot ?? null;
   const markBellPty = useTerminalStore((s) => s.markBellPty);
   const [error, setError] = useState<string | null>(null);
 
@@ -108,24 +111,32 @@ function TerminalInstance({ paneId, ptyId }: Props) {
           >
             <Radio className={cn("size-10 text-white animate-pulse")} />
             <span className={cn("text-lg font-black text-white tracking-wide")}>Broadcasting</span>
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => {
-                const ended = useBroadcastStore.getState().stopBroadcast();
-                if (ended?.target === "mirror") {
+                const { mirrors, pip, stopMirror, stopPip } = useBroadcastStore.getState();
+
+                if (mirrors[ptyId]) {
+                  const ended = stopMirror(ptyId);
                   const gt = usePanelLayoutStore.getState().globalTerminal;
-                  const mirrorTab = gt.tabs.find((t) => t.mirrorPtyId === ended.ptyId);
+                  const mirrorTab = gt.tabs.find((t) => t.mirrorPtyId === ended?.ptyId);
                   if (mirrorTab) {
                     usePanelLayoutStore.getState().removeGlobalTerminalTab(mirrorTab.id);
                   }
+                  return;
+                }
+
+                if (pip?.ptyId === ptyId) {
+                  stopPip();
                 }
               }}
               className={cn(
-                "mt-1 text-xs text-white/60 hover:text-white transition-colors",
+                "mt-1 h-auto border-white/15 bg-white/5 px-2 py-1 text-xs text-white/60 hover:border-white/25 hover:bg-white/10 hover:text-white",
               )}
             >
               Stop
-            </button>
+            </Button>
           </div>
         </div>
       )}

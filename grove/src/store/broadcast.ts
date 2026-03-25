@@ -12,57 +12,109 @@ export interface BroadcastSession {
 }
 
 interface BroadcastState {
-  active: BroadcastSession | null;
+  mirrors: Record<string, BroadcastSession>;
+  pip: BroadcastSession | null;
 
   /**
-   * Start broadcasting a terminal pane to a target.
-   * If already broadcasting, replaces the current session.
+   * Start or replace a mirror broadcast for a specific PTY.
    */
-  startBroadcast: (
+  startMirror: (
     ptyId: string,
     paneId: string,
-    target: BroadcastTarget,
     originalCols: number,
     originalRows: number,
     snapshot?: string | null,
   ) => void;
 
   /**
-   * Stop the active broadcast.
+   * Stop a mirror broadcast for a specific PTY.
    * Returns the ended session (for size restoration) or null if idle.
    */
-  stopBroadcast: () => BroadcastSession | null;
+  stopMirror: (ptyId: string) => BroadcastSession | null;
+
+  /**
+   * Start or replace the single PiP broadcast slot.
+   */
+  startPip: (
+    ptyId: string,
+    paneId: string,
+    originalCols: number,
+    originalRows: number,
+    snapshot?: string | null,
+  ) => void;
+
+  /**
+   * Stop the active PiP broadcast.
+   * Returns the ended session (for size restoration) or null if idle.
+   */
+  stopPip: () => BroadcastSession | null;
 
   /** Check if a specific ptyId is currently broadcasting. */
   isBroadcasting: (ptyId: string) => boolean;
 
-  /** Get the broadcast target for a ptyId, or null if not broadcasting. */
-  getBroadcastTarget: (ptyId: string) => BroadcastTarget | null;
+  /** Check if a specific ptyId currently has a mirror broadcast. */
+  isMirroring: (ptyId: string) => boolean;
+
+  /** Get the mirror session for a ptyId, or null if not mirroring. */
+  getMirror: (ptyId: string) => BroadcastSession | null;
 }
 
 export const useBroadcastStore = create<BroadcastState>((set, get) => ({
-  active: null,
+  mirrors: {},
+  pip: null,
 
-  startBroadcast: (ptyId, paneId, target, originalCols, originalRows, snapshot = null) => {
+  startMirror: (ptyId, paneId, originalCols, originalRows, snapshot = null) => {
+    set((state) => ({
+      mirrors: {
+        ...state.mirrors,
+        [ptyId]: {
+          ptyId,
+          paneId,
+          target: "mirror",
+          originalCols,
+          originalRows,
+          snapshot,
+        },
+      },
+    }));
+  },
+
+  stopMirror: (ptyId) => {
+    const session = get().mirrors[ptyId];
+    if (!session) return null;
+
+    set((state) => {
+      const nextMirrors = { ...state.mirrors };
+      delete nextMirrors[ptyId];
+      return { mirrors: nextMirrors };
+    });
+
+    return session;
+  },
+
+  startPip: (ptyId, paneId, originalCols, originalRows, snapshot = null) => {
     set({
-      active: { ptyId, paneId, target, originalCols, originalRows, snapshot },
+      pip: { ptyId, paneId, target: "pip", originalCols, originalRows, snapshot },
     });
   },
 
-  stopBroadcast: () => {
-    const { active } = get();
-    if (!active) return null;
-    set({ active: null });
-    return active;
+  stopPip: () => {
+    const { pip } = get();
+    if (!pip) return null;
+    set({ pip: null });
+    return pip;
   },
 
   isBroadcasting: (ptyId) => {
-    const { active } = get();
-    return active?.ptyId === ptyId;
+    const { mirrors, pip } = get();
+    return Boolean(mirrors[ptyId] || pip?.ptyId === ptyId);
   },
 
-  getBroadcastTarget: (ptyId) => {
-    const { active } = get();
-    return active?.ptyId === ptyId ? active.target : null;
+  isMirroring: (ptyId) => {
+    return Boolean(get().mirrors[ptyId]);
+  },
+
+  getMirror: (ptyId) => {
+    return get().mirrors[ptyId] ?? null;
   },
 }));

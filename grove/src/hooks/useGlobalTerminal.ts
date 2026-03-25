@@ -122,8 +122,10 @@ export function useGlobalTerminal() {
 
   const removeMirrorTabs = useCallback(() => {
     const gt = usePanelLayoutStore.getState().globalTerminal;
+    const { stopMirror } = useBroadcastStore.getState();
     for (const tab of gt.tabs) {
       if (tab.mirrorPtyId) {
+        stopMirror(tab.mirrorPtyId);
         usePanelLayoutStore.getState().removeGlobalTerminalTab(tab.id);
       }
     }
@@ -134,9 +136,9 @@ export function useGlobalTerminal() {
     const gt = usePanelLayoutStore.getState().globalTerminal;
     const tab = gt.tabs.find((t) => t.id === tabId);
     if (tab?.mirrorPtyId) {
-      const { active, stopBroadcast } = useBroadcastStore.getState();
-      if (active?.ptyId === tab.mirrorPtyId && active.target === "mirror") {
-        stopBroadcast();
+      const { mirrors, stopMirror } = useBroadcastStore.getState();
+      if (mirrors[tab.mirrorPtyId]) {
+        stopMirror(tab.mirrorPtyId);
       }
     }
     usePanelLayoutStore.getState().removeGlobalTerminalTab(tabId);
