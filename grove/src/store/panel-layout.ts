@@ -22,6 +22,7 @@ interface PanelLayouts {
   changes: number[];
   pipWidth: number;
   globalTerminal: GlobalTerminalLayout;
+  sidebarMode: "projects" | "missions";
 }
 
 interface PanelLayoutStore {
@@ -30,6 +31,7 @@ interface PanelLayoutStore {
   changes: number[];
   pipWidth: number;
   globalTerminal: GlobalTerminalLayout;
+  sidebarMode: "projects" | "missions";
   loaded: boolean;
   init: () => Promise<void>;
   updateMain: (ratios: number[]) => void;
@@ -42,6 +44,7 @@ interface PanelLayoutStore {
   removeGlobalTerminalTab: (tabId: string) => void;
   setActiveGlobalTerminalTab: (tabId: string) => void;
   switchGlobalTerminalTab: (direction: "next" | "prev") => void;
+  setSidebarMode: (mode: "projects" | "missions") => void;
 }
 
 const DEFAULTS: PanelLayouts = {
@@ -50,6 +53,7 @@ const DEFAULTS: PanelLayouts = {
   changes: [0.35, 0.65],
   pipWidth: 360,
   globalTerminal: { collapsed: true, ratio: 0.3, tabs: [], activeTabId: "" },
+  sidebarMode: "projects" as const,
 };
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -68,7 +72,14 @@ function debouncedSave(layouts: PanelLayouts) {
 }
 
 function getFullLayouts(get: () => PanelLayoutStore): PanelLayouts {
-  return { main: get().main, diff: get().diff, changes: get().changes, pipWidth: get().pipWidth, globalTerminal: get().globalTerminal };
+  return {
+    main: get().main,
+    diff: get().diff,
+    changes: get().changes,
+    pipWidth: get().pipWidth,
+    globalTerminal: get().globalTerminal,
+    sidebarMode: get().sidebarMode,
+  };
 }
 
 // Accept legacy shape with optional paneId
@@ -114,6 +125,7 @@ function resolvePanelLayouts(parsed?: Partial<PanelLayouts>): PanelLayouts {
     globalTerminal: resolveGlobalTerminalLayout(
       parsed?.globalTerminal as LegacyGlobalTerminalLayout | undefined,
     ),
+    sidebarMode: parsed?.sidebarMode ?? DEFAULTS.sidebarMode,
   };
 }
 
@@ -123,6 +135,7 @@ export const usePanelLayoutStore = create<PanelLayoutStore>((set, get) => ({
   changes: DEFAULTS.changes,
   pipWidth: DEFAULTS.pipWidth,
   globalTerminal: resolveGlobalTerminalLayout(DEFAULTS.globalTerminal),
+  sidebarMode: DEFAULTS.sidebarMode,
   loaded: false,
 
   init: async () => {
@@ -256,5 +269,10 @@ export const usePanelLayoutStore = create<PanelLayoutStore>((set, get) => ({
     };
     set({ globalTerminal: updated });
     debouncedSave({ ...getFullLayouts(get), globalTerminal: updated });
+  },
+
+  setSidebarMode: (mode) => {
+    set({ sidebarMode: mode });
+    debouncedSave({ ...getFullLayouts(get), sidebarMode: mode });
   },
 }));

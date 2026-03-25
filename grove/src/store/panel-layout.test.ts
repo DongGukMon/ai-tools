@@ -26,6 +26,7 @@ describe("usePanelLayoutStore", () => {
         tabs: [{ id: "tab-1", paneId: "pane-existing", title: "Terminal 1" }],
         activeTabId: "tab-1",
       },
+      sidebarMode: "projects",
       loaded: false,
     });
   });
@@ -59,6 +60,52 @@ describe("usePanelLayoutStore", () => {
     expect(gt.tabs[0].title).toBe("Terminal 1");
     expect(gt.activeTabId).toBe(gt.tabs[0].id);
     expect((gt as unknown as Record<string, unknown>).paneId).toBeUndefined();
+  });
+
+  describe("sidebarMode", () => {
+    it("defaults to 'projects'", () => {
+      expect(usePanelLayoutStore.getState().sidebarMode).toBe("projects");
+    });
+
+    it("persists through resolve when saved", async () => {
+      loadPanelLayoutsMock.mockResolvedValue(
+        JSON.stringify({
+          main: [0.18, 0.52, 0.3],
+          diff: [0.25, 0.2, 0.55],
+          globalTerminal: { collapsed: true, ratio: 0.3, tabs: [], activeTabId: "" },
+          sidebarMode: "missions",
+        }),
+      );
+
+      await usePanelLayoutStore.getState().init();
+
+      expect(usePanelLayoutStore.getState().sidebarMode).toBe("missions");
+    });
+
+    it("falls back to 'projects' when not in saved data", async () => {
+      loadPanelLayoutsMock.mockResolvedValue(
+        JSON.stringify({
+          main: [0.18, 0.52, 0.3],
+          diff: [0.25, 0.2, 0.55],
+          globalTerminal: { collapsed: true, ratio: 0.3, tabs: [], activeTabId: "" },
+        }),
+      );
+
+      await usePanelLayoutStore.getState().init();
+
+      expect(usePanelLayoutStore.getState().sidebarMode).toBe("projects");
+    });
+
+    it("setSidebarMode updates and triggers save", () => {
+      usePanelLayoutStore.getState().setSidebarMode("missions");
+      vi.advanceTimersByTime(500);
+
+      expect(usePanelLayoutStore.getState().sidebarMode).toBe("missions");
+      expect(savePanelLayoutsMock).toHaveBeenCalled();
+      const calls = savePanelLayoutsMock.mock.calls;
+      const saved = JSON.parse(calls[calls.length - 1][0]);
+      expect(saved.sidebarMode).toBe("missions");
+    });
   });
 
   describe("global terminal tabs", () => {
