@@ -303,7 +303,10 @@ pub fn write(id: &str, data: &[u8]) -> Result<(), String> {
                 let s = status.as_deref();
                 if tool_hooks::needs_idle_detection(s) && !tool_hooks::is_running(s) {
                     state.last_output_at = Some(Instant::now());
-                    Some((state.session_name.clone(), tool_hooks::to_running(s.unwrap())))
+                    Some((
+                        state.session_name.clone(),
+                        tool_hooks::to_running(s.unwrap()),
+                    ))
                 } else {
                     None
                 }
@@ -315,11 +318,7 @@ pub fn write(id: &str, data: &[u8]) -> Result<(), String> {
 
     // Set tmux option outside of registry lock to avoid holding locks during shell-out.
     if let Some((session_name, running_status)) = transition_session {
-        let _ = tmux_set_option(
-            &session_name,
-            TMUX_GROVE_AI_STATUS_OPTION,
-            &running_status,
-        );
+        let _ = tmux_set_option(&session_name, TMUX_GROVE_AI_STATUS_OPTION, &running_status);
     }
 
     Ok(())
@@ -397,6 +396,64 @@ pub fn close_ptys_for_worktree(worktree_path: &str) -> Result<(), String> {
     Ok(())
 }
 
+pub fn cleanup_stale_tmux_sessions_on_startup() -> Result<(), String> {
+    cleanup_stale_tmux_sessions(list_grove_tmux_sessions()?)
+}
+
+fn cleanup_stale_tmux_sessions<I>(session_names: I) -> Result<(), String>
+where
+    I: IntoIterator<Item = String>,
+{
+    let live_sessions: HashSet<String> = {
+        let reg = registry().lock().map_err(|e| e.to_string())?;
+        reg.values()
+            .map(|instance| instance.session_name.clone())
+            .collect()
+    };
+
+    for session_name in session_names {
+        if live_sessions.contains(&session_name) {
+            continue;
+        }
+
+        let managed = match tmux_session_option(&session_name, TMUX_GROVE_MANAGED_OPTION) {
+            Ok(value) => value,
+            Err(error) if tmux_session_missing(&error) => continue,
+            Err(error) => {
+                eprintln!(
+                    "Warning: failed to inspect tmux session {session_name} during startup cleanup: {error}"
+                );
+                continue;
+            }
+        };
+        if managed.as_deref() != Some("1") {
+            continue;
+        }
+
+        let attached_clients = match tmux_session_attached_count(&session_name) {
+            Ok(value) => value,
+            Err(error) if tmux_session_missing(&error) => continue,
+            Err(error) => {
+                eprintln!(
+                    "Warning: failed to inspect attached tmux clients for {session_name} during startup cleanup: {error}"
+                );
+                continue;
+            }
+        };
+        if attached_clients > 0 {
+            continue;
+        }
+
+        if let Err(error) = kill_tmux_session_if_exists(&session_name) {
+            eprintln!(
+                "Warning: failed to clean up stale tmux session {session_name} during startup cleanup: {error}"
+            );
+        }
+    }
+
+    Ok(())
+}
+
 pub fn poll_bell_events() -> Result<Vec<PtyBellEvent>, String> {
     let tracked_sessions = {
         let reg = registry().lock().map_err(|e| e.to_string())?;
@@ -437,10 +494,13 @@ pub fn poll_bell_events() -> Result<Vec<PtyBellEvent>, String> {
         let is_hookless = tool_hooks::needs_idle_detection(ai_ref);
 
         let ai_status = if is_hookless && tool_hooks::is_running(ai_ref) {
-            let should_idle = tracked.lock().ok().is_some_and(|state| match state.last_output_at {
-                Some(t) => t.elapsed() >= CODEX_OUTPUT_IDLE_TIMEOUT,
-                None => true, // no output tracked (e.g. after app restart)
-            });
+            let should_idle = tracked
+                .lock()
+                .ok()
+                .is_some_and(|state| match state.last_output_at {
+                    Some(t) => t.elapsed() >= CODEX_OUTPUT_IDLE_TIMEOUT,
+                    None => true, // no output tracked (e.g. after app restart)
+                });
             if should_idle {
                 let idle_status = tool_hooks::to_idle(ai_ref.unwrap());
                 let _ = tmux_set_option(&session_name, TMUX_GROVE_AI_STATUS_OPTION, &idle_status);
@@ -450,10 +510,13 @@ pub fn poll_bell_events() -> Result<Vec<PtyBellEvent>, String> {
             }
         } else if is_hookless && tool_hooks::is_idle(ai_ref) {
             let should_attention = tracked.lock().ok().is_some_and(|state| {
-                state.idle_since.is_some_and(|t| t.elapsed() >= HOOKLESS_ATTENTION_TIMEOUT)
+                state
+                    .idle_since
+                    .is_some_and(|t| t.elapsed() >= HOOKLESS_ATTENTION_TIMEOUT)
             });
             if should_attention {
-                let attn_status = format!("{}:attention", ai_ref.unwrap().split(':').next().unwrap());
+                let attn_status =
+                    format!("{}:attention", ai_ref.unwrap().split(':').next().unwrap());
                 let _ = tmux_set_option(&session_name, TMUX_GROVE_AI_STATUS_OPTION, &attn_status);
                 Some(attn_status)
             } else {
@@ -1088,6 +1151,14 @@ fn tmux_session_option(session_name: &str, option: &str) -> Result<Option<String
     ))
 }
 
+fn tmux_session_attached_count(session_name: &str) -> Result<u32, String> {
+    let attached = tmux_display_message_value(session_name, "#{session_attached}")?
+        .unwrap_or_else(|| "0".to_string());
+    attached.parse::<u32>().map_err(|error| {
+        format!("failed to parse attached client count for {session_name}: {attached} ({error})")
+    })
+}
+
 fn kill_tmux_session_if_exists(session_name: &str) -> Result<(), String> {
     let output = tmux_output(["kill-session", "-t", session_name])?;
     if output.status.success() {
@@ -1344,6 +1415,12 @@ mod tests {
         fn drop(&mut self) {
             let _ = kill_tmux_session_if_exists(&self.session_name);
         }
+    }
+
+    struct NoopSink;
+
+    impl PtyEventSink for NoopSink {
+        fn on_output(&self, _pty_id: &str, _data: &[u8]) {}
     }
 
     fn run_zdotdir_tmux_child_assertions() {
@@ -1865,6 +1942,75 @@ mod tests {
 
         assert!(!tmux_session_exists(&session_name).unwrap());
 
+        let _ = std::fs::remove_dir_all(&worktree_path);
+    }
+
+    #[test]
+    fn startup_cleanup_kills_stale_grove_tmux_sessions() {
+        if Command::new("tmux").arg("-V").output().is_err() {
+            return;
+        }
+
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let session_name = format!("grove-test-startup-stale-{nonce}");
+        let worktree_path = env::temp_dir().join(format!("grove-worktree-startup-stale-{nonce}"));
+        std::fs::create_dir_all(&worktree_path).unwrap();
+        let worktree_path = worktree_path.to_string_lossy().into_owned();
+        let pane_id = format!("pane-{nonce}");
+
+        let _ = kill_tmux_session_if_exists(&session_name);
+        ensure_grove_tmux_session(&session_name, &worktree_path, &pane_id, &worktree_path).unwrap();
+        assert!(tmux_session_exists(&session_name).unwrap());
+
+        cleanup_stale_tmux_sessions(vec![session_name.clone()]).unwrap();
+
+        assert!(!tmux_session_exists(&session_name).unwrap());
+
+        let _ = std::fs::remove_dir_all(&worktree_path);
+    }
+
+    #[test]
+    fn startup_cleanup_preserves_live_registered_tmux_sessions() {
+        if Command::new("tmux").arg("-V").output().is_err() {
+            return;
+        }
+
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let pty_id = format!("pty-{nonce}");
+        let pane_id = format!("pane-{nonce}");
+        let worktree_path = env::temp_dir().join(format!("grove-worktree-startup-live-{nonce}"));
+        std::fs::create_dir_all(&worktree_path).unwrap();
+        let worktree_path = worktree_path.to_string_lossy().into_owned();
+        let session_name = grove_tmux_session_name(&worktree_path, &pane_id);
+
+        let _ = kill_tmux_session_if_exists(&session_name);
+
+        create(
+            CreatePtyRequest {
+                pty_id: pty_id.clone(),
+                pane_id: pane_id.clone(),
+                worktree_path: worktree_path.clone(),
+                cwd: worktree_path.clone(),
+                cols: 80,
+                rows: 24,
+                restore: None,
+            },
+            Arc::new(NoopSink),
+        )
+        .unwrap();
+        assert!(tmux_session_exists(&session_name).unwrap());
+
+        cleanup_stale_tmux_sessions(vec![session_name.clone()]).unwrap();
+
+        assert!(tmux_session_exists(&session_name).unwrap());
+
+        close(&pty_id).unwrap();
         let _ = std::fs::remove_dir_all(&worktree_path);
     }
 

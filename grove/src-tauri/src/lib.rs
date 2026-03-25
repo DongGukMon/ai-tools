@@ -340,6 +340,11 @@ pub fn run() {
             merge_default_branch,
         ])
         .setup(|app| {
+            if let Err(error) = grove_core::pty::cleanup_stale_tmux_sessions_on_startup() {
+                eprintln!(
+                    "Warning: failed to clean up stale Grove tmux sessions on startup: {error}"
+                );
+            }
             eventbus::init(app.handle());
             Ok(())
         })
