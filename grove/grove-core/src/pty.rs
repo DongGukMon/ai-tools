@@ -595,11 +595,12 @@ pub fn save_terminal_session_snapshot(
         panes,
     };
 
-    let mut store = config::load_terminal_session_snapshot_store()?;
-    store
-        .worktrees
-        .insert(worktree_path.to_string(), snapshot.clone());
-    config::save_terminal_session_snapshot_store(&store)?;
+    config::update_terminal_session_snapshot_store(|store| {
+        store
+            .worktrees
+            .insert(worktree_path.to_string(), snapshot.clone());
+        Ok(())
+    })?;
 
     Ok(snapshot)
 }

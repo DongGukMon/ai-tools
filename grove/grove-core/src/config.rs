@@ -3,6 +3,7 @@ use crate::worktree_lifecycle::WorktreeResource;
 use crate::TerminalSessionSnapshotStore;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::fs;
+use std::sync::{Mutex, OnceLock};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -55,19 +56,6 @@ fn grove_data_path(filename: &str) -> Result<PathBuf, String> {
         .ok_or("No home dir")?
         .join(".grove")
         .join(filename))
-}
-
-fn load_json_file_or_default<T>(path: &Path) -> Result<T, String>
-where
-    T: DeserializeOwned + Default,
-{
-    if !path.exists() {
-        return Ok(T::default());
-    }
-
-    let content =
-        fs::read_to_string(path).map_err(|e| format!("Failed to read {}: {e}", path.display()))?;
-    serde_json::from_str(&content).map_err(|e| format!("Failed to parse {}: {e}", path.display()))
 }
 
 fn save_json_file<T>(path: &Path, value: &T) -> Result<(), String>
@@ -139,20 +127,77 @@ fn terminal_session_snapshots_path() -> Result<PathBuf, String> {
     grove_data_path("terminal-session-snapshots.json")
 }
 
+fn terminal_session_snapshot_store_lock() -> &'static Mutex<()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(()))
+}
+
+fn parse_json_with_trailing_data_recovery<T>(content: &str) -> Result<Option<T>, serde_json::Error>
+where
+    T: DeserializeOwned,
+{
+    let mut stream = serde_json::Deserializer::from_str(content).into_iter::<T>();
+    match stream.next() {
+        Some(Ok(value)) => {
+            let trailing = &content[stream.byte_offset()..];
+            if trailing.trim().is_empty() {
+                Ok(None)
+            } else {
+                Ok(Some(value))
+            }
+        }
+        Some(Err(error)) => Err(error),
+        None => Ok(None),
+    }
+}
+
 pub fn load_terminal_session_snapshot_store() -> Result<TerminalSessionSnapshotStore, String> {
-    load_terminal_session_snapshot_store_from_path(&terminal_session_snapshots_path()?)
+    let path = terminal_session_snapshots_path()?;
+    let _guard = terminal_session_snapshot_store_lock()
+        .lock()
+        .map_err(|_| "Terminal session snapshot store lock poisoned".to_string())?;
+    load_terminal_session_snapshot_store_from_path(&path)
 }
 
 fn load_terminal_session_snapshot_store_from_path(
     path: &Path,
 ) -> Result<TerminalSessionSnapshotStore, String> {
-    load_json_file_or_default(path)
+    if !path.exists() {
+        return Ok(TerminalSessionSnapshotStore::default());
+    }
+
+    let content =
+        fs::read_to_string(path).map_err(|e| format!("Failed to read {}: {e}", path.display()))?;
+    match serde_json::from_str(&content) {
+        Ok(store) => Ok(store),
+        Err(error) => {
+            if let Some(store) = parse_json_with_trailing_data_recovery(&content)
+                .map_err(|_| format!("Failed to parse {}: {error}", path.display()))?
+            {
+                save_terminal_session_snapshot_store_to_path(path, &store)?;
+                Ok(store)
+            } else {
+                Err(format!("Failed to parse {}: {error}", path.display()))
+            }
+        }
+    }
 }
 
 pub fn save_terminal_session_snapshot_store(
     store: &TerminalSessionSnapshotStore,
 ) -> Result<(), String> {
-    save_terminal_session_snapshot_store_to_path(&terminal_session_snapshots_path()?, store)
+    let path = terminal_session_snapshots_path()?;
+    let _guard = terminal_session_snapshot_store_lock()
+        .lock()
+        .map_err(|_| "Terminal session snapshot store lock poisoned".to_string())?;
+    save_terminal_session_snapshot_store_to_path(&path, store)
+}
+
+pub fn update_terminal_session_snapshot_store<R>(
+    update: impl FnOnce(&mut TerminalSessionSnapshotStore) -> Result<R, String>,
+) -> Result<R, String> {
+    let path = terminal_session_snapshots_path()?;
+    update_terminal_session_snapshot_store_at_path(&path, update)
 }
 
 fn save_terminal_session_snapshot_store_to_path(
@@ -160,6 +205,19 @@ fn save_terminal_session_snapshot_store_to_path(
     store: &TerminalSessionSnapshotStore,
 ) -> Result<(), String> {
     save_json_file(path, store)
+}
+
+fn update_terminal_session_snapshot_store_at_path<R>(
+    path: &Path,
+    update: impl FnOnce(&mut TerminalSessionSnapshotStore) -> Result<R, String>,
+) -> Result<R, String> {
+    let _guard = terminal_session_snapshot_store_lock()
+        .lock()
+        .map_err(|_| "Terminal session snapshot store lock poisoned".to_string())?;
+    let mut store = load_terminal_session_snapshot_store_from_path(path)?;
+    let result = update(&mut store)?;
+    save_terminal_session_snapshot_store_to_path(path, &store)?;
+    Ok(result)
 }
 
 pub fn get_app_config_impl() -> AppConfig {
@@ -264,11 +322,10 @@ pub fn remove_terminal_layouts_for_worktree(worktree_path: &str) -> Result<(), S
 }
 
 pub fn remove_terminal_session_snapshot_for_worktree(worktree_path: &str) -> Result<(), String> {
-    let mut store = load_terminal_session_snapshot_store()?;
-    if remove_worktree_entries_from_snapshot_store(&mut store, worktree_path) {
-        save_terminal_session_snapshot_store(&store)?;
-    }
-    Ok(())
+    update_terminal_session_snapshot_store(|store| {
+        remove_worktree_entries_from_snapshot_store(store, worktree_path);
+        Ok(())
+    })
 }
 
 pub fn remove_panel_layouts_for_worktree(worktree_path: &str) -> Result<(), String> {
@@ -663,6 +720,60 @@ mod tests {
             snapshot.panes[0].restore_cwd_source,
             TerminalRestoreCwdSource::LastKnownCwd
         );
+
+        let _ = fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn load_terminal_session_snapshot_store_recovers_trailing_bytes() {
+        let path = temp_snapshot_store_path();
+        let store = sample_snapshot_store();
+        let mut raw = serde_json::to_string_pretty(&store).unwrap();
+        raw.push_str("garbage\x1b[31m");
+        write_fixture(&path, &raw);
+
+        let loaded = load_terminal_session_snapshot_store_from_path(&path).unwrap();
+        let repaired = fs::read_to_string(&path).unwrap();
+
+        assert_eq!(loaded.version, 1);
+        assert_eq!(loaded.worktrees.len(), 1);
+        serde_json::from_str::<TerminalSessionSnapshotStore>(&repaired).unwrap();
+
+        let _ = fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn update_terminal_session_snapshot_store_serializes_concurrent_updates() {
+        use std::sync::{Arc, Barrier};
+        use std::thread;
+
+        let path = temp_snapshot_store_path();
+        let barrier = Arc::new(Barrier::new(5));
+        let mut handles = Vec::new();
+
+        for index in 0..4 {
+            let barrier = Arc::clone(&barrier);
+            let path = path.clone();
+            handles.push(thread::spawn(move || {
+                let worktree_path = format!("/tmp/grove/worktree-{index}");
+                barrier.wait();
+                update_terminal_session_snapshot_store_at_path(&path, |store| {
+                    store
+                        .worktrees
+                        .insert(worktree_path.clone(), sample_snapshot(&worktree_path));
+                    Ok(())
+                })
+            }));
+        }
+
+        barrier.wait();
+
+        for handle in handles {
+            handle.join().unwrap().unwrap();
+        }
+
+        let loaded = load_terminal_session_snapshot_store_from_path(&path).unwrap();
+        assert_eq!(loaded.worktrees.len(), 4);
 
         let _ = fs::remove_dir_all(path.parent().unwrap());
     }
