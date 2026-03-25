@@ -27,11 +27,14 @@ interface Props {
   filePath: string;
   isFirst: boolean;
   selectedLines: Set<number>;
-  onToggleLine: (index: number) => void;
   isStaged: boolean;
   onStageHunk?: (filePath: string, hunkIndex: number) => void;
   onUnstageHunk?: (filePath: string, hunkIndex: number) => void;
   onDiscardHunk?: (filePath: string, hunkIndex: number) => void;
+  onGutterClick: (lineIndex: number, shiftKey: boolean) => void;
+  onGutterMouseDown: (lineIndex: number) => void;
+  onGutterMouseEnter: (lineIndex: number, buttons: number) => void;
+  onGutterMouseUp: () => void;
 }
 
 export default function DiffHunk({
@@ -40,11 +43,14 @@ export default function DiffHunk({
   filePath,
   isFirst,
   selectedLines,
-  onToggleLine,
   isStaged,
   onStageHunk,
   onUnstageHunk,
   onDiscardHunk,
+  onGutterClick,
+  onGutterMouseDown,
+  onGutterMouseEnter,
+  onGutterMouseUp,
 }: Props) {
   const [collapsed, setCollapsed] = useState(false);
 
@@ -104,7 +110,16 @@ export default function DiffHunk({
       {/* Lines grouped by type */}
       {!collapsed &&
         groupLines(hunk.lines).map((group, gi) => (
-          <LineGroupView key={gi} type={group.type} lines={group.lines} />
+          <LineGroupView
+            key={gi}
+            type={group.type}
+            lines={group.lines}
+            selectedLines={selectedLines}
+            onGutterClick={onGutterClick}
+            onGutterMouseDown={onGutterMouseDown}
+            onGutterMouseEnter={onGutterMouseEnter}
+            onGutterMouseUp={onGutterMouseUp}
+          />
         ))}
     </div>
   );
@@ -113,9 +128,19 @@ export default function DiffHunk({
 function LineGroupView({
   type,
   lines,
+  selectedLines,
+  onGutterClick,
+  onGutterMouseDown,
+  onGutterMouseEnter,
+  onGutterMouseUp,
 }: {
   type: GroupType;
   lines: DiffLineType[];
+  selectedLines: Set<number>;
+  onGutterClick: (lineIndex: number, shiftKey: boolean) => void;
+  onGutterMouseDown: (lineIndex: number) => void;
+  onGutterMouseEnter: (lineIndex: number, buttons: number) => void;
+  onGutterMouseUp: () => void;
 }) {
   const isAdd = type === "add";
   const isRemove = type === "remove";
@@ -157,45 +182,63 @@ function LineGroupView({
     >
       {/* Fixed gutter */}
       <div className="shrink-0" style={{ backgroundColor: gutterBg }}>
-        {lines.map((line) => (
-          <div
-            key={line.index}
-            className={cn("flex min-h-[20px] leading-[20px] font-mono text-[12px]")}
-          >
-            <span className={cn("w-[40px] text-right pr-2 text-[11px] select-none", {
-              "text-muted-foreground/50": isContext,
-              "text-muted-foreground": !isContext,
-            })}>
-              {line.oldLineNumber ?? ""}
-            </span>
-            <span className={cn("w-[40px] text-right pr-2 text-[11px] select-none", {
-              "text-muted-foreground/50": isContext,
-              "text-muted-foreground": !isContext,
-            })}>
-              {line.newLineNumber ?? ""}
-            </span>
-            <span
-              className={cn("w-[18px] text-center select-none font-medium")}
-              style={{ color: prefixColor }}
+        {lines.map((line) => {
+          const isSelectable = !isContext;
+          const isSelected = isSelectable && selectedLines.has(line.index);
+
+          return (
+            <div
+              key={line.index}
+              className={cn("flex min-h-[20px] leading-[20px] font-mono text-[12px]", {
+                "cursor-pointer": isSelectable,
+              })}
+              style={isSelected ? { boxShadow: `inset 3px 0 0 ${borderColor.replace("0.3", "0.8")}` } : undefined}
+              onClick={isSelectable ? (e) => { e.stopPropagation(); onGutterClick(line.index, e.shiftKey); } : undefined}
+              onMouseDown={isSelectable ? () => onGutterMouseDown(line.index) : undefined}
+              onMouseEnter={isSelectable ? (e) => onGutterMouseEnter(line.index, e.buttons) : undefined}
+              onMouseUp={isSelectable ? onGutterMouseUp : undefined}
             >
-              {prefix}
-            </span>
-          </div>
-        ))}
+              <span className={cn("w-[40px] text-right pr-2 text-[11px] select-none", {
+                "text-muted-foreground/50": isContext,
+                "text-muted-foreground": !isContext,
+              })}>
+                {line.oldLineNumber ?? ""}
+              </span>
+              <span className={cn("w-[40px] text-right pr-2 text-[11px] select-none", {
+                "text-muted-foreground/50": isContext,
+                "text-muted-foreground": !isContext,
+              })}>
+                {line.newLineNumber ?? ""}
+              </span>
+              <span
+                className={cn("w-[18px] text-center select-none font-medium")}
+                style={{ color: prefixColor }}
+              >
+                {prefix}
+              </span>
+            </div>
+          );
+        })}
       </div>
 
       {/* Shared scrollable code content */}
       <div className={cn("flex-1 overflow-x-auto overflow-y-hidden diff-line-content")}>
-        {lines.map((line) => (
-          <div
-            key={line.index}
-            className={cn("min-h-[20px] leading-[20px] font-mono text-[12px] whitespace-pre pr-3", {
-              "text-foreground/80": isContext,
-            })}
-          >
-            {line.content}
-          </div>
-        ))}
+        {lines.map((line) => {
+          const isSelectable = !isContext;
+          const isSelected = isSelectable && selectedLines.has(line.index);
+
+          return (
+            <div
+              key={line.index}
+              className={cn("min-h-[20px] leading-[20px] font-mono text-[12px] whitespace-pre pr-3", {
+                "text-foreground/80": isContext,
+              })}
+              style={isSelected ? { backgroundColor: isAdd ? "rgba(46, 160, 67, 0.15)" : "rgba(248, 81, 73, 0.15)" } : undefined}
+            >
+              {line.content}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

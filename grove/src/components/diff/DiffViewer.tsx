@@ -3,6 +3,7 @@ import type { FileDiff } from "../../types";
 import DiffHunk from "./DiffHunk";
 import { cn } from "../../lib/cn";
 import { useDiffStore } from "../../store/diff";
+import { useLineSelection } from "../../hooks/useLineSelection";
 
 
 interface Props {
@@ -14,7 +15,7 @@ interface Props {
 
 export default function DiffViewer({ diff, selectedFile, isStaged, isCommitView }: Props) {
   const selectedLines = useDiffStore((s) => s.selectedLines);
-  const toggleLine = useDiffStore((s) => s.toggleLine);
+  const { handleGutterClick, handleGutterMouseDown, handleGutterMouseEnter, handleGutterMouseUp } = useLineSelection();
   const stageHunk = useDiffStore((s) => s.stageHunk);
   const unstageHunk = useDiffStore((s) => s.unstageHunk);
   const discardHunk = useDiffStore((s) => s.discardHunk);
@@ -62,11 +63,14 @@ export default function DiffViewer({ diff, selectedFile, isStaged, isCommitView 
           filePath={selectedFile!}
           isFirst={i === 0}
           selectedLines={selectedLines}
-          onToggleLine={toggleLine}
           isStaged={isStaged}
           onStageHunk={isCommitView ? undefined : handleStageHunk}
           onUnstageHunk={isCommitView ? undefined : handleUnstageHunk}
           onDiscardHunk={isCommitView ? undefined : handleDiscardHunk}
+          onGutterClick={handleGutterClick}
+          onGutterMouseDown={handleGutterMouseDown}
+          onGutterMouseEnter={handleGutterMouseEnter}
+          onGutterMouseUp={handleGutterMouseUp}
         />
       ))}
     </div>
