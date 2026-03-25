@@ -28,6 +28,7 @@ interface DiffState {
   selectFile: (path: string | null, staged?: boolean) => void;
   selectLine: (index: number) => void;
   toggleLine: (index: number) => void;
+  selectLineRange: (start: number, end: number) => void;
   clearSelection: () => void;
 
   stageFile: (path: string) => Promise<void>;
@@ -214,6 +215,16 @@ export const useDiffStore = create<DiffState>((set, get) => ({
       next.delete(index);
     } else {
       next.add(index);
+    }
+    set({ selectedLines: next });
+  },
+
+  selectLineRange: (start, end) => {
+    const min = Math.min(start, end);
+    const max = Math.max(start, end);
+    const next = new Set<number>();
+    for (let i = min; i <= max; i++) {
+      next.add(i);
     }
     set({ selectedLines: next });
   },
