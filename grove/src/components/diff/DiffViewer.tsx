@@ -19,6 +19,9 @@ export default function DiffViewer({ diff, selectedFile, isStaged, isCommitView 
   const stageHunk = useDiffStore((s) => s.stageHunk);
   const unstageHunk = useDiffStore((s) => s.unstageHunk);
   const discardHunk = useDiffStore((s) => s.discardHunk);
+  const stageLines = useDiffStore((s) => s.stageLines);
+  const unstageLines = useDiffStore((s) => s.unstageLines);
+  const clearSelection = useDiffStore((s) => s.clearSelection);
 
   const handleStageHunk = useCallback(
     (filePath: string, hunkIndex: number) => stageHunk(filePath, hunkIndex),
@@ -31,6 +34,44 @@ export default function DiffViewer({ diff, selectedFile, isStaged, isCommitView 
   const handleDiscardHunk = useCallback(
     (filePath: string, hunkIndex: number) => discardHunk(filePath, hunkIndex),
     [discardHunk],
+  );
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (!selectedFile) return;
+
+      if (e.key === " ") {
+        e.preventDefault();
+        if (selectedLines.size > 0) {
+          // Group selected lines by hunk index
+          const linesByHunk = new Map<number, number[]>();
+          for (const lineIdx of selectedLines) {
+            if (!diff) continue;
+            for (let hi = 0; hi < diff.hunks.length; hi++) {
+              const hunk = diff.hunks[hi];
+              if (hunk.lines.some((l) => l.index === lineIdx)) {
+                const arr = linesByHunk.get(hi) ?? [];
+                arr.push(lineIdx);
+                linesByHunk.set(hi, arr);
+                break;
+              }
+            }
+          }
+          const action = isStaged ? unstageLines : stageLines;
+          for (const [hunkIdx, lines] of linesByHunk) {
+            action(selectedFile, hunkIdx, lines);
+          }
+        } else if (diff && diff.hunks.length > 0) {
+          const action = isStaged ? unstageHunk : stageHunk;
+          action(selectedFile, 0);
+        }
+      }
+
+      if (e.key === "Escape") {
+        clearSelection();
+      }
+    },
+    [selectedFile, selectedLines, diff, isStaged, stageLines, unstageLines, stageHunk, unstageHunk, clearSelection],
   );
 
   if (!diff || !selectedFile) {
@@ -54,7 +95,7 @@ export default function DiffViewer({ diff, selectedFile, isStaged, isCommitView 
   }
 
   return (
-    <div className={cn("h-full overflow-y-auto")}>
+    <div className={cn("h-full overflow-y-auto outline-none")} tabIndex={0} onKeyDown={handleKeyDown}>
       {diff.hunks.map((hunk, i) => (
         <DiffHunk
           key={`${hunk.header}-${i}`}
