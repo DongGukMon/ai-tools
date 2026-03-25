@@ -52,7 +52,10 @@ function FileItem({
       <FileText className={cn("size-3 shrink-0", statusColors[file.status])} />
       <span className={cn("truncate flex-1")}>{file.path}</span>
       {actions && (
-        <div className={cn("flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity")}>
+        <div className={cn("flex items-center gap-0.5 shrink-0", {
+          "opacity-100": selected,
+          "opacity-0 group-hover:opacity-100": !selected,
+        })}>
           {actions}
         </div>
       )}
