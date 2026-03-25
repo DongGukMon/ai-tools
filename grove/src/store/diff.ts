@@ -251,6 +251,7 @@ function createMutationActions() {
 
   const refresh = async () => {
     const state = useDiffStore.getState();
+    state.clearSelection();
     await state.loadStatus();
     if (state.selectedFile && state.selectedView === "changes") {
       await state.loadWorkingDiff(state.selectedFile, state.isViewingStaged);
