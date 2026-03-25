@@ -6,6 +6,7 @@ import { runCommand, runCommandSafely } from "../lib/command";
 import { useTerminalStore } from "./terminal";
 import { useBroadcastStore } from "./broadcast";
 import { collectTerminalPanes } from "../lib/terminal-session";
+import { useMissionStore } from "./mission";
 
 interface ProjectState {
   projects: Project[];
@@ -176,6 +177,35 @@ export const useProjectStore = create<ProjectState>((set) => ({
   },
 
   removeProject: async (id: string) => {
+    // Check for mission references BEFORE deleting
+    const { missions } = useMissionStore.getState();
+    const referencingMissions = missions.filter((m) =>
+      m.projects.some((p) => p.projectId === id),
+    );
+
+    if (referencingMissions.length > 0) {
+      const missionNames = referencingMissions
+        .map((m) => m.name)
+        .join("\n  - ");
+      const confirmed = window.confirm(
+        `This project is used in the following missions:\n  - ${missionNames}\n\nDelete will also remove it from these missions.`,
+      );
+      if (!confirmed) throw new Error("Cancelled");
+
+      // Clean up mission references first (before SOT deletion)
+      for (const mission of referencingMissions) {
+        await useMissionStore.getState().removeProject(mission.id, id);
+        // If mission now has 0 projects, delete it entirely
+        const updated = useMissionStore
+          .getState()
+          .missions.find((m) => m.id === mission.id);
+        if (updated && updated.projects.length === 0) {
+          await useMissionStore.getState().deleteMission(mission.id);
+        }
+      }
+    }
+
+    // Proceed with project deletion
     await runCommand(() => tauri.removeProject(id), {
       errorToast: "Failed to remove project",
     });
