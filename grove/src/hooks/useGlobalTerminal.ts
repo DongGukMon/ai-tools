@@ -10,6 +10,7 @@ import {
 import { useBroadcastStore } from "../store/broadcast";
 import { runCommand, runCommandSafely } from "../lib/command";
 import { log, error as logError } from "../lib/logger";
+import { restoreBroadcastSessionSize } from "../lib/broadcast-session";
 
 interface TabPtyState {
   ptyId: string;
@@ -125,7 +126,8 @@ export function useGlobalTerminal() {
     const { stopMirror } = useBroadcastStore.getState();
     for (const tab of gt.tabs) {
       if (tab.mirrorPtyId) {
-        stopMirror(tab.mirrorPtyId);
+        const ended = stopMirror(tab.mirrorPtyId);
+        restoreBroadcastSessionSize(ended);
         usePanelLayoutStore.getState().removeGlobalTerminalTab(tab.id);
       }
     }
@@ -138,7 +140,8 @@ export function useGlobalTerminal() {
     if (tab?.mirrorPtyId) {
       const { mirrors, stopMirror } = useBroadcastStore.getState();
       if (mirrors[tab.mirrorPtyId]) {
-        stopMirror(tab.mirrorPtyId);
+        const ended = stopMirror(tab.mirrorPtyId);
+        restoreBroadcastSessionSize(ended);
       }
     }
     usePanelLayoutStore.getState().removeGlobalTerminalTab(tabId);

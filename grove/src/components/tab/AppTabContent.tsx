@@ -11,6 +11,10 @@ import {
   getRuntimeSize,
   captureRuntimeSnapshot,
 } from "../../lib/terminal-runtime";
+import {
+  buildBroadcastSessionKey,
+  restoreBroadcastSessionSize,
+} from "../../lib/broadcast-session";
 import { collectTerminalPanes } from "../../lib/terminal-session";
 import { shouldStartPipBroadcast } from "../../lib/broadcast-policy";
 import { cn } from "../../lib/cn";
@@ -68,9 +72,17 @@ function AppTabContent() {
   const prevIsTerminalRef = useRef(isTerminal);
   const pipContainerRef = useRef<HTMLDivElement>(null);
   const pipRuntimeMapRef = useRef(
-    new Map<string, { paneId: string; runtime: ReturnType<typeof acquireTerminalRuntime> }>(),
+    new Map<
+      string,
+      {
+        ptyId: string;
+        paneId: string;
+        sessionKey: string;
+        runtime: ReturnType<typeof acquireTerminalRuntime>;
+      }
+    >(),
   );
-  const attachedPipWorktreeRef = useRef<string | null>(null);
+  const attachedPipSessionRef = useRef<{ worktreePath: string; sessionKey: string } | null>(null);
 
   const pipDismissed = selectedWorktreePath
     ? (pipDismissedByWorktree[selectedWorktreePath] ?? true)
@@ -84,7 +96,8 @@ function AppTabContent() {
     if (isTerminal) {
       // Returning to Terminal tab — stop PiP broadcast if active
       if (selectedWorktreePath && pip) {
-        stopPip(selectedWorktreePath);
+        const ended = stopPip(selectedWorktreePath);
+        restoreBroadcastSessionSize(ended);
       }
     } else if (
       selectedWorktreePath &&
@@ -127,8 +140,9 @@ function AppTabContent() {
     const activeWorktreePaths = new Set(Object.keys(pips));
 
     for (const [worktreePath, session] of Object.entries(pips)) {
+      const sessionKey = buildBroadcastSessionKey(worktreePath, session);
       const current = runtimeMap.get(worktreePath);
-      if (current?.paneId === session.paneId) {
+      if (current?.sessionKey === sessionKey) {
         continue;
       }
 
@@ -136,7 +150,9 @@ function AppTabContent() {
       current?.runtime.release();
 
       runtimeMap.set(worktreePath, {
+        ptyId: session.ptyId,
         paneId: session.paneId,
+        sessionKey,
         runtime: acquireTerminalRuntime(session.paneId, theme),
       });
     }
@@ -149,8 +165,8 @@ function AppTabContent() {
       entry.runtime.detach();
       entry.runtime.release();
       runtimeMap.delete(worktreePath);
-      if (attachedPipWorktreeRef.current === worktreePath) {
-        attachedPipWorktreeRef.current = null;
+      if (attachedPipSessionRef.current?.worktreePath === worktreePath) {
+        attachedPipSessionRef.current = null;
       }
     }
   }, [pips, theme]);
@@ -163,13 +179,19 @@ function AppTabContent() {
 
   useEffect(() => {
     const runtimeMap = pipRuntimeMapRef.current;
-    const attachedWorktreePath = attachedPipWorktreeRef.current;
+    const activeSessionKey = pip && selectedWorktreePath
+      ? buildBroadcastSessionKey(selectedWorktreePath, pip)
+      : null;
+    const attachedSession = attachedPipSessionRef.current;
     if (
-      attachedWorktreePath &&
-      (!selectedWorktreePath || attachedWorktreePath !== selectedWorktreePath || !hasPipBroadcast)
+      attachedSession &&
+      (!selectedWorktreePath ||
+        attachedSession.worktreePath !== selectedWorktreePath ||
+        !hasPipBroadcast ||
+        attachedSession.sessionKey !== activeSessionKey)
     ) {
-      runtimeMap.get(attachedWorktreePath)?.runtime.detach();
-      attachedPipWorktreeRef.current = null;
+      runtimeMap.get(attachedSession.worktreePath)?.runtime.detach();
+      attachedPipSessionRef.current = null;
     }
 
     if (!hasPipBroadcast || !pip || !selectedWorktreePath) {
@@ -183,11 +205,14 @@ function AppTabContent() {
     }
 
     entry.runtime.attach(container);
-    attachedPipWorktreeRef.current = selectedWorktreePath;
+    attachedPipSessionRef.current = {
+      worktreePath: selectedWorktreePath,
+      sessionKey: activeSessionKey ?? entry.sessionKey,
+    };
     requestAnimationFrame(() => {
       entry.runtime.fitAddon.fit();
     });
-  }, [hasPipBroadcast, pip?.paneId, selectedWorktreePath]);
+  }, [hasPipBroadcast, pip?.paneId, pip?.ptyId, selectedWorktreePath]);
 
   useEffect(() => () => {
     for (const { runtime } of pipRuntimeMapRef.current.values()) {
@@ -195,7 +220,7 @@ function AppTabContent() {
       runtime.release();
     }
     pipRuntimeMapRef.current.clear();
-    attachedPipWorktreeRef.current = null;
+    attachedPipSessionRef.current = null;
   }, []);
 
   const {
@@ -256,8 +281,13 @@ function AppTabContent() {
     }));
   }, [selectedWorktreePath]);
 
+  const activePipKey = pip && selectedWorktreePath
+    ? buildBroadcastSessionKey(selectedWorktreePath, pip)
+    : null;
+
   const pipElement = hasPipBroadcast && (
     <PipTerminal
+      key={activePipKey ?? "pip"}
       containerRef={pipContainerRef}
       dismissed={pipDismissed}
       onDismiss={handlePipDismiss}

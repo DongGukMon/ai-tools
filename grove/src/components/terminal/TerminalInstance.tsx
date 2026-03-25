@@ -7,6 +7,7 @@ import "@xterm/xterm/css/xterm.css";
 import { cn } from "../../lib/cn";
 import { acquireTerminalRuntime } from "../../lib/terminal-runtime";
 import { shouldAttachPrimaryRuntime } from "../../lib/broadcast-policy";
+import { restoreBroadcastSessionSize } from "../../lib/broadcast-session";
 import { Button } from "../ui/button";
 
 interface Props {
@@ -125,6 +126,7 @@ function TerminalInstance({ paneId, ptyId }: Props) {
 
                 if (mirrors[ptyId]) {
                   const ended = stopMirror(ptyId);
+                  restoreBroadcastSessionSize(ended);
                   const gt = usePanelLayoutStore.getState().globalTerminal;
                   const mirrorTab = gt.tabs.find((t) => t.mirrorPtyId === ended?.ptyId);
                   if (mirrorTab) {
@@ -134,7 +136,8 @@ function TerminalInstance({ paneId, ptyId }: Props) {
                 }
 
                 if (pipSession?.ptyId === ptyId) {
-                  stopPipByPty(ptyId);
+                  const ended = stopPipByPty(ptyId);
+                  restoreBroadcastSessionSize(ended?.session ?? null);
                 }
               }}
               className={cn(

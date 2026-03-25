@@ -32,6 +32,8 @@ Consumer slots:
 - Multiple worktrees may each have an active PiP state at the same time.
   The visible PiP container always renders the currently selected worktree's PiP.
 - A worktree switch must never keep showing the previous worktree's PTY in the shared PiP container.
+- The visible PiP consumer identity is `worktreePath + ptyId + paneId`.
+  Reusing only `worktreePath` is insufficient because the shared PiP container can otherwise keep the wrong runtime attached.
 - Removing a worktree must clear any PiP or mirror state that references that worktree's PTYs.
 
 ### Broadcast State Machine
@@ -56,6 +58,7 @@ broadcasting ──[stop]───→ idle (restore original size)
 - **Scope**: one PiP slot per worktree space
 - **Behavior**: attaches the selected worktree's focused pane runtime to the shared PiP container
 - **Worktree switch**: detaches the previous worktree's PiP consumer and attaches the newly selected worktree's PiP consumer
+- **Consumer key**: the visible PiP subtree and attach bookkeeping must be keyed by `worktreePath + ptyId + paneId`
 - **Retention**: active PiP runtimes stay retained offscreen so switching back to a worktree can reattach the same runtime instead of recreating it
 - **Dismiss**: auto on return to Terminal tab / dismiss button → restore via arrow
 - **Policy**: skipped if the focused pane is already broadcasting (mirror)
@@ -89,7 +92,7 @@ broadcasting ──[stop]───→ idle (restore original size)
 - The active consumer controls PTY resize.
 - When a PTY is mirrored or shown in PiP, the original pane must not keep ownership of the runtime.
 - When the visible PiP worktree changes, the previous PiP runtime is detached but retained; the newly selected worktree's PiP runtime becomes the resize owner.
-- On broadcast end, PTY is restored to `originalCols/originalRows`.
+- On broadcast end, PTY is restored to `originalCols/originalRows` via an explicit `resizePty(...)` call. Detach alone is not sufficient.
 
 ## Regression Matrix
 
@@ -100,6 +103,7 @@ These cases should stay covered by tests or manual verification:
 3. Create PiP in worktree A, create PiP in worktree B, then switch A ↔ B while staying outside the Terminal tab. The shared PiP container must always show the selected worktree's PTY.
 4. Stop PiP for worktree A. Worktree B's PiP must remain intact.
 5. Remove a worktree that currently owns PiP or mirror state. All broadcast entries tied to that worktree's PTYs must be cleared.
+6. Return from Changes/Browser to Terminal while PiP is active. The source PTY must restore to the pre-broadcast size.
 
 ## Key Files
 
