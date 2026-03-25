@@ -1,0 +1,141 @@
+import { useState } from "react";
+import {
+  ChevronDown,
+  ChevronRight,
+  Plus,
+  X,
+  Loader2,
+} from "lucide-react";
+import type { Mission } from "../../types";
+import { useMissionStore } from "../../store/mission";
+import { useTerminalStore } from "../../store/terminal";
+import { IconButton } from "../ui/button";
+import { Badge } from "../ui/badge";
+import MissionProjectItem from "./MissionProjectItem";
+import AddProjectToMissionDialog from "./AddProjectToMissionDialog";
+import { cn } from "../../lib/cn";
+
+interface Props {
+  mission: Mission;
+}
+
+function MissionItem({ mission }: Props) {
+  const collapsed = useMissionStore(
+    (s) => !!s.collapsedMissions[mission.id],
+  );
+  const deleting = useMissionStore(
+    (s) => !!s.deletingMissions[mission.id],
+  );
+  const selectedItem = useMissionStore((s) => s.selectedItem);
+  const toggleCollapse = useMissionStore((s) => s.toggleCollapse);
+  const selectItem = useMissionStore((s) => s.selectItem);
+  const deleteMission = useMissionStore((s) => s.deleteMission);
+
+  const [showAddProject, setShowAddProject] = useState(false);
+
+  const isMissionSelected =
+    selectedItem?.missionId === mission.id && !selectedItem?.projectId;
+
+  const handleNameClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    selectItem(mission.id);
+    useTerminalStore.getState().setActiveWorktree(mission.missionDir);
+  };
+
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const confirmed = window.confirm(
+      `Delete mission "${mission.name}"? This will remove all project associations.`,
+    );
+    if (!confirmed) return;
+    await deleteMission(mission.id);
+  };
+
+  return (
+    <div className={cn("pl-2 pr-2")}>
+      {/* Mission header */}
+      <div
+        className={cn(
+          "group flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-[13px] transition-all duration-150 cursor-pointer select-none",
+          {
+            "text-foreground hover:bg-secondary/50": !deleting,
+            "pointer-events-none opacity-50": deleting,
+          },
+        )}
+        onClick={() => toggleCollapse(mission.id)}
+      >
+        {collapsed ? (
+          <ChevronRight className={cn("h-[13px] w-[13px] shrink-0 text-muted-foreground")} />
+        ) : (
+          <ChevronDown className={cn("h-[13px] w-[13px] shrink-0 text-muted-foreground")} />
+        )}
+        <span
+          className={cn("min-w-0 flex-1 truncate font-medium", {
+            "text-accent": isMissionSelected,
+          })}
+          onClick={handleNameClick}
+        >
+          {mission.name}
+        </span>
+        {collapsed && mission.projects.length > 0 && (
+          <Badge variant="secondary" className={cn("text-[10px] h-4 px-1.5")}>
+            {mission.projects.length}
+          </Badge>
+        )}
+        <div className={cn("flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity")}>
+          <IconButton
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowAddProject(!showAddProject);
+            }}
+            title="Add project"
+          >
+            <Plus className={cn("h-[13px] w-[13px]")} />
+          </IconButton>
+          {deleting ? (
+            <Loader2 className={cn("h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground")} />
+          ) : (
+            <IconButton
+              onClick={handleDelete}
+              title="Delete mission"
+            >
+              <X className={cn("h-[13px] w-[13px]")} />
+            </IconButton>
+          )}
+        </div>
+      </div>
+
+      {/* Expanded content */}
+      <div
+        className={cn(
+          "grid transition-[grid-template-rows] duration-200 ease-out",
+          {
+            "grid-rows-[1fr]": !collapsed,
+            "grid-rows-[0fr]": collapsed,
+          },
+        )}
+      >
+        <div className={cn("overflow-hidden")}>
+          <div className={cn("ml-4 border-l border-border pl-1.5")}>
+            {mission.projects.map((project) => (
+              <MissionProjectItem
+                key={project.projectId}
+                missionId={mission.id}
+                project={project}
+              />
+            ))}
+            {showAddProject && (
+              <AddProjectToMissionDialog
+                missionId={mission.id}
+                existingProjectIds={mission.projects.map((p) => p.projectId)}
+                onClose={() => setShowAddProject(false)}
+              />
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default MissionItem;
