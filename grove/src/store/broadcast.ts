@@ -13,7 +13,7 @@ export interface BroadcastSession {
 
 interface BroadcastState {
   mirrors: Record<string, BroadcastSession>;
-  pip: BroadcastSession | null;
+  pips: Record<string, BroadcastSession>;
 
   /**
    * Start or replace a mirror broadcast for a specific PTY.
@@ -36,6 +36,7 @@ interface BroadcastState {
    * Start or replace the single PiP broadcast slot.
    */
   startPip: (
+    worktreePath: string,
     ptyId: string,
     paneId: string,
     originalCols: number,
@@ -47,7 +48,15 @@ interface BroadcastState {
    * Stop the active PiP broadcast.
    * Returns the ended session (for size restoration) or null if idle.
    */
-  stopPip: () => BroadcastSession | null;
+  stopPip: (worktreePath: string) => BroadcastSession | null;
+
+  /** Stop the PiP broadcast that owns this PTY, regardless of worktree. */
+  stopPipByPty: (
+    ptyId: string,
+  ) => { worktreePath: string; session: BroadcastSession } | null;
+
+  /** Get the PiP session for a worktree, or null if none is active. */
+  getPip: (worktreePath: string | null | undefined) => BroadcastSession | null;
 
   /** Check if a specific ptyId is currently broadcasting. */
   isBroadcasting: (ptyId: string) => boolean;
@@ -61,7 +70,7 @@ interface BroadcastState {
 
 export const useBroadcastStore = create<BroadcastState>((set, get) => ({
   mirrors: {},
-  pip: null,
+  pips: {},
 
   startMirror: (ptyId, paneId, originalCols, originalRows, snapshot = null) => {
     set((state) => ({
@@ -92,22 +101,69 @@ export const useBroadcastStore = create<BroadcastState>((set, get) => ({
     return session;
   },
 
-  startPip: (ptyId, paneId, originalCols, originalRows, snapshot = null) => {
-    set({
-      pip: { ptyId, paneId, target: "pip", originalCols, originalRows, snapshot },
-    });
+  startPip: (
+    worktreePath,
+    ptyId,
+    paneId,
+    originalCols,
+    originalRows,
+    snapshot = null,
+  ) => {
+    set((state) => ({
+      pips: {
+        ...state.pips,
+        [worktreePath]: {
+          ptyId,
+          paneId,
+          target: "pip",
+          originalCols,
+          originalRows,
+          snapshot,
+        },
+      },
+    }));
   },
 
-  stopPip: () => {
-    const { pip } = get();
-    if (!pip) return null;
-    set({ pip: null });
-    return pip;
+  stopPip: (worktreePath) => {
+    const session = get().pips[worktreePath];
+    if (!session) return null;
+
+    set((state) => {
+      const nextPips = { ...state.pips };
+      delete nextPips[worktreePath];
+      return { pips: nextPips };
+    });
+
+    return session;
+  },
+
+  stopPipByPty: (ptyId) => {
+    const entry = Object.entries(get().pips).find(([, session]) => session.ptyId === ptyId);
+    if (!entry) return null;
+
+    const [worktreePath, session] = entry;
+    set((state) => {
+      const nextPips = { ...state.pips };
+      delete nextPips[worktreePath];
+      return { pips: nextPips };
+    });
+
+    return { worktreePath, session };
+  },
+
+  getPip: (worktreePath) => {
+    if (!worktreePath) {
+      return null;
+    }
+    return get().pips[worktreePath] ?? null;
   },
 
   isBroadcasting: (ptyId) => {
-    const { mirrors, pip } = get();
-    return Boolean(mirrors[ptyId] || pip?.ptyId === ptyId);
+    const { mirrors, pips } = get();
+    return Boolean(
+      mirrors[ptyId] ||
+      Object.values(pips).some((session) => session.ptyId === ptyId),
+    );
   },
 
   isMirroring: (ptyId) => {

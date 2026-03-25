@@ -96,18 +96,26 @@ export function useMarqueeSelection(
     [containerRef, hitTest, onSelectionChange],
   );
 
-  const justEndedRef = useRef(false);
-
   const onMouseUp = useCallback(() => {
-    justEndedRef.current = activeRef.current;
+    const wasActive = activeRef.current;
     startRef.current = null;
     activeRef.current = false;
     setRect(null);
-    // Reset after a tick so click events can check it
-    requestAnimationFrame(() => { justEndedRef.current = false; });
-  }, []);
 
-  const wasMarquee = useCallback(() => justEndedRef.current, []);
+    // Suppress the click event that fires after mouseup when a marquee drag just ended
+    if (wasActive) {
+      const container = containerRef.current;
+      if (container) {
+        const suppressClick = (e: MouseEvent) => {
+          e.stopPropagation();
+          e.preventDefault();
+        };
+        container.addEventListener("click", suppressClick, { capture: true, once: true });
+      }
+    }
+  }, [containerRef]);
+
+  const wasMarquee = useCallback(() => false, []);
 
   return {
     rect,

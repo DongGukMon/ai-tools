@@ -21,7 +21,9 @@ function TerminalInstance({ paneId, ptyId }: Props) {
   const isFocused = useTerminalStore((s) => s.focusedPtyId === ptyId);
   const setFocusedPtyId = useTerminalStore((s) => s.setFocusedPtyId);
   const mirrorSession = useBroadcastStore((s) => s.mirrors[ptyId] ?? null);
-  const pipSession = useBroadcastStore((s) => (s.pip?.ptyId === ptyId ? s.pip : null));
+  const pipSession = useBroadcastStore((s) =>
+    Object.values(s.pips).find((session) => session.ptyId === ptyId) ?? null,
+  );
   const isBroadcasting = Boolean(mirrorSession || pipSession);
   const snapshot = mirrorSession?.snapshot ?? pipSession?.snapshot ?? null;
   const markBellPty = useTerminalStore((s) => s.markBellPty);
@@ -119,7 +121,7 @@ function TerminalInstance({ paneId, ptyId }: Props) {
               variant="ghost"
               size="sm"
               onClick={() => {
-                const { mirrors, pip, stopMirror, stopPip } = useBroadcastStore.getState();
+                const { mirrors, stopMirror, stopPipByPty } = useBroadcastStore.getState();
 
                 if (mirrors[ptyId]) {
                   const ended = stopMirror(ptyId);
@@ -131,8 +133,8 @@ function TerminalInstance({ paneId, ptyId }: Props) {
                   return;
                 }
 
-                if (pip?.ptyId === ptyId) {
-                  stopPip();
+                if (pipSession?.ptyId === ptyId) {
+                  stopPipByPty(ptyId);
                 }
               }}
               className={cn(
