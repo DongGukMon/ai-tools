@@ -51,14 +51,27 @@ fn config_path() -> PathBuf {
         .join("config.json")
 }
 
-fn grove_data_path(filename: &str) -> Result<PathBuf, String> {
+pub(crate) fn grove_data_path(filename: &str) -> Result<PathBuf, String> {
     Ok(dirs::home_dir()
         .ok_or("No home dir")?
         .join(".grove")
         .join(filename))
 }
 
-fn save_json_file<T>(path: &Path, value: &T) -> Result<(), String>
+pub(crate) fn load_json_file_or_default<T>(path: &Path) -> Result<T, String>
+where
+    T: DeserializeOwned + Default,
+{
+    if !path.exists() {
+        return Ok(T::default());
+    }
+
+    let content =
+        fs::read_to_string(path).map_err(|e| format!("Failed to read {}: {e}", path.display()))?;
+    serde_json::from_str(&content).map_err(|e| format!("Failed to parse {}: {e}", path.display()))
+}
+
+pub(crate) fn save_json_file<T>(path: &Path, value: &T) -> Result<(), String>
 where
     T: Serialize,
 {

@@ -2,6 +2,7 @@ pub mod config;
 pub mod git_diff;
 pub mod git_project;
 pub mod logger;
+pub mod mission;
 pub mod process_env;
 pub mod pty;
 pub mod terminal_theme;
