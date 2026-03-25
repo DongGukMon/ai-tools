@@ -54,7 +54,8 @@ export function useMarqueeSelection(
 
   const onMouseDown = useCallback(
     (e: React.MouseEvent) => {
-      if ((e.target as HTMLElement).closest("[data-file-item]")) return;
+      // Start tracking from anywhere in the container (including file items)
+      // Marquee only activates after dragging > 4px threshold
       const container = containerRef.current;
       if (!container) return;
 

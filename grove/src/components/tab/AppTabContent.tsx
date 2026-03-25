@@ -54,18 +54,27 @@ function AppTabContent() {
 
   const theme = useTerminalStore((s) => s.theme);
   const focusedPtyId = useTerminalStore((s) => s.focusedPtyId);
-  const pip = useBroadcastStore((s) => s.pip);
+  const pips = useBroadcastStore((s) => s.pips);
+  const pip = useBroadcastStore((s) =>
+    selectedWorktreePath ? (s.pips[selectedWorktreePath] ?? null) : null,
+  );
   const isFocusedPtyMirroring = useBroadcastStore((s) =>
     focusedPtyId ? Boolean(s.mirrors[focusedPtyId]) : false,
   );
   const startPip = useBroadcastStore((s) => s.startPip);
   const stopPip = useBroadcastStore((s) => s.stopPip);
 
-  const [pipPtyId, setPipPtyId] = useState<string | null>(null);
-  const [pipDismissed, setPipDismissed] = useState(true);
+  const [pipDismissedByWorktree, setPipDismissedByWorktree] = useState<Record<string, boolean>>({});
   const prevIsTerminalRef = useRef(isTerminal);
   const pipContainerRef = useRef<HTMLDivElement>(null);
-  const pipRuntimeRef = useRef<ReturnType<typeof acquireTerminalRuntime> | null>(null);
+  const pipRuntimeMapRef = useRef(
+    new Map<string, { paneId: string; runtime: ReturnType<typeof acquireTerminalRuntime> }>(),
+  );
+  const attachedPipWorktreeRef = useRef<string | null>(null);
+
+  const pipDismissed = selectedWorktreePath
+    ? (pipDismissedByWorktree[selectedWorktreePath] ?? true)
+    : true;
 
   // PiP broadcast policy
   useEffect(() => {
@@ -74,11 +83,11 @@ function AppTabContent() {
 
     if (isTerminal) {
       // Returning to Terminal tab — stop PiP broadcast if active
-      if (pip) {
-        stopPip();
+      if (selectedWorktreePath && pip) {
+        stopPip(selectedWorktreePath);
       }
-      setPipPtyId(null);
     } else if (
+      selectedWorktreePath &&
       shouldStartPipBroadcast({
         isTerminal,
         wasTerminal,
@@ -95,46 +104,99 @@ function AppTabContent() {
       if (paneId) {
         const { cols, rows } = getRuntimeSize(paneId);
         const snapshot = captureRuntimeSnapshot(paneId);
-        startPip(ptyId, paneId, cols, rows, snapshot);
-        setPipPtyId(ptyId);
+        startPip(selectedWorktreePath, ptyId, paneId, cols, rows, snapshot);
       }
     }
-  }, [isFocusedPtyMirroring, isTerminal, focusedPtyId, pip, startPip, stopPip]);
+  }, [
+    isFocusedPtyMirroring,
+    isTerminal,
+    focusedPtyId,
+    pip,
+    selectedWorktreePath,
+    startPip,
+    stopPip,
+  ]);
 
   const hasPipBroadcast =
     !isTerminal &&
-    !!pipPtyId &&
-    pip?.ptyId === pipPtyId;
+    !!selectedWorktreePath &&
+    !!pip;
 
   useEffect(() => {
-    if (!hasPipBroadcast || !pip) {
+    const runtimeMap = pipRuntimeMapRef.current;
+    const activeWorktreePaths = new Set(Object.keys(pips));
+
+    for (const [worktreePath, session] of Object.entries(pips)) {
+      const current = runtimeMap.get(worktreePath);
+      if (current?.paneId === session.paneId) {
+        continue;
+      }
+
+      current?.runtime.detach();
+      current?.runtime.release();
+
+      runtimeMap.set(worktreePath, {
+        paneId: session.paneId,
+        runtime: acquireTerminalRuntime(session.paneId, theme),
+      });
+    }
+
+    for (const [worktreePath, entry] of runtimeMap.entries()) {
+      if (activeWorktreePaths.has(worktreePath)) {
+        continue;
+      }
+
+      entry.runtime.detach();
+      entry.runtime.release();
+      runtimeMap.delete(worktreePath);
+      if (attachedPipWorktreeRef.current === worktreePath) {
+        attachedPipWorktreeRef.current = null;
+      }
+    }
+  }, [pips, theme]);
+
+  useEffect(() => {
+    for (const { runtime } of pipRuntimeMapRef.current.values()) {
+      runtime.setTheme(theme);
+    }
+  }, [theme]);
+
+  useEffect(() => {
+    const runtimeMap = pipRuntimeMapRef.current;
+    const attachedWorktreePath = attachedPipWorktreeRef.current;
+    if (
+      attachedWorktreePath &&
+      (!selectedWorktreePath || attachedWorktreePath !== selectedWorktreePath || !hasPipBroadcast)
+    ) {
+      runtimeMap.get(attachedWorktreePath)?.runtime.detach();
+      attachedPipWorktreeRef.current = null;
+    }
+
+    if (!hasPipBroadcast || !pip || !selectedWorktreePath) {
       return;
     }
 
     const container = pipContainerRef.current;
-    if (!container) {
+    const entry = runtimeMap.get(selectedWorktreePath);
+    if (!container || !entry) {
       return;
     }
 
-    const runtime = acquireTerminalRuntime(pip.paneId, theme);
-    pipRuntimeRef.current = runtime;
-    runtime.attach(container);
+    entry.runtime.attach(container);
+    attachedPipWorktreeRef.current = selectedWorktreePath;
     requestAnimationFrame(() => {
-      runtime.fitAddon.fit();
+      entry.runtime.fitAddon.fit();
     });
+  }, [hasPipBroadcast, pip?.paneId, selectedWorktreePath]);
 
-    return () => {
+  useEffect(() => () => {
+    for (const { runtime } of pipRuntimeMapRef.current.values()) {
       runtime.detach();
       runtime.release();
-      if (pipRuntimeRef.current === runtime) {
-        pipRuntimeRef.current = null;
-      }
-    };
-  }, [hasPipBroadcast, pip?.paneId, theme]);
-
-  useEffect(() => {
-    pipRuntimeRef.current?.setTheme(theme);
-  }, [theme]);
+    }
+    pipRuntimeMapRef.current.clear();
+    attachedPipWorktreeRef.current = null;
+  }, []);
 
   const {
     tabs: globalTabs,
@@ -175,12 +237,24 @@ function AppTabContent() {
   const setActiveTab = useTabStore((s) => s.setActiveTab);
 
   const handlePipDismiss = useCallback(() => {
-    setPipDismissed(true);
-  }, []);
+    if (!selectedWorktreePath) {
+      return;
+    }
+    setPipDismissedByWorktree((state) => ({
+      ...state,
+      [selectedWorktreePath]: true,
+    }));
+  }, [selectedWorktreePath]);
 
   const handlePipRestore = useCallback(() => {
-    setPipDismissed(false);
-  }, []);
+    if (!selectedWorktreePath) {
+      return;
+    }
+    setPipDismissedByWorktree((state) => ({
+      ...state,
+      [selectedWorktreePath]: false,
+    }));
+  }, [selectedWorktreePath]);
 
   const pipElement = hasPipBroadcast && (
     <PipTerminal

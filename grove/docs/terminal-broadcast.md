@@ -2,6 +2,8 @@
 
 System for moving a terminal pane's xterm runtime to a different UI container. One PTY has exactly one xterm instance — broadcasting swaps the "consumer" (UI slot) that the runtime is attached to.
 
+This document reflects the current implementation in `src/store/broadcast.ts`, `src/components/tab/AppTabContent.tsx`, and the terminal runtime consumers.
+
 ## Concepts
 
 ### Consumer Model
@@ -21,6 +23,17 @@ Consumer slots:
 - Broadcasting = consumer swap (`runtime.attach(targetContainer)`)
 - The original pane shows a frozen snapshot (canvas capture) + overlay
 
+## Invariants
+
+- Mirror is **PTY-scoped**.
+  A mirrored PTY is tracked globally by `ptyId` because the Global Terminal is not tied to a single worktree tab.
+- PiP is **worktree-space-scoped**.
+  Each worktree tab session owns at most one PiP slot, keyed by `worktreePath`.
+- Multiple worktrees may each have an active PiP state at the same time.
+  The visible PiP container always renders the currently selected worktree's PiP.
+- A worktree switch must never keep showing the previous worktree's PTY in the shared PiP container.
+- Removing a worktree must clear any PiP or mirror state that references that worktree's PTYs.
+
 ### Broadcast State Machine
 
 ```
@@ -29,9 +42,10 @@ idle ──[tab switch]─────→ broadcasting(pip)
 broadcasting ──[stop]───→ idle (restore original size)
 ```
 
-- At most one active broadcast (mirror XOR pip)
+- Mirrors: many global entries keyed by `ptyId`
+- PiP: many worktree-local entries keyed by `worktreePath`
 - State: `BroadcastStore` (Zustand, in-memory only)
-- Deterministic transitions: no simultaneous broadcasts
+- Deterministic transitions: replacing PiP for one worktree must not affect another worktree's PiP or any mirror entry
 
 ## Features
 
@@ -39,7 +53,10 @@ broadcasting ──[stop]───→ idle (restore original size)
 
 - **Trigger**: automatic when switching from Terminal tab to Changes/Browser tab
 - **Position**: 360x200 overlay at bottom-right of tab content
-- **Behavior**: attaches the focused pane's runtime to the PiP container
+- **Scope**: one PiP slot per worktree space
+- **Behavior**: attaches the selected worktree's focused pane runtime to the shared PiP container
+- **Worktree switch**: detaches the previous worktree's PiP consumer and attaches the newly selected worktree's PiP consumer
+- **Retention**: active PiP runtimes stay retained offscreen so switching back to a worktree can reattach the same runtime instead of recreating it
 - **Dismiss**: auto on return to Terminal tab / dismiss button → restore via arrow
 - **Policy**: skipped if the focused pane is already broadcasting (mirror)
 
@@ -65,26 +82,35 @@ broadcasting ──[stop]───→ idle (restore original size)
   - `debouncedSave`: filters out mirror tabs before writing to disk
   - `resolveGlobalTerminalLayout`: strips stale mirror tabs on load (belt-and-suspenders)
 - `BroadcastStore`: in-memory only, resets on app restart
+- PiP state is not persisted either. Worktree switching keeps it only for the current in-memory session.
 
 ## Resize
 
-- Original pane's resize is suppressed via `suppressedPaneIds` during broadcast
-- The target consumer (PiP/mirror) controls PTY resize
-- On broadcast end, PTY is restored to `originalCols/originalRows`
+- The active consumer controls PTY resize.
+- When a PTY is mirrored or shown in PiP, the original pane must not keep ownership of the runtime.
+- When the visible PiP worktree changes, the previous PiP runtime is detached but retained; the newly selected worktree's PiP runtime becomes the resize owner.
+- On broadcast end, PTY is restored to `originalCols/originalRows`.
+
+## Regression Matrix
+
+These cases should stay covered by tests or manual verification:
+
+1. Mirror a PTY, then split panes in the source worktree. The mirror must stay attached to the mirrored runtime.
+2. Enter Changes while the focused PTY is mirrored. PiP must not start for that PTY.
+3. Create PiP in worktree A, create PiP in worktree B, then switch A ↔ B while staying outside the Terminal tab. The shared PiP container must always show the selected worktree's PTY.
+4. Stop PiP for worktree A. Worktree B's PiP must remain intact.
+5. Remove a worktree that currently owns PiP or mirror state. All broadcast entries tied to that worktree's PTYs must be cleared.
 
 ## Key Files
 
 | File | Role |
 |------|------|
-| `src/store/broadcast.ts` | BroadcastStore — state machine |
-| `src/lib/terminal-runtime.ts` | `getRuntime`, `captureRuntimeSnapshot`, `getRuntimeSize`, `suppressResizeForPane` |
+| `src/store/broadcast.ts` | BroadcastStore — PTY-global mirrors and worktree-scoped PiP slots |
+| `src/lib/terminal-runtime.ts` | Runtime retain/release, attach/detach, snapshots, resize ownership |
 | `src/components/terminal/TerminalInstance.tsx` | Original pane: snapshot + overlay + Stop button |
-| `src/components/tab/AppTabContent.tsx` | PiP policy + PiP container |
+| `src/components/tab/AppTabContent.tsx` | Worktree-aware PiP policy, runtime retention, shared PiP container |
 | `src/hooks/useTerminalCommandPipeline.ts` | Mirror button → startBroadcast + addMirrorTab |
 | `src/hooks/useGlobalTerminal.ts` | Mirror tab close → stopBroadcast |
 | `src/components/terminal/GlobalTerminalTabBar.tsx` | Mirror tab UI (live indicator + title) |
+| `src/store/project.ts` | Worktree removal cleanup for terminal broadcast state |
 | `src/store/panel-layout.ts` | `addGlobalTerminalMirrorTab`, persistence filtering |
-
-## WebGL Note
-
-The xterm.js WebGL addon must be initialized with `preserveDrawingBuffer: true` for `canvas.toDataURL()` to work. Without this, snapshot capture returns a blank image.

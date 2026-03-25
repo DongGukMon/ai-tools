@@ -4,6 +4,8 @@ import type { Project, Worktree } from "../types";
 import * as tauri from "../lib/platform";
 import { runCommand, runCommandSafely } from "../lib/command";
 import { useTerminalStore } from "./terminal";
+import { useBroadcastStore } from "./broadcast";
+import { collectTerminalPanes } from "../lib/terminal-session";
 
 interface ProjectState {
   projects: Project[];
@@ -236,6 +238,17 @@ export const useProjectStore = create<ProjectState>((set) => ({
 
     unstable_batchedUpdates(() => {
       if (worktreePath) {
+        const removedSession = useTerminalStore.getState().sessions[worktreePath];
+        const broadcastStore = useBroadcastStore.getState();
+        broadcastStore.stopPip(worktreePath);
+        if (removedSession) {
+          for (const pane of collectTerminalPanes(removedSession)) {
+            if (pane.ptyId) {
+              broadcastStore.stopMirror(pane.ptyId);
+              broadcastStore.stopPipByPty(pane.ptyId);
+            }
+          }
+        }
         useTerminalStore
           .getState()
           .removeSession(worktreePath, nextSelectedWorktree?.path ?? null);
