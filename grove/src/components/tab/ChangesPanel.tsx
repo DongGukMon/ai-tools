@@ -146,7 +146,7 @@ function FileSection({
       </div>
       <div
         ref={sectionRef}
-        className={cn("flex-1 overflow-y-auto relative")}
+        className={cn("flex-1 overflow-y-auto relative select-none cursor-default")}
         {...marquee.handlers}
       >
         {files.map((file) => (

@@ -56,6 +56,7 @@ export function useMarqueeSelection(
     (e: React.MouseEvent) => {
       // Start tracking from anywhere in the container (including file items)
       // Marquee only activates after dragging > 4px threshold
+      e.preventDefault(); // Prevent browser text selection during drag
       suppressNextClickRef.current = false;
       const container = containerRef.current;
       if (!container) return;
