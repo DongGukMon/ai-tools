@@ -188,6 +188,7 @@ function LineGroupView({
           return (
             <div
               key={line.index}
+              data-gutter-line={isSelectable ? "" : undefined}
               className={cn("flex min-h-[20px] leading-[20px] font-mono text-[12px]", {
                 "cursor-pointer": isSelectable,
               })}

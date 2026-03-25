@@ -63,7 +63,18 @@ export default function DiffViewer({ diffs, isStaged, isCommitView }: Props) {
   }
 
   return (
-    <div ref={containerRef} className={cn("h-full overflow-y-auto outline-none")} tabIndex={0} onKeyDown={handleKeyDown}>
+    <div
+      ref={containerRef}
+      className={cn("h-full overflow-y-auto outline-none")}
+      tabIndex={0}
+      onKeyDown={handleKeyDown}
+      onClick={(e) => {
+        // Click on empty space (not on a gutter line or button) clears line selection
+        if (!(e.target as HTMLElement).closest("[data-gutter-line]")) {
+          clearSelection();
+        }
+      }}
+    >
       {diffs.map((diff, fi) => (
         <FileDiffSection
           key={diff.path}
