@@ -3,6 +3,7 @@ import type { SplitNode } from "../../types";
 import TerminalInstance from "./TerminalInstance";
 import { useTerminalStore } from "../../store/terminal";
 import { cn } from "../../lib/cn";
+import { requestTerminalLayoutSync } from "../../lib/terminal-layout-sync";
 import ResizablePanelGroup from "../ui/resizable-panel-group";
 
 interface Props {
@@ -51,6 +52,9 @@ function SplitContainer({
       id={node.id}
       vertical={node.type === "vertical"}
       ratios={node.sizes}
+      onLayout={() => {
+        requestTerminalLayoutSync({ source: "panelResize" });
+      }}
       onCommit={handleCommit}
     >
       {node.children?.map((child, i) => (

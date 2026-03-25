@@ -23,6 +23,7 @@ type ResizablePanelGroupProps = Omit<
   className?: string;
   allotmentClassName?: string;
   ratios?: number[];
+  onLayout?: (ratios: number[]) => void;
   onCommit?: (ratios: number[]) => void;
 };
 
@@ -46,6 +47,7 @@ const ResizablePanelGroupBase = forwardRef<AllotmentHandle, ResizablePanelGroupP
       className,
       allotmentClassName,
       ratios,
+      onLayout,
       onCommit,
       ...props
     },
@@ -127,6 +129,8 @@ const ResizablePanelGroupBase = forwardRef<AllotmentHandle, ResizablePanelGroupP
           return;
         }
 
+        onLayout?.(nextRatios);
+
         if (isDraggingRef.current) {
           appliedRatiosRef.current = signature;
           pendingRatiosRef.current = nextRatios;
@@ -140,7 +144,7 @@ const ResizablePanelGroupBase = forwardRef<AllotmentHandle, ResizablePanelGroupP
         clearResetPending();
         commitRatios(nextRatios);
       },
-      [clearResetPending, commitRatios],
+      [clearResetPending, commitRatios, onLayout],
     );
 
     const handleDragEnd = useCallback((sizes: number[]) => {

@@ -3,6 +3,7 @@ import { ChevronUp, ChevronDown } from "lucide-react";
 import { useTerminalStore } from "../../store/terminal";
 import { useBroadcastStore } from "../../store/broadcast";
 import { usePanelLayoutStore, type GlobalTerminalTab } from "../../store/panel-layout";
+import { requestTerminalLayoutSync } from "../../lib/terminal-layout-sync";
 import { acquireTerminalRuntime } from "../../lib/terminal-runtime";
 import { cn } from "../../lib/cn";
 import { IconButton } from "../ui/button";
@@ -29,6 +30,7 @@ const TerminalTabContent = memo(function TerminalTabContent({
   const runtimeRef = useRef<ReturnType<
     typeof acquireTerminalRuntime
   > | null>(null);
+  const runtimePaneId = mirrorSession?.paneId ?? tab.paneId;
 
   useLayoutEffect(() => {
     const container = termRef.current;
@@ -45,9 +47,10 @@ const TerminalTabContent = memo(function TerminalTabContent({
     runtimeRef.current = runtime;
     runtime.setPtyId(ptyId);
     runtime.attach(container);
+    requestTerminalLayoutSync({ paneId: runtimePaneId, source: "attach" });
 
     return () => {
-      runtime.detach();
+      runtime.detach(container);
       runtime.release();
       runtimeRef.current = null;
     };
@@ -56,18 +59,14 @@ const TerminalTabContent = memo(function TerminalTabContent({
     ptyId,
     tab.mirrorPtyId,
     tab.paneId,
+    runtimePaneId,
   ]);
 
   // Refit when becoming active
   useEffect(() => {
     if (!isActive) return;
-    const runtime = runtimeRef.current;
-    if (!runtime) return;
-
-    requestAnimationFrame(() => {
-      runtime.fitAddon.fit();
-    });
-  }, [isActive]);
+    requestTerminalLayoutSync({ paneId: runtimePaneId, source: "globalTerminal" });
+  }, [isActive, runtimePaneId]);
 
   // Update theme
   useEffect(() => {

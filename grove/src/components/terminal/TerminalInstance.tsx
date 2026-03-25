@@ -5,6 +5,7 @@ import { useBroadcastStore } from "../../store/broadcast";
 import { usePanelLayoutStore } from "../../store/panel-layout";
 import "@xterm/xterm/css/xterm.css";
 import { cn } from "../../lib/cn";
+import { requestTerminalLayoutSync } from "../../lib/terminal-layout-sync";
 import { acquireTerminalRuntime } from "../../lib/terminal-runtime";
 import { shouldAttachPrimaryRuntime } from "../../lib/broadcast-policy";
 import { restoreBroadcastSessionSize } from "../../lib/broadcast-session";
@@ -51,12 +52,13 @@ function TerminalInstance({ paneId, ptyId }: Props) {
     runtime.setErrorHandler(setError);
     runtime.setBellHandler(markBellPty);
     runtime.attach(container);
+    requestTerminalLayoutSync({ paneId, source: "attach" });
 
     return () => {
       runtime.setFocusHandler(null);
       runtime.setErrorHandler(null);
       runtime.setBellHandler(null);
-      runtime.detach();
+      runtime.detach(container);
       runtime.release();
       runtimeRef.current = null;
     };
@@ -70,18 +72,8 @@ function TerminalInstance({ paneId, ptyId }: Props) {
     runtimeRef.current?.setTheme(theme);
   }, [theme]);
 
-  // Re-attach runtime when broadcast ends
   useEffect(() => {
-    if (!isBroadcasting) {
-      const runtime = runtimeRef.current;
-      const container = termRef.current;
-      if (runtime && container) {
-        runtime.attach(container);
-        requestAnimationFrame(() => {
-          runtime.fitAddon.fit();
-        });
-      }
-    }
+    requestTerminalLayoutSync({ source: "broadcast" });
   }, [isBroadcasting]);
 
   if (error) {

@@ -18,6 +18,7 @@ import {
 import { collectTerminalPanes } from "../../lib/terminal-session";
 import { shouldStartPipBroadcast } from "../../lib/broadcast-policy";
 import { cn } from "../../lib/cn";
+import { requestTerminalLayoutSync } from "../../lib/terminal-layout-sync";
 import TerminalPanel from "../terminal/TerminalPanel";
 import ChangesPanel from "./ChangesPanel";
 import PipTerminal from "./PipTerminal";
@@ -148,7 +149,7 @@ function AppTabContent() {
         continue;
       }
 
-      current?.runtime.detach();
+      current?.runtime.detach(pipContainerRef.current);
       current?.runtime.release();
 
       runtimeMap.set(worktreePath, {
@@ -164,7 +165,7 @@ function AppTabContent() {
         continue;
       }
 
-      entry.runtime.detach();
+      entry.runtime.detach(pipContainerRef.current);
       entry.runtime.release();
       runtimeMap.delete(worktreePath);
       if (attachedPipSessionRef.current?.worktreePath === worktreePath) {
@@ -192,7 +193,7 @@ function AppTabContent() {
         !hasPipBroadcast ||
         attachedSession.sessionKey !== activeSessionKey)
     ) {
-      runtimeMap.get(attachedSession.worktreePath)?.runtime.detach();
+      runtimeMap.get(attachedSession.worktreePath)?.runtime.detach(pipContainerRef.current);
       attachedPipSessionRef.current = null;
     }
 
@@ -211,14 +212,12 @@ function AppTabContent() {
       worktreePath: selectedWorktreePath,
       sessionKey: activeSessionKey ?? entry.sessionKey,
     };
-    requestAnimationFrame(() => {
-      entry.runtime.fitAddon.fit();
-    });
+    requestTerminalLayoutSync({ paneId: entry.paneId, source: "attach" });
   }, [hasPipBroadcast, pip?.paneId, pip?.ptyId, selectedWorktreePath]);
 
   useEffect(() => () => {
     for (const { runtime } of pipRuntimeMapRef.current.values()) {
-      runtime.detach();
+      runtime.detach(pipContainerRef.current);
       runtime.release();
     }
     pipRuntimeMapRef.current.clear();
@@ -249,6 +248,19 @@ function AppTabContent() {
   );
 
   const hasGlobalPanel = globalTabs.length > 0;
+
+  useEffect(() => {
+    requestTerminalLayoutSync({ source: "tabSwitch" });
+  }, [activeTabId, selectedWorktreePath]);
+
+  useEffect(() => {
+    requestTerminalLayoutSync({ source: "broadcast" });
+  }, [hasPipBroadcast, pip?.paneId, pip?.ptyId, selectedWorktreePath]);
+
+  useEffect(() => {
+    requestTerminalLayoutSync({ source: "globalTerminal" });
+  }, [collapsed, hasGlobalPanel, ratio]);
+
   const globalPanel = hasGlobalPanel ? (
     <GlobalTerminalPanel
       tabs={globalTabs}
@@ -340,6 +352,9 @@ function AppTabContent() {
       className={cn("flex-1 min-h-0")}
       vertical
       ratios={[1 - ratio, ratio]}
+      onLayout={() => {
+        requestTerminalLayoutSync({ source: "panelResize" });
+      }}
       onCommit={handleRatioCommit}
     >
       <ResizablePanelGroup.Pane>
