@@ -141,7 +141,7 @@ function FileSection({
             "rounded-full bg-accent/20 px-1.5 py-0.5 text-[10px] font-medium text-accent",
           )}
         >
-          {files.length}
+          {selectedPaths.size > 0 ? `${selectedPaths.size}/${files.length}` : files.length}
         </span>
       </div>
       <div
@@ -332,29 +332,6 @@ function WorkingChangesView({
               )}
             />
           </div>
-          {/* Action bar */}
-          {selectedPaths.size > 0 && (
-            <div
-              className={cn("flex items-center justify-between px-2 py-1.5 shrink-0")}
-              style={{ background: "rgba(99, 163, 255, 0.06)", borderTop: "1px solid rgba(99, 163, 255, 0.15)" }}
-            >
-              <span className={cn("text-[10px]")} style={{ color: "rgba(99, 163, 255, 0.7)" }}>
-                {selectedPaths.size} file{selectedPaths.size > 1 ? "s" : ""}
-              </span>
-              <span
-                className={cn("text-[10px]")}
-                style={{
-                  padding: "2px 8px",
-                  borderRadius: "3px",
-                  background: "rgba(99, 163, 255, 0.1)",
-                  border: "1px solid rgba(99, 163, 255, 0.2)",
-                  color: "rgba(99, 163, 255, 0.7)",
-                }}
-              >
-                Space: {isStaged ? "Unstage" : "Stage"}
-              </span>
-            </div>
-          )}
         </div>
       </ResizablePanelGroup.Pane>
       <ResizablePanelGroup.Pane minSize={200}>
