@@ -1,14 +1,37 @@
+import { useCallback } from "react";
 import type { FileDiff } from "../../types";
 import DiffHunk from "./DiffHunk";
 import { cn } from "../../lib/cn";
+import { useDiffStore } from "../../store/diff";
 
 
 interface Props {
   diff: FileDiff | null;
   selectedFile: string | null;
+  isStaged: boolean;
+  isCommitView?: boolean;
 }
 
-export default function DiffViewer({ diff, selectedFile }: Props) {
+export default function DiffViewer({ diff, selectedFile, isStaged, isCommitView }: Props) {
+  const selectedLines = useDiffStore((s) => s.selectedLines);
+  const toggleLine = useDiffStore((s) => s.toggleLine);
+  const stageHunk = useDiffStore((s) => s.stageHunk);
+  const unstageHunk = useDiffStore((s) => s.unstageHunk);
+  const discardHunk = useDiffStore((s) => s.discardHunk);
+
+  const handleStageHunk = useCallback(
+    (filePath: string, hunkIndex: number) => stageHunk(filePath, hunkIndex),
+    [stageHunk],
+  );
+  const handleUnstageHunk = useCallback(
+    (filePath: string, hunkIndex: number) => unstageHunk(filePath, hunkIndex),
+    [unstageHunk],
+  );
+  const handleDiscardHunk = useCallback(
+    (filePath: string, hunkIndex: number) => discardHunk(filePath, hunkIndex),
+    [discardHunk],
+  );
+
   if (!diff || !selectedFile) {
     return (
       <div className={cn("flex items-center justify-center h-full")}>
@@ -36,10 +59,14 @@ export default function DiffViewer({ diff, selectedFile }: Props) {
           key={`${hunk.header}-${i}`}
           hunk={hunk}
           hunkIndex={i}
-          filePath={selectedFile}
+          filePath={selectedFile!}
           isFirst={i === 0}
-          selectedLines={new Set()}
-          onToggleLine={() => {}}
+          selectedLines={selectedLines}
+          onToggleLine={toggleLine}
+          isStaged={isStaged}
+          onStageHunk={isCommitView ? undefined : handleStageHunk}
+          onUnstageHunk={isCommitView ? undefined : handleUnstageHunk}
+          onDiscardHunk={isCommitView ? undefined : handleDiscardHunk}
         />
       ))}
     </div>

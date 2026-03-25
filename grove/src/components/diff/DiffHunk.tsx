@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import type { DiffHunk as DiffHunkType, DiffLine as DiffLineType } from "../../types";
 import { cn } from "../../lib/cn";
+import { Button } from "../ui/button";
 
 type GroupType = "add" | "remove" | "context";
 type LineGroup = { type: GroupType; lines: DiffLineType[] };
@@ -27,11 +28,23 @@ interface Props {
   isFirst: boolean;
   selectedLines: Set<number>;
   onToggleLine: (index: number) => void;
+  isStaged: boolean;
+  onStageHunk?: (filePath: string, hunkIndex: number) => void;
+  onUnstageHunk?: (filePath: string, hunkIndex: number) => void;
+  onDiscardHunk?: (filePath: string, hunkIndex: number) => void;
 }
 
 export default function DiffHunk({
   hunk,
+  hunkIndex,
+  filePath,
   isFirst,
+  selectedLines,
+  onToggleLine,
+  isStaged,
+  onStageHunk,
+  onUnstageHunk,
+  onDiscardHunk,
 }: Props) {
   const [collapsed, setCollapsed] = useState(false);
 
@@ -53,6 +66,39 @@ export default function DiffHunk({
         <span className={cn("min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground")}>
           {hunk.header}
         </span>
+        {(onStageHunk || onUnstageHunk || onDiscardHunk) && (
+          <div className={cn("flex items-center gap-1 shrink-0")}>
+            {isStaged ? (
+              <Button
+                type="button"
+                variant="ghost"
+                className={cn("h-auto px-1.5 py-0.5 text-[10px]")}
+                onClick={(e) => { e.stopPropagation(); onUnstageHunk?.(filePath, hunkIndex); }}
+              >
+                Unstage Hunk
+              </Button>
+            ) : (
+              <>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className={cn("h-auto px-1.5 py-0.5 text-[10px]")}
+                  onClick={(e) => { e.stopPropagation(); onStageHunk?.(filePath, hunkIndex); }}
+                >
+                  Stage Hunk
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className={cn("h-auto px-1.5 py-0.5 text-[10px]")}
+                  onClick={(e) => { e.stopPropagation(); onDiscardHunk?.(filePath, hunkIndex); }}
+                >
+                  Discard
+                </Button>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Lines grouped by type */}
