@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useProjectStore } from "../../store/project";
+import { useDiffStore } from "../../store/diff";
 import { useDiff } from "../../hooks/useDiff";
 import { usePanelLayoutStore } from "../../store/panel-layout";
 import { cn } from "../../lib/cn";
@@ -205,8 +206,10 @@ function WorkingChangesView({
   // Multi-file diffs loaded at component level
   const [diffs, setDiffs] = useState<FileDiff[]>([]);
   const worktreePath = store.worktreePath;
+  const clearLineSelection = useDiffStore((s) => s.clearSelection);
 
-  // Load diffs for selected files
+  // Load diffs for selected files — also re-fires when fileStatuses change (after mutations)
+  const fileStatuses = store.fileStatuses;
   useEffect(() => {
     if (selectedPaths.size === 0 || !worktreePath) {
       setDiffs([]);
@@ -230,7 +233,12 @@ function WorkingChangesView({
     });
 
     return () => { cancelled = true; };
-  }, [selectedPaths, selectedSection, worktreePath]);
+  }, [selectedPaths, selectedSection, worktreePath, fileStatuses]);
+
+  // Clear line selection when file selection or section changes
+  useEffect(() => {
+    clearLineSelection();
+  }, [selectedPaths, selectedSection, clearLineSelection]);
 
   // Selection handler
   const handleSelectFile = useCallback(
