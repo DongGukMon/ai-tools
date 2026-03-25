@@ -88,6 +88,16 @@ pub fn load_config() -> GroveConfig {
     load_config_from_path(&config_path())
 }
 
+pub(crate) fn find_project_entry_by_id(project_id: &str) -> Result<ProjectEntry, String> {
+    let config = load_config();
+    config
+        .projects
+        .iter()
+        .find(|project| project.id == project_id)
+        .cloned()
+        .ok_or_else(|| format!("Project not found: {project_id}"))
+}
+
 fn load_config_from_path(path: &Path) -> GroveConfig {
     if !path.exists() {
         return GroveConfig::default();

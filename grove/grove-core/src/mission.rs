@@ -37,6 +37,14 @@ fn missions_path() -> Result<PathBuf, String> {
     grove_data_path("missions.json")
 }
 
+fn run_git(cwd: &Path, args: &[&str]) -> Result<(), String> {
+    crate::git_project::run_git(cwd, args)
+}
+
+fn run_git_output(cwd: &Path, args: &[&str]) -> Result<String, String> {
+    crate::git_project::run_git_output(cwd, args)
+}
+
 pub(crate) fn missions_dir() -> Result<PathBuf, String> {
     Ok(dirs::home_dir()
         .ok_or("No home dir")?
@@ -80,6 +88,26 @@ pub fn create_mission(name: &str) -> Result<Mission, String> {
     create_mission_with_paths(&path, &dir, name)
 }
 
+fn resolve_source_path_for_project(project_id: &str) -> Result<PathBuf, String> {
+    let entry = crate::config::find_project_entry_by_id(project_id)?;
+    Ok(PathBuf::from(&entry.source_path))
+}
+
+fn remove_mission_worktree(source_path: &Path, worktree_path: &str, branch: &str) {
+    if source_path.exists() {
+        let _ = run_git(
+            source_path,
+            &["worktree", "remove", worktree_path, "--force"],
+        );
+        let _ = run_git(source_path, &["branch", "-D", branch]);
+    }
+
+    let worktree_dir = Path::new(worktree_path);
+    if worktree_dir.exists() {
+        let _ = fs::remove_dir_all(worktree_dir);
+    }
+}
+
 fn create_mission_with_paths(
     store_path: &Path,
     missions_dir: &Path,
@@ -113,6 +141,125 @@ fn create_mission_with_paths(
     Ok(mission)
 }
 
+pub fn add_project_to_mission(
+    mission_id: &str,
+    project_id: &str,
+) -> Result<MissionProject, String> {
+    let store_path = missions_path()?;
+    let dir = missions_dir()?;
+    let entry = crate::config::find_project_entry_by_id(project_id)?;
+
+    add_project_to_mission_with_paths(
+        &store_path,
+        &dir,
+        mission_id,
+        project_id,
+        &entry.source_path,
+        &entry.repo,
+    )
+}
+
+fn add_project_to_mission_with_paths(
+    store_path: &Path,
+    missions_dir: &Path,
+    mission_id: &str,
+    project_id: &str,
+    source_path: &str,
+    repo_name: &str,
+) -> Result<MissionProject, String> {
+    let mut store = load_missions_from_path(store_path);
+    let mission = store
+        .missions
+        .iter_mut()
+        .find(|mission| mission.id == mission_id)
+        .ok_or_else(|| format!("Mission not found: {mission_id}"))?;
+
+    if mission
+        .projects
+        .iter()
+        .any(|project| project.project_id == project_id)
+    {
+        return Err("Project already in mission".into());
+    }
+
+    let branch_name = format!("mission/{mission_id}");
+    let worktree_path = missions_dir.join(mission_id).join(repo_name);
+    let worktree_path_str = worktree_path.to_string_lossy().to_string();
+    let source = Path::new(source_path);
+
+    if !source.exists() {
+        return Err(format!("Source directory not found: {source_path}"));
+    }
+
+    if let Some(parent) = worktree_path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("Failed to create mission worktree parent: {error}"))?;
+    }
+
+    let branch_exists = run_git_output(source, &["rev-parse", "--verify", &branch_name]).is_ok();
+    if branch_exists {
+        run_git(
+            source,
+            &["worktree", "add", &worktree_path_str, &branch_name],
+        )?;
+    } else {
+        run_git(
+            source,
+            &["worktree", "add", "-b", &branch_name, &worktree_path_str],
+        )?;
+    }
+
+    let project = MissionProject {
+        project_id: project_id.to_string(),
+        branch: branch_name,
+        path: worktree_path_str,
+    };
+    mission.projects.push(project.clone());
+    save_missions_to_path(store_path, &store)?;
+    Ok(project)
+}
+
+pub fn remove_project_from_mission(mission_id: &str, project_id: &str) -> Result<(), String> {
+    let store_path = missions_path()?;
+    let dir = missions_dir()?;
+    remove_project_from_mission_with_paths(&store_path, &dir, mission_id, project_id)
+}
+
+fn remove_project_from_mission_with_paths(
+    store_path: &Path,
+    _missions_dir: &Path,
+    mission_id: &str,
+    project_id: &str,
+) -> Result<(), String> {
+    let mut store = load_missions_from_path(store_path);
+    let mission = store
+        .missions
+        .iter_mut()
+        .find(|mission| mission.id == mission_id)
+        .ok_or_else(|| format!("Mission not found: {mission_id}"))?;
+    let project = mission
+        .projects
+        .iter()
+        .find(|project| project.project_id == project_id)
+        .ok_or_else(|| format!("Project not in mission: {project_id}"))?
+        .clone();
+
+    crate::worktree_lifecycle::default_worktree_lifecycle().cleanup(&project.path);
+    if let Ok(source_path) = resolve_source_path_for_project(project_id) {
+        remove_mission_worktree(&source_path, &project.path, &project.branch);
+    } else {
+        let worktree_dir = Path::new(&project.path);
+        if worktree_dir.exists() {
+            let _ = fs::remove_dir_all(worktree_dir);
+        }
+    }
+
+    mission
+        .projects
+        .retain(|project| project.project_id != project_id);
+    save_missions_to_path(store_path, &store)
+}
+
 pub fn delete_mission(id: &str) -> Result<(), String> {
     let path = missions_path()?;
     let dir = missions_dir()?;
@@ -124,21 +271,19 @@ fn delete_mission_with_paths(
     missions_dir: &Path,
     id: &str,
 ) -> Result<(), String> {
-    let mut store = load_missions_from_path(store_path);
-    let mission = store
+    let mission = load_missions_from_path(store_path)
         .missions
         .iter()
         .find(|mission| mission.id == id)
         .cloned()
         .ok_or_else(|| format!("Mission not found: {id}"))?;
 
-    for project in &mission.projects {
-        crate::worktree_lifecycle::default_worktree_lifecycle().cleanup(&project.path);
-
-        let worktree_dir = Path::new(&project.path);
-        if worktree_dir.exists() {
-            let _ = fs::remove_dir_all(worktree_dir);
-        }
+    for project_id in mission
+        .projects
+        .iter()
+        .map(|project| project.project_id.clone())
+    {
+        remove_project_from_mission_with_paths(store_path, missions_dir, id, &project_id)?;
     }
 
     let mission_dir = missions_dir.join(id);
@@ -147,6 +292,7 @@ fn delete_mission_with_paths(
             .map_err(|e| format!("Failed to remove mission directory: {e}"))?;
     }
 
+    let mut store = load_missions_from_path(store_path);
     store.missions.retain(|mission| mission.id != id);
     save_missions_to_path(store_path, &store)
 }
@@ -154,12 +300,111 @@ fn delete_mission_with_paths(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::{GroveConfig, ProjectEntry};
+    use std::sync::{Mutex, OnceLock};
     use uuid::Uuid;
 
     fn temp_missions_path() -> PathBuf {
         std::env::temp_dir()
             .join(format!("grove-mission-tests-{}", Uuid::new_v4()))
             .join("missions.json")
+    }
+
+    fn env_lock() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+    }
+
+    struct TestHome {
+        root: PathBuf,
+        original_home: Option<String>,
+    }
+
+    impl TestHome {
+        fn new() -> Self {
+            let root = std::env::temp_dir().join(format!("grove-mission-home-{}", Uuid::new_v4()));
+            fs::create_dir_all(&root).unwrap();
+
+            let original_home = std::env::var("HOME").ok();
+            unsafe {
+                std::env::set_var("HOME", &root);
+            }
+
+            Self {
+                root,
+                original_home,
+            }
+        }
+    }
+
+    impl Drop for TestHome {
+        fn drop(&mut self) {
+            match &self.original_home {
+                Some(original_home) => unsafe {
+                    std::env::set_var("HOME", original_home);
+                },
+                None => unsafe {
+                    std::env::remove_var("HOME");
+                },
+            }
+
+            let _ = fs::remove_dir_all(&self.root);
+        }
+    }
+
+    fn run_git_ok(cwd: &Path, args: &[&str]) {
+        let output = crate::git_project::git_command()
+            .args(args)
+            .current_dir(cwd)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    fn configure_git_identity(repo_dir: &Path) {
+        run_git_ok(repo_dir, &["config", "user.name", "Grove Test"]);
+        run_git_ok(repo_dir, &["config", "user.email", "grove@example.com"]);
+    }
+
+    fn temp_git_repo() -> (PathBuf, PathBuf) {
+        let root = std::env::temp_dir().join(format!("grove-mission-git-{}", Uuid::new_v4()));
+        let source = root.join("source");
+        fs::create_dir_all(&source).unwrap();
+        run_git_ok(&source, &["init"]);
+        configure_git_identity(&source);
+        run_git_ok(&source, &["checkout", "-b", "main"]);
+        fs::write(source.join("README.md"), "# test").unwrap();
+        run_git_ok(&source, &["add", "."]);
+        run_git_ok(&source, &["commit", "-m", "init"]);
+        (root, source)
+    }
+
+    fn sample_project_entry(project_id: &str, source_dir: &Path, repo_name: &str) -> ProjectEntry {
+        ProjectEntry {
+            id: project_id.to_string(),
+            name: repo_name.to_string(),
+            url: format!("https://github.com/bang9/{repo_name}.git"),
+            org: "bang9".into(),
+            repo: repo_name.to_string(),
+            source_path: source_dir.to_string_lossy().to_string(),
+            worktree_order: Vec::new(),
+        }
+    }
+
+    fn save_test_config(projects: Vec<ProjectEntry>) {
+        crate::config::save_config(&GroveConfig {
+            projects,
+            base_dir: None,
+            terminal_theme: None,
+        })
+        .unwrap();
     }
 
     #[test]
@@ -237,5 +482,137 @@ mod tests {
         assert!(store.missions.is_empty());
 
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn add_project_creates_worktree_at_mission_path() {
+        let _lock = env_lock();
+        let home = TestHome::new();
+        let (repo_root, source_dir) = temp_git_repo();
+        let project_id = "project-1";
+        let repo_name = "grove";
+        save_test_config(vec![sample_project_entry(
+            project_id,
+            &source_dir,
+            repo_name,
+        )]);
+
+        let mission = create_mission("Mission").unwrap();
+        let project = add_project_to_mission(&mission.id, project_id).unwrap();
+        let expected_path = home
+            .root
+            .join(".grove")
+            .join("missions")
+            .join(&mission.id)
+            .join(repo_name);
+
+        assert_eq!(PathBuf::from(&project.path), expected_path);
+        assert_eq!(project.branch, format!("mission/{}", mission.id));
+        assert!(expected_path.exists());
+        assert_eq!(
+            run_git_output(&expected_path, &["branch", "--show-current"]).unwrap(),
+            project.branch
+        );
+
+        let store = load_missions();
+        let saved_mission = store
+            .missions
+            .iter()
+            .find(|saved_mission| saved_mission.id == mission.id)
+            .unwrap();
+        assert_eq!(saved_mission.projects.len(), 1);
+        assert_eq!(saved_mission.projects[0].project_id, project.project_id);
+        assert_eq!(saved_mission.projects[0].branch, project.branch);
+        assert_eq!(saved_mission.projects[0].path, project.path);
+
+        delete_mission(&mission.id).unwrap();
+        let _ = fs::remove_dir_all(repo_root);
+    }
+
+    #[test]
+    fn add_project_reuses_existing_branch() {
+        let _lock = env_lock();
+        let _home = TestHome::new();
+        let (repo_root, source_dir) = temp_git_repo();
+        let project_id = "project-1";
+        let repo_name = "grove";
+        save_test_config(vec![sample_project_entry(
+            project_id,
+            &source_dir,
+            repo_name,
+        )]);
+
+        let mission = create_mission("Mission").unwrap();
+        let branch_name = format!("mission/{}", mission.id);
+        run_git_ok(&source_dir, &["branch", &branch_name]);
+
+        let project = add_project_to_mission(&mission.id, project_id).unwrap();
+
+        assert_eq!(project.branch, branch_name);
+        assert_eq!(
+            run_git_output(Path::new(&project.path), &["branch", "--show-current"]).unwrap(),
+            project.branch
+        );
+
+        delete_mission(&mission.id).unwrap();
+        let _ = fs::remove_dir_all(repo_root);
+    }
+
+    #[test]
+    fn remove_project_removes_worktree_and_branch() {
+        let _lock = env_lock();
+        let _home = TestHome::new();
+        let (repo_root, source_dir) = temp_git_repo();
+        let project_id = "project-1";
+        save_test_config(vec![sample_project_entry(project_id, &source_dir, "grove")]);
+
+        let mission = create_mission("Mission").unwrap();
+        let project = add_project_to_mission(&mission.id, project_id).unwrap();
+
+        assert!(Path::new(&project.path).exists());
+        assert!(run_git_output(&source_dir, &["rev-parse", "--verify", &project.branch]).is_ok());
+
+        remove_project_from_mission(&mission.id, project_id).unwrap();
+
+        assert!(!Path::new(&project.path).exists());
+        assert!(run_git_output(&source_dir, &["rev-parse", "--verify", &project.branch]).is_err());
+
+        let store = load_missions();
+        let saved_mission = store
+            .missions
+            .iter()
+            .find(|saved_mission| saved_mission.id == mission.id)
+            .unwrap();
+        assert!(saved_mission.projects.is_empty());
+
+        delete_mission(&mission.id).unwrap();
+        let _ = fs::remove_dir_all(repo_root);
+    }
+
+    #[test]
+    fn delete_mission_removes_project_worktree_and_branch() {
+        let _lock = env_lock();
+        let home = TestHome::new();
+        let (repo_root, source_dir) = temp_git_repo();
+        let project_id = "project-1";
+        let repo_name = "grove";
+        save_test_config(vec![sample_project_entry(
+            project_id,
+            &source_dir,
+            repo_name,
+        )]);
+
+        let mission = create_mission("Mission").unwrap();
+        let project = add_project_to_mission(&mission.id, project_id).unwrap();
+        let mission_path = home.root.join(".grove").join("missions").join(&mission.id);
+
+        delete_mission(&mission.id).unwrap();
+
+        assert!(!mission_path.exists());
+        assert!(!Path::new(&project.path).exists());
+        assert!(run_git_output(&source_dir, &["rev-parse", "--verify", &project.branch]).is_err());
+        assert!(load_missions().missions.is_empty());
+
+        let _ = fs::remove_dir_all(repo_root);
     }
 }

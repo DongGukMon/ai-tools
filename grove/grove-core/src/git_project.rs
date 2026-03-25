@@ -927,11 +927,11 @@ fn validate_branch_name(name: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn run_git(cwd: &Path, args: &[&str]) -> Result<(), String> {
+pub(crate) fn run_git(cwd: &Path, args: &[&str]) -> Result<(), String> {
     run_git_output(cwd, args).map(|_| ())
 }
 
-fn run_git_output(cwd: &Path, args: &[&str]) -> Result<String, String> {
+pub(crate) fn run_git_output(cwd: &Path, args: &[&str]) -> Result<String, String> {
     let output = git_command()
         .args(args)
         .current_dir(cwd)
