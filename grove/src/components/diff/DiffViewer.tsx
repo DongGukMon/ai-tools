@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import type { FileDiff } from "../../types";
 import DiffHunk from "./DiffHunk";
 import { cn } from "../../lib/cn";
@@ -14,8 +14,18 @@ interface Props {
 }
 
 export default function DiffViewer({ diff, selectedFile, isStaged, isCommitView }: Props) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const selectedLines = useDiffStore((s) => s.selectedLines);
-  const { handleGutterClick, handleGutterMouseDown, handleGutterMouseEnter, handleGutterMouseUp } = useLineSelection();
+  const { handleGutterClick: rawGutterClick, handleGutterMouseDown, handleGutterMouseEnter, handleGutterMouseUp } = useLineSelection();
+
+  // Auto-focus container after gutter click so keyboard shortcuts work
+  const handleGutterClick = useCallback(
+    (lineIndex: number, shiftKey: boolean) => {
+      rawGutterClick(lineIndex, shiftKey);
+      containerRef.current?.focus();
+    },
+    [rawGutterClick],
+  );
   const stageHunk = useDiffStore((s) => s.stageHunk);
   const unstageHunk = useDiffStore((s) => s.unstageHunk);
   const discardHunk = useDiffStore((s) => s.discardHunk);
@@ -95,7 +105,7 @@ export default function DiffViewer({ diff, selectedFile, isStaged, isCommitView 
   }
 
   return (
-    <div className={cn("h-full overflow-y-auto outline-none")} tabIndex={0} onKeyDown={handleKeyDown}>
+    <div ref={containerRef} className={cn("h-full overflow-y-auto outline-none")} tabIndex={0} onKeyDown={handleKeyDown}>
       {diff.hunks.map((hunk, i) => (
         <DiffHunk
           key={`${hunk.header}-${i}`}
