@@ -49,7 +49,15 @@ function FileItem({
       } : { borderLeft: "2px solid transparent" }}
       onClick={onClick}
     >
-      <FileText className={cn("size-3 shrink-0", statusColors[file.status])} />
+      {/* Actions on left — shown on hover, replacing the file icon */}
+      <div className={cn("size-3 shrink-0 relative")}>
+        <FileText className={cn("size-3 group-hover:opacity-0 transition-opacity", statusColors[file.status])} />
+        {actions && (
+          <div className={cn("absolute inset-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity")}>
+            {actions}
+          </div>
+        )}
+      </div>
       <span className={cn("truncate flex-1")}>{file.path}</span>
       <span
         className={cn(
@@ -59,15 +67,6 @@ function FileItem({
       >
         {file.status[0]}
       </span>
-      {actions && (
-        <div
-          className={cn(
-            "flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity",
-          )}
-        >
-          {actions}
-        </div>
-      )}
     </div>
   );
 }
@@ -78,10 +77,12 @@ function ActionButton({
   icon: Icon,
   title,
   onClick,
+  confirm: confirmMsg,
 }: {
   icon: typeof Plus;
   title: string;
   onClick: () => void;
+  confirm?: string;
 }) {
   return (
     <button
@@ -89,6 +90,7 @@ function ActionButton({
       title={title}
       onClick={(e) => {
         e.stopPropagation();
+        if (confirmMsg && !window.confirm(confirmMsg)) return;
         onClick();
       }}
       className={cn(
@@ -337,7 +339,7 @@ function WorkingChangesView({
               renderActions={(file) => (
                 <>
                   <ActionButton icon={Plus} title="Stage" onClick={() => store.stageFile(file.path)} />
-                  <ActionButton icon={Undo2} title="Discard" onClick={() => store.discardFile(file.path)} />
+                  <ActionButton icon={Undo2} title="Discard" onClick={() => store.discardFile(file.path)} confirm="Discard all changes to this file?" />
                 </>
               )}
             />
