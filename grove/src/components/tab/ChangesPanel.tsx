@@ -125,7 +125,7 @@ function FileSection({
     <div className={cn("flex flex-col min-h-0 flex-1")}>
       <div
         className={cn(
-          "flex items-center gap-2 px-2 h-7 shrink-0 border-b border-border",
+          "flex items-center gap-2 px-2 h-7 shrink-0 border-b border-border select-none",
         )}
       >
         <span
