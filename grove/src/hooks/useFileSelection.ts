@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface UseFileSelectionResult {
   selectedIds: Set<string>;
@@ -31,20 +31,19 @@ export function useFileSelection<T>(
     [items, getId],
   );
 
+  // Clear selection when items change (e.g. worktree switch)
+  useEffect(() => {
+    setSelectedIds(new Set());
+    lastClickedIndexRef.current = null;
+  }, [items]);
+
   const handleClick = useCallback(
     (id: string, index: number, shiftKey: boolean) => {
       if (shiftKey && lastClickedIndexRef.current !== null) {
         selectRange(lastClickedIndexRef.current, index);
       } else {
-        setSelectedIds((prev) => {
-          const next = new Set(prev);
-          if (next.has(id)) {
-            next.delete(id);
-          } else {
-            next.add(id);
-          }
-          return next;
-        });
+        // Single click = select only this item (deselect rest)
+        setSelectedIds(new Set([id]));
       }
       lastClickedIndexRef.current = index;
     },

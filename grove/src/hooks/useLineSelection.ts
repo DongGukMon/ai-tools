@@ -2,7 +2,7 @@ import { useCallback, useRef } from "react";
 import { useDiffStore } from "../store/diff";
 
 export function useLineSelection() {
-  const toggleLine = useDiffStore((s) => s.toggleLine);
+  const selectLine = useDiffStore((s) => s.selectLine);
   const selectLineRange = useDiffStore((s) => s.selectLineRange);
   const clearSelection = useDiffStore((s) => s.clearSelection);
   const lastClickedRef = useRef<number | null>(null);
@@ -13,11 +13,11 @@ export function useLineSelection() {
       if (shiftKey && lastClickedRef.current !== null) {
         selectLineRange(lastClickedRef.current, lineIndex);
       } else {
-        toggleLine(lineIndex);
+        selectLine(lineIndex);
       }
       lastClickedRef.current = lineIndex;
     },
-    [toggleLine, selectLineRange],
+    [selectLine, selectLineRange],
   );
 
   const handleGutterMouseDown = useCallback(
