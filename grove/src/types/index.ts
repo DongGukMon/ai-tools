@@ -1,4 +1,5 @@
 export type { Project, Worktree } from "./project";
+export type { Mission, MissionProject } from "./mission";
 export type {
   TerminalTheme,
   PtySession,
