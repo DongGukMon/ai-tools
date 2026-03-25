@@ -6,6 +6,8 @@ import { useDiffStore } from "../../store/diff";
 import { useLineSelection } from "../../hooks/useLineSelection";
 
 
+const EMPTY_SET = new Set<number>();
+
 interface Props {
   diff: FileDiff | null;
   selectedFile: string | null;
@@ -16,7 +18,7 @@ interface Props {
 export default function DiffViewer({ diff, selectedFile, isStaged, isCommitView }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const selectedLines = useDiffStore((s) => s.selectedLines);
-  const { handleGutterClick: rawGutterClick, handleGutterMouseDown, handleGutterMouseEnter, handleGutterMouseUp } = useLineSelection();
+  const { handleGutterClick: rawGutterClick, handleGutterMouseDown, handleGutterMouseEnter, handleGutterMouseUp } = useLineSelection(selectedFile ?? "");
 
   // Auto-focus container after gutter click so keyboard shortcuts work
   const handleGutterClick = useCallback(
@@ -52,10 +54,11 @@ export default function DiffViewer({ diff, selectedFile, isStaged, isCommitView 
 
       if (e.key === " ") {
         e.preventDefault();
-        if (selectedLines.size > 0) {
+        const fileLines = selectedFile ? (selectedLines.get(selectedFile) ?? EMPTY_SET) : EMPTY_SET;
+        if (fileLines.size > 0) {
           // Group selected lines by hunk index
           const linesByHunk = new Map<number, number[]>();
-          for (const lineIdx of selectedLines) {
+          for (const lineIdx of fileLines) {
             if (!diff) continue;
             for (let hi = 0; hi < diff.hunks.length; hi++) {
               const hunk = diff.hunks[hi];
@@ -113,7 +116,7 @@ export default function DiffViewer({ diff, selectedFile, isStaged, isCommitView 
           hunkIndex={i}
           filePath={selectedFile!}
           isFirst={i === 0}
-          selectedLines={selectedLines}
+          selectedLines={selectedLines.get(selectedFile!) ?? EMPTY_SET}
           isStaged={isStaged}
           onStageHunk={isCommitView ? undefined : handleStageHunk}
           onUnstageHunk={isCommitView ? undefined : handleUnstageHunk}

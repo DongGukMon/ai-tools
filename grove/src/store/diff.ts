@@ -12,7 +12,7 @@ interface DiffState {
   selectedView: "changes" | CommitInfo;
   selectedFile: string | null;
   isViewingStaged: boolean;
-  selectedLines: Set<number>;
+  selectedLines: Map<string, Set<number>>;
   worktreePath: string | null;
   behindCount: number;
   merging: boolean;
@@ -26,9 +26,9 @@ interface DiffState {
   loadCommitDiff: (hash: string) => Promise<void>;
   selectView: (view: "changes" | CommitInfo) => void;
   selectFile: (path: string | null, staged?: boolean) => void;
-  selectLine: (index: number) => void;
-  toggleLine: (index: number) => void;
-  selectLineRange: (start: number, end: number) => void;
+  selectLine: (filePath: string, index: number) => void;
+  toggleLine: (filePath: string, index: number) => void;
+  selectLineRange: (filePath: string, start: number, end: number) => void;
   clearSelection: () => void;
 
   stageFile: (path: string) => Promise<void>;
@@ -62,7 +62,7 @@ export const useDiffStore = create<DiffState>((set, get) => ({
   selectedView: "changes",
   selectedFile: null,
   isViewingStaged: false,
-  selectedLines: new Set(),
+  selectedLines: new Map(),
   worktreePath: null,
   behindCount: 0,
   merging: false,
@@ -78,7 +78,7 @@ export const useDiffStore = create<DiffState>((set, get) => ({
       selectedView: "changes",
       selectedFile: null,
       isViewingStaged: false,
-      selectedLines: new Set(),
+      selectedLines: new Map(),
       behindCount: 0,
     });
   },
@@ -143,7 +143,7 @@ export const useDiffStore = create<DiffState>((set, get) => ({
       errorToast: false,
     });
     if (diff) {
-      set({ currentDiff: diff, selectedLines: new Set() });
+      set({ currentDiff: diff, selectedLines: new Map() });
     } else {
       set({ currentDiff: null });
     }
@@ -160,7 +160,7 @@ export const useDiffStore = create<DiffState>((set, get) => ({
         commitDiffs: diffs,
         currentDiff: diffs[0] ?? null,
         selectedFile: diffs[0]?.path ?? null,
-        selectedLines: new Set(),
+        selectedLines: new Map(),
       });
     } else {
       set({ currentDiff: null });
@@ -174,7 +174,7 @@ export const useDiffStore = create<DiffState>((set, get) => ({
         selectedFile: null,
         currentDiff: null,
         commitDiffs: [],
-        selectedLines: new Set(),
+        selectedLines: new Map(),
       });
       // Auto-select first file
       const { fileStatuses } = get();
@@ -183,13 +183,13 @@ export const useDiffStore = create<DiffState>((set, get) => ({
       }
     } else {
       // Switch view immediately but keep previous data visible until load completes
-      set({ selectedView: view, selectedLines: new Set() });
+      set({ selectedView: view, selectedLines: new Map() });
       get().loadCommitDiff(view.hash);
     }
   },
 
   selectFile: (path, staged = false) => {
-    set({ selectedFile: path, isViewingStaged: staged, selectedLines: new Set() });
+    set({ selectedFile: path, isViewingStaged: staged, selectedLines: new Map() });
     if (path) {
       const state = get();
       if (state.selectedView === "changes") {
@@ -204,32 +204,38 @@ export const useDiffStore = create<DiffState>((set, get) => ({
     }
   },
 
-  selectLine: (index) => {
-    set({ selectedLines: new Set([index]) });
-  },
-
-  toggleLine: (index) => {
-    const prev = get().selectedLines;
-    const next = new Set(prev);
-    if (next.has(index)) {
-      next.delete(index);
-    } else {
-      next.add(index);
-    }
+  selectLine: (filePath, index) => {
+    const next = new Map(get().selectedLines);
+    next.set(filePath, new Set([index]));
     set({ selectedLines: next });
   },
 
-  selectLineRange: (start, end) => {
+  toggleLine: (filePath, index) => {
+    const prev = get().selectedLines;
+    const next = new Map(prev);
+    const fileSet = new Set(prev.get(filePath) ?? []);
+    if (fileSet.has(index)) {
+      fileSet.delete(index);
+    } else {
+      fileSet.add(index);
+    }
+    next.set(filePath, fileSet);
+    set({ selectedLines: next });
+  },
+
+  selectLineRange: (filePath, start, end) => {
     const min = Math.min(start, end);
     const max = Math.max(start, end);
-    const next = new Set<number>();
+    const fileSet = new Set<number>();
     for (let i = min; i <= max; i++) {
-      next.add(i);
+      fileSet.add(i);
     }
+    const next = new Map(get().selectedLines);
+    next.set(filePath, fileSet);
     set({ selectedLines: next });
   },
 
-  clearSelection: () => set({ selectedLines: new Set() }),
+  clearSelection: () => set({ selectedLines: new Map() }),
 
   // Refresh helpers
   ...createMutationActions(),

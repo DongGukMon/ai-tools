@@ -1,7 +1,7 @@
 import { useCallback, useRef } from "react";
 import { useDiffStore } from "../store/diff";
 
-export function useLineSelection() {
+export function useLineSelection(filePath: string) {
   const selectLine = useDiffStore((s) => s.selectLine);
   const selectLineRange = useDiffStore((s) => s.selectLineRange);
   const clearSelection = useDiffStore((s) => s.clearSelection);
@@ -11,13 +11,13 @@ export function useLineSelection() {
   const handleGutterClick = useCallback(
     (lineIndex: number, shiftKey: boolean) => {
       if (shiftKey && lastClickedRef.current !== null) {
-        selectLineRange(lastClickedRef.current, lineIndex);
+        selectLineRange(filePath, lastClickedRef.current, lineIndex);
       } else {
-        selectLine(lineIndex);
+        selectLine(filePath, lineIndex);
       }
       lastClickedRef.current = lineIndex;
     },
-    [selectLine, selectLineRange],
+    [filePath, selectLine, selectLineRange],
   );
 
   const handleGutterMouseDown = useCallback(
@@ -30,10 +30,10 @@ export function useLineSelection() {
   const handleGutterMouseEnter = useCallback(
     (lineIndex: number, buttons: number) => {
       if (buttons === 1 && dragStartRef.current !== null) {
-        selectLineRange(dragStartRef.current, lineIndex);
+        selectLineRange(filePath, dragStartRef.current, lineIndex);
       }
     },
-    [selectLineRange],
+    [filePath, selectLineRange],
   );
 
   const handleGutterMouseUp = useCallback(() => {

@@ -1,0 +1,187 @@
+<h2>Changes Tab — Unified Selection + Multi-File Diff</h2>
+<p class="subtitle">전체 흐름: 파일 선택 → diff 보기 → stage/unstage 동시 처리</p>
+
+<div class="split" style="gap: 16px; align-items: stretch;">
+
+  <!-- Left: File list with marquee -->
+  <div class="mockup" style="flex: 0.35; min-width: 0;">
+    <div class="mockup-header">File List (Marquee Select)</div>
+    <div class="mockup-body" style="padding: 0; font-family: -apple-system, sans-serif; font-size: 12px; background: #16161e; min-height: 400px; position: relative;">
+
+      <!-- Section: Staged -->
+      <div style="padding: 4px 8px; border-bottom: 1px solid rgba(255,255,255,0.06);">
+        <span style="font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: rgba(255,255,255,0.35);">Staged</span>
+        <span style="margin-left: 6px; font-size: 10px; color: rgba(255,255,255,0.25);">2</span>
+      </div>
+      <div style="display: flex; align-items: center; padding: 3px 8px; color: rgba(255,255,255,0.5);">
+        <span style="width: 16px; font-size: 10px; font-weight: 600; color: rgba(234,179,8,0.6);">M</span>
+        <span style="flex: 1; truncate;">src/store/broadcast.ts</span>
+      </div>
+      <div style="display: flex; align-items: center; padding: 3px 8px; color: rgba(255,255,255,0.5);">
+        <span style="width: 16px; font-size: 10px; font-weight: 600; color: rgba(63,185,80,0.6);">A</span>
+        <span style="flex: 1; truncate;">src/hooks/useLineSelection.ts</span>
+      </div>
+
+      <!-- Section: Unstaged -->
+      <div style="padding: 4px 8px; border-bottom: 1px solid rgba(255,255,255,0.06); border-top: 1px solid rgba(255,255,255,0.06); margin-top: 4px;">
+        <span style="font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: rgba(255,255,255,0.35);">Unstaged</span>
+        <span style="margin-left: 6px; font-size: 10px; color: rgba(255,255,255,0.25);">5</span>
+      </div>
+
+      <div style="display: flex; align-items: center; padding: 3px 8px; color: rgba(255,255,255,0.5);">
+        <span style="width: 16px; font-size: 10px; font-weight: 600; color: rgba(234,179,8,0.6);">M</span>
+        <span style="flex: 1;">src/components/diff/DiffHunk.tsx</span>
+      </div>
+
+      <!-- SELECTED files (marquee range) -->
+      <div style="display: flex; align-items: center; padding: 3px 8px; background: rgba(99,163,255,0.08); border-left: 2px solid rgba(99,163,255,0.5);">
+        <span style="width: 16px; font-size: 10px; font-weight: 600; color: rgba(234,179,8,0.8);">M</span>
+        <span style="flex: 1; color: rgba(255,255,255,0.8);">src/components/diff/DiffViewer.tsx</span>
+      </div>
+      <div style="display: flex; align-items: center; padding: 3px 8px; background: rgba(99,163,255,0.08); border-left: 2px solid rgba(99,163,255,0.5);">
+        <span style="width: 16px; font-size: 10px; font-weight: 600; color: rgba(234,179,8,0.8);">M</span>
+        <span style="flex: 1; color: rgba(255,255,255,0.8);">src/components/tab/ChangesPanel.tsx</span>
+      </div>
+      <div style="display: flex; align-items: center; padding: 3px 8px; background: rgba(99,163,255,0.08); border-left: 2px solid rgba(99,163,255,0.5);">
+        <span style="width: 16px; font-size: 10px; font-weight: 600; color: rgba(63,185,80,0.8);">A</span>
+        <span style="flex: 1; color: rgba(255,255,255,0.8);">src/hooks/useFileSelection.ts</span>
+      </div>
+
+      <div style="display: flex; align-items: center; padding: 3px 8px; color: rgba(255,255,255,0.5);">
+        <span style="width: 16px; font-size: 10px; font-weight: 600; color: rgba(248,81,73,0.6);">D</span>
+        <span style="flex: 1;">src/lib/old-utils.ts</span>
+      </div>
+
+      <!-- Marquee rectangle overlay -->
+      <div style="position: absolute; top: 128px; left: 20px; width: 200px; height: 78px; border: 1px solid rgba(99,163,255,0.5); background: rgba(99,163,255,0.06); border-radius: 2px; pointer-events: none;"></div>
+
+      <!-- Action bar -->
+      <div style="position: absolute; bottom: 0; left: 0; right: 0; display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; background: rgba(99,163,255,0.06); border-top: 1px solid rgba(99,163,255,0.15);">
+        <span style="font-size: 10px; color: rgba(99,163,255,0.7);">3 files</span>
+        <div style="display: flex; gap: 4px;">
+          <span style="font-size: 10px; padding: 2px 8px; border-radius: 3px; background: rgba(99,163,255,0.1); border: 1px solid rgba(99,163,255,0.2); color: rgba(99,163,255,0.7);">Space: Stage</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Multi-file diff view -->
+  <div class="mockup" style="flex: 0.65; min-width: 0;">
+    <div class="mockup-header">Diff View (3 selected files)</div>
+    <div class="mockup-body" style="padding: 0; font-family: 'SF Mono', monospace; font-size: 11px; background: #16161e; min-height: 400px;">
+
+      <!-- File header 1 -->
+      <div style="display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: rgba(99,163,255,0.06); border-bottom: 1px solid rgba(255,255,255,0.06); position: sticky; top: 0;">
+        <span style="font-size: 10px; font-weight: 600; color: rgba(234,179,8,0.7);">M</span>
+        <span style="font-size: 11px; color: rgba(255,255,255,0.7); font-family: -apple-system, sans-serif;">DiffViewer.tsx</span>
+        <span style="margin-left: auto; font-size: 10px; color: rgba(255,255,255,0.3);">+12 -3</span>
+      </div>
+
+      <!-- Hunk -->
+      <div style="display: flex; align-items: center; padding: 2px 12px; background: rgba(99,163,255,0.04); border-bottom: 1px solid rgba(255,255,255,0.04);">
+        <span style="flex: 1; font-size: 10px; color: rgba(136,198,255,0.5);">@@ -16,8 +16,20 @@</span>
+        <div style="display: flex; gap: 3px;">
+          <span style="font-size: 9px; padding: 1px 6px; border-radius: 3px; border: 1px solid rgba(255,255,255,0.08); color: rgba(255,255,255,0.4);">Stage</span>
+          <span style="font-size: 9px; padding: 1px 6px; border-radius: 3px; border: 1px solid rgba(255,255,255,0.08); color: rgba(255,255,255,0.4);">Discard</span>
+        </div>
+      </div>
+
+      <!-- Diff lines -->
+      <div style="padding: 0;">
+        <div style="display: flex; color: rgba(255,255,255,0.35); padding: 0 12px; line-height: 1.7;">
+          <span style="width: 32px; text-align: right; padding-right: 6px; color: rgba(255,255,255,0.15); user-select: none;">16</span>
+          <span style="width: 32px; text-align: right; padding-right: 6px; color: rgba(255,255,255,0.15); user-select: none;">16</span>
+          <span>&nbsp; const selectedLines = useDiffStore(...);</span>
+        </div>
+        <div style="display: flex; background: rgba(248,81,73,0.07); padding: 0 12px; line-height: 1.7; border-left: 2px solid rgba(248,81,73,0.3);">
+          <span style="width: 32px; text-align: right; padding-right: 6px; color: rgba(248,81,73,0.4); user-select: none;">17</span>
+          <span style="width: 32px; text-align: right; padding-right: 6px; user-select: none;"></span>
+          <span style="color: rgba(248,81,73,0.7);">- const toggleLine = useDiffStore(...);</span>
+        </div>
+        <div style="display: flex; background: rgba(63,185,80,0.07); padding: 0 12px; line-height: 1.7; border-left: 2px solid rgba(63,185,80,0.3);">
+          <span style="width: 32px; text-align: right; padding-right: 6px; user-select: none;"></span>
+          <span style="width: 32px; text-align: right; padding-right: 6px; color: rgba(63,185,80,0.4); user-select: none;">17</span>
+          <span style="color: rgba(63,185,80,0.7);">+ const { handleGutterClick } = useLineSelection();</span>
+        </div>
+      </div>
+
+      <!-- File header 2 -->
+      <div style="display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: rgba(99,163,255,0.06); border-bottom: 1px solid rgba(255,255,255,0.06); border-top: 1px solid rgba(255,255,255,0.08); margin-top: 8px;">
+        <span style="font-size: 10px; font-weight: 600; color: rgba(234,179,8,0.7);">M</span>
+        <span style="font-size: 11px; color: rgba(255,255,255,0.7); font-family: -apple-system, sans-serif;">ChangesPanel.tsx</span>
+        <span style="margin-left: auto; font-size: 10px; color: rgba(255,255,255,0.3);">+45 -8</span>
+      </div>
+
+      <!-- Hunk -->
+      <div style="display: flex; align-items: center; padding: 2px 12px; background: rgba(99,163,255,0.04); border-bottom: 1px solid rgba(255,255,255,0.04);">
+        <span style="flex: 1; font-size: 10px; color: rgba(136,198,255,0.5);">@@ -140,6 +148,12 @@</span>
+        <div style="display: flex; gap: 3px;">
+          <span style="font-size: 9px; padding: 1px 6px; border-radius: 3px; border: 1px solid rgba(255,255,255,0.08); color: rgba(255,255,255,0.4);">Stage</span>
+          <span style="font-size: 9px; padding: 1px 6px; border-radius: 3px; border: 1px solid rgba(255,255,255,0.08); color: rgba(255,255,255,0.4);">Discard</span>
+        </div>
+      </div>
+
+      <div style="padding: 0;">
+        <div style="display: flex; background: rgba(63,185,80,0.07); padding: 0 12px; line-height: 1.7; border-left: 2px solid rgba(63,185,80,0.3);">
+          <span style="width: 32px; text-align: right; padding-right: 6px; user-select: none;"></span>
+          <span style="width: 32px; text-align: right; padding-right: 6px; color: rgba(63,185,80,0.4); user-select: none;">149</span>
+          <span style="color: rgba(63,185,80,0.7);">+ const stagedSelection = useFileSelection(...);</span>
+        </div>
+      </div>
+
+      <!-- File header 3 -->
+      <div style="display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: rgba(99,163,255,0.06); border-bottom: 1px solid rgba(255,255,255,0.06); border-top: 1px solid rgba(255,255,255,0.08); margin-top: 8px;">
+        <span style="font-size: 10px; font-weight: 600; color: rgba(63,185,80,0.7);">A</span>
+        <span style="font-size: 11px; color: rgba(255,255,255,0.7); font-family: -apple-system, sans-serif;">useFileSelection.ts</span>
+        <span style="margin-left: auto; font-size: 10px; color: rgba(255,255,255,0.3);">+90</span>
+      </div>
+
+      <div style="display: flex; align-items: center; padding: 2px 12px; background: rgba(99,163,255,0.04); border-bottom: 1px solid rgba(255,255,255,0.04);">
+        <span style="flex: 1; font-size: 10px; color: rgba(136,198,255,0.5);">@@ -0,0 +1,90 @@</span>
+        <div style="display: flex; gap: 3px;">
+          <span style="font-size: 9px; padding: 1px 6px; border-radius: 3px; border: 1px solid rgba(255,255,255,0.08); color: rgba(255,255,255,0.4);">Stage</span>
+        </div>
+      </div>
+
+      <div style="padding: 0;">
+        <div style="display: flex; background: rgba(63,185,80,0.07); padding: 0 12px; line-height: 1.7; border-left: 2px solid rgba(63,185,80,0.3);">
+          <span style="width: 32px; text-align: right; padding-right: 6px; user-select: none;"></span>
+          <span style="width: 32px; text-align: right; padding-right: 6px; color: rgba(63,185,80,0.4); user-select: none;">1</span>
+          <span style="color: rgba(63,185,80,0.7);">+ import { useCallback, useRef, useState } ...</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 1.5rem;">
+  <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+    <div style="flex: 1; min-width: 200px; padding: 1rem; background: rgba(255,255,255,0.02); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+      <h3 style="margin-top: 0; font-size: 12px; color: rgba(255,255,255,0.4);">Selection</h3>
+      <ul style="margin: 0; padding-left: 1rem; color: rgba(255,255,255,0.5); font-size: 11px; line-height: 1.8;">
+        <li>Click → 단일 선택 (diff 표시 + stage 대상)</li>
+        <li>Shift+click → 범위 선택</li>
+        <li>Marquee 드래그 → 사각형 영역 선택</li>
+        <li>선택 = 보기 + stage 대상 (통합)</li>
+      </ul>
+    </div>
+    <div style="flex: 1; min-width: 200px; padding: 1rem; background: rgba(255,255,255,0.02); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+      <h3 style="margin-top: 0; font-size: 12px; color: rgba(255,255,255,0.4);">Diff View</h3>
+      <ul style="margin: 0; padding-left: 1rem; color: rgba(255,255,255,0.5); font-size: 11px; line-height: 1.8;">
+        <li>선택된 파일들 연속 표시 (파일 헤더로 구분)</li>
+        <li>각 hunk에 Stage/Discard 버튼</li>
+        <li>gutter 클릭으로 라인 선택</li>
+        <li>Space → 선택 범위 stage/unstage</li>
+      </ul>
+    </div>
+    <div style="flex: 1; min-width: 200px; padding: 1rem; background: rgba(255,255,255,0.02); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+      <h3 style="margin-top: 0; font-size: 12px; color: rgba(255,255,255,0.4);">Keyboard</h3>
+      <ul style="margin: 0; padding-left: 1rem; color: rgba(255,255,255,0.5); font-size: 11px; line-height: 1.8;">
+        <li><code style="background: rgba(255,255,255,0.08); padding: 1px 4px; border-radius: 2px; font-size: 10px;">Space</code> 파일 선택 시 → 파일 단위 stage</li>
+        <li><code style="background: rgba(255,255,255,0.08); padding: 1px 4px; border-radius: 2px; font-size: 10px;">Space</code> 라인 선택 시 → 라인 단위 stage</li>
+        <li><code style="background: rgba(255,255,255,0.08); padding: 1px 4px; border-radius: 2px; font-size: 10px;">Esc</code> → 선택 해제</li>
+      </ul>
+    </div>
+  </div>
+</div>
