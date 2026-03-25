@@ -44,8 +44,7 @@ function MissionProjectItem({ missionId, project }: Props) {
       className={cn(
         "group flex w-full items-center gap-2 rounded-md px-2 py-1 text-[13px] transition-all duration-150 cursor-pointer select-none",
         {
-          "bg-[var(--color-bg-active)] border-l-2 border-accent text-foreground":
-            isSelected,
+          "bg-selected text-foreground": isSelected,
           "text-muted-foreground hover:bg-secondary/50 hover:text-foreground":
             !isSelected,
         },
@@ -57,7 +56,11 @@ function MissionProjectItem({ missionId, project }: Props) {
       <span className={cn("min-w-0 flex-1 truncate")}>{displayName}</span>
       <button
         className={cn(
-          "h-4 w-4 flex items-center justify-center rounded-sm transition-colors opacity-0 group-hover:opacity-100 hover:text-foreground",
+          "h-4 w-4 cursor-pointer items-center justify-center rounded-sm transition-colors",
+          {
+            "flex opacity-50 hover:opacity-100 hover:text-foreground": isSelected,
+            "hidden group-hover:flex hover:text-foreground": !isSelected,
+          },
         )}
         onClick={handleRemove}
         title="Remove from mission"

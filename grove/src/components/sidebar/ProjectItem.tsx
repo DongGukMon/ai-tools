@@ -103,11 +103,10 @@ const ProjectItem = memo(function ProjectItem({ project }: Props) {
   };
 
   return (
-    <div ref={setNodeRef} style={style} className={cn("pl-2 pr-2")}>
-      {/* Project header */}
+    <div ref={setNodeRef} style={style} className={cn("px-1.5")}>
       <div
         className={cn(
-          "group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[13px] text-foreground hover:bg-secondary/50 transition-all duration-150 cursor-pointer select-none",
+          "group flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] text-foreground transition-all duration-150 cursor-pointer select-none hover:bg-secondary/50",
         )}
         onClick={() => setExpanded(!expanded)}
         {...attributes}
@@ -130,65 +129,64 @@ const ProjectItem = memo(function ProjectItem({ project }: Props) {
         </div>
       </div>
 
-      {/* Worktree list */}
       <div className={cn(
         "grid transition-[grid-template-rows] duration-200 ease-out",
         { "grid-rows-[1fr]": expanded, "grid-rows-[0fr]": !expanded },
       )}>
         <div className={cn("overflow-hidden")}>
-        <div className={cn("ml-4 border-l border-border pl-1.5")}>
-          <DefaultBranchItem project={project} />
-          {/* Phase 2: 드래그 재정렬 — <WorktreeItem>을 드래그 가능하게 만들고,
-              드래그 완료 시 setWorktreeOrder(project.id, newOrder) 호출.
-              react-dnd 또는 @dnd-kit/sortable 권장. */}
-          {project.worktrees.map((wt) => (
-            <WorktreeItem
-              key={wt.path}
-              worktree={wt}
-              projectId={project.id}
-            />
-          ))}
-          {adding ? (
-            <form onSubmit={handleAddWorktree}>
-              <div className={cn("relative flex items-center gap-2 rounded-md px-2 py-1")}>
-                <GitBranch className={cn("h-[13px] w-[13px] shrink-0 text-muted-foreground")} />
-                <input
-                  className={cn(
-                    "min-w-0 flex-1 bg-transparent text-[13px] text-foreground outline-none",
-                    "placeholder:text-muted-foreground/50 disabled:opacity-50",
+          <div className={cn("ml-4 border-l border-border/80 pl-2")}>
+            <DefaultBranchItem project={project} />
+            {/* Phase 2: 드래그 재정렬 — <WorktreeItem>을 드래그 가능하게 만들고,
+                드래그 완료 시 setWorktreeOrder(project.id, newOrder) 호출.
+                react-dnd 또는 @dnd-kit/sortable 권장. */}
+            {project.worktrees.map((wt) => (
+              <WorktreeItem
+                key={wt.path}
+                worktree={wt}
+                projectId={project.id}
+              />
+            ))}
+            {adding ? (
+              <form onSubmit={handleAddWorktree}>
+                <div className={cn("relative flex items-center gap-2 rounded-md px-2 py-1")}>
+                  <GitBranch className={cn("h-[13px] w-[13px] shrink-0 text-muted-foreground")} />
+                  <input
+                    className={cn(
+                      "min-w-0 flex-1 bg-transparent text-[13px] text-foreground outline-none",
+                      "placeholder:text-muted-foreground/50 disabled:opacity-50",
+                    )}
+                    type="text"
+                    placeholder="branch name"
+                    value={worktreeName}
+                    onChange={(e) => setWorktreeName(sanitizeBranchName(e.target.value))}
+                    autoFocus
+                    disabled={addingLoading}
+                    onBlur={() => {
+                      if (!worktreeName.trim() && !addingLoading) setAdding(false);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape" && !addingLoading) setAdding(false);
+                    }}
+                  />
+                  {addingLoading && (
+                    <span className={cn("text-xs text-muted-foreground animate-pulse shrink-0")}>
+                      Creating...
+                    </span>
                   )}
-                  type="text"
-                  placeholder="branch name"
-                  value={worktreeName}
-                  onChange={(e) => setWorktreeName(sanitizeBranchName(e.target.value))}
-                  autoFocus
-                  disabled={addingLoading}
-                  onBlur={() => {
-                    if (!worktreeName.trim() && !addingLoading) setAdding(false);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Escape" && !addingLoading) setAdding(false);
-                  }}
-                />
-                {addingLoading && (
-                  <span className={cn("text-xs text-muted-foreground animate-pulse shrink-0")}>
-                    Creating...
-                  </span>
+                </div>
+              </form>
+            ) : (
+              <button
+                className={cn(
+                  "flex w-full items-center gap-2 rounded-md px-2 py-1 text-[13px] transition-colors",
+                  "text-muted-foreground hover:bg-secondary/50 hover:text-foreground",
                 )}
-              </div>
-            </form>
-          ) : (
-            <button
-              className={cn(
-                "flex w-full items-center gap-2 rounded-md px-2 py-1 text-[13px] transition-colors",
-                "text-muted-foreground hover:bg-secondary/50 hover:text-foreground",
-              )}
-              onClick={() => setAdding(true)}
-            >
-              <span>Add worktree</span>
-            </button>
-          )}
-        </div>
+                onClick={() => setAdding(true)}
+              >
+                <span>Add worktree</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

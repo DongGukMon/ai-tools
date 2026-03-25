@@ -23,7 +23,7 @@ pub struct Mission {
     #[serde(default)]
     pub projects: Vec<MissionProject>,
     /// Absolute path to ~/.grove/missions/{id}. Populated at load time, not persisted.
-    #[serde(skip)]
+    #[serde(default, skip_deserializing)]
     pub mission_dir: String,
 }
 
@@ -32,6 +32,22 @@ pub struct Mission {
 pub struct MissionStore {
     #[serde(default)]
     pub missions: Vec<Mission>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PersistedMission {
+    id: String,
+    name: String,
+    #[serde(default)]
+    projects: Vec<MissionProject>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct PersistedMissionStore {
+    #[serde(default)]
+    missions: Vec<PersistedMission>,
 }
 
 fn missions_path() -> Result<PathBuf, String> {
@@ -120,7 +136,19 @@ pub(crate) fn load_missions_from_path(path: &Path) -> MissionStore {
     if !path.exists() {
         return MissionStore::default();
     }
-    load_json_file_or_default(path).unwrap_or_default()
+    let persisted: PersistedMissionStore = load_json_file_or_default(path).unwrap_or_default();
+    MissionStore {
+        missions: persisted
+            .missions
+            .into_iter()
+            .map(|mission| Mission {
+                id: mission.id,
+                name: mission.name,
+                projects: mission.projects,
+                mission_dir: String::new(),
+            })
+            .collect(),
+    }
 }
 
 pub fn save_missions(store: &MissionStore) -> Result<(), String> {
@@ -128,7 +156,18 @@ pub fn save_missions(store: &MissionStore) -> Result<(), String> {
 }
 
 pub(crate) fn save_missions_to_path(path: &Path, store: &MissionStore) -> Result<(), String> {
-    save_json_file(path, store)
+    let persisted = PersistedMissionStore {
+        missions: store
+            .missions
+            .iter()
+            .map(|mission| PersistedMission {
+                id: mission.id.clone(),
+                name: mission.name.clone(),
+                projects: mission.projects.clone(),
+            })
+            .collect(),
+    };
+    save_json_file(path, &persisted)
 }
 
 fn generate_mission_id() -> String {

@@ -17,6 +17,7 @@ import {
 import { restrictToVerticalAxis, restrictToParentElement } from "@dnd-kit/modifiers";
 import type { Project } from "../../types";
 import { useProjectStore } from "../../store/project";
+import { cn } from "../../lib/cn";
 import ProjectItem from "./ProjectItem";
 
 interface Props {
@@ -74,7 +75,7 @@ function ProjectTree({ projects }: Props) {
       onDragCancel={handleDragCancel}
     >
       <SortableContext items={projectIds} strategy={verticalListSortingStrategy}>
-        <div className="space-y-1">
+        <div className={cn("space-y-1 py-0.5")}>
           {projects.map((project) => (
             <ProjectItem key={project.id} project={project} />
           ))}

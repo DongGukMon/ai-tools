@@ -36,10 +36,14 @@ function MissionItem({ mission }: Props) {
   const isMissionSelected =
     selectedItem?.missionId === mission.id && !selectedItem?.projectId;
 
-  const handleNameClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleSelectMission = () => {
     selectItem(mission.id);
     useTerminalStore.getState().setActiveWorktree(mission.missionDir);
+  };
+
+  const handleToggleCollapse = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    toggleCollapse(mission.id);
   };
 
   const handleDelete = async (e: React.MouseEvent) => {
@@ -52,28 +56,35 @@ function MissionItem({ mission }: Props) {
   };
 
   return (
-    <div className={cn("pl-2 pr-2")}>
-      {/* Mission header */}
+    <div className={cn("px-1.5")}>
       <div
         className={cn(
-          "group flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-[13px] transition-all duration-150 cursor-pointer select-none",
+          "group flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] transition-all duration-150 cursor-pointer select-none",
           {
-            "text-foreground hover:bg-secondary/50": !deleting,
+            "bg-selected text-foreground": isMissionSelected && !deleting,
+            "text-foreground hover:bg-secondary/50": !isMissionSelected && !deleting,
             "pointer-events-none opacity-50": deleting,
           },
         )}
-        onClick={() => toggleCollapse(mission.id)}
+        onClick={handleSelectMission}
       >
-        {collapsed ? (
-          <ChevronRight className={cn("h-[13px] w-[13px] shrink-0 text-muted-foreground")} />
-        ) : (
-          <ChevronDown className={cn("h-[13px] w-[13px] shrink-0 text-muted-foreground")} />
-        )}
+        <button
+          className={cn(
+            "flex h-4 w-4 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground transition-colors hover:text-foreground",
+          )}
+          onClick={handleToggleCollapse}
+          title={collapsed ? "Expand mission" : "Collapse mission"}
+        >
+          {collapsed ? (
+            <ChevronRight className={cn("h-[15px] w-[15px]")} />
+          ) : (
+            <ChevronDown className={cn("h-[15px] w-[15px]")} />
+          )}
+        </button>
         <span
           className={cn("min-w-0 flex-1 truncate font-medium", {
             "text-accent": isMissionSelected,
           })}
-          onClick={handleNameClick}
         >
           {mission.name}
         </span>
@@ -82,7 +93,7 @@ function MissionItem({ mission }: Props) {
             {mission.projects.length}
           </Badge>
         )}
-        <div className={cn("flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity")}>
+        <div className={cn("ml-auto flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity")}>
           <IconButton
             onClick={(e) => {
               e.stopPropagation();
@@ -105,7 +116,6 @@ function MissionItem({ mission }: Props) {
         </div>
       </div>
 
-      {/* Expanded content */}
       <div
         className={cn(
           "grid transition-[grid-template-rows] duration-200 ease-out",
@@ -116,7 +126,7 @@ function MissionItem({ mission }: Props) {
         )}
       >
         <div className={cn("overflow-hidden")}>
-          <div className={cn("ml-4 border-l border-border pl-1.5")}>
+          <div className={cn("ml-4 border-l border-border/80 pl-2")}>
             {mission.projects.map((project) => (
               <MissionProjectItem
                 key={project.projectId}

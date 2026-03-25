@@ -7,7 +7,7 @@ export default function MissionPanel() {
 
   if (missions.length === 0) {
     return (
-      <div className={cn("flex flex-col items-center justify-center py-8 gap-2")}>
+      <div className={cn("flex flex-col items-center justify-center gap-2 px-3 py-10")}>
         <span className={cn("text-xs text-muted-foreground")}>No missions yet</span>
         <span className={cn("text-[11px] text-[var(--color-text-tertiary)]")}>
           Click + to create one
@@ -17,7 +17,7 @@ export default function MissionPanel() {
   }
 
   return (
-    <div className={cn("space-y-1")}>
+    <div className={cn("space-y-1 py-0.5")}>
       {missions.map((mission) => (
         <MissionItem key={mission.id} mission={mission} />
       ))}
