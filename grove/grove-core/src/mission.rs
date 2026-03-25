@@ -1,6 +1,10 @@
 use crate::config::{grove_data_path, load_json_file_or_default, save_json_file};
+use rand::Rng;
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -65,6 +69,88 @@ pub(crate) fn save_missions_to_path(path: &Path, store: &MissionStore) -> Result
     save_json_file(path, store)
 }
 
+fn generate_mission_id() -> String {
+    let mut rng = rand::rng();
+    format!("{:08x}", rng.random::<u32>())
+}
+
+pub fn create_mission(name: &str) -> Result<Mission, String> {
+    let path = missions_path()?;
+    let dir = missions_dir()?;
+    create_mission_with_paths(&path, &dir, name)
+}
+
+fn create_mission_with_paths(
+    store_path: &Path,
+    missions_dir: &Path,
+    name: &str,
+) -> Result<Mission, String> {
+    let mut store = load_missions_from_path(store_path);
+
+    let id = loop {
+        let candidate = generate_mission_id();
+        let already_exists = store.missions.iter().any(|mission| mission.id == candidate)
+            || missions_dir.join(&candidate).exists();
+
+        if !already_exists {
+            break candidate;
+        }
+    };
+
+    let mission_dir = missions_dir.join(&id);
+    fs::create_dir_all(&mission_dir)
+        .map_err(|e| format!("Failed to create mission directory: {e}"))?;
+
+    let mission = Mission {
+        id,
+        name: name.to_string(),
+        projects: vec![],
+        mission_dir: mission_dir.to_string_lossy().to_string(),
+    };
+
+    store.missions.push(mission.clone());
+    save_missions_to_path(store_path, &store)?;
+    Ok(mission)
+}
+
+pub fn delete_mission(id: &str) -> Result<(), String> {
+    let path = missions_path()?;
+    let dir = missions_dir()?;
+    delete_mission_with_paths(&path, &dir, id)
+}
+
+fn delete_mission_with_paths(
+    store_path: &Path,
+    missions_dir: &Path,
+    id: &str,
+) -> Result<(), String> {
+    let mut store = load_missions_from_path(store_path);
+    let mission = store
+        .missions
+        .iter()
+        .find(|mission| mission.id == id)
+        .cloned()
+        .ok_or_else(|| format!("Mission not found: {id}"))?;
+
+    for project in &mission.projects {
+        crate::worktree_lifecycle::default_worktree_lifecycle().cleanup(&project.path);
+
+        let worktree_dir = Path::new(&project.path);
+        if worktree_dir.exists() {
+            let _ = fs::remove_dir_all(worktree_dir);
+        }
+    }
+
+    let mission_dir = missions_dir.join(id);
+    if mission_dir.exists() {
+        fs::remove_dir_all(&mission_dir)
+            .map_err(|e| format!("Failed to remove mission directory: {e}"))?;
+    }
+
+    store.missions.retain(|mission| mission.id != id);
+    save_missions_to_path(store_path, &store)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -110,6 +196,45 @@ mod tests {
         assert_eq!(loaded.missions[0].id, "abcd1234");
         assert_eq!(loaded.missions[0].name, "Test Mission");
         assert_eq!(loaded.missions[0].projects.len(), 1);
+
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn create_mission_generates_id_and_creates_directory() {
+        let path = temp_missions_path();
+        let missions_dir = path.parent().unwrap().join("missions");
+
+        let mission =
+            create_mission_with_paths(&path, &missions_dir, "SDK v5 마이그레이션").unwrap();
+
+        assert_eq!(mission.name, "SDK v5 마이그레이션");
+        assert_eq!(mission.id.len(), 8);
+        assert!(mission.id.chars().all(|ch| ch.is_ascii_hexdigit()));
+        assert!(mission.projects.is_empty());
+        assert!(missions_dir.join(&mission.id).exists());
+
+        let store = load_missions_from_path(&path);
+        assert_eq!(store.missions.len(), 1);
+        assert_eq!(store.missions[0].id, mission.id);
+
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn delete_mission_removes_directory_and_entry() {
+        let path = temp_missions_path();
+        let missions_dir = path.parent().unwrap().join("missions");
+
+        let mission = create_mission_with_paths(&path, &missions_dir, "To Delete").unwrap();
+        assert!(missions_dir.join(&mission.id).exists());
+
+        delete_mission_with_paths(&path, &missions_dir, &mission.id).unwrap();
+
+        assert!(!missions_dir.join(&mission.id).exists());
+
+        let store = load_missions_from_path(&path);
+        assert!(store.missions.is_empty());
 
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
