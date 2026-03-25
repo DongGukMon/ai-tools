@@ -9,6 +9,7 @@ import ResizablePanelGroup from "../ui/resizable-panel-group";
 import DiffViewer from "../diff/DiffViewer";
 import type { FileStatus, FileDiff } from "../../types";
 import { FileText, Plus, Minus, Undo2 } from "lucide-react";
+import { useMarqueeSelection } from "../../hooks/useMarqueeSelection";
 
 // ── FileItem ──
 
@@ -105,14 +106,21 @@ function FileSection({
   files,
   selectedPaths,
   onSelectFile,
+  onMarqueeSelect,
   renderActions,
 }: {
   title: string;
   files: FileStatus[];
   selectedPaths: Set<string>;
   onSelectFile: (path: string, shiftKey: boolean) => void;
+  onMarqueeSelect?: (ids: Set<string>) => void;
   renderActions?: (file: FileStatus) => React.ReactNode;
 }) {
+  const sectionRef = useRef<HTMLDivElement>(null);
+  const itemRefsMap = useRef<Map<string, HTMLElement>>(new Map());
+  const noop = useCallback(() => {}, []);
+  const marquee = useMarqueeSelection(sectionRef, itemRefsMap, onMarqueeSelect ?? noop);
+
   return (
     <div className={cn("flex flex-col min-h-0")}>
       <div
@@ -135,16 +143,41 @@ function FileSection({
           {files.length}
         </span>
       </div>
-      <div className={cn("flex-1 overflow-y-auto")}>
+      <div
+        ref={sectionRef}
+        className={cn("flex-1 overflow-y-auto relative")}
+        {...marquee.handlers}
+      >
         {files.map((file) => (
-          <FileItem
+          <div
             key={file.path}
-            file={file}
-            selected={selectedPaths.has(file.path)}
-            onClick={(e) => onSelectFile(file.path, e.shiftKey)}
-            actions={renderActions?.(file)}
-          />
+            ref={(el) => {
+              if (el) itemRefsMap.current.set(file.path, el);
+              else itemRefsMap.current.delete(file.path);
+            }}
+          >
+            <FileItem
+              file={file}
+              selected={selectedPaths.has(file.path)}
+              onClick={(e) => onSelectFile(file.path, e.shiftKey)}
+              actions={renderActions?.(file)}
+            />
+          </div>
         ))}
+        {marquee.rect && (
+          <div
+            className={cn("absolute pointer-events-none z-10")}
+            style={{
+              left: marquee.rect.x,
+              top: marquee.rect.y,
+              width: marquee.rect.width,
+              height: marquee.rect.height,
+              border: "1px solid rgba(99, 163, 255, 0.5)",
+              background: "rgba(99, 163, 255, 0.06)",
+              borderRadius: 2,
+            }}
+          />
+        )}
       </div>
     </div>
   );
@@ -227,6 +260,14 @@ function WorkingChangesView({
 
   const isStaged = selectedSection === "staged";
 
+  const handleMarqueeSelect = useCallback(
+    (section: "staged" | "unstaged", ids: Set<string>) => {
+      setSelectedPaths(ids);
+      setSelectedSection(section);
+    },
+    [],
+  );
+
   // Keyboard
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -262,6 +303,7 @@ function WorkingChangesView({
               files={staged}
               selectedPaths={selectedSection === "staged" ? selectedPaths : new Set()}
               onSelectFile={(path, shiftKey) => handleSelectFile("staged", staged, path, shiftKey)}
+              onMarqueeSelect={(ids) => handleMarqueeSelect("staged", ids)}
               renderActions={(file) => (
                 <ActionButton icon={Minus} title="Unstage" onClick={() => store.unstageFile(file.path)} />
               )}
@@ -273,6 +315,7 @@ function WorkingChangesView({
               files={unstaged}
               selectedPaths={selectedSection === "unstaged" ? selectedPaths : new Set()}
               onSelectFile={(path, shiftKey) => handleSelectFile("unstaged", unstaged, path, shiftKey)}
+              onMarqueeSelect={(ids) => handleMarqueeSelect("unstaged", ids)}
               renderActions={(file) => (
                 <>
                   <ActionButton icon={Plus} title="Stage" onClick={() => store.stageFile(file.path)} />
