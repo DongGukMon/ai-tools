@@ -49,16 +49,13 @@ function FileItem({
       } : { borderLeft: "2px solid transparent" }}
       onClick={onClick}
     >
-      {/* Actions on left — shown on hover, replacing the file icon */}
-      <div className={cn("size-3 shrink-0 relative")}>
-        <FileText className={cn("size-3 group-hover:opacity-0 transition-opacity", statusColors[file.status])} />
-        {actions && (
-          <div className={cn("absolute inset-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity")}>
-            {actions}
-          </div>
-        )}
-      </div>
+      <FileText className={cn("size-3 shrink-0", statusColors[file.status])} />
       <span className={cn("truncate flex-1")}>{file.path}</span>
+      {actions && (
+        <div className={cn("flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity")}>
+          {actions}
+        </div>
+      )}
       <span
         className={cn(
           "shrink-0 text-[10px] uppercase font-medium",
