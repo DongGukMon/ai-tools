@@ -6,8 +6,13 @@ import { useTerminalStore } from "../../store/terminal";
 import { usePanelLayoutStore } from "../../store/panel-layout";
 import { useBroadcastStore } from "../../store/broadcast";
 import { useGlobalTerminal } from "../../hooks/useGlobalTerminal";
-import { getRuntime, getRuntimeSize, captureRuntimeSnapshot } from "../../lib/terminal-runtime";
+import {
+  acquireTerminalRuntime,
+  getRuntimeSize,
+  captureRuntimeSnapshot,
+} from "../../lib/terminal-runtime";
 import { collectTerminalPanes } from "../../lib/terminal-session";
+import { shouldStartPipBroadcast } from "../../lib/broadcast-policy";
 import { cn } from "../../lib/cn";
 import TerminalPanel from "../terminal/TerminalPanel";
 import ChangesPanel from "./ChangesPanel";
@@ -47,8 +52,12 @@ function AppTabContent() {
   const isTerminal = activeTabId === "terminal";
   const isChanges = activeTabId === "changes";
 
+  const theme = useTerminalStore((s) => s.theme);
   const focusedPtyId = useTerminalStore((s) => s.focusedPtyId);
   const pip = useBroadcastStore((s) => s.pip);
+  const isFocusedPtyMirroring = useBroadcastStore((s) =>
+    focusedPtyId ? Boolean(s.mirrors[focusedPtyId]) : false,
+  );
   const startPip = useBroadcastStore((s) => s.startPip);
   const stopPip = useBroadcastStore((s) => s.stopPip);
 
@@ -56,6 +65,7 @@ function AppTabContent() {
   const [pipDismissed, setPipDismissed] = useState(true);
   const prevIsTerminalRef = useRef(isTerminal);
   const pipContainerRef = useRef<HTMLDivElement>(null);
+  const pipRuntimeRef = useRef<ReturnType<typeof acquireTerminalRuntime> | null>(null);
 
   // PiP broadcast policy
   useEffect(() => {
@@ -68,16 +78,28 @@ function AppTabContent() {
         stopPip();
       }
       setPipPtyId(null);
-    } else if (wasTerminal && focusedPtyId && !pip) {
-      const paneId = findPaneIdForPty(focusedPtyId);
+    } else if (
+      shouldStartPipBroadcast({
+        isTerminal,
+        wasTerminal,
+        focusedPtyId,
+        hasActivePip: Boolean(pip),
+        isFocusedPtyMirroring,
+      })
+    ) {
+      if (!focusedPtyId) {
+        return;
+      }
+      const ptyId = focusedPtyId;
+      const paneId = findPaneIdForPty(ptyId);
       if (paneId) {
         const { cols, rows } = getRuntimeSize(paneId);
         const snapshot = captureRuntimeSnapshot(paneId);
-        startPip(focusedPtyId, paneId, cols, rows, snapshot);
-        setPipPtyId(focusedPtyId);
+        startPip(ptyId, paneId, cols, rows, snapshot);
+        setPipPtyId(ptyId);
       }
     }
-  }, [isTerminal, focusedPtyId, pip, startPip, stopPip]);
+  }, [isFocusedPtyMirroring, isTerminal, focusedPtyId, pip, startPip, stopPip]);
 
   const hasPipBroadcast =
     !isTerminal &&
@@ -90,16 +112,29 @@ function AppTabContent() {
     }
 
     const container = pipContainerRef.current;
-    const runtime = getRuntime(pip.paneId);
-    if (!container || !runtime) {
+    if (!container) {
       return;
     }
 
+    const runtime = acquireTerminalRuntime(pip.paneId, theme);
+    pipRuntimeRef.current = runtime;
     runtime.attach(container);
     requestAnimationFrame(() => {
       runtime.fitAddon.fit();
     });
-  }, [hasPipBroadcast, pip?.paneId]);
+
+    return () => {
+      runtime.detach();
+      runtime.release();
+      if (pipRuntimeRef.current === runtime) {
+        pipRuntimeRef.current = null;
+      }
+    };
+  }, [hasPipBroadcast, pip?.paneId, theme]);
+
+  useEffect(() => {
+    pipRuntimeRef.current?.setTheme(theme);
+  }, [theme]);
 
   const {
     tabs: globalTabs,

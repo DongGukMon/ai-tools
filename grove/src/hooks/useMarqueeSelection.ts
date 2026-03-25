@@ -9,6 +9,8 @@ interface Rect {
 
 interface UseMarqueeResult {
   rect: Rect | null;
+  /** True if a marquee drag just ended — use to suppress click events */
+  wasMarquee: () => boolean;
   handlers: {
     onMouseDown: (e: React.MouseEvent) => void;
     onMouseMove: (e: React.MouseEvent) => void;
@@ -94,14 +96,22 @@ export function useMarqueeSelection(
     [containerRef, hitTest, onSelectionChange],
   );
 
+  const justEndedRef = useRef(false);
+
   const onMouseUp = useCallback(() => {
+    justEndedRef.current = activeRef.current;
     startRef.current = null;
     activeRef.current = false;
     setRect(null);
+    // Reset after a tick so click events can check it
+    requestAnimationFrame(() => { justEndedRef.current = false; });
   }, []);
+
+  const wasMarquee = useCallback(() => justEndedRef.current, []);
 
   return {
     rect,
+    wasMarquee,
     handlers: { onMouseDown, onMouseMove, onMouseUp },
   };
 }

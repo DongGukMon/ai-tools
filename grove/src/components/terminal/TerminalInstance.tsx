@@ -6,6 +6,7 @@ import { usePanelLayoutStore } from "../../store/panel-layout";
 import "@xterm/xterm/css/xterm.css";
 import { cn } from "../../lib/cn";
 import { acquireTerminalRuntime } from "../../lib/terminal-runtime";
+import { shouldAttachPrimaryRuntime } from "../../lib/broadcast-policy";
 import { Button } from "../ui/button";
 
 interface Props {
@@ -33,7 +34,10 @@ function TerminalInstance({ paneId, ptyId }: Props) {
 
   useLayoutEffect(() => {
     const container = termRef.current;
-    if (!container) return;
+    if (!container || !shouldAttachPrimaryRuntime(isBroadcasting)) {
+      runtimeRef.current = null;
+      return;
+    }
 
     const runtime = acquireTerminalRuntime(paneId, theme);
     runtimeRef.current = runtime;
@@ -53,7 +57,7 @@ function TerminalInstance({ paneId, ptyId }: Props) {
       runtime.release();
       runtimeRef.current = null;
     };
-  }, [paneId, setFocusedPtyId]);
+  }, [isBroadcasting, markBellPty, paneId, setFocusedPtyId, theme]);
 
   useEffect(() => {
     runtimeRef.current?.setPtyId(ptyId);

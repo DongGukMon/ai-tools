@@ -119,6 +119,8 @@ function FileDiffSection({
   const stageHunk = useDiffStore((s) => s.stageHunk);
   const unstageHunk = useDiffStore((s) => s.unstageHunk);
   const discardHunk = useDiffStore((s) => s.discardHunk);
+  const stageLines = useDiffStore((s) => s.stageLines);
+  const unstageLines = useDiffStore((s) => s.unstageLines);
 
   const added = diff.hunks.reduce((s, h) => s + h.lines.filter((l) => l.type === "add").length, 0);
   const removed = diff.hunks.reduce((s, h) => s + h.lines.filter((l) => l.type === "remove").length, 0);
@@ -165,6 +167,8 @@ function FileDiffSection({
           onStageHunk={isCommitView ? undefined : stageHunk}
           onUnstageHunk={isCommitView ? undefined : unstageHunk}
           onDiscardHunk={isCommitView ? undefined : discardHunk}
+          onStageLines={isCommitView ? undefined : stageLines}
+          onUnstageLines={isCommitView ? undefined : unstageLines}
           onGutterClick={handleGutterClick}
           onGutterMouseDown={handleGutterMouseDown}
           onGutterMouseEnter={handleGutterMouseEnter}

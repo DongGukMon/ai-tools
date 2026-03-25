@@ -3,7 +3,7 @@ import { ChevronUp, ChevronDown } from "lucide-react";
 import { useTerminalStore } from "../../store/terminal";
 import { useBroadcastStore } from "../../store/broadcast";
 import { usePanelLayoutStore, type GlobalTerminalTab } from "../../store/panel-layout";
-import { acquireTerminalRuntime, getRuntime } from "../../lib/terminal-runtime";
+import { acquireTerminalRuntime } from "../../lib/terminal-runtime";
 import { cn } from "../../lib/cn";
 import { IconButton } from "../ui/button";
 import GlobalTerminalTabBar from "./GlobalTerminalTabBar";
@@ -37,7 +37,7 @@ const TerminalTabContent = memo(function TerminalTabContent({
     const isMirror = Boolean(tab.mirrorPtyId);
     const runtime = isMirror
       ? mirrorSession
-        ? getRuntime(mirrorSession.paneId)
+        ? acquireTerminalRuntime(mirrorSession.paneId, theme)
         : null
       : acquireTerminalRuntime(tab.paneId, theme);
     if (!runtime) return;
@@ -48,9 +48,7 @@ const TerminalTabContent = memo(function TerminalTabContent({
 
     return () => {
       runtime.detach();
-      if (!isMirror) {
-        runtime.release();
-      }
+      runtime.release();
       runtimeRef.current = null;
     };
   }, [

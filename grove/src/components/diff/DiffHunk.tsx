@@ -30,6 +30,8 @@ interface Props {
   onStageHunk?: (filePath: string, hunkIndex: number) => void;
   onUnstageHunk?: (filePath: string, hunkIndex: number) => void;
   onDiscardHunk?: (filePath: string, hunkIndex: number) => void;
+  onStageLines?: (filePath: string, hunkIndex: number, lineIndices: number[]) => void;
+  onUnstageLines?: (filePath: string, hunkIndex: number, lineIndices: number[]) => void;
   onGutterClick: (lineIndex: number, shiftKey: boolean) => void;
   onGutterMouseDown: (lineIndex: number) => void;
   onGutterMouseEnter: (lineIndex: number, buttons: number) => void;
@@ -46,12 +48,36 @@ export default function DiffHunk({
   onStageHunk,
   onUnstageHunk,
   onDiscardHunk,
+  onStageLines,
+  onUnstageLines,
   onGutterClick,
   onGutterMouseDown,
   onGutterMouseEnter,
   onGutterMouseUp,
 }: Props) {
   const [collapsed, setCollapsed] = useState(false);
+
+  // Get selected lines that belong to this hunk
+  const hunkLineIndices = hunk.lines.map((l) => l.index);
+  const selectedInHunk = hunkLineIndices.filter((idx) => selectedLines.has(idx));
+
+  const handleStage = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (selectedInHunk.length > 0 && onStageLines) {
+      onStageLines(filePath, hunkIndex, selectedInHunk);
+    } else {
+      onStageHunk?.(filePath, hunkIndex);
+    }
+  };
+
+  const handleUnstage = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (selectedInHunk.length > 0 && onUnstageLines) {
+      onUnstageLines(filePath, hunkIndex, selectedInHunk);
+    } else {
+      onUnstageHunk?.(filePath, hunkIndex);
+    }
+  };
 
   return (
     <div className={cn({ "border-t border-border": !isFirst })}>
@@ -80,18 +106,18 @@ export default function DiffHunk({
               <button
                 type="button"
                 className={cn("px-2 py-0.5 text-[10px] rounded cursor-pointer border border-border bg-secondary/50 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors")}
-                onClick={(e) => { e.stopPropagation(); onUnstageHunk?.(filePath, hunkIndex); }}
+                onClick={handleUnstage}
               >
-                Unstage
+                {selectedInHunk.length > 0 ? `Unstage ${selectedInHunk.length} lines` : "Unstage"}
               </button>
             ) : (
               <>
                 <button
                   type="button"
                   className={cn("px-2 py-0.5 text-[10px] rounded cursor-pointer border border-border bg-secondary/50 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors")}
-                  onClick={(e) => { e.stopPropagation(); onStageHunk?.(filePath, hunkIndex); }}
+                  onClick={handleStage}
                 >
-                  Stage
+                  {selectedInHunk.length > 0 ? `Stage ${selectedInHunk.length} lines` : "Stage"}
                 </button>
                 <button
                   type="button"
