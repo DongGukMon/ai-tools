@@ -35,10 +35,16 @@ const DEFAULT_SESSION: TabSession = {
   activeTabId: "terminal",
 };
 
+function getSessionForWorktree(
+  state: TabState,
+  worktreePath: string | null,
+): TabSession {
+  if (!worktreePath) return DEFAULT_SESSION;
+  return state.sessions[worktreePath] ?? DEFAULT_SESSION;
+}
+
 function getSession(state: TabState): TabSession {
-  const wt = state.activeWorktree;
-  if (!wt) return DEFAULT_SESSION;
-  return state.sessions[wt] ?? DEFAULT_SESSION;
+  return getSessionForWorktree(state, state.activeWorktree);
 }
 
 function updateSession(
@@ -135,4 +141,18 @@ export function selectCurrentTabs(state: TabState): AppTab[] {
 
 export function selectCurrentActiveTabId(state: TabState): string {
   return getSession(state).activeTabId;
+}
+
+export function selectTabsForWorktree(
+  state: TabState,
+  worktreePath: string | null,
+): AppTab[] {
+  return getSessionForWorktree(state, worktreePath).tabs;
+}
+
+export function selectActiveTabIdForWorktree(
+  state: TabState,
+  worktreePath: string | null,
+): string {
+  return getSessionForWorktree(state, worktreePath).activeTabId;
 }

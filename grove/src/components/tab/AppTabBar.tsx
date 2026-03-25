@@ -2,7 +2,12 @@ import { useCallback, useState } from "react";
 import { Globe, Plus, X } from "lucide-react";
 import { cn } from "../../lib/cn";
 import { IconButton } from "../ui/button";
-import { useTabStore, selectCurrentTabs, selectCurrentActiveTabId } from "../../store/tab";
+import {
+  useTabStore,
+  selectActiveTabIdForWorktree,
+  selectTabsForWorktree,
+} from "../../store/tab";
+import { useProjectStore } from "../../store/project";
 import type { AppTabType } from "../../types";
 
 const ADD_TAB_OPTIONS: { type: Exclude<AppTabType, "terminal" | "changes">; label: string; icon: typeof Globe }[] = [
@@ -10,8 +15,11 @@ const ADD_TAB_OPTIONS: { type: Exclude<AppTabType, "terminal" | "changes">; labe
 ];
 
 function AppTabBar() {
-  const tabs = useTabStore(selectCurrentTabs);
-  const activeTabId = useTabStore(selectCurrentActiveTabId);
+  const selectedWorktreePath = useProjectStore((s) => s.selectedWorktree?.path ?? null);
+  const tabs = useTabStore((state) => selectTabsForWorktree(state, selectedWorktreePath));
+  const activeTabId = useTabStore((state) =>
+    selectActiveTabIdForWorktree(state, selectedWorktreePath),
+  );
   const setActiveTab = useTabStore((s) => s.setActiveTab);
   const closeTab = useTabStore((s) => s.closeTab);
   const addTab = useTabStore((s) => s.addTab);

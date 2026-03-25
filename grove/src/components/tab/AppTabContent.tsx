@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Globe } from "lucide-react";
-import { useTabStore, selectCurrentActiveTabId } from "../../store/tab";
+import { useTabStore, selectActiveTabIdForWorktree } from "../../store/tab";
 import { useProjectStore } from "../../store/project";
 import { useTerminalStore } from "../../store/terminal";
 import { usePanelLayoutStore } from "../../store/panel-layout";
@@ -52,7 +52,9 @@ function AppTabContent() {
     setActiveWorktree(selectedWorktreePath);
   }, [selectedWorktreePath, setActiveWorktree]);
 
-  const activeTabId = useTabStore(selectCurrentActiveTabId);
+  const activeTabId = useTabStore((state) =>
+    selectActiveTabIdForWorktree(state, selectedWorktreePath),
+  );
   const isTerminal = activeTabId === "terminal";
   const isChanges = activeTabId === "changes";
 

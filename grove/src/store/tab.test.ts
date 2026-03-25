@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useTabStore, selectCurrentTabs, selectCurrentActiveTabId } from "./tab";
+import {
+  useTabStore,
+  selectActiveTabIdForWorktree,
+  selectCurrentActiveTabId,
+  selectCurrentTabs,
+  selectTabsForWorktree,
+} from "./tab";
 
 function initWorktree(path = "/tmp/wt") {
   useTabStore.getState().setActiveWorktree(path);
@@ -125,6 +131,20 @@ describe("useTabStore", () => {
       useTabStore.getState().setActiveWorktree("/tmp/a");
       expect(selectCurrentTabs(useTabStore.getState())).toHaveLength(3);
       expect(selectCurrentActiveTabId(useTabStore.getState())).toBe("br-a");
+    });
+
+    it("can read a selected worktree session before activeWorktree catches up", () => {
+      useTabStore.getState().setActiveWorktree("/tmp/a");
+      useTabStore.getState().setActiveTab("changes");
+
+      useTabStore.getState().setActiveWorktree("/tmp/b");
+
+      const state = useTabStore.getState();
+
+      expect(selectActiveTabIdForWorktree(state, "/tmp/a")).toBe("changes");
+      expect(selectActiveTabIdForWorktree(state, "/tmp/b")).toBe("terminal");
+      expect(selectTabsForWorktree(state, "/tmp/a")).toHaveLength(2);
+      expect(selectTabsForWorktree(state, "/tmp/b")).toHaveLength(2);
     });
 
     it("removeSession cleans up worktree tab state", () => {
