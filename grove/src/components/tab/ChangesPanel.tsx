@@ -160,7 +160,7 @@ function FileSection({
             <FileItem
               file={file}
               selected={selectedPaths.has(file.path)}
-              onClick={(e) => { if (!marquee.wasMarquee()) onSelectFile(file.path, e.shiftKey); }}
+              onClick={(e) => onSelectFile(file.path, e.shiftKey)}
               actions={renderActions?.(file)}
             />
           </div>

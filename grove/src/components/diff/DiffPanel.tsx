@@ -13,6 +13,10 @@ export default function DiffPanel() {
   const store = useDiff(selectedWorktree?.path ?? null);
   const diffSizes = usePanelLayoutStore((s) => s.diff);
   const updateDiff = usePanelLayoutStore((s) => s.updateDiff);
+  const viewerDiffs =
+    store.selectedView === "changes"
+      ? (store.currentDiff ? [store.currentDiff] : [])
+      : (store.currentDiff ? [store.currentDiff] : store.commitDiffs);
 
   if (!selectedWorktree) {
     return (
@@ -59,8 +63,9 @@ export default function DiffPanel() {
       </ResizablePanelGroup.Pane>
       <ResizablePanelGroup.Pane minSize={100}>
         <DiffViewer
-          diff={store.currentDiff}
-          selectedFile={store.selectedFile}
+          diffs={viewerDiffs}
+          isStaged={false}
+          isCommitView={store.selectedView !== "changes"}
         />
       </ResizablePanelGroup.Pane>
     </ResizablePanelGroup>

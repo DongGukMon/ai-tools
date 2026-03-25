@@ -9,12 +9,11 @@ interface Rect {
 
 interface UseMarqueeResult {
   rect: Rect | null;
-  /** True if a marquee drag just ended — use to suppress click events */
-  wasMarquee: () => boolean;
   handlers: {
     onMouseDown: (e: React.MouseEvent) => void;
     onMouseMove: (e: React.MouseEvent) => void;
     onMouseUp: () => void;
+    onClickCapture: (e: React.MouseEvent) => void;
   };
 }
 
@@ -26,6 +25,7 @@ export function useMarqueeSelection(
   const [rect, setRect] = useState<Rect | null>(null);
   const startRef = useRef<{ x: number; y: number } | null>(null);
   const activeRef = useRef(false);
+  const suppressNextClickRef = useRef(false);
 
   const hitTest = useCallback(
     (marqueeRect: Rect) => {
@@ -56,6 +56,7 @@ export function useMarqueeSelection(
     (e: React.MouseEvent) => {
       // Start tracking from anywhere in the container (including file items)
       // Marquee only activates after dragging > 4px threshold
+      suppressNextClickRef.current = false;
       const container = containerRef.current;
       if (!container) return;
 
@@ -102,25 +103,19 @@ export function useMarqueeSelection(
     startRef.current = null;
     activeRef.current = false;
     setRect(null);
+    suppressNextClickRef.current = wasActive;
+  }, []);
 
-    // Suppress the click event that fires after mouseup when a marquee drag just ended
-    if (wasActive) {
-      const container = containerRef.current;
-      if (container) {
-        const suppressClick = (e: MouseEvent) => {
-          e.stopPropagation();
-          e.preventDefault();
-        };
-        container.addEventListener("click", suppressClick, { capture: true, once: true });
-      }
-    }
-  }, [containerRef]);
-
-  const wasMarquee = useCallback(() => false, []);
+  const onClickCapture = useCallback((e: React.MouseEvent) => {
+    if (!suppressNextClickRef.current) return;
+    suppressNextClickRef.current = false;
+    // Use React's capture phase so the synthetic FileItem click never runs after a drag.
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
 
   return {
     rect,
-    wasMarquee,
-    handlers: { onMouseDown, onMouseMove, onMouseUp },
+    handlers: { onMouseDown, onMouseMove, onMouseUp, onClickCapture },
   };
 }
