@@ -13,6 +13,7 @@ interface UseMarqueeResult {
     onMouseDown: (e: React.MouseEvent) => void;
     onMouseMove: (e: React.MouseEvent) => void;
     onMouseUp: () => void;
+    onMouseLeave: () => void;
     onClickCapture: (e: React.MouseEvent) => void;
   };
 }
@@ -107,16 +108,24 @@ export function useMarqueeSelection(
     suppressNextClickRef.current = wasActive;
   }, []);
 
+  const onMouseLeave = useCallback(() => {
+    if (!activeRef.current) return;
+    // Finalize selection and clean up when cursor leaves the container
+    suppressNextClickRef.current = true;
+    startRef.current = null;
+    activeRef.current = false;
+    setRect(null);
+  }, []);
+
   const onClickCapture = useCallback((e: React.MouseEvent) => {
     if (!suppressNextClickRef.current) return;
     suppressNextClickRef.current = false;
-    // Use React's capture phase so the synthetic FileItem click never runs after a drag.
     e.preventDefault();
     e.stopPropagation();
   }, []);
 
   return {
     rect,
-    handlers: { onMouseDown, onMouseMove, onMouseUp, onClickCapture },
+    handlers: { onMouseDown, onMouseMove, onMouseUp, onMouseLeave, onClickCapture },
   };
 }
