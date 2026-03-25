@@ -297,10 +297,20 @@ function WorkingChangesView({
     [selectedPaths, isStaged, store],
   );
 
+  const fileListRef = useRef<HTMLDivElement>(null);
+
+  // Auto-focus file list when selection changes so keyboard shortcuts work
+  useEffect(() => {
+    if (selectedPaths.size > 0) {
+      fileListRef.current?.focus();
+    }
+  }, [selectedPaths]);
+
   return (
     <ResizablePanelGroup className={cn("h-full")} ratios={ratios} onCommit={onCommit}>
       <ResizablePanelGroup.Pane minSize={160}>
         <div
+          ref={fileListRef}
           className={cn("flex flex-col h-full bg-sidebar overflow-hidden outline-none")}
           tabIndex={0}
           onKeyDown={handleKeyDown}
