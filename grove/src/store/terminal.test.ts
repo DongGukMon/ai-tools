@@ -24,6 +24,7 @@ describe("useTerminalStore bell state", () => {
       activeWorktree: null,
       focusedPtyId: null,
       bellPtyIds: new Set<string>(),
+      aiSessions: {},
       theme: null,
       detectedTheme: null,
     });
@@ -84,6 +85,48 @@ describe("useTerminalStore bell state", () => {
     expect(useTerminalStore.getState().activeWorktree).toBe("/tmp/source");
     expect(useTerminalStore.getState().focusedPtyId).toBe("pty-source");
     expect(useTerminalStore.getState().bellPtyIds).toEqual(new Set());
+    expect(useTerminalStore.getState().aiSessions["pty-source"]).toEqual({
+      tool: "codex",
+      status: "idle",
+    });
+  });
+
+  it("suppresses attention updates for panes in the active worktree", () => {
+    useTerminalStore.setState({
+      sessions: {
+        "/tmp/source": makeLeaf("pane-source", "pty-source"),
+        "/tmp/other": makeLeaf("pane-other", "pty-other"),
+      },
+      activeWorktree: "/tmp/source",
+      aiSessions: {
+        "pty-source": { tool: "codex", status: "running" },
+      },
+    });
+
+    useTerminalStore.getState().updateAiStatus("pty-source", "codex:attention");
+    useTerminalStore.getState().updateAiStatus("pty-other", "codex:attention");
+
+    expect(useTerminalStore.getState().aiSessions["pty-source"]).toEqual({
+      tool: "codex",
+      status: "idle",
+    });
+    expect(useTerminalStore.getState().aiSessions["pty-other"]).toEqual({
+      tool: "codex",
+      status: "attention",
+    });
+  });
+
+  it("clears attention when the pane receives focus", () => {
+    useTerminalStore.setState({
+      aiSessions: {
+        "pty-source": { tool: "codex", status: "attention" },
+      },
+      focusedPtyId: null,
+    });
+
+    useTerminalStore.getState().setFocusedPtyId("pty-source");
+
+    expect(useTerminalStore.getState().focusedPtyId).toBe("pty-source");
     expect(useTerminalStore.getState().aiSessions["pty-source"]).toEqual({
       tool: "codex",
       status: "idle",

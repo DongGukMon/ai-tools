@@ -74,6 +74,29 @@ interface TerminalState {
   initLayouts: () => Promise<void>;
 }
 
+function sessionContainsPty(node: SplitNode | undefined, ptyId: string): boolean {
+  return !!node && collectTerminalPanes(node).some((pane) => pane.ptyId === ptyId);
+}
+
+function clearAttentionForPty(
+  aiSessions: Record<string, AiSession>,
+  ptyId: string | null,
+): Record<string, AiSession> {
+  if (!ptyId) {
+    return aiSessions;
+  }
+
+  const session = aiSessions[ptyId];
+  if (!session || session.status !== "attention") {
+    return aiSessions;
+  }
+
+  return {
+    ...aiSessions,
+    [ptyId]: { ...session, status: "idle" },
+  };
+}
+
 export const useTerminalStore = create<TerminalState>((set) => ({
   sessions: {},
   activeWorktree: null,
@@ -240,7 +263,11 @@ export const useTerminalStore = create<TerminalState>((set) => ({
       };
     }),
 
-  setFocusedPtyId: (ptyId) => set({ focusedPtyId: ptyId }),
+  setFocusedPtyId: (ptyId) =>
+    set((state) => ({
+      focusedPtyId: ptyId,
+      aiSessions: clearAttentionForPty(state.aiSessions, ptyId),
+    })),
 
   markBellPty: (ptyId) =>
     set((state) => {
@@ -256,8 +283,18 @@ export const useTerminalStore = create<TerminalState>((set) => ({
   updateAiStatus: (ptyId, raw) =>
     set((state) => {
       if (raw) {
-        const [tool, status] = raw.split(":") as [AiTool, AiStatus];
+        const [tool, nextStatus] = raw.split(":") as [AiTool, AiStatus];
+        let status = nextStatus;
         if (!tool || !status) return state;
+        if (
+          status === "attention" &&
+          sessionContainsPty(
+            state.activeWorktree ? state.sessions[state.activeWorktree] : undefined,
+            ptyId,
+          )
+        ) {
+          status = "idle";
+        }
         const prev = state.aiSessions[ptyId];
         if (prev && prev.tool === tool && prev.status === status) return state;
         return { aiSessions: { ...state.aiSessions, [ptyId]: { tool, status } } };
