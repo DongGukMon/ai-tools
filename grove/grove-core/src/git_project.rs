@@ -1580,6 +1580,7 @@ fn refresh_source_repo(source: &Path) -> Result<(), String> {
 mod tests {
     use super::*;
     use crate::test_support::env_lock;
+    use std::ffi::OsString;
 
     #[test]
     fn github_remote_accepts_github_urls_and_rejects_others() {
@@ -1929,6 +1930,37 @@ mod tests {
         );
 
         assert_eq!(remote_default_branch(&source_dir).unwrap(), "trunk");
+    }
+
+    #[test]
+    fn git_command_injects_current_ssh_auth_sock_into_spawned_process_env() {
+        let _lock = env_lock();
+        let original = std::env::var_os("SSH_AUTH_SOCK");
+        unsafe {
+            std::env::set_var("SSH_AUTH_SOCK", "/tmp/grove-git-command.sock");
+        }
+
+        let command = git_command();
+        let ssh_auth_sock = command
+            .get_envs()
+            .find_map(|(key, value)| match (key.to_str(), value) {
+                (Some("SSH_AUTH_SOCK"), Some(value)) => Some(value.to_os_string()),
+                _ => None,
+            });
+
+        assert_eq!(
+            ssh_auth_sock,
+            Some(OsString::from("/tmp/grove-git-command.sock"))
+        );
+
+        match original {
+            Some(value) => unsafe {
+                std::env::set_var("SSH_AUTH_SOCK", value);
+            },
+            None => unsafe {
+                std::env::remove_var("SSH_AUTH_SOCK");
+            },
+        }
     }
 
     #[test]

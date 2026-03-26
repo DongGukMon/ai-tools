@@ -1,6 +1,6 @@
 use crate::{
     config,
-    process_env::{enriched_path, subprocess_env_pairs},
+    process_env::{enriched_path, preferred_ssh_auth_sock, subprocess_env_pairs},
     tool_hooks::{self, TMUX_GROVE_AI_STATUS_OPTION},
     worktree_lifecycle::WorktreeResource,
     CreatePtyInitialHydration, CreatePtyInitialHydrationSource, CreatePtyRequest, CreatePtyRestore,
@@ -950,6 +950,9 @@ fn grove_tmux_environment(session_name: &str) -> Vec<(&'static str, String)> {
         ("GROVE_TMUX_SESSION", session_name.to_string()),
         ("PATH", enriched_path().to_string()),
     ];
+    if let Some(ssh_auth_sock) = preferred_ssh_auth_sock() {
+        vars.push(("SSH_AUTH_SOCK", ssh_auth_sock));
+    }
     if let Some(zdotdir) = tool_hooks::grove_zdotdir() {
         vars.push(("GROVE_REAL_ZDOTDIR", grove_real_zdotdir()));
         vars.push(("ZDOTDIR", zdotdir));
@@ -1398,6 +1401,7 @@ fn consume_bell_edge(previous_flag: &mut bool, current_flag: bool) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::env_lock;
     use crate::TerminalPaneSnapshotInput;
     use std::fs;
     use std::path::{Path, PathBuf};
@@ -1908,6 +1912,66 @@ mod tests {
 
         let _ = fs::remove_dir_all(&child_root);
         assert_subprocess_success(&output, "zdotdir tmux assertions");
+    }
+
+    #[test]
+    fn ensure_grove_tmux_session_propagates_current_ssh_auth_sock() {
+        let _lock = env_lock();
+        if Command::new("tmux").arg("-V").output().is_err() {
+            return;
+        }
+
+        let original = env::var_os("SSH_AUTH_SOCK");
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let session_name = format!("grove-test-ssh-auth-{nonce}");
+        let worktree_path = env::current_dir().unwrap();
+        let worktree_path = worktree_path.to_string_lossy().into_owned();
+        let pane_id = format!("pane-{nonce}");
+        let expected_sock = format!("/tmp/grove-ssh-auth-{nonce}.sock");
+
+        unsafe {
+            env::set_var("SSH_AUTH_SOCK", &expected_sock);
+        }
+
+        let _session_guard = TmuxSessionGuard::new(session_name.clone());
+        let _ = kill_tmux_session_if_exists(&session_name);
+
+        let first =
+            ensure_grove_tmux_session(&session_name, &worktree_path, &pane_id, &worktree_path)
+                .unwrap();
+        assert_eq!(first, CreatePtySessionState::Created);
+        assert_eq!(
+            tmux_session_environment_value(&session_name, "SSH_AUTH_SOCK")
+                .unwrap()
+                .as_deref(),
+            Some(expected_sock.as_str())
+        );
+
+        tmux_set_session_environment(&session_name, "SSH_AUTH_SOCK", "/tmp/stale-agent.sock")
+            .unwrap();
+
+        let second =
+            ensure_grove_tmux_session(&session_name, &worktree_path, &pane_id, &worktree_path)
+                .unwrap();
+        assert_eq!(second, CreatePtySessionState::Attached);
+        assert_eq!(
+            tmux_session_environment_value(&session_name, "SSH_AUTH_SOCK")
+                .unwrap()
+                .as_deref(),
+            Some(expected_sock.as_str())
+        );
+
+        match original {
+            Some(value) => unsafe {
+                env::set_var("SSH_AUTH_SOCK", value);
+            },
+            None => unsafe {
+                env::remove_var("SSH_AUTH_SOCK");
+            },
+        }
     }
 
     #[test]

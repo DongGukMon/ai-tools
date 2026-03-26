@@ -62,7 +62,6 @@ const PATH_MARKER: &str = "__GROVE_PATH__";
 const ENV_MARKER: &str = "__GROVE_ENV__";
 const SHELL_ENV_KEYS: &[&str] = &[
     "PATH",
-    "SSH_AUTH_SOCK",
     "GH_TOKEN_SENDBIRD",
     "GH_TOKEN_SENDBIRD_PLAYGROUND",
     "GH_TOKEN_RICH_AUTOMATION",
@@ -343,7 +342,12 @@ pub fn preferred_env_var(key: &str) -> Option<String> {
 }
 
 pub fn preferred_ssh_auth_sock() -> Option<String> {
-    resolve_with(preferred_env_var("SSH_AUTH_SOCK"), cached_launchctl_ssh_auth_sock)
+    // Interactive shells can surface stale agent sockets. Keep SSH_AUTH_SOCK on the
+    // same trusted path as before the PR env work: process env first, then launchctl.
+    resolve_with(
+        normalize_env_value(env::var("SSH_AUTH_SOCK").ok()),
+        cached_launchctl_ssh_auth_sock,
+    )
 }
 
 pub fn subprocess_env_pairs() -> Vec<(String, String)> {
