@@ -100,6 +100,25 @@ Candidate parallel groups: N (based on file independence)
 
 This summary helps the operator understand the scope before entering the triage form.
 
+### Duplicate-thread clustering
+
+Before rendering the webform, detect near-duplicate unresolved threads.
+
+Cluster threads when any of the following are true:
+- Same file and same line
+- Same file and materially identical problem statement
+- Different reviewers raising the same underlying issue
+
+Keep original threads for traceability, but surface the cluster in the summary:
+
+```
+Duplicate clusters:
+- Cluster A: issues #2, #6, #8 → typing indicator effect dependencies
+- Cluster B: issues #4, #5, #7 → scroll reconciliation / starvation
+```
+
+In the form, keep per-thread controls, but note the cluster so the operator can intentionally give one instruction across duplicates.
+
 ## Phase 4: Webform Triage
 
 Generate a webform schema dynamically from the normalized issues. The form mixes read-only context with per-issue inputs.
@@ -125,19 +144,24 @@ issue2_auto_resolve cb "Auto comment+resolve"
 
 ### Webform execution (Codex)
 
-Run webform as a background process. Capture stderr and stdout separately — never mix the streams:
+Run `webform` as a synchronous blocking interactive checkpoint. The command blocks until the user submits, cancels, or the form times out — then returns the result JSON to stdout.
 
 ```bash
-webform <<'SCHEMA' > /tmp/pr-triage-result.json 2>/tmp/pr-triage-url.txt &
+URL_PATH=$(mktemp /tmp/pr-triage-url.XXXXXX)
+
+webform <<'SCHEMA' 2> "$URL_PATH"
 <generated schema>
 SCHEMA
-WEBFORM_PID=$!
 ```
 
-- `stderr` contains the localhost URL line — if the browser does not open automatically, surface this URL to the user
-- `stdout` contains the final JSON result after the user submits or cancels
-- Wait for the background process: `wait $WEBFORM_PID`
-- Read the result: `cat /tmp/pr-triage-result.json`
+Execution flow:
+1. `webform` starts a local server and emits the URL to `stderr` (captured in `$URL_PATH`)
+2. Browser auto-open is best-effort — always read and surface the URL from `$URL_PATH` so the operator can open it manually if needed
+3. The command blocks until the operator submits or cancels in the browser
+4. On completion, the result JSON is written to `stdout`
+5. Parse the JSON and continue only when `status == "submitted"`
+
+### Status handling
 
 Handle all terminal statuses from the JSON result:
 - `"submitted"` — continue to Phase 5
@@ -156,7 +180,13 @@ For each issue, classify the operator's instruction:
 | Empty / blank | **Skip** — no action taken on this issue |
 | Explanatory / conversational (e.g., "this is intentional because...", "already handled in...") | **Reply-only** — master posts the instruction text as a comment directly, no code change |
 | Code-change verbs (e.g., "fix", "refactor", "add", "remove", "update") | **Fix task** — dispatched via `$whip-start` |
-| Ambiguous / unclear | **Clarify** — surface back to operator: "Issue #N instruction is unclear: '<text>'. Please clarify: fix, reply, or skip?" |
+| Ambiguous / unclear (e.g., `test`, `check`, `hmm`, `?`, `maybe`, short placeholders) | **Invalid** — stop before plan generation and request clarification |
+
+If any instruction is ambiguous or invalid, stop before plan generation and return a compact clarification request:
+
+> "Issue #N instruction is ambiguous: '<text>'. Please clarify as one of: `fix` (code change), `reply` (comment only), `skip` (no action)."
+
+Do not guess intent. Resolve all ambiguous instructions before proceeding.
 
 If all issues are skipped, report "No action taken — all issues skipped." and exit.
 
@@ -276,7 +306,7 @@ Dispatch via `$whip-start` Solo Flow or Team Flow based on the dispatch mode sel
 After each task completes successfully, for each source thread in that task where `auto_resolve=true`:
 
 1. **Stale check #2**: Re-fetch the thread status. If already resolved, skip.
-2. **Comment**: Post a comment on the thread summarizing what was done (e.g., "Fixed in commit <sha>: <brief description>").
+2. **Comment**: Post a comment on the thread summarizing what was done (e.g., "Fixed in commit <short-sha>: <brief description>"). Use the language that the review conversation is in (e.g., if the reviewer wrote in Korean, reply in Korean). Use 7-character short SHA for commit hashes so GitHub auto-links them correctly.
 3. **Resolve**: Resolve the thread.
 
 Use the same GraphQL mutations described in Phase 5 reply-only handling.
@@ -307,3 +337,7 @@ After all tasks complete:
 - **Webform cancelled or timed out**: Report "triage cancelled" and exit
 - **Thread resolved between collection and dispatch (stale)**: Stale check #1 drops it from the plan; stale check #2 skips auto-resolve
 - **Ambiguous instruction text**: Surface back to operator for clarification before proceeding
+- **Webform launched but browser did not open**: Surface the URL from stderr and continue
+- **Webform URL emitted but process exited early**: Invalidate that URL and re-launch
+- **Submitted JSON exists but instructions are unclassifiable**: Request clarification and stop
+- **Duplicate threads across reviewers**: Preserve separate thread IDs, but allow shared handling through clustering

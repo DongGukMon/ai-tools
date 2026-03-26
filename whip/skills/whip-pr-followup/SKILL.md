@@ -260,7 +260,7 @@ Dispatch via `/whip-start` Solo Flow or Team Flow based on the dispatch mode sel
 After each task completes successfully, for each source thread in that task where `auto_resolve=true`:
 
 1. **Stale check #2**: Re-fetch the thread status. If already resolved, skip.
-2. **Comment**: Post a comment on the thread summarizing what was done (e.g., "Fixed in commit <sha>: <brief description>").
+2. **Comment**: Post a comment on the thread summarizing what was done (e.g., "Fixed in commit <short-sha>: <brief description>"). Use the language that the review conversation is in (e.g., if the reviewer wrote in Korean, reply in Korean). Use 7-character short SHA for commit hashes so GitHub auto-links them correctly.
 3. **Resolve**: Resolve the thread.
 
 Use the same GraphQL mutations described in Phase 5 reply-only handling.
