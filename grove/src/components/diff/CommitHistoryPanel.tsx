@@ -1,14 +1,14 @@
 import { useCallback } from "react";
-import { useProjectStore } from "../../store/project";
 import { useDiff } from "../../hooks/useDiff";
+import { useResolvedSidebarSelection } from "../../hooks/useResolvedSidebarSelection";
 import { useTabStore } from "../../store/tab";
 import { cn } from "../../lib/cn";
 import CommitList from "./CommitList";
 import type { CommitInfo } from "../../types";
 
 export default function CommitHistoryPanel() {
-  const selectedWorktree = useProjectStore((s) => s.selectedWorktree);
-  const store = useDiff(selectedWorktree?.path ?? null);
+  const { worktreePath } = useResolvedSidebarSelection();
+  const store = useDiff(worktreePath);
   const addTab = useTabStore((s) => s.addTab);
 
   const handleSelectView = useCallback(
@@ -19,7 +19,7 @@ export default function CommitHistoryPanel() {
     [store.selectView, addTab],
   );
 
-  if (!selectedWorktree) {
+  if (!worktreePath) {
     return (
       <div className={cn("flex items-center justify-center h-full bg-sidebar")}>
         <span className={cn("text-sm text-muted-foreground")}>

@@ -7,7 +7,7 @@ import {
   selectActiveTabIdForWorktree,
   selectTabsForWorktree,
 } from "../../store/tab";
-import { useProjectStore } from "../../store/project";
+import { useResolvedSidebarSelection } from "../../hooks/useResolvedSidebarSelection";
 import type { AppTabType } from "../../types";
 
 const ADD_TAB_OPTIONS: { type: Exclude<AppTabType, "terminal" | "changes">; label: string; icon: typeof Globe }[] = [
@@ -15,10 +15,10 @@ const ADD_TAB_OPTIONS: { type: Exclude<AppTabType, "terminal" | "changes">; labe
 ];
 
 function AppTabBar() {
-  const selectedWorktreePath = useProjectStore((s) => s.selectedWorktree?.path ?? null);
-  const tabs = useTabStore((state) => selectTabsForWorktree(state, selectedWorktreePath));
+  const { worktreePath } = useResolvedSidebarSelection();
+  const tabs = useTabStore((state) => selectTabsForWorktree(state, worktreePath));
   const activeTabId = useTabStore((state) =>
-    selectActiveTabIdForWorktree(state, selectedWorktreePath),
+    selectActiveTabIdForWorktree(state, worktreePath),
   );
   const setActiveTab = useTabStore((s) => s.setActiveTab);
   const closeTab = useTabStore((s) => s.closeTab);

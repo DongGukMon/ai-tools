@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useProjectStore } from "../../store/project";
 import { useDiffStore } from "../../store/diff";
 import { useDiff } from "../../hooks/useDiff";
+import { useResolvedSidebarSelection } from "../../hooks/useResolvedSidebarSelection";
 import { usePanelLayoutStore } from "../../store/panel-layout";
 import { cn } from "../../lib/cn";
 import { runCommandSafely } from "../../lib/command";
@@ -403,10 +403,10 @@ function CommitChangesView({
 // ── ChangesPanel ──
 
 export default function ChangesPanel() {
-  const selectedWorktree = useProjectStore((s) => s.selectedWorktree);
-  const store = useDiff(selectedWorktree?.path ?? null);
+  const { worktreePath } = useResolvedSidebarSelection();
+  const store = useDiff(worktreePath);
 
-  if (!selectedWorktree) {
+  if (!worktreePath) {
     return (
       <div
         className={cn(

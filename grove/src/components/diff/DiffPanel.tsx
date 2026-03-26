@@ -1,5 +1,5 @@
-import { useProjectStore } from "../../store/project";
 import { useDiff } from "../../hooks/useDiff";
+import { useResolvedSidebarSelection } from "../../hooks/useResolvedSidebarSelection";
 import { usePanelLayoutStore } from "../../store/panel-layout";
 import type { FileStatus } from "../../types";
 import { cn } from "../../lib/cn";
@@ -9,8 +9,8 @@ import FileList from "./FileList";
 import DiffViewer from "./DiffViewer";
 
 export default function DiffPanel() {
-  const selectedWorktree = useProjectStore((s) => s.selectedWorktree);
-  const store = useDiff(selectedWorktree?.path ?? null);
+  const { worktreePath } = useResolvedSidebarSelection();
+  const store = useDiff(worktreePath);
   const diffSizes = usePanelLayoutStore((s) => s.diff);
   const updateDiff = usePanelLayoutStore((s) => s.updateDiff);
   const viewerDiffs =
@@ -18,7 +18,7 @@ export default function DiffPanel() {
       ? (store.currentDiff ? [store.currentDiff] : [])
       : (store.currentDiff ? [store.currentDiff] : store.commitDiffs);
 
-  if (!selectedWorktree) {
+  if (!worktreePath) {
     return (
       <div className={cn("flex items-center justify-center h-full bg-sidebar")}>
         <span className={cn("text-sm text-muted-foreground")}>

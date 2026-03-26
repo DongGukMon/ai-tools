@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Globe } from "lucide-react";
 import { useTabStore, selectActiveTabIdForWorktree } from "../../store/tab";
-import { useProjectStore } from "../../store/project";
 import { useTerminalStore } from "../../store/terminal";
 import { usePanelLayoutStore } from "../../store/panel-layout";
 import { useBroadcastStore } from "../../store/broadcast";
 import { useGlobalTerminal } from "../../hooks/useGlobalTerminal";
+import { useResolvedSidebarSelection } from "../../hooks/useResolvedSidebarSelection";
 import {
   acquireTerminalRuntime,
   getRuntimeSize,
@@ -46,15 +46,15 @@ function findPaneIdForPty(ptyId: string): string | null {
 }
 
 function AppTabContent() {
-  const selectedWorktreePath = useProjectStore((s) => s.selectedWorktree?.path ?? null);
+  const { worktreePath } = useResolvedSidebarSelection();
   const setActiveWorktree = useTabStore((s) => s.setActiveWorktree);
 
   useEffect(() => {
-    setActiveWorktree(selectedWorktreePath);
-  }, [selectedWorktreePath, setActiveWorktree]);
+    setActiveWorktree(worktreePath);
+  }, [worktreePath, setActiveWorktree]);
 
   const activeTabId = useTabStore((state) =>
-    selectActiveTabIdForWorktree(state, selectedWorktreePath),
+    selectActiveTabIdForWorktree(state, worktreePath),
   );
   const isTerminal = activeTabId === "terminal";
   const isChanges = activeTabId === "changes";
@@ -63,7 +63,7 @@ function AppTabContent() {
   const focusedPtyId = useTerminalStore((s) => s.focusedPtyId);
   const pips = useBroadcastStore((s) => s.pips);
   const pip = useBroadcastStore((s) =>
-    selectedWorktreePath ? (s.pips[selectedWorktreePath] ?? null) : null,
+    worktreePath ? (s.pips[worktreePath] ?? null) : null,
   );
   const isFocusedPtyMirroring = useBroadcastStore((s) =>
     focusedPtyId ? Boolean(s.mirrors[focusedPtyId]) : false,
@@ -87,8 +87,8 @@ function AppTabContent() {
   );
   const attachedPipSessionRef = useRef<{ worktreePath: string; sessionKey: string } | null>(null);
 
-  const pipDismissed = selectedWorktreePath
-    ? (pipDismissedByWorktree[selectedWorktreePath] ?? true)
+  const pipDismissed = worktreePath
+    ? (pipDismissedByWorktree[worktreePath] ?? true)
     : true;
 
   // PiP broadcast policy
@@ -98,12 +98,12 @@ function AppTabContent() {
 
     if (isTerminal) {
       // Returning to Terminal tab — stop PiP broadcast if active
-      if (selectedWorktreePath && pip) {
-        const ended = stopPip(selectedWorktreePath);
+      if (worktreePath && pip) {
+        const ended = stopPip(worktreePath);
         restoreBroadcastSessionSize(ended);
       }
     } else if (
-      selectedWorktreePath &&
+      worktreePath &&
       shouldStartPipBroadcast({
         isTerminal,
         wasTerminal,
@@ -120,7 +120,7 @@ function AppTabContent() {
       if (paneId) {
         const { cols, rows } = getRuntimeSize(paneId);
         const snapshot = captureRuntimeSnapshot(paneId);
-        startPip(selectedWorktreePath, ptyId, paneId, cols, rows, snapshot);
+        startPip(worktreePath, ptyId, paneId, cols, rows, snapshot);
       }
     }
   }, [
@@ -128,14 +128,14 @@ function AppTabContent() {
     isTerminal,
     focusedPtyId,
     pip,
-    selectedWorktreePath,
+    worktreePath,
     startPip,
     stopPip,
   ]);
 
   const hasPipBroadcast =
     !isTerminal &&
-    !!selectedWorktreePath &&
+    !!worktreePath &&
     !!pip;
 
   useEffect(() => {
@@ -182,14 +182,14 @@ function AppTabContent() {
 
   useEffect(() => {
     const runtimeMap = pipRuntimeMapRef.current;
-    const activeSessionKey = pip && selectedWorktreePath
-      ? buildBroadcastSessionKey(selectedWorktreePath, pip)
+    const activeSessionKey = pip && worktreePath
+      ? buildBroadcastSessionKey(worktreePath, pip)
       : null;
     const attachedSession = attachedPipSessionRef.current;
     if (
       attachedSession &&
-      (!selectedWorktreePath ||
-        attachedSession.worktreePath !== selectedWorktreePath ||
+      (!worktreePath ||
+        attachedSession.worktreePath !== worktreePath ||
         !hasPipBroadcast ||
         attachedSession.sessionKey !== activeSessionKey)
     ) {
@@ -197,23 +197,23 @@ function AppTabContent() {
       attachedPipSessionRef.current = null;
     }
 
-    if (!hasPipBroadcast || !pip || !selectedWorktreePath) {
+    if (!hasPipBroadcast || !pip || !worktreePath) {
       return;
     }
 
     const container = pipContainerRef.current;
-    const entry = runtimeMap.get(selectedWorktreePath);
+    const entry = runtimeMap.get(worktreePath);
     if (!container || !entry) {
       return;
     }
 
     entry.runtime.attach(container);
     attachedPipSessionRef.current = {
-      worktreePath: selectedWorktreePath,
+      worktreePath,
       sessionKey: activeSessionKey ?? entry.sessionKey,
     };
     requestTerminalLayoutSync({ paneId: entry.paneId, source: "attach" });
-  }, [hasPipBroadcast, pip?.paneId, pip?.ptyId, selectedWorktreePath]);
+  }, [hasPipBroadcast, pip?.paneId, pip?.ptyId, worktreePath]);
 
   useEffect(() => () => {
     for (const { runtime } of pipRuntimeMapRef.current.values()) {
@@ -251,11 +251,11 @@ function AppTabContent() {
 
   useEffect(() => {
     requestTerminalLayoutSync({ source: "tabSwitch" });
-  }, [activeTabId, selectedWorktreePath]);
+  }, [activeTabId, worktreePath]);
 
   useEffect(() => {
     requestTerminalLayoutSync({ source: "broadcast" });
-  }, [hasPipBroadcast, pip?.paneId, pip?.ptyId, selectedWorktreePath]);
+  }, [hasPipBroadcast, pip?.paneId, pip?.ptyId, worktreePath]);
 
   useEffect(() => {
     requestTerminalLayoutSync({ source: "globalTerminal" });
@@ -276,27 +276,27 @@ function AppTabContent() {
   const setActiveTab = useTabStore((s) => s.setActiveTab);
 
   const handlePipDismiss = useCallback(() => {
-    if (!selectedWorktreePath) {
+    if (!worktreePath) {
       return;
     }
     setPipDismissedByWorktree((state) => ({
       ...state,
-      [selectedWorktreePath]: true,
+      [worktreePath]: true,
     }));
-  }, [selectedWorktreePath]);
+  }, [worktreePath]);
 
   const handlePipRestore = useCallback(() => {
-    if (!selectedWorktreePath) {
+    if (!worktreePath) {
       return;
     }
     setPipDismissedByWorktree((state) => ({
       ...state,
-      [selectedWorktreePath]: false,
+      [worktreePath]: false,
     }));
-  }, [selectedWorktreePath]);
+  }, [worktreePath]);
 
-  const activePipKey = pip && selectedWorktreePath
-    ? buildBroadcastSessionKey(selectedWorktreePath, pip)
+  const activePipKey = pip && worktreePath
+    ? buildBroadcastSessionKey(worktreePath, pip)
     : null;
 
   const pipElement = hasPipBroadcast && (
