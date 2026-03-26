@@ -2,13 +2,14 @@ import { useState } from "react";
 import { GitBranch, Loader2, X } from "lucide-react";
 import type { Worktree } from "../../types";
 import { useProjectStore } from "../../store/project";
-import { useTabStore } from "../../store/tab";
 import type { AiSession, AiTool } from "../../store/terminal";
 import { useToast } from "../../store/toast";
 import { overlay } from "../../lib/overlay";
 import { cn } from "../../lib/cn";
 import claudeCodeColor from "../../assets/claudecode-color.png";
 import codexColor from "../../assets/codex-color.png";
+import { useSidebarLeafActivation } from "../../hooks/useSidebarLeafActivation";
+import SidebarLeafItem from "./SidebarLeafItem";
 import {
   useAiWorktreeSessions,
   useWorktreeBell,
@@ -65,6 +66,11 @@ function WorktreeItem({ worktree, projectId }: Props) {
   const hasBell = useWorktreeBell(worktree.path);
   const aiSessions = useAiWorktreeSessions(worktree.path);
   const displayName = worktree.branch || worktree.name;
+  const handleActivate = useSidebarLeafActivation({
+    disabled: removing,
+    isSelected,
+    onSelect: () => selectWorktree(worktree),
+  });
 
   const handleRemoveClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -93,31 +99,19 @@ function WorktreeItem({ worktree, projectId }: Props) {
   };
 
   return (
-    <div
-      className={cn(
-        "group flex w-full items-center gap-2 rounded-md px-2 py-1 text-[13px] transition-all duration-150 cursor-pointer select-none",
-        {
-          "pointer-events-none opacity-50": removing,
-          "bg-selected text-foreground": isSelected && !removing,
-          "text-muted-foreground hover:bg-secondary/50 hover:text-foreground": !isSelected && !removing,
-        },
+    <SidebarLeafItem
+      icon={(
+        <GitBranch className={cn("h-[13px] w-[13px] shrink-0", {
+          "text-orange-500": hasBell,
+        })} />
       )}
-      onClick={() => {
-        if (removing) return;
-        if (isSelected) {
-          useTabStore.getState().setActiveTab("terminal");
-        } else {
-          selectWorktree(worktree);
-        }
-      }}
+      label={displayName}
       title={worktree.path}
-    >
-      <GitBranch className={cn("h-[13px] w-[13px] shrink-0", {
-        "text-orange-500": hasBell,
-      })} />
-      <span className={cn("min-w-0 flex-1 truncate")}>{displayName}</span>
-      <AiStatusIcons sessions={aiSessions} />
-      {removing ? (
+      isSelected={isSelected}
+      disabled={removing}
+      onActivate={handleActivate}
+      status={<AiStatusIcons sessions={aiSessions} />}
+      action={removing ? (
         <Loader2 className={cn("h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground")} />
       ) : (
         <button
@@ -134,7 +128,7 @@ function WorktreeItem({ worktree, projectId }: Props) {
           <X className={cn("h-3 w-3")} />
         </button>
       )}
-    </div>
+    />
   );
 }
 

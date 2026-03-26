@@ -4,7 +4,9 @@ import type { Project } from "../../types";
 import { useProjectStore } from "../../store/project";
 import { useToast } from "../../store/toast";
 import { cn } from "../../lib/cn";
+import { useSidebarLeafActivation } from "../../hooks/useSidebarLeafActivation";
 import { AiStatusIcons } from "./WorktreeItem";
+import SidebarLeafItem from "./SidebarLeafItem";
 import { useAiWorktreeSessions, useWorktreeBell } from "./worktree-status";
 
 interface Props {
@@ -25,6 +27,11 @@ function DefaultBranchItem({ project }: Props) {
   const isSelected = selectedWorktree?.path === project.sourcePath;
   const hasBell = useWorktreeBell(project.sourcePath);
   const aiSessions = useAiWorktreeSessions(project.sourcePath);
+  const handleActivate = useSidebarLeafActivation({
+    disabled: refreshing,
+    isSelected,
+    onSelect: () => selectWorktree(sourceWorktree),
+  });
 
   const handleRefresh = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -40,25 +47,19 @@ function DefaultBranchItem({ project }: Props) {
   };
 
   return (
-    <div
-      className={cn(
-        "group flex w-full items-center gap-2 rounded-md px-2 py-1 text-[13px] transition-all duration-150 cursor-pointer select-none",
-        {
-          "pointer-events-none opacity-50": refreshing,
-          "bg-selected text-foreground": isSelected && !refreshing,
-          "text-muted-foreground hover:bg-secondary/50 hover:text-foreground":
-            !isSelected && !refreshing,
-        },
+    <SidebarLeafItem
+      icon={(
+        <GitBranch className={cn("h-[13px] w-[13px] shrink-0", {
+          "text-orange-500": hasBell,
+        })} />
       )}
-      onClick={() => !refreshing && selectWorktree(sourceWorktree)}
+      label="main"
       title={project.sourcePath}
-    >
-      <GitBranch className={cn("h-[13px] w-[13px] shrink-0", {
-        "text-orange-500": hasBell,
-      })} />
-      <span className={cn("min-w-0 flex-1 truncate")}>main</span>
-      <AiStatusIcons sessions={aiSessions} />
-      {refreshing ? (
+      isSelected={isSelected}
+      disabled={refreshing}
+      onActivate={handleActivate}
+      status={<AiStatusIcons sessions={aiSessions} />}
+      action={refreshing ? (
         <Loader2 className={cn("h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground")} />
       ) : (
         <button
@@ -89,7 +90,7 @@ function DefaultBranchItem({ project }: Props) {
           <RotateCw className={cn("h-3 w-3")} />
         </button>
       )}
-    </div>
+    />
   );
 }
 

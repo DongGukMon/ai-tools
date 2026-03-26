@@ -5,6 +5,8 @@ import { useProjectStore } from "../../store/project";
 import { useTerminalStore } from "../../store/terminal";
 import { cn } from "../../lib/cn";
 import { overlay } from "../../lib/overlay";
+import { useSidebarLeafActivation } from "../../hooks/useSidebarLeafActivation";
+import SidebarLeafItem from "./SidebarLeafItem";
 
 interface Props {
   missionId: string;
@@ -32,12 +34,14 @@ function MissionProjectItem({ missionId, project }: Props) {
     ? `${projectData.org}/${projectData.repo}`
     : project.branch;
   const disabled = deletingMission || deletingProject;
-
-  const handleClick = () => {
-    if (disabled) return;
-    selectItem(missionId, project.projectId);
-    useTerminalStore.getState().setActiveWorktree(project.path);
-  };
+  const handleActivate = useSidebarLeafActivation({
+    disabled,
+    isSelected,
+    onSelect: () => {
+      selectItem(missionId, project.projectId);
+      useTerminalStore.getState().setActiveWorktree(project.path);
+    },
+  });
 
   const handleRemove = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -53,22 +57,14 @@ function MissionProjectItem({ missionId, project }: Props) {
   };
 
   return (
-    <div
-      className={cn(
-        "group flex w-full items-center gap-2 rounded-md px-2 py-1 text-[13px] transition-all duration-150 cursor-pointer select-none",
-        {
-          "bg-selected text-foreground": isSelected && !disabled,
-          "text-muted-foreground hover:bg-secondary/50 hover:text-foreground":
-            !isSelected && !disabled,
-          "pointer-events-none opacity-50": disabled,
-        },
-      )}
-      onClick={handleClick}
+    <SidebarLeafItem
+      icon={<FolderGit2 className={cn("h-[13px] w-[13px] shrink-0")} />}
+      label={displayName}
       title={project.path}
-    >
-      <FolderGit2 className={cn("h-[13px] w-[13px] shrink-0")} />
-      <span className={cn("min-w-0 flex-1 truncate")}>{displayName}</span>
-      {deletingProject ? (
+      isSelected={isSelected}
+      disabled={disabled}
+      onActivate={handleActivate}
+      action={deletingProject ? (
         <Loader2 className={cn("h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground")} />
       ) : (
         <button
@@ -85,7 +81,7 @@ function MissionProjectItem({ missionId, project }: Props) {
           <X className={cn("h-3 w-3")} />
         </button>
       )}
-    </div>
+    />
   );
 }
 
