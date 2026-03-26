@@ -28,6 +28,8 @@ export default function EnvSyncDialog({ projectId, resolve, close }: Props) {
         if (config) {
           setEnabled(config.enabled);
           setExcludeText(config.exclude_patterns.join("\n"));
+        } else {
+          setExcludeText("node_modules");
         }
       } catch (err) {
         if (!cancelled) setError(getCommandErrorMessage(err));
@@ -92,7 +94,7 @@ export default function EnvSyncDialog({ projectId, resolve, close }: Props) {
                   "w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground",
                   "placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-ring",
                 )}
-                placeholder={"SECRET_*\nAWS_*"}
+                placeholder={"node_modules\n.idea"}
               />
             </div>
             {error && (

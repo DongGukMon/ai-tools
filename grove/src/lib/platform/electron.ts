@@ -10,6 +10,7 @@ import type {
   FileStatus,
   CommitInfo,
   FileDiff,
+  EnvSyncConfig,
 } from "../../types";
 import type { Platform, UnlistenFn } from "./types";
 
@@ -267,6 +268,16 @@ export async function openExternal(url: string): Promise<void> {
 
 export async function revealInFinder(path: string): Promise<void> {
   return platform.invoke("reveal_in_finder", { path });
+}
+
+// === ENV SYNC COMMANDS ===
+
+export async function setEnvSync(_projectId: string, _config: EnvSyncConfig): Promise<void> {
+  throw new Error("Not implemented");
+}
+
+export async function getEnvSync(_projectId: string): Promise<EnvSyncConfig | null> {
+  throw new Error("Not implemented");
 }
 
 // === PTY COMMANDS (W3) ===
