@@ -32,6 +32,7 @@ pub struct Project {
     pub source_has_changes: bool,
     pub source_behind_remote: bool,
     pub base_branch: Option<String>,
+    pub resolved_default_branch: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
