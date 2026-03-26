@@ -9,6 +9,7 @@ interface MissionState {
   selectedItem: { missionId: string; projectId?: string } | null;
   collapsedMissions: Record<string, boolean>;
   deletingMissions: Record<string, boolean>;
+  deletingMissionProjects: Record<string, boolean>;
   loading: boolean;
 
   loadMissions: () => Promise<void>;
@@ -26,6 +27,7 @@ export const useMissionStore = create<MissionState>((set, get) => ({
   selectedItem: null,
   collapsedMissions: {},
   deletingMissions: {},
+  deletingMissionProjects: {},
   loading: false,
 
   loadMissions: async () => {
@@ -51,9 +53,17 @@ export const useMissionStore = create<MissionState>((set, get) => ({
   },
 
   deleteMission: async (id: string) => {
-    set((state) => ({
-      deletingMissions: { ...state.deletingMissions, [id]: true },
-    }));
+      set((state) => ({
+        deletingMissions: { ...state.deletingMissions, [id]: true },
+        deletingMissionProjects: {
+          ...state.deletingMissionProjects,
+          ...Object.fromEntries(
+            (state.missions.find((mission) => mission.id === id)?.projects ?? []).map(
+              (project) => [`${id}:${project.projectId}`, true],
+            ),
+          ),
+        },
+      }));
 
     try {
       const mission = get().missions.find((m) => m.id === id);
@@ -70,19 +80,33 @@ export const useMissionStore = create<MissionState>((set, get) => ({
       set((state) => {
         const { [id]: _, ...remainingDeleting } = state.deletingMissions;
         const { [id]: __, ...remainingCollapsed } = state.collapsedMissions;
+        const remainingDeletingProjects = Object.fromEntries(
+          Object.entries(state.deletingMissionProjects).filter(
+            ([key]) => !key.startsWith(`${id}:`),
+          ),
+        );
         const nextSelected =
           state.selectedItem?.missionId === id ? null : state.selectedItem;
         return {
           missions: state.missions.filter((m) => m.id !== id),
           selectedItem: nextSelected,
           deletingMissions: remainingDeleting,
+          deletingMissionProjects: remainingDeletingProjects,
           collapsedMissions: remainingCollapsed,
         };
       });
     } catch (error) {
       set((state) => {
         const { [id]: _, ...remainingDeleting } = state.deletingMissions;
-        return { deletingMissions: remainingDeleting };
+        const remainingDeletingProjects = Object.fromEntries(
+          Object.entries(state.deletingMissionProjects).filter(
+            ([key]) => !key.startsWith(`${id}:`),
+          ),
+        );
+        return {
+          deletingMissions: remainingDeleting,
+          deletingMissionProjects: remainingDeletingProjects,
+        };
       });
       throw error;
     }
@@ -103,40 +127,67 @@ export const useMissionStore = create<MissionState>((set, get) => ({
   },
 
   removeProject: async (missionId: string, projectId: string) => {
+    const deletionKey = `${missionId}:${projectId}`;
     const mission = get().missions.find((m) => m.id === missionId);
     const removedProject = mission?.projects.find(
       (p) => p.projectId === projectId,
     );
+    const wasSelected =
+      get().selectedItem?.missionId === missionId &&
+      get().selectedItem?.projectId === projectId;
+    const nextActiveWorktree = wasSelected
+      ? (mission?.missionDir ?? null)
+      : null;
 
-    if (removedProject) {
-      useTerminalStore.getState().removeSession(removedProject.path);
-    }
+    set((state) => ({
+      deletingMissionProjects: {
+        ...state.deletingMissionProjects,
+        [deletionKey]: true,
+      },
+    }));
 
-    await runCommand(
-      () => tauri.removeProjectFromMission(missionId, projectId),
-      { errorToast: "Failed to remove project from mission" },
-    );
+    try {
+      if (removedProject) {
+        useTerminalStore
+          .getState()
+          .removeSession(removedProject.path, nextActiveWorktree);
+      }
 
-    set((state) => {
-      const nextMissions = state.missions.map((m) =>
-        m.id === missionId
-          ? { ...m, projects: m.projects.filter((p) => p.projectId !== projectId) }
-          : m,
+      await runCommand(
+        () => tauri.removeProjectFromMission(missionId, projectId),
+        { errorToast: "Failed to remove project from mission" },
       );
 
-      // Fall back selection to mission dir if removed project was selected
-      const wasSelected =
-        state.selectedItem?.missionId === missionId &&
-        state.selectedItem?.projectId === projectId;
-      const nextSelected = wasSelected
-        ? { missionId }
-        : state.selectedItem;
+      set((state) => {
+        const nextMissions = state.missions.map((m) =>
+          m.id === missionId
+            ? { ...m, projects: m.projects.filter((p) => p.projectId !== projectId) }
+            : m,
+        );
 
-      return {
-        missions: nextMissions,
-        selectedItem: nextSelected,
-      };
-    });
+        const shouldFallbackSelection =
+          state.selectedItem?.missionId === missionId &&
+          state.selectedItem?.projectId === projectId;
+        const nextSelected = shouldFallbackSelection
+          ? { missionId }
+          : state.selectedItem;
+        const { [deletionKey]: _, ...remainingDeletingProjects } =
+          state.deletingMissionProjects;
+
+        return {
+          missions: nextMissions,
+          selectedItem: nextSelected,
+          deletingMissionProjects: remainingDeletingProjects,
+        };
+      });
+    } catch (error) {
+      set((state) => {
+        const { [deletionKey]: _, ...remainingDeletingProjects } =
+          state.deletingMissionProjects;
+        return { deletingMissionProjects: remainingDeletingProjects };
+      });
+      throw error;
+    }
   },
 
   selectItem: (missionId: string, projectId?: string) => {

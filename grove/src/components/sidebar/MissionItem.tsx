@@ -38,17 +38,20 @@ function MissionItem({ mission }: Props) {
     selectedItem?.missionId === mission.id && !selectedItem?.projectId;
 
   const handleSelectMission = () => {
+    if (deleting) return;
     selectItem(mission.id);
     useTerminalStore.getState().setActiveWorktree(mission.missionDir);
   };
 
   const handleToggleCollapse = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (deleting) return;
     toggleCollapse(mission.id);
   };
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (deleting) return;
     const confirmed = await overlay.confirm({
       title: "Delete mission?",
       description: `Delete mission "${mission.name}"? This will remove all project associations.`,
@@ -101,6 +104,7 @@ function MissionItem({ mission }: Props) {
           <IconButton
             onClick={(e) => {
               e.stopPropagation();
+              if (deleting) return;
               setShowAddProject(!showAddProject);
             }}
             title="Add project"
@@ -138,7 +142,7 @@ function MissionItem({ mission }: Props) {
                 project={project}
               />
             ))}
-            {showAddProject && (
+            {showAddProject && !deleting && (
               <AddProjectToMissionDialog
                 missionId={mission.id}
                 existingProjectIds={mission.projects.map((p) => p.projectId)}
