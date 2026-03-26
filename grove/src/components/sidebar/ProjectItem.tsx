@@ -4,6 +4,7 @@ import {
   Sprout,
   GitBranch,
   Pencil,
+  Settings,
 } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -11,6 +12,7 @@ import type { Project } from "../../types";
 import { useProjectStore } from "../../store/project";
 import { useToast } from "../../store/toast";
 import { overlay } from "../../lib/overlay";
+import EnvSyncDialog from "./EnvSyncDialog";
 import DefaultBranchItem from "./DefaultBranchItem";
 import WorktreeItem from "./WorktreeItem";
 import { IconButton } from "../ui/button";
@@ -80,6 +82,13 @@ const ProjectItem = memo(function ProjectItem({ project }: Props) {
       // Toasts are handled by the command layer.
     }
     setRenaming(false);
+  };
+
+  const handleEnvSyncSettings = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    overlay.open<boolean>(({ resolve, close }) => (
+      <EnvSyncDialog projectId={project.id} resolve={resolve} close={close} />
+    ));
   };
 
   const handleRemoveProject = async (e: React.MouseEvent) => {
@@ -158,6 +167,12 @@ const ProjectItem = memo(function ProjectItem({ project }: Props) {
             title="Rename project"
           >
             <Pencil className={cn("h-[13px] w-[13px]")} />
+          </IconButton>
+          <IconButton
+            onClick={handleEnvSyncSettings}
+            title="Env sync settings"
+          >
+            <Settings className={cn("h-[13px] w-[13px]")} />
           </IconButton>
           <IconButton
             onClick={handleRemoveProject}

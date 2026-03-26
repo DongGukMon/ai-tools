@@ -3,6 +3,7 @@ export type {
   Worktree,
   WorktreePullRequest,
   WorktreePullRequestStatus,
+  EnvSyncConfig,
 } from "./project";
 export type { Mission, MissionProject } from "./mission";
 export type {

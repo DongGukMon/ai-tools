@@ -25,3 +25,8 @@ export interface WorktreePullRequest {
   url: string;
   status: WorktreePullRequestStatus;
 }
+
+export interface EnvSyncConfig {
+  enabled: boolean;
+  exclude_patterns: string[];
+}
