@@ -1,9 +1,8 @@
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { TerminalSquare } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { useTerminalStore } from "../../store/terminal";
 import { useProjectStore } from "../../store/project";
-import { usePanelLayoutStore } from "../../store/panel-layout";
 import {
   getTerminalTheme,
   getAppConfig,
@@ -13,11 +12,8 @@ import {
 } from "../../lib/platform";
 import { runCommand } from "../../lib/command";
 import { useTerminal } from "../../hooks/useTerminal";
-import { useGlobalTerminal } from "../../hooks/useGlobalTerminal";
 import SplitContainer from "./SplitContainer";
 import TerminalToolbar from "./TerminalToolbar";
-import GlobalTerminalPanel from "./GlobalTerminalPanel";
-import { ResizablePanelGroup } from "../ui/resizable-panel-group";
 import { log, error as logError } from "../../lib/logger";
 import {
   buildTerminalPaneTopologySignature,
@@ -84,29 +80,8 @@ function TerminalPanel() {
   const setActiveWorktree = useTerminalStore((s) => s.setActiveWorktree);
   const updateAiStatus = useTerminalStore((s) => s.updateAiStatus);
   const selectedWorktreePath = useProjectStore((s) => s.selectedWorktree?.path ?? null);
-  const collapsed = usePanelLayoutStore((s) => s.globalTerminal.collapsed);
-  const ratio = usePanelLayoutStore((s) => s.globalTerminal.ratio);
-  const updateGlobalTerminal = usePanelLayoutStore((s) => s.updateGlobalTerminal);
   const { createTerminal } = useTerminal();
-  const {
-    tabs: globalTabs,
-    activeTabId: globalActiveTabId,
-    addTab: addGlobalTab,
-    removeTab: removeGlobalTab,
-    selectTab: selectGlobalTab,
-    getTabPtyId: getGlobalTabPtyId,
-    isTabReady: isGlobalTabReady,
-  } = useGlobalTerminal();
   const [error, setError] = useState<string | null>(null);
-
-  const handleRatioCommit = useCallback(
-    (ratios: number[]) => {
-      if (ratios.length === 2) {
-        updateGlobalTerminal({ ratio: ratios[1] });
-      }
-    },
-    [updateGlobalTerminal],
-  );
   const previousPaneTopologyRef = useRef(new Map<string, string>());
   const snapshotSaveTimersRef = useRef(
     new Map<string, ReturnType<typeof setTimeout>>(),
@@ -319,61 +294,24 @@ function TerminalPanel() {
     );
   }
 
-  const worktreeContent = (
-    <div className={cn("relative overflow-hidden h-full")}>
-      {!activeWorktree ? (
-        <div className={cn("flex flex-col items-center justify-center h-full gap-3")}>
-          <TerminalSquare className={cn("size-10 text-muted-foreground/50")} />
-          <span className={cn("text-sm text-muted-foreground")}>Select a worktree to open terminal</span>
-        </div>
-      ) : (
-        // Render ALL sessions, show/hide via CSS - preserves xterm state
-        worktreePaths.map((path) => (
-          <TerminalSessionView
-            key={path}
-            worktreePath={path}
-          />
-        ))
-      )}
-    </div>
-  );
-
-  const globalPanel = globalTabs.length > 0 ? (
-    <GlobalTerminalPanel
-      tabs={globalTabs}
-      activeTabId={globalActiveTabId}
-      getTabPtyId={getGlobalTabPtyId}
-      isTabReady={isGlobalTabReady}
-      onAdd={addGlobalTab}
-      onRemove={removeGlobalTab}
-      onSelect={selectGlobalTab}
-    />
-  ) : null;
-
   return (
     <div className={cn("flex flex-col h-full bg-background")}>
       <TerminalToolbar />
-      {collapsed ? (
-        <>
-          <div className={cn("flex-1 relative overflow-hidden")}>
-            {worktreeContent}
+      <div className={cn("flex-1 relative overflow-hidden")}>
+        {!activeWorktree ? (
+          <div className={cn("flex flex-col items-center justify-center h-full gap-3")}>
+            <TerminalSquare className={cn("size-10 text-muted-foreground/50")} />
+            <span className={cn("text-sm text-muted-foreground")}>Select a worktree to open terminal</span>
           </div>
-          {globalPanel}
-        </>
-      ) : (
-        <ResizablePanelGroup
-          vertical
-          ratios={[1 - ratio, ratio]}
-          onCommit={handleRatioCommit}
-        >
-          <ResizablePanelGroup.Pane>
-            {worktreeContent}
-          </ResizablePanelGroup.Pane>
-          <ResizablePanelGroup.Pane>
-            {globalPanel}
-          </ResizablePanelGroup.Pane>
-        </ResizablePanelGroup>
-      )}
+        ) : (
+          worktreePaths.map((path) => (
+            <TerminalSessionView
+              key={path}
+              worktreePath={path}
+            />
+          ))
+        )}
+      </div>
     </div>
   );
 }

@@ -16,6 +16,7 @@ function makeContext(
     openThemeSettings: vi.fn(),
     splitTerminal: vi.fn(),
     closeTerminal: vi.fn(),
+    mirrorTerminal: vi.fn(),
     sendText: vi.fn(),
     ...overrides,
   };
@@ -81,5 +82,21 @@ describe("terminal command pipeline", () => {
     await executeTerminalCommand(command, context);
 
     expect(context.openThemeSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it("routes mirror session steps through mirrorTerminal", async () => {
+    const context = makeContext();
+    const command: TerminalCommandDefinition = {
+      id: "terminal-mirror",
+      label: "Mirror to Global Terminal",
+      title: "Mirror to Global Terminal",
+      icon: "mirror",
+      when: "focused-pty",
+      steps: [{ type: "session", action: "mirror" }],
+    };
+
+    await executeTerminalCommand(command, context);
+
+    expect(context.mirrorTerminal).toHaveBeenCalledTimes(1);
   });
 });

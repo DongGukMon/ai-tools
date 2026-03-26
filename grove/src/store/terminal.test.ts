@@ -16,6 +16,19 @@ function makeLeaf(id: string, ptyId: string): SplitNode {
   };
 }
 
+function makeSplit(
+  id: string,
+  children: SplitNode[],
+  type: "horizontal" | "vertical" = "horizontal",
+): SplitNode {
+  return {
+    id,
+    type,
+    sizes: children.map(() => 1 / children.length),
+    children,
+  };
+}
+
 describe("useTerminalStore bell state", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -23,6 +36,7 @@ describe("useTerminalStore bell state", () => {
       sessions: {},
       activeWorktree: null,
       focusedPtyId: null,
+      focusedPaneIdByWorktree: {},
       bellPtyIds: new Set<string>(),
       aiSessions: {},
       theme: null,
@@ -131,5 +145,46 @@ describe("useTerminalStore bell state", () => {
       tool: "codex",
       status: "idle",
     });
+  });
+
+  it("restores the previously focused pane when switching back to a worktree", () => {
+    useTerminalStore.setState({
+      sessions: {
+        "/tmp/a": makeSplit("root-a", [
+          makeLeaf("pane-a-1", "pty-a-1"),
+          makeLeaf("pane-a-2", "pty-a-2"),
+        ]),
+        "/tmp/b": makeLeaf("pane-b-1", "pty-b-1"),
+      },
+    });
+
+    useTerminalStore.getState().setActiveWorktree("/tmp/a");
+    useTerminalStore.getState().setFocusedPtyId("pty-a-2");
+    useTerminalStore.getState().setActiveWorktree("/tmp/b");
+    useTerminalStore.getState().setActiveWorktree("/tmp/a");
+
+    expect(useTerminalStore.getState().focusedPtyId).toBe("pty-a-2");
+    expect(useTerminalStore.getState().focusedPaneIdByWorktree["/tmp/a"]).toBe("pane-a-2");
+  });
+
+  it("falls back to the first surviving pane when the remembered pane is removed", () => {
+    useTerminalStore.setState({
+      sessions: {
+        "/tmp/a": makeLeaf("pane-a-1", "pty-a-1"),
+        "/tmp/b": makeSplit("root-b", [
+          makeLeaf("pane-b-1", "pty-b-1"),
+          makeLeaf("pane-b-2", "pty-b-2"),
+        ]),
+      },
+    });
+
+    useTerminalStore.getState().setActiveWorktree("/tmp/b");
+    useTerminalStore.getState().setFocusedPtyId("pty-b-2");
+    useTerminalStore.getState().setActiveWorktree("/tmp/a");
+    useTerminalStore.getState().closeTerminal("/tmp/b", "pty-b-2");
+    useTerminalStore.getState().setActiveWorktree("/tmp/b");
+
+    expect(useTerminalStore.getState().focusedPtyId).toBe("pty-b-1");
+    expect(useTerminalStore.getState().focusedPaneIdByWorktree["/tmp/b"]).toBe("pane-b-1");
   });
 });

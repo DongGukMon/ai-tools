@@ -12,6 +12,7 @@ export type {
   DiffHunk,
   FileDiff,
 } from "./diff";
+export type { AppTab, AppTabType } from "./tab";
 
 export interface AppConfig {
   baseDir: string;

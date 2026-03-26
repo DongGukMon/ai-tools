@@ -62,7 +62,7 @@ function IconButton({
     <button
       className={cn(
         "inline-flex items-center justify-center rounded-md transition-colors",
-        "h-7 w-7 text-muted-foreground hover:bg-accent/10 hover:text-foreground",
+        "h-7 w-7 cursor-pointer text-muted-foreground hover:bg-accent/10 hover:text-foreground",
         "disabled:pointer-events-none disabled:opacity-50",
         className,
       )}

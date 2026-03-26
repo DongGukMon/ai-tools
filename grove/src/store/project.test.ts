@@ -22,6 +22,7 @@ vi.mock("../lib/platform", () => ({
 
 import * as tauri from "../lib/platform";
 import { useProjectStore } from "./project";
+import { useBroadcastStore } from "./broadcast";
 import { useTerminalStore } from "./terminal";
 
 function makeWorktree(name: string, branch = name): Worktree {
@@ -83,10 +84,15 @@ describe("useProjectStore", () => {
       sessions: {},
       activeWorktree: null,
       focusedPtyId: null,
+      focusedPaneIdByWorktree: {},
       bellPtyIds: new Set<string>(),
       aiSessions: {},
       theme: null,
       detectedTheme: null,
+    });
+    useBroadcastStore.setState({
+      mirrors: {},
+      pips: {},
     });
   });
 
@@ -182,6 +188,32 @@ describe("useProjectStore", () => {
     expect(useTerminalStore.getState().sessions[selectedWorktree.path]).toBeUndefined();
     expect(useTerminalStore.getState().activeWorktree).toBe("/tmp/source");
     expect(useTerminalStore.getState().focusedPtyId).toBe("pty-source");
+  });
+
+  it("clears broadcast state tied to a removed worktree", async () => {
+    const selectedWorktree = makeWorktree("feature-a");
+    useProjectStore.setState({
+      projects: [makeProject([selectedWorktree])],
+      selectedWorktree,
+      loading: false,
+    });
+    useTerminalStore.setState({
+      sessions: {
+        [selectedWorktree.path]: makeLeaf("pane-feature", "pty-feature"),
+      },
+      activeWorktree: selectedWorktree.path,
+      focusedPtyId: "pty-feature",
+    });
+    useBroadcastStore.getState().startMirror("pty-feature", "pane-feature", 120, 30);
+    useBroadcastStore
+      .getState()
+      .startPip(selectedWorktree.path, "pty-feature", "pane-feature", 80, 24);
+    vi.mocked(tauri.removeWorktree).mockResolvedValue();
+
+    await useProjectStore.getState().removeWorktree("project-1", "feature-a");
+
+    expect(useBroadcastStore.getState().mirrors["pty-feature"]).toBeUndefined();
+    expect(useBroadcastStore.getState().pips[selectedWorktree.path]).toBeUndefined();
   });
 
   it("keeps the current selection when removing a different worktree", async () => {

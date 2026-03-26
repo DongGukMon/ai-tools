@@ -1,5 +1,6 @@
 export type TerminalCommandIcon =
   | "settings"
+  | "mirror"
   | "split-horizontal"
   | "split-vertical"
   | "close"
@@ -18,6 +19,7 @@ export type TerminalCommandStep =
       direction: "horizontal" | "vertical";
     }
   | { type: "session"; action: "close" }
+  | { type: "session"; action: "mirror" }
   | {
       type: "pty";
       action: "send-text";
@@ -43,6 +45,7 @@ export interface TerminalCommandContext {
     direction: "horizontal" | "vertical",
   ) => Promise<void> | void;
   closeTerminal: () => Promise<void> | void;
+  mirrorTerminal: () => void;
   sendText: (
     text: string,
     options?: { addNewline?: boolean },
@@ -81,6 +84,8 @@ export async function executeTerminalCommand(
       case "session":
         if (step.action === "split") {
           await context.splitTerminal(step.direction);
+        } else if (step.action === "mirror") {
+          context.mirrorTerminal();
         } else {
           await context.closeTerminal();
         }

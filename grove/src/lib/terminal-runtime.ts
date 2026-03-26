@@ -3,6 +3,7 @@ import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal } from "@xterm/xterm";
 import type { TerminalTheme } from "../types";
+import { subscribeTerminalLayoutSync } from "./terminal-layout-sync";
 import { clearPtyScrollback, platform, resizePty, writePty } from "./platform";
 import {
   getMacShortcutSequence,
@@ -61,6 +62,7 @@ function toXtermTheme(theme: TerminalTheme | null) {
 const paneSeeds = new Map<string, TerminalPaneSeed>();
 const runtimes = new Map<string, TerminalPaneRuntime>();
 const activityListeners = new Set<(activity: TerminalPaneActivity) => void>();
+const LAYOUT_SYNC_RETRY_FRAMES = 3;
 const RUNTIME_RELEASE_GRACE_MS = 50;
 
 function emitTerminalPaneActivity(activity: TerminalPaneActivity) {
@@ -116,8 +118,47 @@ export function acquireTerminalRuntime(
   return runtime;
 }
 
+export function getRuntime(paneId: string) {
+  return runtimes.get(paneId) ?? null;
+}
+
+export function captureRuntimeSnapshot(paneId: string): string | null {
+  const runtime = runtimes.get(paneId);
+  if (!runtime?.term.element) return null;
+  const canvases = runtime.term.element.querySelectorAll("canvas");
+  if (canvases.length === 0) return null;
+  try {
+    const first = canvases[0] as HTMLCanvasElement;
+    const composite = document.createElement("canvas");
+    composite.width = first.width;
+    composite.height = first.height;
+    const ctx = composite.getContext("2d");
+    if (!ctx) return null;
+    // Composite all canvas layers (background + text + cursor)
+    for (const canvas of canvases) {
+      ctx.drawImage(canvas as HTMLCanvasElement, 0, 0);
+    }
+    return composite.toDataURL("image/png");
+  } catch {
+    return null;
+  }
+}
+
+export function getRuntimeSize(paneId: string): { cols: number; rows: number } {
+  const runtime = runtimes.get(paneId);
+  if (!runtime) return { cols: 80, rows: 24 };
+  return { cols: runtime.term.cols, rows: runtime.term.rows };
+}
+
 export function getTerminalPaneLaunchCwd(paneId: string): string | undefined {
   return runtimes.get(paneId)?.launchCwd ?? paneSeeds.get(paneId)?.launchCwd;
+}
+
+export function shouldDetachTerminalContainer(
+  currentContainer: HTMLDivElement | null,
+  ownerContainer?: HTMLDivElement | null,
+) {
+  return ownerContainer === undefined || currentContainer === ownerContainer;
 }
 
 class TerminalPaneRuntime {
@@ -151,6 +192,7 @@ class TerminalPaneRuntime {
   private onTrackpadMouseMoveCapture: ((event: MouseEvent) => void) | null = null;
   private onFocusIn: (() => void) | null = null;
   private ownerDocument: Document | null = null;
+  private readonly unlistenLayoutSync: () => void;
 
   private readonly unlistenPromise: Promise<() => void>;
   private readonly dataDisposable: { dispose(): void };
@@ -178,6 +220,14 @@ class TerminalPaneRuntime {
 
     this.fitAddon = new FitAddon();
     this.term.loadAddon(this.fitAddon);
+
+    this.unlistenLayoutSync = subscribeTerminalLayoutSync((request) => {
+      if (request.paneId && request.paneId !== this.paneId) {
+        return;
+      }
+
+      this.scheduleLayoutSync();
+    });
 
     const unicode11 = new Unicode11Addon();
     this.term.loadAddon(unicode11);
@@ -316,6 +366,8 @@ class TerminalPaneRuntime {
       this.term.options.fontFamily = theme.fontFamily;
       this.term.options.fontSize = theme.fontSize;
     }
+
+    this.scheduleLayoutSync();
   }
 
   setFocusHandler(handler: FocusHandler | null) {
@@ -345,12 +397,10 @@ class TerminalPaneRuntime {
         container.appendChild(this.term.element);
       }
     }
-
-    this.scheduleLayoutSync();
   }
 
-  detach() {
-    if (!this.container) {
+  detach(ownerContainer?: HTMLDivElement | null) {
+    if (!shouldDetachTerminalContainer(this.container, ownerContainer) || !this.container) {
       return;
     }
 
@@ -443,27 +493,48 @@ class TerminalPaneRuntime {
     this.resizeObserver.observe(container);
   }
 
-  private scheduleLayoutSync() {
-    if (this.disposed || !this.container || this.frameId !== null) {
+  private scheduleLayoutSync(attempt = 0) {
+    if (this.disposed || !this.container) {
       return;
+    }
+
+    if (this.frameId !== null) {
+      cancelAnimationFrame(this.frameId);
     }
 
     this.frameId = requestAnimationFrame(() => {
       this.frameId = null;
-      if (this.disposed || !this.container || !this.hasLayoutDimensions()) {
+      if (this.disposed || !this.container) {
         return;
       }
 
-      if (!this.term.element) {
-        this.term.open(this.container);
-        this.startHydration();
-      } else if (this.term.element.parentElement !== this.container) {
-        this.container.appendChild(this.term.element);
+      this.ensureTerminalHost();
+      if (!this.hasLayoutDimensions()) {
+        if (attempt < LAYOUT_SYNC_RETRY_FRAMES) {
+          this.scheduleLayoutSync(attempt + 1);
+        }
+        return;
       }
 
       this.loadWebglAddon();
       this.fitTerminal();
     });
+  }
+
+  private ensureTerminalHost() {
+    if (!this.container) {
+      return;
+    }
+
+    if (!this.term.element) {
+      this.term.open(this.container);
+      this.startHydration();
+      return;
+    }
+
+    if (this.term.element.parentElement !== this.container) {
+      this.container.appendChild(this.term.element);
+    }
   }
 
   private hasLayoutDimensions() {
@@ -481,7 +552,7 @@ class TerminalPaneRuntime {
     }
 
     try {
-      const webglAddon = new WebglAddon();
+      const webglAddon = new WebglAddon(true);
       webglAddon.onContextLoss(() => webglAddon.dispose());
       this.term.loadAddon(webglAddon);
       this.hasLoadedWebgl = true;
@@ -579,6 +650,7 @@ class TerminalPaneRuntime {
     this.detach();
     this.dataDisposable.dispose();
     this.bellDisposable.dispose();
+    this.unlistenLayoutSync();
     this.unlistenPromise.then((unlisten) => {
       if (typeof unlisten === "function") {
         unlisten();

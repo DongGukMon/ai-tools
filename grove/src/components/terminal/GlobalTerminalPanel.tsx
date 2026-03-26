@@ -1,7 +1,9 @@
 import { memo, useEffect, useLayoutEffect, useRef } from "react";
 import { ChevronUp, ChevronDown } from "lucide-react";
 import { useTerminalStore } from "../../store/terminal";
+import { useBroadcastStore } from "../../store/broadcast";
 import { usePanelLayoutStore, type GlobalTerminalTab } from "../../store/panel-layout";
+import { requestTerminalLayoutSync } from "../../lib/terminal-layout-sync";
 import { acquireTerminalRuntime } from "../../lib/terminal-runtime";
 import { cn } from "../../lib/cn";
 import { IconButton } from "../ui/button";
@@ -21,37 +23,50 @@ const TerminalTabContent = memo(function TerminalTabContent({
   direction,
 }: TerminalTabContentProps) {
   const theme = useTerminalStore((s) => s.theme);
+  const mirrorSession = useBroadcastStore((s) =>
+    tab.mirrorPtyId ? (s.mirrors[tab.mirrorPtyId] ?? null) : null,
+  );
   const termRef = useRef<HTMLDivElement>(null);
   const runtimeRef = useRef<ReturnType<
     typeof acquireTerminalRuntime
   > | null>(null);
+  const runtimePaneId = mirrorSession?.paneId ?? tab.paneId;
 
   useLayoutEffect(() => {
     const container = termRef.current;
     if (!container || !ptyId) return;
 
-    const runtime = acquireTerminalRuntime(tab.paneId, theme);
+    const isMirror = Boolean(tab.mirrorPtyId);
+    const runtime = isMirror
+      ? mirrorSession
+        ? acquireTerminalRuntime(mirrorSession.paneId, theme)
+        : null
+      : acquireTerminalRuntime(tab.paneId, theme);
+    if (!runtime) return;
+
     runtimeRef.current = runtime;
     runtime.setPtyId(ptyId);
     runtime.attach(container);
+    requestTerminalLayoutSync({ paneId: runtimePaneId, source: "attach" });
 
     return () => {
-      runtime.detach();
+      runtime.detach(container);
       runtime.release();
       runtimeRef.current = null;
     };
-  }, [tab.paneId, ptyId, theme]);
+  }, [
+    mirrorSession?.paneId,
+    ptyId,
+    tab.mirrorPtyId,
+    tab.paneId,
+    runtimePaneId,
+  ]);
 
   // Refit when becoming active
   useEffect(() => {
     if (!isActive) return;
-    const runtime = runtimeRef.current;
-    if (!runtime) return;
-
-    requestAnimationFrame(() => {
-      runtime.fitAddon.fit();
-    });
-  }, [isActive]);
+    requestTerminalLayoutSync({ paneId: runtimePaneId, source: "globalTerminal" });
+  }, [isActive, runtimePaneId]);
 
   // Update theme
   useEffect(() => {
@@ -113,15 +128,16 @@ function GlobalTerminalPanel({
         )}
       >
         <div className={cn("flex items-center gap-1 min-w-0 flex-1")}>
-          {!collapsed && (
-            <GlobalTerminalTabBar
-              tabs={tabs}
-              activeTabId={activeTabId}
-              onSelect={onSelect}
-              onAdd={onAdd}
-              onClose={onRemove}
-            />
-          )}
+          <GlobalTerminalTabBar
+            tabs={tabs}
+            activeTabId={activeTabId}
+            onSelect={(tabId) => {
+              onSelect(tabId);
+              updateGlobalTerminal({ collapsed: false });
+            }}
+            onAdd={onAdd}
+            onClose={onRemove}
+          />
         </div>
         <IconButton onClick={toggle} title={collapsed ? "Expand" : "Collapse"}>
           {collapsed ? (

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { GitBranch, Loader2, X } from "lucide-react";
 import type { Worktree } from "../../types";
 import { useProjectStore } from "../../store/project";
+import { useTabStore } from "../../store/tab";
 import type { AiSession, AiTool } from "../../store/terminal";
 import { useToast } from "../../store/toast";
 import { overlay } from "../../lib/overlay";
@@ -106,7 +107,14 @@ function WorktreeItem({ worktree, projectId }: Props) {
           "text-muted-foreground hover:bg-secondary/50 hover:text-foreground": !isSelected && !removing,
         },
       )}
-      onClick={() => !removing && selectWorktree(worktree)}
+      onClick={() => {
+        if (removing) return;
+        if (isSelected) {
+          useTabStore.getState().setActiveTab("terminal");
+        } else {
+          selectWorktree(worktree);
+        }
+      }}
       title={worktree.path}
     >
       <GitBranch className={cn("h-[13px] w-[13px] shrink-0", {

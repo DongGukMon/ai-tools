@@ -36,6 +36,24 @@ export function collectTerminalPanes(node: SplitNode): TerminalPaneEntry[] {
   return (node.children ?? []).flatMap(collectTerminalPanes);
 }
 
+export function findFirstTerminalPane(node: SplitNode): TerminalPaneEntry | null {
+  return collectTerminalPanes(node)[0] ?? null;
+}
+
+export function findTerminalPaneByPaneId(
+  node: SplitNode,
+  paneId: string,
+): TerminalPaneEntry | null {
+  return collectTerminalPanes(node).find((pane) => pane.paneId === paneId) ?? null;
+}
+
+export function findTerminalPaneByPtyId(
+  node: SplitNode,
+  ptyId: string,
+): TerminalPaneEntry | null {
+  return collectTerminalPanes(node).find((pane) => pane.ptyId === ptyId) ?? null;
+}
+
 export function buildTerminalPaneTopologySignature(
   node: SplitNode | undefined,
 ): string {

@@ -1,8 +1,15 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Radio } from "lucide-react";
 import { useTerminalStore } from "../../store/terminal";
+import { useBroadcastStore } from "../../store/broadcast";
+import { usePanelLayoutStore } from "../../store/panel-layout";
 import "@xterm/xterm/css/xterm.css";
 import { cn } from "../../lib/cn";
+import { requestTerminalLayoutSync } from "../../lib/terminal-layout-sync";
 import { acquireTerminalRuntime } from "../../lib/terminal-runtime";
+import { shouldAttachPrimaryRuntime } from "../../lib/broadcast-policy";
+import { restoreBroadcastSessionSize } from "../../lib/broadcast-session";
+import { Button } from "../ui/button";
 
 interface Props {
   paneId: string;
@@ -15,6 +22,12 @@ function TerminalInstance({ paneId, ptyId }: Props) {
   const theme = useTerminalStore((s) => s.theme);
   const isFocused = useTerminalStore((s) => s.focusedPtyId === ptyId);
   const setFocusedPtyId = useTerminalStore((s) => s.setFocusedPtyId);
+  const mirrorSession = useBroadcastStore((s) => s.mirrors[ptyId] ?? null);
+  const pipSession = useBroadcastStore((s) =>
+    Object.values(s.pips).find((session) => session.ptyId === ptyId) ?? null,
+  );
+  const isBroadcasting = Boolean(mirrorSession || pipSession);
+  const snapshot = mirrorSession?.snapshot ?? pipSession?.snapshot ?? null;
   const markBellPty = useTerminalStore((s) => s.markBellPty);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,7 +38,10 @@ function TerminalInstance({ paneId, ptyId }: Props) {
 
   useLayoutEffect(() => {
     const container = termRef.current;
-    if (!container) return;
+    if (!container || !shouldAttachPrimaryRuntime(isBroadcasting)) {
+      runtimeRef.current = null;
+      return;
+    }
 
     const runtime = acquireTerminalRuntime(paneId, theme);
     runtimeRef.current = runtime;
@@ -36,16 +52,17 @@ function TerminalInstance({ paneId, ptyId }: Props) {
     runtime.setErrorHandler(setError);
     runtime.setBellHandler(markBellPty);
     runtime.attach(container);
+    requestTerminalLayoutSync({ paneId, source: "attach" });
 
     return () => {
       runtime.setFocusHandler(null);
       runtime.setErrorHandler(null);
       runtime.setBellHandler(null);
-      runtime.detach();
+      runtime.detach(container);
       runtime.release();
       runtimeRef.current = null;
     };
-  }, [paneId, setFocusedPtyId]);
+  }, [isBroadcasting, markBellPty, paneId, setFocusedPtyId, theme]);
 
   useEffect(() => {
     runtimeRef.current?.setPtyId(ptyId);
@@ -54,6 +71,10 @@ function TerminalInstance({ paneId, ptyId }: Props) {
   useEffect(() => {
     runtimeRef.current?.setTheme(theme);
   }, [theme]);
+
+  useEffect(() => {
+    requestTerminalLayoutSync({ source: "broadcast" });
+  }, [isBroadcasting]);
 
   if (error) {
     return (
@@ -73,6 +94,53 @@ function TerminalInstance({ paneId, ptyId }: Props) {
     >
       <div ref={termRef} className={cn("terminal-instance h-full w-full")} />
       <div className={cn("terminal-pane-dim", { "terminal-pane-dim-active": !isFocused })} />
+      {isBroadcasting && (
+        <div className={cn("absolute inset-0 z-10")}>
+          {/* Frozen terminal snapshot */}
+          {snapshot && (
+            <img
+              src={snapshot}
+              alt=""
+              className={cn("absolute inset-4 pointer-events-none")}
+            />
+          )}
+          {/* Blurred overlay on top of snapshot */}
+          <div
+            className={cn("absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/40 backdrop-blur-[1.3px]")}
+          >
+            <Radio className={cn("size-10 text-white animate-pulse")} />
+            <span className={cn("text-lg font-black text-white tracking-wide")}>Broadcasting</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                const { mirrors, stopMirror, stopPipByPty } = useBroadcastStore.getState();
+
+                if (mirrors[ptyId]) {
+                  const ended = stopMirror(ptyId);
+                  restoreBroadcastSessionSize(ended);
+                  const gt = usePanelLayoutStore.getState().globalTerminal;
+                  const mirrorTab = gt.tabs.find((t) => t.mirrorPtyId === ended?.ptyId);
+                  if (mirrorTab) {
+                    usePanelLayoutStore.getState().removeGlobalTerminalTab(mirrorTab.id);
+                  }
+                  return;
+                }
+
+                if (pipSession?.ptyId === ptyId) {
+                  const ended = stopPipByPty(ptyId);
+                  restoreBroadcastSessionSize(ended?.session ?? null);
+                }
+              }}
+              className={cn(
+                "mt-1 h-auto border-white/15 bg-white/5 px-2 py-1 text-xs text-white/60 hover:border-white/25 hover:bg-white/10 hover:text-white",
+              )}
+            >
+              Stop
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -251,7 +251,7 @@ mod tests {
 
     #[test]
     fn needs_idle_detection_only_for_hookless_tools() {
-        use super::{is_idle, is_running, needs_idle_detection, to_idle, to_running};
+        use super::needs_idle_detection;
 
         // Codex — hookless, needs idle detection
         assert!(needs_idle_detection(Some("codex:idle")));

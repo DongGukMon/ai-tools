@@ -1,0 +1,104 @@
+<h2>Diff View — Hunk & Line Stage/Unstage</h2>
+<p class="subtitle">Mockup of the diff view interaction. Does this feel right?</p>
+
+<div class="mockup" style="max-width: 800px; margin: 0 auto;">
+  <div class="mockup-header">Working Changes — src/store/broadcast.ts (unstaged)</div>
+  <div class="mockup-body" style="padding: 0; font-family: 'SF Mono', 'Menlo', monospace; font-size: 12px; line-height: 1.6; background: #1a1a2e;">
+
+    <!-- Hunk header -->
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 4px 12px; background: rgba(88, 166, 255, 0.08); border-bottom: 1px solid rgba(255,255,255,0.06);">
+      <span style="color: rgba(136, 198, 255, 0.7); font-size: 11px;">@@ -12,8 +12,10 @@ export interface BroadcastSession</span>
+      <div style="display: flex; gap: 4px;">
+        <button style="font-size: 10px; padding: 1px 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.6); cursor: pointer;">Stage Hunk</button>
+        <button style="font-size: 10px; padding: 1px 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.6); cursor: pointer;">Discard</button>
+      </div>
+    </div>
+
+    <!-- Context line -->
+    <div style="display: flex; color: rgba(255,255,255,0.4); border-bottom: 1px solid rgba(255,255,255,0.03);">
+      <span style="width: 40px; text-align: right; padding-right: 8px; color: rgba(255,255,255,0.2); user-select: none;">12</span>
+      <span style="width: 40px; text-align: right; padding-right: 8px; color: rgba(255,255,255,0.2); user-select: none;">12</span>
+      <span style="width: 16px; text-align: center; color: rgba(255,255,255,0.15); user-select: none;"> </span>
+      <span style="padding-left: 4px; color: rgba(255,255,255,0.5);">}</span>
+    </div>
+
+    <!-- Context line -->
+    <div style="display: flex; color: rgba(255,255,255,0.4); border-bottom: 1px solid rgba(255,255,255,0.03);">
+      <span style="width: 40px; text-align: right; padding-right: 8px; color: rgba(255,255,255,0.2); user-select: none;">13</span>
+      <span style="width: 40px; text-align: right; padding-right: 8px; color: rgba(255,255,255,0.2); user-select: none;">13</span>
+      <span style="width: 16px; text-align: center; color: rgba(255,255,255,0.15); user-select: none;"> </span>
+      <span style="padding-left: 4px; color: rgba(255,255,255,0.5);"></span>
+    </div>
+
+    <!-- Removed line -->
+    <div style="display: flex; background: rgba(248, 81, 73, 0.1); border-bottom: 1px solid rgba(255,255,255,0.03);">
+      <span style="width: 40px; text-align: right; padding-right: 8px; color: rgba(248, 81, 73, 0.5); user-select: none;">14</span>
+      <span style="width: 40px; text-align: right; padding-right: 8px; color: rgba(255,255,255,0.2); user-select: none;"></span>
+      <span style="width: 16px; text-align: center; color: rgba(248, 81, 73, 0.7); user-select: none;">-</span>
+      <span style="padding-left: 4px; color: rgba(248, 81, 73, 0.8);">  active: BroadcastSession | null;</span>
+    </div>
+
+    <!-- Added line (SELECTED - highlight band) -->
+    <div style="display: flex; background: rgba(63, 185, 80, 0.18); border-bottom: 1px solid rgba(255,255,255,0.03); box-shadow: inset 3px 0 0 rgba(63, 185, 80, 0.6);">
+      <span style="width: 40px; text-align: right; padding-right: 8px; color: rgba(255,255,255,0.2); user-select: none;"></span>
+      <span style="width: 40px; text-align: right; padding-right: 8px; color: rgba(63, 185, 80, 0.6); user-select: none;">14</span>
+      <span style="width: 16px; text-align: center; color: rgba(63, 185, 80, 0.7); user-select: none;">+</span>
+      <span style="padding-left: 4px; color: rgba(63, 185, 80, 0.9);">  mirrors: Record&lt;string, BroadcastSession&gt;;</span>
+    </div>
+
+    <!-- Added line (SELECTED - highlight band) -->
+    <div style="display: flex; background: rgba(63, 185, 80, 0.18); border-bottom: 1px solid rgba(255,255,255,0.03); box-shadow: inset 3px 0 0 rgba(63, 185, 80, 0.6);">
+      <span style="width: 40px; text-align: right; padding-right: 8px; color: rgba(255,255,255,0.2); user-select: none;"></span>
+      <span style="width: 40px; text-align: right; padding-right: 8px; color: rgba(63, 185, 80, 0.6); user-select: none;">15</span>
+      <span style="width: 16px; text-align: center; color: rgba(63, 185, 80, 0.7); user-select: none;">+</span>
+      <span style="padding-left: 4px; color: rgba(63, 185, 80, 0.9);">  pip: BroadcastSession | null;</span>
+    </div>
+
+    <!-- Context line -->
+    <div style="display: flex; color: rgba(255,255,255,0.4); border-bottom: 1px solid rgba(255,255,255,0.03);">
+      <span style="width: 40px; text-align: right; padding-right: 8px; color: rgba(255,255,255,0.2); user-select: none;">15</span>
+      <span style="width: 40px; text-align: right; padding-right: 8px; color: rgba(255,255,255,0.2); user-select: none;">16</span>
+      <span style="width: 16px; text-align: center; color: rgba(255,255,255,0.15); user-select: none;"> </span>
+      <span style="padding-left: 4px; color: rgba(255,255,255,0.5);">  /**</span>
+    </div>
+
+    <!-- Context line -->
+    <div style="display: flex; color: rgba(255,255,255,0.4); border-bottom: 1px solid rgba(255,255,255,0.03);">
+      <span style="width: 40px; text-align: right; padding-right: 8px; color: rgba(255,255,255,0.2); user-select: none;">16</span>
+      <span style="width: 40px; text-align: right; padding-right: 8px; color: rgba(255,255,255,0.2); user-select: none;">17</span>
+      <span style="width: 16px; text-align: center; color: rgba(255,255,255,0.15); user-select: none;"> </span>
+      <span style="padding-left: 4px; color: rgba(255,255,255,0.5);">   * Start or replace a mirror broadcast for a specific PTY.</span>
+    </div>
+
+  </div>
+</div>
+
+<div class="section" style="margin-top: 1.5rem; max-width: 800px; margin-left: auto; margin-right: auto;">
+  <div style="display: flex; gap: 1.5rem; flex-wrap: wrap;">
+    <div style="flex: 1; min-width: 200px; padding: 1rem; background: rgba(255,255,255,0.03); border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);">
+      <h3 style="margin-top: 0; font-size: 13px; color: rgba(255,255,255,0.5);">Selection</h3>
+      <ul style="margin: 0; padding-left: 1.2rem; color: rgba(255,255,255,0.6); font-size: 12px;">
+        <li>Gutter 클릭 → 라인 선택 (왼쪽 초록 바)</li>
+        <li>Shift+클릭 → 범위 선택</li>
+        <li>Gutter 드래그 → 범위 선택</li>
+        <li>Context 라인은 선택 불가</li>
+      </ul>
+    </div>
+    <div style="flex: 1; min-width: 200px; padding: 1rem; background: rgba(255,255,255,0.03); border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);">
+      <h3 style="margin-top: 0; font-size: 13px; color: rgba(255,255,255,0.5);">Keyboard</h3>
+      <ul style="margin: 0; padding-left: 1.2rem; color: rgba(255,255,255,0.6); font-size: 12px;">
+        <li><code style="background: rgba(255,255,255,0.1); padding: 1px 5px; border-radius: 3px;">Space</code> — 선택된 라인 stage/unstage</li>
+        <li><code style="background: rgba(255,255,255,0.1); padding: 1px 5px; border-radius: 3px;">Space</code> (선택 없을 때) — 현재 hunk 전체</li>
+        <li>Stage/unstage는 현재 보고 있는 파일의 상태에 따라 자동 결정</li>
+      </ul>
+    </div>
+    <div style="flex: 1; min-width: 200px; padding: 1rem; background: rgba(255,255,255,0.03); border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);">
+      <h3 style="margin-top: 0; font-size: 13px; color: rgba(255,255,255,0.5);">Hunk Actions</h3>
+      <ul style="margin: 0; padding-left: 1.2rem; color: rgba(255,255,255,0.6); font-size: 12px;">
+        <li>Hunk header 우측 버튼 항상 노출</li>
+        <li>Unstaged → <strong>Stage Hunk</strong> / Discard</li>
+        <li>Staged → <strong>Unstage Hunk</strong></li>
+      </ul>
+    </div>
+  </div>
+</div>
