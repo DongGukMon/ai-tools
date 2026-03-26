@@ -29,6 +29,7 @@ grove/src-electron/native/index.js
 
 # Local files
 blog-post.md
+docs/superpowers/
 .claude/
 *.exe
 *.dll

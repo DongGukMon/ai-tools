@@ -1,0 +1,4 @@
+interface:
+  display_name: "Whip PR Followup"
+  short_description: "Triage unresolved PR review threads and dispatch fixes via whip-start"
+  default_prompt: "Use $whip-pr-followup to collect unresolved review threads from the current branch's PR, triage them, and dispatch fixes."
