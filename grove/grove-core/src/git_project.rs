@@ -406,6 +406,7 @@ fn make_project_entry(
         repo,
         source_path,
         worktree_order: Vec::new(),
+        base_branch: None,
     }
 }
 
@@ -611,6 +612,7 @@ fn project_from_entry(entry: ProjectEntry) -> Project {
         worktrees,
         source_has_changes,
         source_behind_remote,
+        base_branch: entry.base_branch,
     }
 }
 
@@ -1770,6 +1772,7 @@ mod tests {
             repo,
             source_path: source_dir.to_string_lossy().to_string(),
             worktree_order: Vec::new(),
+            base_branch: None,
         }
     }
 
