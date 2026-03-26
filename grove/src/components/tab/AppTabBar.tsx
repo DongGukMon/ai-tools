@@ -1,5 +1,5 @@
-import { useCallback, useState } from "react";
-import { Globe, Plus, X } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
+import { GitPullRequest, Globe, Loader2, Plus, X } from "lucide-react";
 import { cn } from "../../lib/cn";
 import { IconButton } from "../ui/button";
 import {
@@ -8,11 +8,152 @@ import {
   selectTabsForWorktree,
 } from "../../store/tab";
 import { useResolvedSidebarSelection } from "../../hooks/useResolvedSidebarSelection";
+import { useMissionStore } from "../../store/mission";
+import { useProjectStore } from "../../store/project";
 import type { AppTabType } from "../../types";
+import { useWorktreePrUrl } from "../sidebar/worktree-pr";
+import { runCommand } from "../../lib/command";
+import { createWorktreePr, openExternal } from "../../lib/platform";
 
 const ADD_TAB_OPTIONS: { type: Exclude<AppTabType, "terminal" | "changes">; label: string; icon: typeof Globe }[] = [
   { type: "browser", label: "Browser", icon: Globe },
 ];
+
+function SelectedWorktreePrAction({ worktreePath }: { worktreePath: string | null }) {
+  const projects = useProjectStore((state) => state.projects);
+  const missions = useMissionStore((state) => state.missions);
+  const missionSelectedItem = useMissionStore((state) => state.selectedItem);
+  const target = useMemo(() => {
+    if (!worktreePath) {
+      return null;
+    }
+
+    if (missionSelectedItem?.projectId) {
+      const mission = missions.find((item) => item.id === missionSelectedItem.missionId);
+      const missionProject = mission?.projects.find(
+        (item) => item.projectId === missionSelectedItem.projectId,
+      );
+      const project = projects.find((item) => item.id === missionSelectedItem.projectId);
+
+      if (
+        missionProject &&
+        project &&
+        missionProject.path === worktreePath
+      ) {
+        return {
+          kind: "worktree" as const,
+          projectOrg: project.org,
+          projectRepo: project.repo,
+          worktreeBranch: missionProject.branch,
+          worktreePath: missionProject.path,
+        };
+      }
+    }
+
+    for (const project of projects) {
+      if (project.sourcePath === worktreePath) {
+        return {
+          kind: "source" as const,
+          worktreePath,
+        };
+      }
+
+      const worktree = project.worktrees.find((item) => item.path === worktreePath);
+      if (worktree) {
+        return {
+          kind: "worktree" as const,
+          projectOrg: project.org,
+          projectRepo: project.repo,
+          worktreeBranch: worktree.branch,
+          worktreePath: worktree.path,
+        };
+      }
+    }
+
+    return null;
+  }, [missionSelectedItem, missions, projects, worktreePath]);
+  const { isLoading, pullRequest } = useWorktreePrUrl(
+    target?.kind === "worktree" ? target : {
+      projectOrg: "",
+      projectRepo: "",
+      worktreeBranch: "",
+      worktreePath: "",
+    },
+  );
+
+  const isSource = target?.kind === "source";
+  const canCreate = target?.kind === "worktree" && !isLoading && !pullRequest;
+  const disabled = isLoading || isSource || !target;
+  const disabledOpacityClass = isSource || !target
+    ? "disabled:opacity-30"
+    : "disabled:opacity-100";
+  let label = "Create PR";
+  let title = "Create pull request";
+  let colorClass = "border-transparent bg-[#1f883d] text-white hover:bg-[#1a7f37]";
+
+  if (isLoading) {
+    label = "Checking PR";
+    title = "Checking pull request status";
+    colorClass = "border-transparent bg-[#57606a] text-white hover:bg-[#4f5864]";
+  } else if (isSource || !target) {
+    title = "Pull requests are unavailable on the source branch";
+    colorClass = "border-transparent bg-[#768390] text-white shadow-none";
+  } else if (pullRequest?.status === "merged") {
+    label = "Merged PR";
+    title = "Open merged pull request";
+    colorClass = "border-transparent bg-[#8250df] text-white hover:bg-[#6f42c1]";
+  } else if (pullRequest) {
+    label = "Open PR";
+    title = "Open pull request";
+  } else if (canCreate) {
+    label = "Create PR";
+    title = "Create pull request";
+  }
+
+  const handleClick = () => {
+    if (!target || isLoading || isSource) {
+      return;
+    }
+
+    if (pullRequest?.url) {
+      void runCommand(() => openExternal(pullRequest.url), {
+        errorToast: "Failed to open pull request",
+      });
+      return;
+    }
+
+    void runCommand(() => createWorktreePr(target.worktreePath), {
+      errorToast: "Failed to create pull request",
+    });
+  };
+
+  return (
+    <div className={cn("ml-auto flex min-w-0 items-center gap-2 pl-2")}>
+      <div className={cn("hidden h-4 w-px bg-border/70 md:block")} />
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={disabled}
+        title={title}
+        aria-label={title}
+        className={cn(
+          "inline-flex h-6 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-semibold tracking-[0.01em] transition-all shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70",
+          "disabled:cursor-not-allowed",
+          disabledOpacityClass,
+          colorClass,
+        )}
+      >
+        {isLoading ? (
+          <Loader2 className={cn("h-3 w-3 animate-spin")} />
+        ) : (
+          <GitPullRequest className={cn("h-3 w-3")} />
+        )}
+        <span className={cn("leading-none")}>{label}</span>
+      </button>
+    </div>
+  );
+}
 
 function AppTabBar() {
   const { worktreePath } = useResolvedSidebarSelection();
@@ -112,6 +253,8 @@ function AppTabBar() {
           </div>
         )}
       </div>
+
+      <SelectedWorktreePrAction worktreePath={worktreePath} />
     </div>
   );
 }

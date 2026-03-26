@@ -9,7 +9,12 @@ type LineGroup = { type: GroupType; lines: DiffLineType[] };
 function groupLines(lines: DiffLineType[]): LineGroup[] {
   const groups: LineGroup[] = [];
   for (const line of lines) {
-    const type: GroupType = line.type === "add" ? "add" : line.type === "remove" ? "remove" : "context";
+    let type: GroupType = "context";
+    if (line.type === "add") {
+      type = "add";
+    } else if (line.type === "remove") {
+      type = "remove";
+    }
     const last = groups[groups.length - 1];
     if (last && last.type === type) {
       last.lines.push(line);
@@ -171,31 +176,25 @@ function LineGroupView({
   const isRemove = type === "remove";
   const isContext = type === "context";
 
-  const containerBg = isAdd
-    ? "rgba(63, 185, 80, 0.07)"
-    : isRemove
-      ? "rgba(248, 81, 73, 0.07)"
-      : undefined;
+  let containerBg: string | undefined;
+  let gutterBg: string | undefined;
+  let prefixColor = "transparent";
+  let prefix = " ";
+  let borderColor = "transparent";
 
-  const gutterBg = isAdd
-    ? "rgba(63, 185, 80, 0.04)"
-    : isRemove
-      ? "rgba(248, 81, 73, 0.04)"
-      : undefined;
-
-  const prefixColor = isAdd
-    ? "rgba(63, 185, 80, 0.7)"
-    : isRemove
-      ? "rgba(248, 81, 73, 0.7)"
-      : "transparent";
-
-  const prefix = isAdd ? "+" : isRemove ? "-" : " ";
-
-  const borderColor = isAdd
-    ? "rgba(63, 185, 80, 0.3)"
-    : isRemove
-      ? "rgba(248, 81, 73, 0.3)"
-      : "transparent";
+  if (isAdd) {
+    containerBg = "rgba(63, 185, 80, 0.07)";
+    gutterBg = "rgba(63, 185, 80, 0.04)";
+    prefixColor = "rgba(63, 185, 80, 0.7)";
+    prefix = "+";
+    borderColor = "rgba(63, 185, 80, 0.3)";
+  } else if (isRemove) {
+    containerBg = "rgba(248, 81, 73, 0.07)";
+    gutterBg = "rgba(248, 81, 73, 0.04)";
+    prefixColor = "rgba(248, 81, 73, 0.7)";
+    prefix = "-";
+    borderColor = "rgba(248, 81, 73, 0.3)";
+  }
 
   return (
     <div

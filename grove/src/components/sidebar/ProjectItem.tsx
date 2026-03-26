@@ -134,8 +134,6 @@ const ProjectItem = memo(function ProjectItem({ project }: Props) {
                 key={wt.path}
                 worktree={wt}
                 projectId={project.id}
-                projectOrg={project.org}
-                projectRepo={project.repo}
               />
             ))}
             {adding ? (

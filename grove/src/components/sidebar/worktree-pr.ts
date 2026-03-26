@@ -1,9 +1,12 @@
 import { useEffect } from "react";
+import type { WorktreePullRequest } from "../../types";
 import { create } from "zustand";
 import { runCommandSafely } from "../../lib/command";
 import { getWorktreePrUrl } from "../../lib/platform";
 
-const WORKTREE_PR_CACHE_TTL_MS = 60_000;
+const WORKTREE_PR_RESULT_CACHE_VERSION = 1;
+const WORKTREE_PR_FOUND_CACHE_TTL_MS = 60_000;
+const WORKTREE_PR_MISSING_CACHE_TTL_MS = 10_000;
 
 export interface WorktreePrLookupInput {
   projectOrg: string;
@@ -13,8 +16,9 @@ export interface WorktreePrLookupInput {
 }
 
 interface WorktreePrEntry {
+  version: number;
   loading: boolean;
-  url: string | null;
+  pullRequest: WorktreePullRequest | null;
   fetchedAt: number | null;
 }
 
@@ -24,19 +28,41 @@ interface WorktreePrState {
 }
 
 const EMPTY_ENTRY: WorktreePrEntry = {
+  version: WORKTREE_PR_RESULT_CACHE_VERSION,
   loading: false,
-  url: null,
+  pullRequest: null,
   fetchedAt: null,
 };
 
 const inflightRequests = new Map<string, Promise<void>>();
 
+function entryTtlMs(entry: WorktreePrEntry): number | null {
+  if (entry.pullRequest == null) {
+    return WORKTREE_PR_MISSING_CACHE_TTL_MS;
+  }
+  if (entry.pullRequest.status === "merged") {
+    return null;
+  }
+  return WORKTREE_PR_FOUND_CACHE_TTL_MS;
+}
+
 function isEntryFresh(entry: WorktreePrEntry | undefined): boolean {
-  return (
-    entry != null &&
-    entry.fetchedAt != null &&
-    Date.now() - entry.fetchedAt < WORKTREE_PR_CACHE_TTL_MS
-  );
+  if (entry == null || entry.fetchedAt == null) {
+    return false;
+  }
+  if (entry.version !== WORKTREE_PR_RESULT_CACHE_VERSION) {
+    return false;
+  }
+  if (!Object.prototype.hasOwnProperty.call(entry, "pullRequest")) {
+    return false;
+  }
+
+  const ttl = entryTtlMs(entry);
+  if (ttl == null) {
+    return true;
+  }
+
+  return Date.now() - entry.fetchedAt < ttl;
 }
 
 export function createWorktreePrLookupKey(
@@ -83,15 +109,16 @@ export const useWorktreePrStore = create<WorktreePrState>((set, get) => ({
       entries: {
         ...state.entries,
         [key]: {
+          version: WORKTREE_PR_RESULT_CACHE_VERSION,
           loading: true,
-          url: cachedEntry?.url ?? null,
+          pullRequest: cachedEntry?.pullRequest ?? null,
           fetchedAt: cachedEntry?.fetchedAt ?? null,
         },
       },
     }));
 
     const request = (async () => {
-      const url = await runCommandSafely(
+      const pullRequest = await runCommandSafely(
         () => getWorktreePrUrl(worktreePath),
         { errorToast: false },
       );
@@ -100,8 +127,9 @@ export const useWorktreePrStore = create<WorktreePrState>((set, get) => ({
         entries: {
           ...state.entries,
           [key]: {
+            version: WORKTREE_PR_RESULT_CACHE_VERSION,
             loading: false,
-            url,
+            pullRequest,
             fetchedAt: Date.now(),
           },
         },
@@ -132,12 +160,43 @@ export function useWorktreePrUrl(input: WorktreePrLookupInput) {
     if (!key) {
       return;
     }
+    if (entry.loading || isEntryFresh(entry)) {
+      return;
+    }
 
     void useWorktreePrStore.getState().ensureWorktreePrUrl(key, input.worktreePath);
-  }, [input.worktreePath, key]);
+  }, [
+    entry.fetchedAt,
+    entry.loading,
+    entry.pullRequest,
+    input.worktreePath,
+    key,
+  ]);
+
+  useEffect(() => {
+    if (!key || entry.fetchedAt == null) {
+      return;
+    }
+
+    const ttl = entryTtlMs(entry);
+    if (ttl == null) {
+      return;
+    }
+
+    const refreshInMs = Math.max(0, entry.fetchedAt + ttl - Date.now());
+    const timeout = globalThis.setTimeout(() => {
+      void useWorktreePrStore.getState().ensureWorktreePrUrl(key, input.worktreePath);
+    }, refreshInMs + 1);
+
+    return () => {
+      globalThis.clearTimeout(timeout);
+    };
+  }, [entry.fetchedAt, input.worktreePath, key]);
 
   return {
     isLoading: entry.loading,
-    url: entry.url,
+    pullRequest: entry.pullRequest,
+    url: entry.pullRequest?.url ?? null,
+    status: entry.pullRequest?.status ?? null,
   };
 }

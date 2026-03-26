@@ -41,6 +41,21 @@ pub struct Worktree {
     pub branch: String,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum WorktreePullRequestStatus {
+    Open,
+    Merged,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct WorktreePullRequest {
+    pub url: String,
+    pub status: WorktreePullRequestStatus,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PtySession {

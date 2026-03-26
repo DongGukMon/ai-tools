@@ -13,10 +13,17 @@ export default function DiffPanel() {
   const store = useDiff(worktreePath);
   const diffSizes = usePanelLayoutStore((s) => s.diff);
   const updateDiff = usePanelLayoutStore((s) => s.updateDiff);
-  const viewerDiffs =
-    store.selectedView === "changes"
-      ? (store.currentDiff ? [store.currentDiff] : [])
-      : (store.currentDiff ? [store.currentDiff] : store.commitDiffs);
+  const viewerDiffs = store.currentDiff ? [store.currentDiff] : [];
+  if (store.selectedView !== "changes" && !store.currentDiff) {
+    viewerDiffs.push(...store.commitDiffs);
+  }
+  const fileStatuses = store.selectedView === "changes"
+    ? store.fileStatuses
+    : store.commitDiffs.map((d) => ({
+        path: d.path,
+        status: d.status as FileStatus["status"],
+        staged: false,
+      }));
 
   if (!worktreePath) {
     return (
@@ -48,15 +55,7 @@ export default function DiffPanel() {
       </ResizablePanelGroup.Pane>
       <ResizablePanelGroup.Pane minSize={60}>
         <FileList
-          fileStatuses={
-            store.selectedView === "changes"
-              ? store.fileStatuses
-              : store.commitDiffs.map((d) => ({
-                  path: d.path,
-                  status: d.status as FileStatus["status"],
-                  staged: false,
-                }))
-          }
+          fileStatuses={fileStatuses}
           selectedFile={store.selectedFile}
           onSelectFile={store.selectFile}
         />

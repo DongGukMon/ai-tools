@@ -175,9 +175,18 @@ pub async fn list_worktrees(project_id: String) -> Result<String> {
 }
 
 #[napi]
-pub async fn get_worktree_pr_url(worktree_path: String) -> Result<Option<String>> {
-    blocking_optional_json(move || grove_core::git_project::get_worktree_pr_url_impl(&worktree_path))
-        .await
+pub async fn get_worktree_pr_url(
+    worktree_path: String,
+) -> Result<Option<String>> {
+    blocking_optional_json(move || {
+        grove_core::git_project::get_worktree_pr_url_impl(&worktree_path)
+    })
+    .await
+}
+
+#[napi]
+pub async fn create_worktree_pr(worktree_path: String) -> Result<()> {
+    blocking_core(move || grove_core::git_project::create_worktree_pr_impl(&worktree_path)).await
 }
 
 #[napi]

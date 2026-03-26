@@ -1,7 +1,10 @@
 use crate::config::{self, ProjectEntry};
-use crate::process_env::{enriched_path, preferred_ssh_auth_sock};
-use crate::{Project, Worktree};
+use crate::process_env::{
+    interactive_shell_output, preferred_env_var, subprocess_env_pairs,
+};
+use crate::{Project, Worktree, WorktreePullRequest, WorktreePullRequestStatus};
 use git2::{Oid, Repository};
+use serde::Deserialize;
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -20,9 +23,8 @@ fn base_dir() -> PathBuf {
 
 pub(crate) fn git_command() -> Command {
     let mut command = Command::new("git");
-    command.env("PATH", enriched_path());
-    if let Some(ssh_auth_sock) = preferred_ssh_auth_sock() {
-        command.env("SSH_AUTH_SOCK", ssh_auth_sock);
+    for (key, value) in subprocess_env_pairs() {
+        command.env(key, value);
     }
     command
 }
@@ -70,6 +72,17 @@ struct PullRequestHeadRef {
     oid: Oid,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GithubPullRequestSummary {
+    url: String,
+    state: String,
+    head_ref_name: String,
+    head_ref_oid: String,
+    merged_at: Option<String>,
+    updated_at: String,
+}
+
 fn is_github_host(host: &str) -> bool {
     let normalized = host.trim().to_ascii_lowercase();
     normalized == "github.com" || normalized.contains("github")
@@ -112,6 +125,212 @@ fn find_pull_request_number_for_head(refs: &[PullRequestHeadRef], head_oid: Oid)
 
 fn canonical_pull_request_url(host: &str, org: &str, repo: &str, number: u64) -> String {
     format!("https://{host}/{org}/{repo}/pull/{number}")
+}
+
+fn github_repo_selector(host: &str, org: &str, repo: &str) -> String {
+    if host.eq_ignore_ascii_case("github.com") {
+        format!("{org}/{repo}")
+    } else {
+        format!("{host}/{org}/{repo}")
+    }
+}
+
+fn github_token_override_env(org: &str) -> Option<&'static str> {
+    match org {
+        "sendbird" => Some("GH_TOKEN_SENDBIRD"),
+        "sendbird-playground" => Some("GH_TOKEN_SENDBIRD_PLAYGROUND"),
+        "rich-automation" => Some("GH_TOKEN_RICH_AUTOMATION"),
+        _ => None,
+    }
+}
+
+fn gh_command(org: &str) -> Command {
+    let mut command = Command::new("gh");
+    for (key, value) in subprocess_env_pairs() {
+        command.env(key, value);
+    }
+
+    if let Some(token_env_name) = github_token_override_env(org) {
+        if let Some(token) = preferred_env_var(token_env_name) {
+            command.env("GH_TOKEN", token);
+        }
+    }
+
+    command
+}
+
+fn shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\"'\"'"))
+}
+
+fn pull_request_status_from_github_summary(
+    pull_request: &GithubPullRequestSummary,
+) -> Option<WorktreePullRequestStatus> {
+    if pull_request.state.eq_ignore_ascii_case("open") {
+        Some(WorktreePullRequestStatus::Open)
+    } else if pull_request.merged_at.is_some() {
+        Some(WorktreePullRequestStatus::Merged)
+    } else {
+        None
+    }
+}
+
+fn select_github_pull_request(
+    pull_requests: &[GithubPullRequestSummary],
+    branch_name: &str,
+    head_oid: Oid,
+) -> Option<WorktreePullRequest> {
+    let head_oid = head_oid.to_string();
+
+    pull_requests
+        .iter()
+        .filter(|pull_request| pull_request.head_ref_name == branch_name)
+        .filter_map(|pull_request| {
+            let status = pull_request_status_from_github_summary(pull_request)?;
+            let priority = (
+                matches!(status, WorktreePullRequestStatus::Open),
+                pull_request.head_ref_oid.eq_ignore_ascii_case(&head_oid),
+                pull_request.updated_at.as_str(),
+            );
+            Some((
+                priority,
+                WorktreePullRequest {
+                    url: pull_request.url.clone(),
+                    status,
+                },
+            ))
+        })
+        .max_by_key(|(priority, _)| *priority)
+        .map(|(_, pull_request)| pull_request)
+}
+
+fn github_pull_request_via_cli(
+    host: &str,
+    org: &str,
+    repo: &str,
+    branch_name: &str,
+    head_oid: Oid,
+) -> Result<Option<WorktreePullRequest>, String> {
+    let repo_selector = github_repo_selector(host, org, repo);
+    let output = gh_command(org)
+        .args([
+            "pr",
+            "list",
+            "--repo",
+            &repo_selector,
+            "--state",
+            "all",
+            "--head",
+            branch_name,
+            "--json",
+            "url,state,headRefName,headRefOid,mergedAt,updatedAt",
+        ])
+        .output()
+        .map_err(|e| format!("Failed to run gh pr list: {e}"))?;
+
+    if !output.status.success() {
+        return Err(format!(
+            "gh pr list failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+
+    let pull_requests: Vec<GithubPullRequestSummary> = serde_json::from_slice(&output.stdout)
+        .map_err(|e| format!("Failed to parse gh pr list output for {repo_selector}: {e}"))?;
+
+    Ok(select_github_pull_request(
+        &pull_requests,
+        branch_name,
+        head_oid,
+    ))
+}
+
+fn github_pull_request_via_interactive_shell(
+    host: &str,
+    org: &str,
+    repo: &str,
+    branch_name: &str,
+    head_oid: Oid,
+) -> Result<Option<WorktreePullRequest>, String> {
+    let repo_selector = github_repo_selector(host, org, repo);
+    let gh_prefix = github_token_override_env(org)
+        .map(|token_env| format!("GH_TOKEN=${token_env} "))
+        .unwrap_or_default();
+    let command = format!(
+        "{gh_prefix}gh pr list -R {repo} --state all --head {branch} --json url,state,headRefName,headRefOid,mergedAt,updatedAt",
+        repo = shell_quote(&repo_selector),
+        branch = shell_quote(branch_name),
+    );
+    let output = interactive_shell_output(&command)?;
+    let pull_requests: Vec<GithubPullRequestSummary> = serde_json::from_str(&output)
+        .map_err(|e| format!("Failed to parse login-shell gh output for {repo_selector}: {e}"))?;
+
+    Ok(select_github_pull_request(
+        &pull_requests,
+        branch_name,
+        head_oid,
+    ))
+}
+
+fn create_github_pull_request_via_cli(
+    worktree: &Path,
+    host: &str,
+    org: &str,
+    repo: &str,
+    branch_name: &str,
+) -> Result<(), String> {
+    let repo_selector = github_repo_selector(host, org, repo);
+    let output = gh_command(org)
+        .current_dir(worktree)
+        .args([
+            "pr",
+            "create",
+            "--repo",
+            &repo_selector,
+            "--head",
+            branch_name,
+            "--web",
+        ])
+        .output()
+        .map_err(|e| format!("Failed to run gh pr create: {e}"))?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(format!(
+            "gh pr create failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ))
+    }
+}
+
+fn create_github_pull_request_via_interactive_shell(
+    worktree: &Path,
+    host: &str,
+    org: &str,
+    repo: &str,
+    branch_name: &str,
+) -> Result<(), String> {
+    let repo_selector = github_repo_selector(host, org, repo);
+    let gh_prefix = github_token_override_env(org)
+        .map(|token_env| format!("GH_TOKEN=${token_env} "))
+        .unwrap_or_default();
+    let command = format!(
+        "cd {worktree} && {gh_prefix}gh pr create -R {repo} --head {branch} --web",
+        worktree = shell_quote(&worktree.to_string_lossy()),
+        repo = shell_quote(&repo_selector),
+        branch = shell_quote(branch_name),
+    );
+    interactive_shell_output(&command).map(|_| ())
+}
+
+fn git_ls_remote_pull_heads_via_interactive_shell(worktree: &Path) -> Result<String, String> {
+    let command = format!(
+        "git -C {worktree} ls-remote origin {pattern}",
+        worktree = shell_quote(&worktree.to_string_lossy()),
+        pattern = shell_quote("refs/pull/*/head"),
+    );
+    interactive_shell_output(&command)
 }
 
 fn project_dir(host: &str, org: &str, repo: &str) -> PathBuf {
@@ -915,7 +1134,9 @@ pub fn list_worktrees_impl(project_id: &str) -> Result<Vec<Worktree>, String> {
     ))
 }
 
-pub fn get_worktree_pr_url_impl(worktree_path: &str) -> Result<Option<String>, String> {
+pub fn get_worktree_pr_url_impl(
+    worktree_path: &str,
+) -> Result<Option<WorktreePullRequest>, String> {
     let worktree = Path::new(worktree_path);
     let repo = Repository::open(worktree).map_err(|e| {
         format!(
@@ -923,15 +1144,16 @@ pub fn get_worktree_pr_url_impl(worktree_path: &str) -> Result<Option<String>, S
             worktree.display()
         )
     })?;
-    let head = repo.head().map_err(|e| {
-        format!(
-            "Failed to read HEAD for {}: {e}",
-            worktree.display()
-        )
-    })?;
-    if !head.is_branch() || head.shorthand().filter(|name| !name.is_empty()).is_none() {
+    let head = repo
+        .head()
+        .map_err(|e| format!("Failed to read HEAD for {}: {e}", worktree.display()))?;
+    let Some(branch_name) = head.shorthand().filter(|name| !name.is_empty()) else {
+        return Ok(None);
+    };
+    if !head.is_branch() {
         return Ok(None);
     }
+    let branch_name = branch_name.to_string();
 
     let head_oid = head
         .peel_to_commit()
@@ -948,17 +1170,98 @@ pub fn get_worktree_pr_url_impl(worktree_path: &str) -> Result<Option<String>, S
         return Ok(None);
     };
 
-    let pull_refs = parse_pull_request_head_refs(&run_git_output(
-        worktree,
-        &["ls-remote", "origin", "refs/pull/*/head"],
-    )?);
+    match github_pull_request_via_cli(&host, &org, &repo_name, &branch_name, head_oid)
+        .or_else(|_| {
+            github_pull_request_via_interactive_shell(
+                &host,
+                &org,
+                &repo_name,
+                &branch_name,
+                head_oid,
+            )
+        })
+    {
+        Ok(Some(pull_request)) => return Ok(Some(pull_request)),
+        Ok(None) => return Ok(None),
+        Err(error) => {
+            eprintln!(
+                "Warning: failed to determine pull request status via gh for {}: {error}",
+                worktree.display()
+            );
+        }
+    }
+
+    let pull_refs_output = match run_git_output(worktree, &["ls-remote", "origin", "refs/pull/*/head"])
+        .or_else(|_| git_ls_remote_pull_heads_via_interactive_shell(worktree))
+    {
+        Ok(output) => output,
+        Err(error) => {
+            eprintln!(
+                "Warning: failed to query pull refs for {}: {error}",
+                worktree.display()
+            );
+            return Ok(None);
+        }
+    };
+    let pull_refs = parse_pull_request_head_refs(&pull_refs_output);
     let Some(number) = find_pull_request_number_for_head(&pull_refs, head_oid) else {
         return Ok(None);
     };
 
-    Ok(Some(canonical_pull_request_url(
-        &host, &org, &repo_name, number,
-    )))
+    Ok(Some(WorktreePullRequest {
+        url: canonical_pull_request_url(&host, &org, &repo_name, number),
+        status: WorktreePullRequestStatus::Unknown,
+    }))
+}
+
+pub fn create_worktree_pr_impl(worktree_path: &str) -> Result<(), String> {
+    let worktree = Path::new(worktree_path);
+    let repo = Repository::open(worktree).map_err(|e| {
+        format!(
+            "Failed to open git repository for {}: {e}",
+            worktree.display()
+        )
+    })?;
+    let head = repo
+        .head()
+        .map_err(|e| format!("Failed to read HEAD for {}: {e}", worktree.display()))?;
+    let Some(branch_name) = head.shorthand().filter(|name| !name.is_empty()) else {
+        return Err(format!(
+            "Cannot create a pull request for detached HEAD at {}",
+            worktree.display()
+        ));
+    };
+    if !head.is_branch() {
+        return Err(format!(
+            "Cannot create a pull request for detached HEAD at {}",
+            worktree.display()
+        ));
+    }
+
+    let remote_url = repo
+        .find_remote("origin")
+        .ok()
+        .and_then(|remote| remote.url().map(str::to_owned))
+        .or_else(|| remote_url_for_repo(worktree).ok())
+        .ok_or_else(|| format!("No git remote URL found for {}", worktree.display()))?;
+    let Some((host, org, repo_name)) = github_remote(&remote_url) else {
+        return Err(format!(
+            "Pull request creation is only supported for GitHub remotes: {}",
+            remote_url
+        ));
+    };
+
+    create_github_pull_request_via_cli(worktree, &host, &org, &repo_name, branch_name).or_else(
+        |_| {
+            create_github_pull_request_via_interactive_shell(
+                worktree,
+                &host,
+                &org,
+                &repo_name,
+                branch_name,
+            )
+        },
+    )
 }
 
 pub fn set_worktree_order_impl(project_id: &str, order: Vec<String>) -> Result<(), String> {
@@ -1333,6 +1636,78 @@ mod tests {
         assert_eq!(
             canonical_pull_request_url("github.sendbird.com", "product", "grove", 7),
             "https://github.sendbird.com/product/grove/pull/7"
+        );
+    }
+
+    #[test]
+    fn select_github_pull_request_prefers_open_and_merged_results() {
+        let branch_name = "fix/rn-scroll-flicker";
+        let head_oid = Oid::from_str("c45c4ac7074d75bcb5d391b1e4ff4c7870d2ae02").unwrap();
+        let pull_requests = vec![
+            GithubPullRequestSummary {
+                url: "https://github.com/sendbird/ai-agent-js/pull/700".to_string(),
+                state: "CLOSED".to_string(),
+                head_ref_name: branch_name.to_string(),
+                head_ref_oid: "deadbeef074d75bcb5d391b1e4ff4c7870d2ae02".to_string(),
+                merged_at: None,
+                updated_at: "2026-03-23T08:16:20Z".to_string(),
+            },
+            GithubPullRequestSummary {
+                url: "https://github.com/sendbird/ai-agent-js/pull/805".to_string(),
+                state: "CLOSED".to_string(),
+                head_ref_name: branch_name.to_string(),
+                head_ref_oid: "deadbeef074d75bcb5d391b1e4ff4c7870d2ae02".to_string(),
+                merged_at: Some("2026-03-24T08:16:20Z".to_string()),
+                updated_at: "2026-03-24T08:16:20Z".to_string(),
+            },
+            GithubPullRequestSummary {
+                url: "https://github.com/sendbird/ai-agent-js/pull/806".to_string(),
+                state: "OPEN".to_string(),
+                head_ref_name: branch_name.to_string(),
+                head_ref_oid: head_oid.to_string(),
+                merged_at: None,
+                updated_at: "2026-03-26T08:16:20Z".to_string(),
+            },
+        ];
+
+        assert_eq!(
+            select_github_pull_request(&pull_requests, branch_name, head_oid),
+            Some(WorktreePullRequest {
+                url: "https://github.com/sendbird/ai-agent-js/pull/806".to_string(),
+                status: WorktreePullRequestStatus::Open,
+            })
+        );
+    }
+
+    #[test]
+    fn select_github_pull_request_uses_latest_merged_when_no_open_pr_exists() {
+        let branch_name = "release/2026-03-26";
+        let head_oid = Oid::from_str("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap();
+        let pull_requests = vec![
+            GithubPullRequestSummary {
+                url: "https://github.com/bang9/grove/pull/40".to_string(),
+                state: "CLOSED".to_string(),
+                head_ref_name: branch_name.to_string(),
+                head_ref_oid: "1111111111111111111111111111111111111111".to_string(),
+                merged_at: Some("2026-03-20T00:00:00Z".to_string()),
+                updated_at: "2026-03-20T00:00:00Z".to_string(),
+            },
+            GithubPullRequestSummary {
+                url: "https://github.com/bang9/grove/pull/42".to_string(),
+                state: "CLOSED".to_string(),
+                head_ref_name: branch_name.to_string(),
+                head_ref_oid: "2222222222222222222222222222222222222222".to_string(),
+                merged_at: Some("2026-03-26T00:00:00Z".to_string()),
+                updated_at: "2026-03-26T00:00:00Z".to_string(),
+            },
+        ];
+
+        assert_eq!(
+            select_github_pull_request(&pull_requests, branch_name, head_oid),
+            Some(WorktreePullRequest {
+                url: "https://github.com/bang9/grove/pull/42".to_string(),
+                status: WorktreePullRequestStatus::Merged,
+            })
         );
     }
 

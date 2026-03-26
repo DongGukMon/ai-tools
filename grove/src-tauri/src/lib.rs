@@ -2,7 +2,7 @@ mod eventbus;
 use grove_core::{
     AppConfig, BehindInfo, CommitInfo, CreatePtyRequest, CreatePtyRestore, CreatePtyResult,
     DetectedThemeResult, FileDiff, FileStatus, Project, PtyBellEvent,
-    SaveTerminalSessionSnapshotRequest, TerminalSessionSnapshot, Worktree,
+    SaveTerminalSessionSnapshotRequest, TerminalSessionSnapshot, Worktree, WorktreePullRequest,
 };
 
 // === Async helper ===
@@ -111,8 +111,13 @@ async fn list_worktrees(project_id: String) -> Result<Vec<Worktree>, String> {
 }
 
 #[tauri::command]
-async fn get_worktree_pr_url(worktree_path: String) -> Result<Option<String>, String> {
+async fn get_worktree_pr_url(worktree_path: String) -> Result<Option<WorktreePullRequest>, String> {
     blocking(move || grove_core::git_project::get_worktree_pr_url_impl(&worktree_path)).await
+}
+
+#[tauri::command]
+async fn create_worktree_pr(worktree_path: String) -> Result<(), String> {
+    blocking(move || grove_core::git_project::create_worktree_pr_impl(&worktree_path)).await
 }
 
 #[tauri::command]
@@ -358,6 +363,7 @@ pub fn run() {
             remove_worktree,
             list_worktrees,
             get_worktree_pr_url,
+            create_worktree_pr,
             set_worktree_order,
             // Mission (W5)
             list_missions,

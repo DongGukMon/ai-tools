@@ -1,3 +1,5 @@
+use crate::tool_hooks;
+use std::collections::HashMap;
 use std::env;
 use std::io::Read as _;
 use std::process::{Command, Stdio};
@@ -53,15 +55,130 @@ fn cached_launchctl_ssh_auth_sock() -> Option<String> {
 }
 
 const LOGIN_SHELL_TIMEOUT: Duration = Duration::from_secs(2);
+const LOGIN_SHELL_COMMAND_TIMEOUT: Duration = Duration::from_secs(15);
 const LOGIN_SHELL_RETRY_ATTEMPTS: usize = 4;
 const LOGIN_SHELL_RETRY_DELAY: Duration = Duration::from_millis(1500);
 const PATH_MARKER: &str = "__GROVE_PATH__";
+const ENV_MARKER: &str = "__GROVE_ENV__";
+const SHELL_ENV_KEYS: &[&str] = &[
+    "PATH",
+    "SSH_AUTH_SOCK",
+    "GH_TOKEN_SENDBIRD",
+    "GH_TOKEN_SENDBIRD_PLAYGROUND",
+    "GH_TOKEN_RICH_AUTOMATION",
+];
+
+fn shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\"'\"'"))
+}
+
+fn grove_real_zdotdir() -> String {
+    let real_zdotdir = env::var("ZDOTDIR").unwrap_or_default();
+    let grove_zsh = tool_hooks::grove_zdotdir();
+
+    if !real_zdotdir.is_empty() && grove_zsh.as_deref() != Some(real_zdotdir.as_str()) {
+        return real_zdotdir;
+    }
+
+    dirs::home_dir()
+        .map(|home| home.to_string_lossy().into_owned())
+        .unwrap_or_default()
+}
+
+fn shell_command(shell: &str, interactive: bool, command: &str) -> Command {
+    let mut child = Command::new(shell);
+    if interactive {
+        child.args(["-i", "-c", command]);
+        if let Some(zdotdir) = tool_hooks::grove_zdotdir() {
+            child.env("GROVE_REAL_ZDOTDIR", grove_real_zdotdir());
+            child.env("ZDOTDIR", zdotdir);
+        }
+    } else {
+        child.args(["-l", "-c", command]);
+    }
+    child
+}
+
+fn shell_output(command: &str, interactive: bool) -> Result<String, String> {
+    let shell = env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
+    if !is_posix_like_shell(&shell) {
+        return Err(format!("Unsupported shell: {shell}"));
+    }
+
+    let mut child = shell_command(&shell, interactive, command)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("Failed to launch shell: {e}"))?;
+
+    let start = Instant::now();
+    loop {
+        match child.try_wait().map_err(|e| format!("Failed to poll shell: {e}"))? {
+            Some(status) => {
+                let output = child
+                    .wait_with_output()
+                    .map_err(|e| format!("Failed to read shell output: {e}"))?;
+                if !status.success() {
+                    return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+                }
+                return Ok(String::from_utf8_lossy(&output.stdout).to_string());
+            }
+            None if start.elapsed() >= LOGIN_SHELL_COMMAND_TIMEOUT => {
+                let _ = child.kill();
+                let _ = child.wait();
+                let shell_mode = if interactive { "interactive" } else { "login" };
+                return Err(format!(
+                    "{shell_mode} shell command timed out after {}s",
+                    LOGIN_SHELL_COMMAND_TIMEOUT.as_secs()
+                ));
+            }
+            None => std::thread::sleep(Duration::from_millis(50)),
+        }
+    }
+}
+
+fn shell_env_snapshot_command() -> String {
+    let keys = SHELL_ENV_KEYS
+        .iter()
+        .map(|key| shell_quote(key))
+        .collect::<Vec<_>>()
+        .join(" ");
+    format!(
+        "printf '%s\\n' {marker}; \
+for key in {keys}; do \
+  value=\"$(/usr/bin/printenv \"$key\" 2>/dev/null || true)\"; \
+  printf '%s=%s\\n' \"$key\" \"$value\"; \
+done; \
+printf '%s\\n' {marker}",
+        marker = shell_quote(ENV_MARKER),
+    )
+}
+
+fn merge_path_candidates(primary: Option<String>, secondary: Option<String>) -> Option<String> {
+    let mut merged = Vec::new();
+    for candidate in [primary, secondary].into_iter().flatten() {
+        for entry in candidate.split(':') {
+            let trimmed = entry.trim();
+            if trimmed.is_empty() || merged.iter().any(|existing| existing == trimmed) {
+                continue;
+            }
+            merged.push(trimmed.to_string());
+        }
+    }
+
+    if merged.is_empty() {
+        None
+    } else {
+        Some(merged.join(":"))
+    }
+}
 
 pub fn enriched_path() -> &'static str {
     static PATH: OnceLock<String> = OnceLock::new();
     PATH.get_or_init(|| {
-        let base =
-            resolve_login_shell_path().unwrap_or_else(|| env::var("PATH").unwrap_or_default());
+        let base = merge_path_candidates(preferred_env_var("PATH"), resolve_login_shell_path())
+            .unwrap_or_else(|| env::var("PATH").unwrap_or_default());
         match dirs::home_dir().and_then(|h| h.join(".grove/bin").to_str().map(String::from)) {
             Some(grove_bin) => format!("{grove_bin}:{base}"),
             None => base,
@@ -171,19 +288,97 @@ fn parse_path_marker(output: &str) -> Option<String> {
     }
 }
 
-pub fn preferred_ssh_auth_sock() -> Option<String> {
-    resolve_with(normalize_env_value(env::var("SSH_AUTH_SOCK").ok()), || {
-        cached_launchctl_ssh_auth_sock()
+fn parse_env_marker_output(output: &str) -> HashMap<String, String> {
+    let start_tag = format!("{ENV_MARKER}\n");
+    let end_tag = format!("\n{ENV_MARKER}");
+
+    let Some(start) = output.find(&start_tag).map(|idx| idx + start_tag.len()) else {
+        return HashMap::new();
+    };
+    let Some(end) = output.rfind(&end_tag) else {
+        return HashMap::new();
+    };
+    if start >= end {
+        return HashMap::new();
+    }
+
+    output[start..end]
+        .lines()
+        .filter_map(|line| {
+            let (key, value) = line.split_once('=')?;
+            normalize_env_value(Some(value.to_string())).map(|value| (key.to_string(), value))
+        })
+        .collect()
+}
+
+#[cfg(target_os = "macos")]
+fn resolve_interactive_shell_env_once() -> Option<HashMap<String, String>> {
+    let output = shell_output(&shell_env_snapshot_command(), true).ok()?;
+    Some(parse_env_marker_output(&output))
+}
+
+#[cfg(target_os = "macos")]
+fn interactive_shell_env() -> &'static HashMap<String, String> {
+    static ENV: OnceLock<HashMap<String, String>> = OnceLock::new();
+    ENV.get_or_init(|| {
+        resolve_with_retry(
+            LOGIN_SHELL_RETRY_ATTEMPTS,
+            LOGIN_SHELL_RETRY_DELAY,
+            resolve_interactive_shell_env_once,
+        )
+        .unwrap_or_default()
     })
+}
+
+#[cfg(not(target_os = "macos"))]
+fn interactive_shell_env() -> &'static HashMap<String, String> {
+    static ENV: OnceLock<HashMap<String, String>> = OnceLock::new();
+    ENV.get_or_init(HashMap::new)
+}
+
+pub fn preferred_env_var(key: &str) -> Option<String> {
+    resolve_with(normalize_env_value(env::var(key).ok()), || {
+        interactive_shell_env().get(key).cloned()
+    })
+}
+
+pub fn preferred_ssh_auth_sock() -> Option<String> {
+    resolve_with(preferred_env_var("SSH_AUTH_SOCK"), cached_launchctl_ssh_auth_sock)
+}
+
+pub fn subprocess_env_pairs() -> Vec<(String, String)> {
+    let mut pairs = vec![("PATH".to_string(), enriched_path().to_string())];
+    if let Some(ssh_auth_sock) = preferred_ssh_auth_sock() {
+        pairs.push(("SSH_AUTH_SOCK".to_string(), ssh_auth_sock));
+    }
+    pairs
+}
+
+pub fn interactive_shell_output(command: &str) -> Result<String, String> {
+    #[cfg(target_os = "macos")]
+    {
+        shell_output(command, true)
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        shell_output(command, false)
+    }
+}
+
+pub fn login_shell_output(command: &str) -> Result<String, String> {
+    shell_output(command, false)
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        enriched_path, is_posix_like_shell, normalize_env_value, parse_path_marker,
-        preferred_ssh_auth_sock, resolve_with, resolve_with_retry,
+        enriched_path, is_posix_like_shell, merge_path_candidates, normalize_env_value,
+        parse_env_marker_output, parse_path_marker, preferred_env_var, preferred_ssh_auth_sock,
+        resolve_with, resolve_with_retry,
     };
     use crate::test_support::env_lock;
+    use std::collections::HashMap;
     use std::time::Duration;
 
     #[test]
@@ -217,6 +412,29 @@ mod tests {
     }
 
     #[test]
+    fn preferred_env_var_prefers_process_env() {
+        let _lock = env_lock();
+        let original = std::env::var("GH_TOKEN_SENDBIRD").ok();
+        unsafe {
+            std::env::set_var("GH_TOKEN_SENDBIRD", "test-token");
+        }
+
+        assert_eq!(
+            preferred_env_var("GH_TOKEN_SENDBIRD").as_deref(),
+            Some("test-token")
+        );
+
+        match original {
+            Some(value) => unsafe {
+                std::env::set_var("GH_TOKEN_SENDBIRD", value);
+            },
+            None => unsafe {
+                std::env::remove_var("GH_TOKEN_SENDBIRD");
+            },
+        }
+    }
+
+    #[test]
     fn normalize_env_value_ignores_blank_values() {
         assert_eq!(
             normalize_env_value(Some("  /private/tmp/agent.sock \n".to_string())),
@@ -244,6 +462,29 @@ mod tests {
     fn parse_path_marker_returns_none_on_empty_path() {
         let output = "__GROVE_PATH__\n\n__GROVE_PATH__";
         assert_eq!(parse_path_marker(output), None);
+    }
+
+    #[test]
+    fn parse_env_marker_output_extracts_non_empty_values() {
+        let output =
+            "noise\n__GROVE_ENV__\nPATH=/usr/bin:/bin\nSSH_AUTH_SOCK=\nGH_TOKEN_SENDBIRD=abc123\n__GROVE_ENV__\nnoise";
+        let expected = HashMap::from([
+            ("PATH".to_string(), "/usr/bin:/bin".to_string()),
+            ("GH_TOKEN_SENDBIRD".to_string(), "abc123".to_string()),
+        ]);
+
+        assert_eq!(parse_env_marker_output(output), expected);
+    }
+
+    #[test]
+    fn merge_path_candidates_preserves_order_and_deduplicates() {
+        assert_eq!(
+            merge_path_candidates(
+                Some("/a:/b:/bin".to_string()),
+                Some("/bin:/c:/a".to_string())
+            ),
+            Some("/a:/b:/bin:/c".to_string())
+        );
     }
 
     #[test]

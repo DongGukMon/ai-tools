@@ -37,11 +37,14 @@ const TerminalTabContent = memo(function TerminalTabContent({
     if (!container || !ptyId) return;
 
     const isMirror = Boolean(tab.mirrorPtyId);
-    const runtime = isMirror
-      ? mirrorSession
+    let runtime: ReturnType<typeof acquireTerminalRuntime> | null;
+    if (isMirror) {
+      runtime = mirrorSession
         ? acquireTerminalRuntime(mirrorSession.paneId, theme)
-        : null
-      : acquireTerminalRuntime(tab.paneId, theme);
+        : null;
+    } else {
+      runtime = acquireTerminalRuntime(tab.paneId, theme);
+    }
     if (!runtime) return;
 
     runtimeRef.current = runtime;
@@ -73,11 +76,12 @@ const TerminalTabContent = memo(function TerminalTabContent({
     runtimeRef.current?.setTheme(theme);
   }, [theme]);
 
-  const translateX = isActive
-    ? "translateX(0)"
-    : direction === "left"
-      ? "translateX(-100%)"
-      : "translateX(100%)";
+  let translateX = "translateX(100%)";
+  if (isActive) {
+    translateX = "translateX(0)";
+  } else if (direction === "left") {
+    translateX = "translateX(-100%)";
+  }
 
   return (
     <div
@@ -156,11 +160,12 @@ function GlobalTerminalPanel({
             const ptyId = getTabPtyId(tab.id);
             if (!isTabReady(tab.id) || !ptyId) return null;
             const isActive = tab.id === activeTabId;
-            const direction = isActive
-              ? "none" as const
-              : idx < activeIdx
-                ? "left" as const
-                : "right" as const;
+            let direction: "left" | "right" | "none" = "right";
+            if (isActive) {
+              direction = "none";
+            } else if (idx < activeIdx) {
+              direction = "left";
+            }
             return (
               <TerminalTabContent
                 key={tab.id}

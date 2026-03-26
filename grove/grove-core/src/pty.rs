@@ -1,6 +1,6 @@
 use crate::{
     config,
-    process_env::{enriched_path, preferred_ssh_auth_sock},
+    process_env::{enriched_path, subprocess_env_pairs},
     tool_hooks::{self, TMUX_GROVE_AI_STATUS_OPTION},
     worktree_lifecycle::WorktreeResource,
     CreatePtyInitialHydration, CreatePtyInitialHydrationSource, CreatePtyRequest, CreatePtyRestore,
@@ -865,26 +865,24 @@ fn required_arg(name: &str, value: &str) -> Result<String, String> {
 }
 
 fn apply_portable_terminal_env(cmd: &mut CommandBuilder) {
-    cmd.env("PATH", enriched_path());
+    for (key, value) in subprocess_env_pairs() {
+        cmd.env(&key, &value);
+    }
     cmd.env("TERM", "xterm-256color");
     let locale = preferred_utf8_locale();
     cmd.env("LC_ALL", &locale);
     cmd.env("LANG", &locale);
     cmd.env("LC_CTYPE", &locale);
-    if let Some(ssh_auth_sock) = preferred_ssh_auth_sock() {
-        cmd.env("SSH_AUTH_SOCK", ssh_auth_sock);
-    }
 }
 
 fn apply_tmux_command_env(cmd: &mut Command) {
-    cmd.env("PATH", enriched_path());
+    for (key, value) in subprocess_env_pairs() {
+        cmd.env(key, value);
+    }
     let locale = preferred_utf8_locale();
     cmd.env("LC_ALL", &locale);
     cmd.env("LANG", &locale);
     cmd.env("LC_CTYPE", &locale);
-    if let Some(ssh_auth_sock) = preferred_ssh_auth_sock() {
-        cmd.env("SSH_AUTH_SOCK", ssh_auth_sock);
-    }
 }
 
 fn grove_tmux_session_name(worktree_path: &str, pane_id: &str) -> String {

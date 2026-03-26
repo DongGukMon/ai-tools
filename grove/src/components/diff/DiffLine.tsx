@@ -9,25 +9,26 @@ export default function DiffLine({ line }: Props) {
   const isAdd = line.type === "add";
   const isRemove = line.type === "remove";
 
-  // GitHub-style row backgrounds
-  const rowBg = isAdd
-    ? "bg-[var(--diff-add-bg)]"
-    : isRemove
-      ? "bg-[var(--diff-remove-bg)]"
-      : "";
+  let rowBg = "";
+  let gutterBg = "";
+  let prefixColor = "text-transparent";
 
-  // Gutter backgrounds (slightly more saturated than row)
-  const gutterBg = isAdd
-    ? "bg-[var(--diff-add-gutter-bg)]"
-    : isRemove
-      ? "bg-[var(--diff-remove-gutter-bg)]"
-      : "";
+  if (isAdd) {
+    rowBg = "bg-[var(--diff-add-bg)]";
+    gutterBg = "bg-[var(--diff-add-gutter-bg)]";
+    prefixColor = "text-[var(--color-success)]";
+  } else if (isRemove) {
+    rowBg = "bg-[var(--diff-remove-bg)]";
+    gutterBg = "bg-[var(--diff-remove-gutter-bg)]";
+    prefixColor = "text-[var(--color-danger)]";
+  }
 
-  const prefixColor = isAdd
-    ? "text-[var(--color-success)]"
-    : isRemove
-      ? "text-[var(--color-danger)]"
-      : "text-transparent";
+  let prefix = " ";
+  if (isAdd) {
+    prefix = "+";
+  } else if (isRemove) {
+    prefix = "-";
+  }
 
   return (
     <div
@@ -51,7 +52,7 @@ export default function DiffLine({ line }: Props) {
       <span
         className={cn("w-[18px] text-center shrink-0 select-none font-medium", prefixColor, gutterBg)}
       >
-        {isAdd ? "+" : isRemove ? "-" : " "}
+        {prefix}
       </span>
 
       {/* Content */}

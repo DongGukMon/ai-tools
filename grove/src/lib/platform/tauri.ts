@@ -6,6 +6,7 @@ import type {
   AppConfig,
   Project,
   Worktree,
+  WorktreePullRequest,
   BehindInfo,
   FileStatus,
   CommitInfo,
@@ -103,12 +104,14 @@ export interface TerminalSessionSnapshot {
 }
 
 export function getCommandErrorMessage(error: unknown): string {
-  const raw =
-    typeof error === "string"
-      ? error
-      : error instanceof Error
-        ? error.message
-        : String(error);
+  let raw: string;
+  if (typeof error === "string") {
+    raw = error;
+  } else if (error instanceof Error) {
+    raw = error.message;
+  } else {
+    raw = String(error);
+  }
   const message = sanitizeCommandErrorMessage(raw);
   return message || "Unknown error";
 }
@@ -208,8 +211,12 @@ export async function listWorktrees(projectId: string): Promise<Worktree[]> {
 
 export async function getWorktreePrUrl(
   worktreePath: string,
-): Promise<string | null> {
-  return platform.invoke<string | null>("get_worktree_pr_url", { worktreePath });
+): Promise<WorktreePullRequest | null> {
+  return platform.invoke<WorktreePullRequest | null>("get_worktree_pr_url", { worktreePath });
+}
+
+export async function createWorktreePr(worktreePath: string): Promise<void> {
+  return platform.invoke("create_worktree_pr", { worktreePath });
 }
 
 // Phase 2: 드래그 재정렬 완료 시 호출하여 커스텀 순서를 영속화

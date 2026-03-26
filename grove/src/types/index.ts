@@ -1,4 +1,9 @@
-export type { Project, Worktree } from "./project";
+export type {
+  Project,
+  Worktree,
+  WorktreePullRequest,
+  WorktreePullRequestStatus,
+} from "./project";
 export type { Mission, MissionProject } from "./mission";
 export type {
   TerminalTheme,

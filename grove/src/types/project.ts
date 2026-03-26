@@ -15,3 +15,10 @@ export interface Worktree {
   path: string;
   branch: string;
 }
+
+export type WorktreePullRequestStatus = "open" | "merged" | "unknown";
+
+export interface WorktreePullRequest {
+  url: string;
+  status: WorktreePullRequestStatus;
+}

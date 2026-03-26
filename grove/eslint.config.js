@@ -21,6 +21,7 @@ export default [
       "grove-classname": classNamePlugin,
     },
     rules: {
+      "no-nested-ternary": "error",
       "grove-classname/require-cn-for-classname": "error",
       "grove-classname/prefer-object-syntax-in-cn": "error",
     },
