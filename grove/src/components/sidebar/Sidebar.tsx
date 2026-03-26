@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
 import { useProject } from "../../hooks/useProject";
 import { useMission } from "../../hooks/useMission";
@@ -19,6 +19,11 @@ function Sidebar() {
   const [showCreateMissionDialog, setShowCreateMissionDialog] = useState(false);
 
   const isProjectsMode = sidebarMode === "projects";
+
+  useEffect(() => {
+    setShowAddDialog(false);
+    setShowCreateMissionDialog(false);
+  }, [sidebarMode]);
 
   return (
     <div className={cn("flex h-full flex-col bg-sidebar")}>

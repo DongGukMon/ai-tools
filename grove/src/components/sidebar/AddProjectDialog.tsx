@@ -40,7 +40,7 @@ function AddProjectDialog({ onClose }: Props) {
       <form onSubmit={handleSubmit}>
         <Input
           type="text"
-          placeholder="https://github.com/org/repo.git or git@github.com:org/repo.git"
+          placeholder="git@github.com:org/repo.git"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           autoFocus
