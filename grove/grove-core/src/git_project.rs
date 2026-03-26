@@ -1032,7 +1032,11 @@ pub fn add_worktree_impl(project_id: &str, name: &str) -> Result<Worktree, Strin
     // Fetch latest from origin
     let _ = run_git(source, &["fetch", "origin"]);
 
-    let default_branch = remote_default_branch(source)?;
+    let default_branch = entry
+        .base_branch
+        .clone()
+        .map(Ok)
+        .unwrap_or_else(|| remote_default_branch(source))?;
 
     let worktree_path = source
         .parent()
