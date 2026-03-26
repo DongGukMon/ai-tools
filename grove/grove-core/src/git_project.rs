@@ -1276,6 +1276,47 @@ pub fn set_worktree_order_impl(project_id: &str, order: Vec<String>) -> Result<(
     config::save_config(&config)
 }
 
+pub fn get_remote_branches_impl(project_id: &str) -> Result<Vec<String>, String> {
+    let entry = find_project_entry(project_id)?;
+    let source_dir = managed_source_dir(&entry)?;
+    let source = source_dir.as_path();
+
+    if !source.exists() {
+        return Err(format!("Source directory not found: {}", entry.source_path));
+    }
+
+    let _ = run_git(source, &["fetch", "origin"]);
+
+    let mut branches = remote_branch_names(source)?;
+    branches.sort();
+    Ok(branches)
+}
+
+pub fn set_base_branch_impl(project_id: &str, branch: Option<String>) -> Result<(), String> {
+    if let Some(ref branch_name) = branch {
+        let entry = find_project_entry(project_id)?;
+        let source_dir = managed_source_dir(&entry)?;
+        let source = source_dir.as_path();
+
+        if !source.exists() {
+            return Err(format!("Source directory not found: {}", entry.source_path));
+        }
+
+        let remote_ref = format!("refs/remotes/origin/{branch_name}");
+        run_git(source, &["show-ref", "--verify", &remote_ref])
+            .map_err(|_| format!("Branch '{}' not found in remote", branch_name))?;
+    }
+
+    let mut config = config::load_config();
+    let entry = config
+        .projects
+        .iter_mut()
+        .find(|p| p.id == project_id)
+        .ok_or_else(|| format!("Project not found: {project_id}"))?;
+    entry.base_branch = branch;
+    config::save_config(&config)
+}
+
 pub fn is_source_dirty_impl(project_id: &str) -> Result<bool, String> {
     let entry = find_project_entry(project_id)?;
     let source_dir = managed_source_dir(&entry)?;
