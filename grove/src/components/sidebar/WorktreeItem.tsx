@@ -6,8 +6,6 @@ import { useTabStore } from "../../store/tab";
 import type { AiSession, AiTool } from "../../store/terminal";
 import { useToast } from "../../store/toast";
 import { overlay } from "../../lib/overlay";
-import { Button } from "../ui/button";
-import { Dialog } from "../ui/dialog";
 import { cn } from "../../lib/cn";
 import claudeCodeColor from "../../assets/claudecode-color.png";
 import codexColor from "../../assets/codex-color.png";
@@ -70,21 +68,18 @@ function WorktreeItem({ worktree, projectId }: Props) {
 
   const handleRemoveClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    const confirmed = await overlay.open<boolean>(({ resolve, close }) => (
-      <Dialog open onClose={close} title="Remove worktree?" className={cn("max-w-sm")}>
-        <div className={cn("space-y-4")}>
-          <p className={cn("text-sm leading-relaxed text-muted-foreground")}>
-            Worktree{" "}
-            <span className={cn("font-semibold text-foreground")}>{displayName}</span>{" "}
-            and its local branch, terminal sessions, and layouts will be removed.
-          </p>
-          <div className={cn("flex justify-end gap-2")}>
-            <Button variant="ghost" size="sm" onClick={close}>Cancel</Button>
-            <Button variant="destructive" size="sm" onClick={() => resolve(true)}>Delete</Button>
-          </div>
-        </div>
-      </Dialog>
-    ));
+    const confirmed = await overlay.confirm({
+      title: "Remove worktree?",
+      description: (
+        <>
+          Worktree{" "}
+          <span className={cn("font-semibold text-foreground")}>{displayName}</span>{" "}
+          and its local branch, terminal sessions, and layouts will be removed.
+        </>
+      ),
+      confirmLabel: "Delete",
+      variant: "destructive",
+    });
 
     if (!confirmed) return;
 

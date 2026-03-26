@@ -7,6 +7,7 @@ import { useTerminalStore } from "./terminal";
 import { useBroadcastStore } from "./broadcast";
 import { collectTerminalPanes } from "../lib/terminal-session";
 import { useMissionStore } from "./mission";
+import { overlay } from "../lib/overlay";
 
 interface ProjectState {
   projects: Project[];
@@ -187,9 +188,13 @@ export const useProjectStore = create<ProjectState>((set) => ({
       const missionNames = referencingMissions
         .map((m) => m.name)
         .join("\n  - ");
-      const confirmed = window.confirm(
-        `This project is used in the following missions:\n  - ${missionNames}\n\nDelete will also remove it from these missions.`,
-      );
+      const confirmed = await overlay.confirm({
+        title: "Remove project from missions too?",
+        description:
+          `This project is used in the following missions:\n  - ${missionNames}\n\nDelete will also remove it from these missions.`,
+        confirmLabel: "Delete project",
+        variant: "destructive",
+      });
       if (!confirmed) throw new Error("Cancelled");
 
       // Clean up mission references first (before SOT deletion)

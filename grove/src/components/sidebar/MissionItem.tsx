@@ -14,6 +14,7 @@ import { Badge } from "../ui/badge";
 import MissionProjectItem from "./MissionProjectItem";
 import AddProjectToMissionDialog from "./AddProjectToMissionDialog";
 import { cn } from "../../lib/cn";
+import { overlay } from "../../lib/overlay";
 
 interface Props {
   mission: Mission;
@@ -48,9 +49,12 @@ function MissionItem({ mission }: Props) {
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    const confirmed = window.confirm(
-      `Delete mission "${mission.name}"? This will remove all project associations.`,
-    );
+    const confirmed = await overlay.confirm({
+      title: "Delete mission?",
+      description: `Delete mission "${mission.name}"? This will remove all project associations.`,
+      confirmLabel: "Delete mission",
+      variant: "destructive",
+    });
     if (!confirmed) return;
     await deleteMission(mission.id);
   };

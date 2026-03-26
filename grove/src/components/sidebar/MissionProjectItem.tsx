@@ -4,6 +4,7 @@ import { useMissionStore } from "../../store/mission";
 import { useProjectStore } from "../../store/project";
 import { useTerminalStore } from "../../store/terminal";
 import { cn } from "../../lib/cn";
+import { overlay } from "../../lib/overlay";
 
 interface Props {
   missionId: string;
@@ -32,9 +33,12 @@ function MissionProjectItem({ missionId, project }: Props) {
 
   const handleRemove = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    const confirmed = window.confirm(
-      `Remove "${displayName}" from this mission?`,
-    );
+    const confirmed = await overlay.confirm({
+      title: "Remove project from mission?",
+      description: `Remove "${displayName}" from this mission?`,
+      confirmLabel: "Remove",
+      variant: "destructive",
+    });
     if (!confirmed) return;
     await removeProject(missionId, project.projectId);
   };

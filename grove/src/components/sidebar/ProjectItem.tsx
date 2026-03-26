@@ -12,8 +12,7 @@ import { useToast } from "../../store/toast";
 import { overlay } from "../../lib/overlay";
 import DefaultBranchItem from "./DefaultBranchItem";
 import WorktreeItem from "./WorktreeItem";
-import { Button, IconButton } from "../ui/button";
-import { Dialog } from "../ui/dialog";
+import { IconButton } from "../ui/button";
 import { cn } from "../../lib/cn";
 import { sanitizeBranchName } from "../../lib/git-utils";
 
@@ -62,35 +61,26 @@ const ProjectItem = memo(function ProjectItem({ project }: Props) {
 
   const handleRemoveProject = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    const confirmed = await overlay.open<boolean>(({ resolve, close }) => (
-      <Dialog open onClose={close} title="Remove project?" className="max-w-sm">
-        <div className="space-y-4">
-          <p className={cn("text-sm leading-relaxed text-muted-foreground")}>
+    const confirmed = await overlay.confirm({
+      title: "Remove project?",
+      description: (
+        <>
+          <p>
             <span className={cn("font-semibold text-foreground")}>
               {project.org}/{project.repo}
             </span>{" "}
             project folder and all worktrees will be deleted.
           </p>
-          <p className={cn("text-xs leading-relaxed text-muted-foreground/70")}>
+          <p className={cn("text-xs text-muted-foreground/70")}>
             This removes the hidden source repository too. Use sync source if
             you only want to reset the source repo to the remote default
             branch.
           </p>
-          <div className={cn("flex justify-end gap-2")}>
-            <Button variant="ghost" size="sm" onClick={close}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => resolve(true)}
-            >
-              Delete project
-            </Button>
-          </div>
-        </div>
-      </Dialog>
-    ));
+        </>
+      ),
+      confirmLabel: "Delete project",
+      variant: "destructive",
+    });
 
     if (!confirmed) return;
 

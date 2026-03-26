@@ -6,6 +6,7 @@ import { usePanelLayoutStore } from "../../store/panel-layout";
 import { cn } from "../../lib/cn";
 import { runCommandSafely } from "../../lib/command";
 import * as tauri from "../../lib/platform";
+import { overlay } from "../../lib/overlay";
 import ResizablePanelGroup from "../ui/resizable-panel-group";
 import DiffViewer from "../diff/DiffViewer";
 import type { FileStatus, FileDiff } from "../../types";
@@ -85,9 +86,17 @@ function ActionButton({
     <button
       type="button"
       title={title}
-      onClick={(e) => {
+      onClick={async (e) => {
         e.stopPropagation();
-        if (confirmMsg && !window.confirm(confirmMsg)) return;
+        if (confirmMsg) {
+          const confirmed = await overlay.confirm({
+            title,
+            description: confirmMsg,
+            confirmLabel: title,
+            variant: "destructive",
+          });
+          if (!confirmed) return;
+        }
         onClick();
       }}
       className={cn(
