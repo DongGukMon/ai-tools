@@ -2,6 +2,8 @@ use crate::tool_hooks;
 use std::collections::HashMap;
 use std::env;
 use std::io::Read as _;
+#[cfg(unix)]
+use std::os::unix::fs::FileTypeExt as _;
 use std::process::{Command, Stdio};
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
@@ -41,6 +43,59 @@ where
     env_value.or_else(fallback)
 }
 
+fn parse_env_var_from_ps_output(output: &str, key: &str) -> Option<String> {
+    let prefix = format!("{key}=");
+    output
+        .split_whitespace()
+        .find_map(|segment| segment.strip_prefix(&prefix).map(str::to_string))
+        .and_then(|value| normalize_env_value(Some(value)))
+}
+
+fn process_parent_id(pid: u32) -> Option<u32> {
+    let output = Command::new("ps")
+        .args(["-o", "ppid=", "-p", &pid.to_string()])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+
+    String::from_utf8_lossy(&output.stdout)
+        .trim()
+        .parse::<u32>()
+        .ok()
+}
+
+fn process_env_var(pid: u32, key: &str) -> Option<String> {
+    let output = Command::new("ps")
+        .args(["eww", "-p", &pid.to_string()])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+
+    parse_env_var_from_ps_output(&String::from_utf8_lossy(&output.stdout), key)
+}
+
+fn ancestor_process_env_var(key: &str) -> Option<String> {
+    let mut pid = std::process::id();
+    for _ in 0..8 {
+        let parent = process_parent_id(pid)?;
+        if parent <= 1 {
+            return None;
+        }
+
+        if let Some(value) = process_env_var(parent, key) {
+            return Some(value);
+        }
+
+        pid = parent;
+    }
+
+    None
+}
+
 #[cfg(target_os = "macos")]
 fn cached_launchctl_ssh_auth_sock() -> Option<String> {
     static SSH_AUTH_SOCK: OnceLock<Option<String>> = OnceLock::new();
@@ -62,6 +117,7 @@ const PATH_MARKER: &str = "__GROVE_PATH__";
 const ENV_MARKER: &str = "__GROVE_ENV__";
 const SHELL_ENV_KEYS: &[&str] = &[
     "PATH",
+    "SSH_AUTH_SOCK",
     "GH_TOKEN_SENDBIRD",
     "GH_TOKEN_SENDBIRD_PLAYGROUND",
     "GH_TOKEN_RICH_AUTOMATION",
@@ -113,7 +169,10 @@ fn shell_output(command: &str, interactive: bool) -> Result<String, String> {
 
     let start = Instant::now();
     loop {
-        match child.try_wait().map_err(|e| format!("Failed to poll shell: {e}"))? {
+        match child
+            .try_wait()
+            .map_err(|e| format!("Failed to poll shell: {e}"))?
+        {
             Some(status) => {
                 let output = child
                     .wait_with_output()
@@ -341,12 +400,56 @@ pub fn preferred_env_var(key: &str) -> Option<String> {
     })
 }
 
+fn validated_shell_ssh_auth_sock(value: Option<String>) -> Option<String> {
+    let value = normalize_env_value(value)?;
+    let metadata = std::fs::metadata(&value).ok()?;
+    #[cfg(unix)]
+    {
+        if metadata.file_type().is_socket() {
+            return Some(value);
+        }
+    }
+
+    #[cfg(not(unix))]
+    {
+        if metadata.is_file() {
+            return Some(value);
+        }
+    }
+
+    None
+}
+
+fn validated_ancestor_ssh_auth_sock() -> Option<String> {
+    validated_shell_ssh_auth_sock(ancestor_process_env_var("SSH_AUTH_SOCK"))
+}
+
+fn preferred_ssh_auth_sock_from(
+    env_value: Option<String>,
+    launchctl_value: Option<String>,
+    ancestor_value: Option<String>,
+    shell_value: Option<String>,
+) -> Option<String> {
+    resolve_with(normalize_env_value(env_value), || {
+        resolve_with(normalize_env_value(launchctl_value), || {
+            resolve_with(validated_shell_ssh_auth_sock(ancestor_value), || {
+                validated_shell_ssh_auth_sock(shell_value)
+            })
+        })
+    })
+}
+
 pub fn preferred_ssh_auth_sock() -> Option<String> {
-    // Interactive shells can surface stale agent sockets. Keep SSH_AUTH_SOCK on the
-    // same trusted path as before the PR env work: process env first, then launchctl.
-    resolve_with(
-        normalize_env_value(env::var("SSH_AUTH_SOCK").ok()),
-        cached_launchctl_ssh_auth_sock,
+    // `19a8ad9` started sourcing SSH_AUTH_SOCK from interactive shell env
+    // rendering. That lets shell-specific or stale agent sockets override the
+    // launchd session socket that refresh/sync previously relied on.
+    // Keep SSH on the pre-refactor trust path and use shell-derived values
+    // only as a last resort.
+    preferred_ssh_auth_sock_from(
+        env::var("SSH_AUTH_SOCK").ok(),
+        cached_launchctl_ssh_auth_sock(),
+        validated_ancestor_ssh_auth_sock(),
+        interactive_shell_env().get("SSH_AUTH_SOCK").cloned(),
     )
 }
 
@@ -378,12 +481,17 @@ pub fn login_shell_output(command: &str) -> Result<String, String> {
 mod tests {
     use super::{
         enriched_path, is_posix_like_shell, merge_path_candidates, normalize_env_value,
-        parse_env_marker_output, parse_path_marker, preferred_env_var, preferred_ssh_auth_sock,
-        resolve_with, resolve_with_retry,
+        parse_env_marker_output, parse_env_var_from_ps_output, parse_path_marker,
+        preferred_env_var, preferred_ssh_auth_sock, preferred_ssh_auth_sock_from, resolve_with,
+        resolve_with_retry,
     };
     use crate::test_support::env_lock;
     use std::collections::HashMap;
+    #[cfg(unix)]
+    use std::os::unix::net::UnixListener;
+    use std::path::PathBuf;
     use std::time::Duration;
+    use uuid::Uuid;
 
     #[test]
     fn preferred_ssh_auth_sock_prefers_process_env() {
@@ -413,6 +521,99 @@ mod tests {
         let resolved = resolve_with(None, || Some("/tmp/launchctl.sock".to_string()));
 
         assert_eq!(resolved, Some("/tmp/launchctl.sock".to_string()));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn preferred_ssh_auth_sock_uses_valid_shell_socket_when_other_sources_missing() {
+        let socket_path = PathBuf::from(format!("/tmp/gssh-{}.sock", Uuid::new_v4().simple()));
+        let listener = UnixListener::bind(&socket_path).unwrap();
+
+        let resolved = preferred_ssh_auth_sock_from(
+            None,
+            None,
+            None,
+            Some(socket_path.to_string_lossy().into_owned()),
+        );
+
+        assert_eq!(resolved.as_deref(), socket_path.to_str());
+
+        drop(listener);
+        let _ = std::fs::remove_file(socket_path);
+    }
+
+    #[test]
+    fn preferred_ssh_auth_sock_rejects_invalid_shell_socket_path() {
+        let missing_path = PathBuf::from("/tmp/grove-missing-shell-ssh-auth.sock");
+        let resolved = preferred_ssh_auth_sock_from(
+            None,
+            None,
+            None,
+            Some(missing_path.to_string_lossy().into_owned()),
+        );
+
+        assert_eq!(resolved, None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn preferred_ssh_auth_sock_prefers_launchctl_over_shell_rendering() {
+        let launchctl_path =
+            PathBuf::from(format!("/tmp/glaunchctl-{}.sock", Uuid::new_v4().simple()));
+        let shell_path = PathBuf::from(format!("/tmp/gshell-{}.sock", Uuid::new_v4().simple()));
+        let launchctl_listener = UnixListener::bind(&launchctl_path).unwrap();
+        let shell_listener = UnixListener::bind(&shell_path).unwrap();
+
+        let resolved = preferred_ssh_auth_sock_from(
+            None,
+            Some(launchctl_path.to_string_lossy().into_owned()),
+            None,
+            Some(shell_path.to_string_lossy().into_owned()),
+        );
+
+        assert_eq!(resolved.as_deref(), launchctl_path.to_str());
+
+        drop(launchctl_listener);
+        drop(shell_listener);
+        let _ = std::fs::remove_file(launchctl_path);
+        let _ = std::fs::remove_file(shell_path);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn preferred_ssh_auth_sock_uses_ancestor_when_process_and_launchctl_are_missing() {
+        let ancestor_path =
+            PathBuf::from(format!("/tmp/gancestor-{}.sock", Uuid::new_v4().simple()));
+        let shell_path = PathBuf::from(format!("/tmp/gshell-{}.sock", Uuid::new_v4().simple()));
+        let ancestor_listener = UnixListener::bind(&ancestor_path).unwrap();
+        let shell_listener = UnixListener::bind(&shell_path).unwrap();
+
+        let resolved = preferred_ssh_auth_sock_from(
+            None,
+            None,
+            Some(ancestor_path.to_string_lossy().into_owned()),
+            Some(shell_path.to_string_lossy().into_owned()),
+        );
+
+        assert_eq!(resolved.as_deref(), ancestor_path.to_str());
+
+        drop(ancestor_listener);
+        drop(shell_listener);
+        let _ = std::fs::remove_file(ancestor_path);
+        let _ = std::fs::remove_file(shell_path);
+    }
+
+    #[test]
+    fn parse_env_var_from_ps_output_extracts_requested_value() {
+        let output = "PID TTY STAT TIME COMMAND HOME=/Users/airenkang SSH_AUTH_SOCK=/tmp/agent.sock PATH=/usr/bin";
+        assert_eq!(
+            parse_env_var_from_ps_output(output, "SSH_AUTH_SOCK").as_deref(),
+            Some("/tmp/agent.sock")
+        );
+        assert_eq!(
+            parse_env_var_from_ps_output(output, "HOME").as_deref(),
+            Some("/Users/airenkang")
+        );
     }
 
     #[test]

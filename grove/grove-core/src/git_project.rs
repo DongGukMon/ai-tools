@@ -1,7 +1,5 @@
 use crate::config::{self, ProjectEntry};
-use crate::process_env::{
-    interactive_shell_output, preferred_env_var, subprocess_env_pairs,
-};
+use crate::process_env::{interactive_shell_output, preferred_env_var, subprocess_env_pairs};
 use crate::{Project, Worktree, WorktreePullRequest, WorktreePullRequestStatus};
 use git2::{Oid, Repository};
 use serde::Deserialize;
@@ -1170,8 +1168,8 @@ pub fn get_worktree_pr_url_impl(
         return Ok(None);
     };
 
-    match github_pull_request_via_cli(&host, &org, &repo_name, &branch_name, head_oid)
-        .or_else(|_| {
+    match github_pull_request_via_cli(&host, &org, &repo_name, &branch_name, head_oid).or_else(
+        |_| {
             github_pull_request_via_interactive_shell(
                 &host,
                 &org,
@@ -1179,8 +1177,8 @@ pub fn get_worktree_pr_url_impl(
                 &branch_name,
                 head_oid,
             )
-        })
-    {
+        },
+    ) {
         Ok(Some(pull_request)) => return Ok(Some(pull_request)),
         Ok(None) => return Ok(None),
         Err(error) => {
@@ -1191,18 +1189,19 @@ pub fn get_worktree_pr_url_impl(
         }
     }
 
-    let pull_refs_output = match run_git_output(worktree, &["ls-remote", "origin", "refs/pull/*/head"])
-        .or_else(|_| git_ls_remote_pull_heads_via_interactive_shell(worktree))
-    {
-        Ok(output) => output,
-        Err(error) => {
-            eprintln!(
-                "Warning: failed to query pull refs for {}: {error}",
-                worktree.display()
-            );
-            return Ok(None);
-        }
-    };
+    let pull_refs_output =
+        match run_git_output(worktree, &["ls-remote", "origin", "refs/pull/*/head"])
+            .or_else(|_| git_ls_remote_pull_heads_via_interactive_shell(worktree))
+        {
+            Ok(output) => output,
+            Err(error) => {
+                eprintln!(
+                    "Warning: failed to query pull refs for {}: {error}",
+                    worktree.display()
+                );
+                return Ok(None);
+            }
+        };
     let pull_refs = parse_pull_request_head_refs(&pull_refs_output);
     let Some(number) = find_pull_request_number_for_head(&pull_refs, head_oid) else {
         return Ok(None);
@@ -1581,6 +1580,8 @@ mod tests {
     use super::*;
     use crate::test_support::env_lock;
     use std::ffi::OsString;
+    #[cfg(unix)]
+    use std::os::unix::fs::PermissionsExt;
 
     #[test]
     fn github_remote_accepts_github_urls_and_rejects_others() {
@@ -1850,6 +1851,24 @@ mod tests {
         let _ = fs::remove_file(fetch_head);
     }
 
+    #[cfg(unix)]
+    fn write_test_executable(path: &Path, content: &str) {
+        fs::write(path, content).unwrap();
+        fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    #[cfg(unix)]
+    fn git_log_contains_in_order(log: &str, patterns: &[&str]) -> bool {
+        let mut search_from = 0;
+        for pattern in patterns {
+            let Some(offset) = log[search_from..].find(pattern) else {
+                return false;
+            };
+            search_from += offset + pattern.len();
+        }
+        true
+    }
+
     #[test]
     fn visible_worktrees_hides_only_actual_source_path() {
         let source_path = "/tmp/grove/source";
@@ -1941,12 +1960,13 @@ mod tests {
         }
 
         let command = git_command();
-        let ssh_auth_sock = command
-            .get_envs()
-            .find_map(|(key, value)| match (key.to_str(), value) {
-                (Some("SSH_AUTH_SOCK"), Some(value)) => Some(value.to_os_string()),
-                _ => None,
-            });
+        let ssh_auth_sock =
+            command
+                .get_envs()
+                .find_map(|(key, value)| match (key.to_str(), value) {
+                    (Some("SSH_AUTH_SOCK"), Some(value)) => Some(value.to_os_string()),
+                    _ => None,
+                });
 
         assert_eq!(
             ssh_auth_sock,
@@ -2767,5 +2787,188 @@ mod tests {
             run_git_output(&source_dir, &["rev-parse", "HEAD"]).unwrap(),
             run_git_output(&source_dir, &["rev-parse", "origin/trunk"]).unwrap()
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn refresh_project_logs_git_and_ssh_env_at_spawn_time() {
+        const CHILD_ENV: &str = "GROVE_REFRESH_GIT_SSH_LOG_CHILD";
+        const BASE_DIR_ENV: &str = "GROVE_REFRESH_GIT_SSH_LOG_BASE_DIR";
+        const LOG_DIR_ENV: &str = "GROVE_REFRESH_GIT_SSH_LOG_DIR";
+        const BIN_DIR_ENV: &str = "GROVE_REFRESH_GIT_SSH_LOG_BIN_DIR";
+        const REAL_GIT_ENV: &str = "GROVE_REFRESH_GIT_SSH_LOG_REAL_GIT";
+        const SSH_AUTH_SOCK_ENV: &str = "GROVE_REFRESH_GIT_SSH_LOG_SOCKET";
+
+        if std::env::var_os(CHILD_ENV).is_some() {
+            let base_dir = PathBuf::from(std::env::var(BASE_DIR_ENV).unwrap());
+            let fake_bin_dir = PathBuf::from(std::env::var(BIN_DIR_ENV).unwrap());
+            let fake_ssh = fake_bin_dir.join("fake-ssh");
+            let current_path = std::env::var("PATH").unwrap_or_default();
+            unsafe {
+                std::env::set_var("PATH", format!("{}:{current_path}", fake_bin_dir.display()));
+                std::env::set_var("GIT_SSH_COMMAND", fake_ssh);
+                std::env::set_var("SSH_AUTH_SOCK", std::env::var(SSH_AUTH_SOCK_ENV).unwrap());
+            }
+
+            let source_dir = base_dir
+                .join("github.com")
+                .join("bang9")
+                .join("grove")
+                .join("source");
+            let before_head = run_git_output(&source_dir, &["rev-parse", "HEAD"]).unwrap();
+            let project = refresh_project_impl("project-1").unwrap();
+            let after_head = run_git_output(&source_dir, &["rev-parse", "HEAD"]).unwrap();
+
+            assert!(project.worktrees.is_empty());
+            assert_ne!(before_head, after_head);
+            return;
+        }
+
+        let _lock = env_lock();
+        let home = TestHome::new();
+        let base_dir = home.root.join("grove-data");
+        let source_dir = base_dir
+            .join("github.com")
+            .join("bang9")
+            .join("grove")
+            .join("source");
+        let remotes_dir = home.root.join("remotes");
+        let (remote_dir, seed_dir) =
+            create_bare_remote(&remotes_dir, "grove-refresh-ssh-logging", "trunk");
+
+        commit_and_push(
+            &seed_dir,
+            &remote_dir,
+            "trunk",
+            "README.md",
+            "# Grove v1\n",
+            "Initial commit",
+        );
+
+        fs::create_dir_all(source_dir.parent().unwrap()).unwrap();
+        let remote_dir_str = remote_dir.to_string_lossy().to_string();
+        let source_dir_str = source_dir.to_string_lossy().to_string();
+        run_git_ok(
+            source_dir.parent().unwrap(),
+            &["clone", &remote_dir_str, &source_dir_str],
+        );
+
+        let ssh_remote_url = format!("git@fakehost:{}", remote_dir.display());
+        run_git_ok(
+            &source_dir,
+            &["remote", "set-url", "origin", &ssh_remote_url],
+        );
+
+        save_test_config(
+            &base_dir,
+            vec![project_entry(
+                "project-1",
+                "https://github.com/bang9/grove.git",
+                &source_dir,
+            )],
+        );
+
+        commit_and_push(
+            &seed_dir,
+            &remote_dir,
+            "trunk",
+            "README.md",
+            "# Grove v2\n",
+            "Refresh source",
+        );
+
+        let log_dir = home.root.join("refresh-logs");
+        let fake_bin_dir = home.root.join("fake-bin");
+        fs::create_dir_all(&log_dir).unwrap();
+        fs::create_dir_all(&fake_bin_dir).unwrap();
+
+        let real_git = std::process::Command::new("sh")
+            .args(["-lc", "command -v git"])
+            .output()
+            .unwrap();
+        assert!(real_git.status.success());
+        let real_git = String::from_utf8_lossy(&real_git.stdout).trim().to_string();
+        assert!(!real_git.is_empty());
+
+        let fake_git = fake_bin_dir.join("git");
+        write_test_executable(
+            &fake_git,
+            r#"#!/bin/sh
+set -eu
+{
+  printf 'cwd=%s\n' "$PWD"
+  printf 'argv='
+  printf '%s\x1f' "$@"
+  printf '\n'
+  printf 'ssh_auth_sock=%s\n' "${SSH_AUTH_SOCK-}"
+  printf 'git_ssh_command=%s\n' "${GIT_SSH_COMMAND-}"
+  printf -- '---\n'
+} >> "${GROVE_REFRESH_GIT_SSH_LOG_DIR}/git.log"
+exec "${GROVE_REFRESH_GIT_SSH_LOG_REAL_GIT}" "$@"
+"#,
+        );
+
+        let fake_ssh = fake_bin_dir.join("fake-ssh");
+        write_test_executable(
+            &fake_ssh,
+            r#"#!/bin/sh
+set -eu
+{
+  printf 'cwd=%s\n' "$PWD"
+  printf 'argv='
+  printf '%s\x1f' "$@"
+  printf '\n'
+  printf 'ssh_auth_sock=%s\n' "${SSH_AUTH_SOCK-}"
+  printf -- '---\n'
+} >> "${GROVE_REFRESH_GIT_SSH_LOG_DIR}/ssh.log"
+host="$1"
+shift
+remote_cmd="$*"
+exec /bin/sh -c "$remote_cmd"
+"#,
+        );
+
+        let expected_socket = "/tmp/grove-refresh-test.sock";
+        let child_output = std::process::Command::new(std::env::current_exe().unwrap())
+            .arg("--exact")
+            .arg("git_project::tests::refresh_project_logs_git_and_ssh_env_at_spawn_time")
+            .arg("--nocapture")
+            .env(CHILD_ENV, "1")
+            .env(BASE_DIR_ENV, &base_dir)
+            .env(LOG_DIR_ENV, &log_dir)
+            .env(BIN_DIR_ENV, &fake_bin_dir)
+            .env(REAL_GIT_ENV, &real_git)
+            .env(SSH_AUTH_SOCK_ENV, expected_socket)
+            .output()
+            .unwrap();
+
+        assert!(
+            child_output.status.success(),
+            "child process failed\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&child_output.stdout),
+            String::from_utf8_lossy(&child_output.stderr)
+        );
+
+        let git_log = fs::read_to_string(log_dir.join("git.log")).unwrap();
+        let ssh_log = fs::read_to_string(log_dir.join("ssh.log")).unwrap();
+
+        assert!(
+            git_log_contains_in_order(
+                &git_log,
+                &[
+                    "argv=symbolic-ref\x1f--short\x1frefs/remotes/origin/HEAD\x1f",
+                    "argv=checkout\x1ftrunk\x1f",
+                    "argv=fetch\x1f--prune\x1forigin\x1f",
+                    "argv=pull\x1f--rebase\x1forigin\x1ftrunk\x1f",
+                    "argv=worktree\x1flist\x1f--porcelain\x1f",
+                ],
+            ),
+            "unexpected git invocation order:\n{git_log}"
+        );
+        assert!(git_log.contains("ssh_auth_sock=/tmp/grove-refresh-test.sock"));
+        assert!(git_log.contains(&format!("git_ssh_command={}", fake_ssh.display())));
+
+        assert!(ssh_log.contains("argv=git@fakehost\x1fgit-upload-pack"));
+        assert!(ssh_log.contains("ssh_auth_sock=/tmp/grove-refresh-test.sock"));
     }
 }
