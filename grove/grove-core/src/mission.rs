@@ -502,6 +502,7 @@ mod tests {
             worktree_order: Vec::new(),
             base_branch: None,
             collapsed: false,
+            env_sync: None,
         }
     }
 

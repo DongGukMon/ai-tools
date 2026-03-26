@@ -408,6 +408,7 @@ fn make_project_entry(
         worktree_order: Vec::new(),
         base_branch: None,
         collapsed: false,
+        env_sync: None,
     }
 }
 
@@ -1021,6 +1022,41 @@ pub fn reorder_projects_impl(project_ids: Vec<String>) -> Result<(), String> {
     config::save_config(&config)
 }
 
+fn sync_env_files(
+    source_dir: &Path,
+    worktree_dir: &Path,
+    exclude: &[String],
+) -> Result<(), String> {
+    let output = run_git_output(
+        source_dir,
+        &["ls-files", "--others", "--ignored", "--exclude-standard"],
+    )?;
+    for line in output.lines() {
+        let rel = line.trim();
+        if rel.is_empty() {
+            continue;
+        }
+        let dominated = exclude
+            .iter()
+            .any(|pat| rel.starts_with(&format!("{pat}/")) || rel == pat.as_str());
+        if dominated {
+            continue;
+        }
+        let src = source_dir.join(rel);
+        let dst = worktree_dir.join(rel);
+        if !src.is_file() {
+            continue;
+        }
+        if let Some(parent) = dst.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| format!("env sync: mkdir {}: {e}", parent.display()))?;
+        }
+        std::fs::copy(&src, &dst)
+            .map_err(|e| format!("env sync: copy {} -> {}: {e}", src.display(), dst.display()))?;
+    }
+    Ok(())
+}
+
 pub fn add_worktree_impl(project_id: &str, name: &str) -> Result<Worktree, String> {
     validate_branch_name(name)?;
 
@@ -1096,6 +1132,14 @@ pub fn add_worktree_impl(project_id: &str, name: &str) -> Result<Worktree, Strin
                 &["worktree", "add", &worktree_path_str, "-b", name, &base_ref],
                 name,
             )?;
+        }
+    }
+
+    if let Some(ref env_sync) = entry.env_sync {
+        if env_sync.enabled {
+            if let Err(e) = sync_env_files(source, &worktree_path, &env_sync.exclude_patterns) {
+                eprintln!("[grove] env sync warning: {e}");
+            }
         }
     }
 
@@ -1359,6 +1403,27 @@ pub fn set_base_branch_impl(project_id: &str, branch: Option<String>) -> Result<
         .ok_or_else(|| format!("Project not found: {project_id}"))?;
     entry.base_branch = branch;
     config::save_config(&config)
+}
+
+pub fn set_env_sync_impl(
+    project_id: &str,
+    env_sync: config::EnvSyncConfig,
+) -> Result<(), String> {
+    let mut grove_config = config::load_config();
+    let entry = grove_config
+        .projects
+        .iter_mut()
+        .find(|p| p.id == project_id)
+        .ok_or_else(|| format!("Project not found: {project_id}"))?;
+    entry.env_sync = Some(env_sync);
+    config::save_config(&grove_config)
+}
+
+pub fn get_env_sync_impl(
+    project_id: &str,
+) -> Result<Option<config::EnvSyncConfig>, String> {
+    let entry = find_project_entry(project_id)?;
+    Ok(entry.env_sync)
 }
 
 pub fn is_source_dirty_impl(project_id: &str) -> Result<bool, String> {
@@ -1859,6 +1924,7 @@ mod tests {
             worktree_order: Vec::new(),
             base_branch: None,
             collapsed: false,
+            env_sync: None,
         }
     }
 

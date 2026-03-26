@@ -151,6 +151,21 @@ async fn set_base_branch(project_id: String, branch: Option<String>) -> Result<(
     blocking(move || grove_core::git_project::set_base_branch_impl(&project_id, branch)).await
 }
 
+#[tauri::command]
+async fn set_env_sync(
+    project_id: String,
+    config: grove_core::config::EnvSyncConfig,
+) -> Result<(), String> {
+    blocking(move || grove_core::git_project::set_env_sync_impl(&project_id, config)).await
+}
+
+#[tauri::command]
+async fn get_env_sync(
+    project_id: String,
+) -> Result<Option<grove_core::config::EnvSyncConfig>, String> {
+    blocking(move || grove_core::git_project::get_env_sync_impl(&project_id)).await
+}
+
 // === MISSION COMMANDS (W5) ===
 
 #[tauri::command]
@@ -413,6 +428,8 @@ pub fn run() {
             set_worktree_order,
             get_remote_branches,
             set_base_branch,
+            set_env_sync,
+            get_env_sync,
             // Mission (W5)
             list_missions,
             create_mission,

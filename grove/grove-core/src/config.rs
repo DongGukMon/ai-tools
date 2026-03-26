@@ -20,6 +20,28 @@ pub struct ProjectEntry {
     pub base_branch: Option<String>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub collapsed: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub env_sync: Option<EnvSyncConfig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EnvSyncConfig {
+    pub enabled: bool,
+    #[serde(default = "default_exclude_patterns")]
+    pub exclude_patterns: Vec<String>,
+}
+
+fn default_exclude_patterns() -> Vec<String> {
+    vec!["node_modules".to_string()]
+}
+
+impl Default for EnvSyncConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            exclude_patterns: default_exclude_patterns(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -472,6 +494,7 @@ mod tests {
             worktree_order: Vec::new(),
             base_branch: None,
             collapsed: false,
+            env_sync: None,
         }
     }
 
