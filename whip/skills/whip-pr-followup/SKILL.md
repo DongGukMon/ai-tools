@@ -123,11 +123,12 @@ Generate a webform schema dynamically from the normalized issues. The form mixes
 
 ### Review group structure
 
-GitHub review comments are submitted in groups (a single review submission can contain multiple threads). Group threads by their parent review submission:
+GitHub review comments are submitted in groups (a single review submission can contain multiple threads). Use the `section` / `thread` / `end` DSL blocks to express this structure:
 
-- Use a **separator** (`c_md` with `---` and review group header) between groups
-- At the group level, provide a **"Hide this review group on PR page"** checkbox to minimize all comments in the group after triage
-- Threads without a parent review (individual comments) form their own group
+- Each review submission becomes a `section` with the reviewer name and timestamp as title
+- `hide="<field_name>"` on a section auto-generates a "Hide this review group on PR page" checkbox
+- Each unresolved thread becomes a `thread` / `end` block within the section
+- Threads without a parent review (individual comments) form their own section
 
 ### Webform timeout
 
@@ -140,27 +141,26 @@ form "PR Review Triage — #<pr_number>"
 
 summary c_md "Overview" body="<Phase 3 summary as markdown>"
 
-# --- Review Group 1: @reviewer-a (submitted 2 comments) ---
-group1_header c_md "Review Group" body="---\n### Review by @<reviewer> · <timestamp>\n_<N> comments in this review_"
-group1_hide cb "Hide this review group on PR page"
+section "### Review by @<reviewer> · <timestamp>\n_<N> comments in this review_" hide="group1_hide"
+  thread
+    issue1_ctx c_md "Issue 1" body="**@<reviewer>** · `<file_path>:<line>` · [thread](<thread_url>)\n\n> <translated top_comment>\n\n<details><summary>Original</summary>\n\n> <top_comment>\n\n</details>\n\n<details><summary>Diff</summary>\n\n```<lang>\n<diff_hunk>\n```\n\n</details>\n\n<details><summary>Suggestion</summary>\n\n<analysis with pros/cons and recommended action>\n\n</details>"
+    issue1_instruction ta "How to handle" rows="4" ph="e.g., fix the validation, reply explaining this is intentional, skip..."
+    issue1_auto_resolve cb "Auto comment+resolve"
+  end
+  thread
+    issue2_ctx c_md "Issue 2" body="..."
+    issue2_instruction ta "How to handle" rows="4" ph="..."
+    issue2_auto_resolve cb "Auto comment+resolve"
+  end
+end
 
-issue1_ctx c_md "Issue 1" body="**@<reviewer>** · `<file_path>:<line>` · [thread](<thread_url>)\n\n> <translated top_comment>\n\n<details><summary>Original</summary>\n\n> <top_comment>\n\n</details>\n\n<details><summary>Diff</summary>\n\n```<lang>\n<diff_hunk>\n```\n\n</details>\n\n<details><summary>Suggestion</summary>\n\n<analysis with pros/cons and recommended action>\n\n</details>"
-issue1_instruction ta "How to handle" rows=4 ph="e.g., fix the validation, reply explaining this is intentional, skip..."
-issue1_auto_resolve cb "Auto comment+resolve"
-
-issue2_ctx c_md "Issue 2" body="..."
-issue2_instruction ta "How to handle" rows=4 ph="..."
-issue2_auto_resolve cb "Auto comment+resolve"
-
-# --- Review Group 2: @reviewer-b ---
-group2_header c_md "Review Group" body="---\n### Review by @<reviewer-b> · <timestamp>\n_<N> comments_"
-group2_hide cb "Hide this review group on PR page"
-
-issue3_ctx c_md "Issue 3" body="..."
-issue3_instruction ta "How to handle" rows=4 ph="..."
-issue3_auto_resolve cb "Auto comment+resolve"
-
-# ... repeat for all groups and issues
+section "### Review by @<reviewer-b> · <timestamp>\n_<N> comments_"
+  thread
+    issue3_ctx c_md "Issue 3" body="..."
+    issue3_instruction ta "How to handle" rows="4" ph="..."
+    issue3_auto_resolve cb "Auto comment+resolve"
+  end
+end
 ```
 
 ### Context rendering rules
