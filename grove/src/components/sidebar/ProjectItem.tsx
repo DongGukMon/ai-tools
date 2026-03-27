@@ -35,7 +35,9 @@ const ProjectItem = memo(function ProjectItem({ project }: Props) {
     opacity: isDragging ? 0.5 : 1,
   };
 
-  const [expanded, setExpanded] = useState(true);
+  const collapsed = useProjectStore((s) => !!s.collapsedProjects[project.id]);
+  const toggleCollapse = useProjectStore((s) => s.toggleProjectCollapse);
+  const expanded = !collapsed;
   const [adding, setAdding] = useState(false);
   const [addingLoading, setAddingLoading] = useState(false);
   const [worktreeName, setWorktreeName] = useState("");
@@ -98,7 +100,7 @@ const ProjectItem = memo(function ProjectItem({ project }: Props) {
         className={cn(
           "group flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] text-foreground transition-all duration-150 cursor-pointer select-none hover:bg-secondary/50",
         )}
-        onClick={() => setExpanded(!expanded)}
+        onClick={() => toggleCollapse(project.id)}
         {...attributes}
         {...listeners}
       >

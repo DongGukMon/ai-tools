@@ -12,6 +12,7 @@ import { overlay } from "../lib/overlay";
 interface ProjectState {
   projects: Project[];
   selectedWorktree: Worktree | null;
+  collapsedProjects: Record<string, boolean>;
   loading: boolean;
 
   loadProjects: () => Promise<void>;
@@ -24,6 +25,7 @@ interface ProjectState {
   removeWorktree: (projectId: string, name: string) => Promise<void>;
   selectWorktree: (worktree: Worktree | null) => void;
   setWorktreeOrder: (projectId: string, order: string[]) => Promise<void>;
+  toggleProjectCollapse: (id: string) => void;
 }
 
 function normalizeProjectUrl(url: string): string {
@@ -105,6 +107,7 @@ function sourceWorktreeForProject(project: Project): Worktree {
 export const useProjectStore = create<ProjectState>((set) => ({
   projects: [],
   selectedWorktree: null,
+  collapsedProjects: {},
   loading: false,
 
   loadProjects: async () => {
@@ -311,6 +314,15 @@ export const useProjectStore = create<ProjectState>((set) => ({
           ? { ...p, worktrees: reorderWorktrees(p.worktrees, order) }
           : p,
       ),
+    }));
+  },
+
+  toggleProjectCollapse: (id: string) => {
+    set((state) => ({
+      collapsedProjects: {
+        ...state.collapsedProjects,
+        [id]: !state.collapsedProjects[id],
+      },
     }));
   },
 }));
