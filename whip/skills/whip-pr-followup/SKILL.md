@@ -179,7 +179,10 @@ Each issue context block has two layers — **visible by default** and **expanda
 
 ### Group-level hide behavior
 
-When the operator checks "Hide this review group on PR page", after all thread-level actions are completed, minimize every comment in that review group using the GitHub GraphQL API:
+The "Hide this review group on PR page" checkbox is an **intent signal**, not an immediate action. After all thread-level actions are completed:
+
+1. **Check resolution status**: Re-fetch all threads in the group. Count how many are resolved.
+2. **All resolved → minimize**: If every thread in the group is resolved, minimize all comments using the GitHub GraphQL API:
 
 ```bash
 gh api graphql -f query='
@@ -191,7 +194,9 @@ gh api graphql -f query='
 ' -f id='<comment_node_id>'
 ```
 
-This hides the AI review comments from the PR page to reduce visual noise. Resolve remains per-comment via `auto_resolve`.
+3. **Any unresolved → skip and notify**: If one or more threads remain unresolved, do **not** minimize. Report to the operator: `"Group @<reviewer>: N/M threads still unresolved, skipping hide."`
+
+This prevents hiding unresolved review comments from the PR page.
 
 Pipe the generated schema to `webform` with the calculated timeout and collect the JSON result.
 
