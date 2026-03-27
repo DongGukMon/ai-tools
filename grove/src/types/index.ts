@@ -19,6 +19,13 @@ export type {
   FileDiff,
 } from "./diff";
 export type { AppTab, AppTabType } from "./tab";
+export type {
+  EnvValueSource,
+  PathDiagnostics,
+  ProcessEnvDiagnostics,
+  SshAuthSockDiagnostics,
+  SubprocessEnvVar,
+} from "./env";
 
 export interface AppConfig {
   baseDir: string;

@@ -99,6 +99,11 @@ pub async fn get_app_config() -> Result<String> {
 }
 
 #[napi]
+pub async fn get_process_env_diagnostics() -> Result<String> {
+    blocking_json(|| Ok(grove_core::process_env::process_env_diagnostics())).await
+}
+
+#[napi]
 pub async fn save_app_config(config: String) -> Result<()> {
     let config = from_json::<grove_core::AppConfig>(&config, "AppConfig")?;
     blocking_core(move || grove_core::config::save_app_config(&config)).await
@@ -175,9 +180,7 @@ pub async fn list_worktrees(project_id: String) -> Result<String> {
 }
 
 #[napi]
-pub async fn get_worktree_pr_url(
-    worktree_path: String,
-) -> Result<Option<String>> {
+pub async fn get_worktree_pr_url(worktree_path: String) -> Result<Option<String>> {
     blocking_optional_json(move || {
         grove_core::git_project::get_worktree_pr_url_impl(&worktree_path)
     })

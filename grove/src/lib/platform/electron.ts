@@ -2,6 +2,7 @@ import type React from "react";
 import type {
   TerminalTheme,
   AppConfig,
+  ProcessEnvDiagnostics,
   Project,
   Worktree,
   WorktreePullRequest,
@@ -153,6 +154,10 @@ export async function getTerminalTheme(): Promise<{ theme: TerminalTheme; detect
 
 export async function getAppConfig(): Promise<AppConfig> {
   return platform.invoke<AppConfig>("get_app_config");
+}
+
+export async function getProcessEnvDiagnostics(): Promise<ProcessEnvDiagnostics> {
+  return platform.invoke<ProcessEnvDiagnostics>("get_process_env_diagnostics");
 }
 
 export async function saveAppConfig(config: AppConfig): Promise<void> {

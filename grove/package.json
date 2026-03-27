@@ -17,6 +17,7 @@
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "lint:fix": "eslint \"src/**/*.{ts,tsx}\" --fix",
     "test": "vitest run",
+    "test:core": "cargo test -p grove-core -- --test-threads=1",
     "preview": "vite preview",
     "tauri": "tauri",
     "install-local": "./install-local.sh"

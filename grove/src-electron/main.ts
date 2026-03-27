@@ -16,6 +16,7 @@ const RENDERER_DEV_URL =
 const JSON_RESPONSE_COMMANDS = new Set([
   "get_terminal_theme",
   "get_app_config",
+  "get_process_env_diagnostics",
   "list_projects",
   "add_project",
   "create_project",

@@ -1,4 +1,5 @@
 use crate::tool_hooks;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::env;
 use std::io::Read as _;
@@ -34,13 +35,6 @@ fn launchctl_getenv(key: &str) -> Option<String> {
 #[cfg(not(target_os = "macos"))]
 fn launchctl_getenv(_key: &str) -> Option<String> {
     None
-}
-
-fn resolve_with<F>(env_value: Option<String>, fallback: F) -> Option<String>
-where
-    F: FnOnce() -> Option<String>,
-{
-    env_value.or_else(fallback)
 }
 
 fn parse_env_var_from_ps_output(output: &str, key: &str) -> Option<String> {
@@ -122,6 +116,56 @@ const SHELL_ENV_KEYS: &[&str] = &[
     "GH_TOKEN_SENDBIRD_PLAYGROUND",
     "GH_TOKEN_RICH_AUTOMATION",
 ];
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum EnvValueSource {
+    Process,
+    Launchctl,
+    AncestorProcess,
+    InteractiveShell,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SubprocessEnvVar {
+    pub key: String,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PathDiagnostics {
+    pub process_env: Option<String>,
+    pub interactive_shell_env: Option<String>,
+    pub login_shell_env: Option<String>,
+    pub preferred_env_source: Option<EnvValueSource>,
+    pub preferred_env_value: Option<String>,
+    pub merged_base_value: String,
+    pub final_value: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SshAuthSockDiagnostics {
+    pub process_env: Option<String>,
+    pub launchctl_env: Option<String>,
+    pub ancestor_process_env: Option<String>,
+    pub interactive_shell_env: Option<String>,
+    pub selected_source: Option<EnvValueSource>,
+    pub selected_value: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ProcessEnvDiagnostics {
+    pub shell: Option<String>,
+    pub zdotdir: Option<String>,
+    pub grove_zdotdir: Option<String>,
+    pub path: PathDiagnostics,
+    pub ssh_auth_sock: SshAuthSockDiagnostics,
+    pub subprocess_env: Vec<SubprocessEnvVar>,
+}
 
 fn shell_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\"'\"'"))
@@ -234,15 +278,8 @@ fn merge_path_candidates(primary: Option<String>, secondary: Option<String>) -> 
 
 pub fn enriched_path() -> &'static str {
     static PATH: OnceLock<String> = OnceLock::new();
-    PATH.get_or_init(|| {
-        let base = merge_path_candidates(preferred_env_var("PATH"), resolve_login_shell_path())
-            .unwrap_or_else(|| env::var("PATH").unwrap_or_default());
-        match dirs::home_dir().and_then(|h| h.join(".grove/bin").to_str().map(String::from)) {
-            Some(grove_bin) => format!("{grove_bin}:{base}"),
-            None => base,
-        }
-    })
-    .as_str()
+    PATH.get_or_init(|| path_diagnostics(&SystemEnvSourceLookup).final_value.clone())
+        .as_str()
 }
 
 #[cfg(target_os = "macos")]
@@ -394,10 +431,96 @@ fn interactive_shell_env() -> &'static HashMap<String, String> {
     ENV.get_or_init(HashMap::new)
 }
 
-pub fn preferred_env_var(key: &str) -> Option<String> {
-    resolve_with(normalize_env_value(env::var(key).ok()), || {
+trait EnvSourceLookup {
+    fn process_env_var(&self, key: &str) -> Option<String>;
+    fn launchctl_env_var(&self, key: &str) -> Option<String>;
+    fn ancestor_process_env_var(&self, key: &str) -> Option<String>;
+    fn interactive_shell_env_var(&self, key: &str) -> Option<String>;
+    fn login_shell_path(&self) -> Option<String>;
+}
+
+struct SystemEnvSourceLookup;
+
+impl EnvSourceLookup for SystemEnvSourceLookup {
+    fn process_env_var(&self, key: &str) -> Option<String> {
+        env::var(key).ok()
+    }
+
+    fn launchctl_env_var(&self, key: &str) -> Option<String> {
+        if key == "SSH_AUTH_SOCK" {
+            cached_launchctl_ssh_auth_sock()
+        } else {
+            launchctl_getenv(key)
+        }
+    }
+
+    fn ancestor_process_env_var(&self, key: &str) -> Option<String> {
+        ancestor_process_env_var(key)
+    }
+
+    fn interactive_shell_env_var(&self, key: &str) -> Option<String> {
         interactive_shell_env().get(key).cloned()
-    })
+    }
+
+    fn login_shell_path(&self) -> Option<String> {
+        resolve_login_shell_path()
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct EnvSourceSnapshot {
+    process_env: Option<String>,
+    launchctl_env: Option<String>,
+    ancestor_process_env: Option<String>,
+    interactive_shell_env: Option<String>,
+    login_shell_env: Option<String>,
+}
+
+fn collect_env_snapshot(
+    lookup: &impl EnvSourceLookup,
+    key: &str,
+    include_launchctl: bool,
+    include_ancestor: bool,
+    include_interactive_shell: bool,
+    include_login_shell: bool,
+) -> EnvSourceSnapshot {
+    EnvSourceSnapshot {
+        process_env: normalize_env_value(lookup.process_env_var(key)),
+        launchctl_env: include_launchctl
+            .then(|| lookup.launchctl_env_var(key))
+            .flatten(),
+        ancestor_process_env: include_ancestor
+            .then(|| lookup.ancestor_process_env_var(key))
+            .flatten(),
+        interactive_shell_env: include_interactive_shell
+            .then(|| lookup.interactive_shell_env_var(key))
+            .flatten(),
+        login_shell_env: include_login_shell
+            .then(|| lookup.login_shell_path())
+            .flatten(),
+    }
+}
+
+fn preferred_env_var_selection(snapshot: &EnvSourceSnapshot) -> Option<(EnvValueSource, String)> {
+    if let Some(value) = snapshot.process_env.clone() {
+        return Some((EnvValueSource::Process, value));
+    }
+    snapshot
+        .interactive_shell_env
+        .clone()
+        .map(|value| (EnvValueSource::InteractiveShell, value))
+}
+
+pub fn preferred_env_var(key: &str) -> Option<String> {
+    preferred_env_var_selection(&collect_env_snapshot(
+        &SystemEnvSourceLookup,
+        key,
+        false,
+        false,
+        true,
+        false,
+    ))
+    .map(|(_, value)| value)
 }
 
 fn validated_shell_ssh_auth_sock(value: Option<String>) -> Option<String> {
@@ -420,23 +543,79 @@ fn validated_shell_ssh_auth_sock(value: Option<String>) -> Option<String> {
     None
 }
 
-fn validated_ancestor_ssh_auth_sock() -> Option<String> {
-    validated_shell_ssh_auth_sock(ancestor_process_env_var("SSH_AUTH_SOCK"))
+fn preferred_ssh_auth_sock_selection(
+    snapshot: &EnvSourceSnapshot,
+) -> Option<(EnvValueSource, String)> {
+    if let Some(value) = snapshot.process_env.clone() {
+        return Some((EnvValueSource::Process, value));
+    }
+    if let Some(value) = snapshot.launchctl_env.clone() {
+        return Some((EnvValueSource::Launchctl, value));
+    }
+    if let Some(value) = validated_shell_ssh_auth_sock(snapshot.ancestor_process_env.clone()) {
+        return Some((EnvValueSource::AncestorProcess, value));
+    }
+    validated_shell_ssh_auth_sock(snapshot.interactive_shell_env.clone())
+        .map(|value| (EnvValueSource::InteractiveShell, value))
 }
 
+#[cfg(test)]
 fn preferred_ssh_auth_sock_from(
     env_value: Option<String>,
     launchctl_value: Option<String>,
     ancestor_value: Option<String>,
     shell_value: Option<String>,
 ) -> Option<String> {
-    resolve_with(normalize_env_value(env_value), || {
-        resolve_with(normalize_env_value(launchctl_value), || {
-            resolve_with(validated_shell_ssh_auth_sock(ancestor_value), || {
-                validated_shell_ssh_auth_sock(shell_value)
-            })
-        })
+    preferred_ssh_auth_sock_selection(&EnvSourceSnapshot {
+        process_env: normalize_env_value(env_value),
+        launchctl_env: normalize_env_value(launchctl_value),
+        ancestor_process_env: normalize_env_value(ancestor_value),
+        interactive_shell_env: normalize_env_value(shell_value),
+        login_shell_env: None,
     })
+    .map(|(_, value)| value)
+}
+
+fn build_enriched_path(base: String) -> String {
+    match dirs::home_dir().and_then(|h| h.join(".grove/bin").to_str().map(String::from)) {
+        Some(grove_bin) => format!("{grove_bin}:{base}"),
+        None => base,
+    }
+}
+
+fn path_diagnostics(lookup: &impl EnvSourceLookup) -> PathDiagnostics {
+    let snapshot = collect_env_snapshot(lookup, "PATH", false, false, true, true);
+    let preferred = preferred_env_var_selection(&snapshot);
+    let merged_base_value = merge_path_candidates(
+        preferred.as_ref().map(|(_, value)| value.clone()),
+        snapshot.login_shell_env.clone(),
+    )
+    .unwrap_or_else(|| env::var("PATH").unwrap_or_default());
+    let final_value = build_enriched_path(merged_base_value.clone());
+
+    PathDiagnostics {
+        process_env: snapshot.process_env,
+        interactive_shell_env: snapshot.interactive_shell_env,
+        login_shell_env: snapshot.login_shell_env,
+        preferred_env_source: preferred.as_ref().map(|(source, _)| *source),
+        preferred_env_value: preferred.map(|(_, value)| value),
+        merged_base_value,
+        final_value,
+    }
+}
+
+fn ssh_auth_sock_diagnostics(lookup: &impl EnvSourceLookup) -> SshAuthSockDiagnostics {
+    let snapshot = collect_env_snapshot(lookup, "SSH_AUTH_SOCK", true, true, true, false);
+    let selected = preferred_ssh_auth_sock_selection(&snapshot);
+
+    SshAuthSockDiagnostics {
+        process_env: snapshot.process_env,
+        launchctl_env: snapshot.launchctl_env,
+        ancestor_process_env: snapshot.ancestor_process_env,
+        interactive_shell_env: snapshot.interactive_shell_env,
+        selected_source: selected.as_ref().map(|(source, _)| *source),
+        selected_value: selected.map(|(_, value)| value),
+    }
 }
 
 pub fn preferred_ssh_auth_sock() -> Option<String> {
@@ -445,20 +624,55 @@ pub fn preferred_ssh_auth_sock() -> Option<String> {
     // launchd session socket that refresh/sync previously relied on.
     // Keep SSH on the pre-refactor trust path and use shell-derived values
     // only as a last resort.
-    preferred_ssh_auth_sock_from(
-        env::var("SSH_AUTH_SOCK").ok(),
-        cached_launchctl_ssh_auth_sock(),
-        validated_ancestor_ssh_auth_sock(),
-        interactive_shell_env().get("SSH_AUTH_SOCK").cloned(),
-    )
+    preferred_ssh_auth_sock_selection(&collect_env_snapshot(
+        &SystemEnvSourceLookup,
+        "SSH_AUTH_SOCK",
+        true,
+        true,
+        true,
+        false,
+    ))
+    .map(|(_, value)| value)
 }
 
 pub fn subprocess_env_pairs() -> Vec<(String, String)> {
+    // Keep subprocess env assembly on the fast path. Full diagnostics may invoke
+    // slower source resolution (notably login-shell PATH rendering) and should
+    // stay opt-in via `process_env_diagnostics()`.
     let mut pairs = vec![("PATH".to_string(), enriched_path().to_string())];
     if let Some(ssh_auth_sock) = preferred_ssh_auth_sock() {
         pairs.push(("SSH_AUTH_SOCK".to_string(), ssh_auth_sock));
     }
     pairs
+}
+
+pub fn process_env_diagnostics() -> ProcessEnvDiagnostics {
+    let lookup = SystemEnvSourceLookup;
+    let path = path_diagnostics(&lookup);
+    let ssh_auth_sock = ssh_auth_sock_diagnostics(&lookup);
+    let subprocess_env = std::iter::once(SubprocessEnvVar {
+        key: "PATH".to_string(),
+        value: path.final_value.clone(),
+    })
+    .chain(
+        ssh_auth_sock
+            .selected_value
+            .clone()
+            .map(|value| SubprocessEnvVar {
+                key: "SSH_AUTH_SOCK".to_string(),
+                value,
+            }),
+    )
+    .collect();
+
+    ProcessEnvDiagnostics {
+        shell: normalize_env_value(env::var("SHELL").ok()),
+        zdotdir: normalize_env_value(env::var("ZDOTDIR").ok()),
+        grove_zdotdir: tool_hooks::grove_zdotdir(),
+        path,
+        ssh_auth_sock,
+        subprocess_env,
+    }
 }
 
 pub fn interactive_shell_output(command: &str) -> Result<String, String> {
@@ -481,9 +695,9 @@ pub fn login_shell_output(command: &str) -> Result<String, String> {
 mod tests {
     use super::{
         enriched_path, is_posix_like_shell, merge_path_candidates, normalize_env_value,
-        parse_env_marker_output, parse_env_var_from_ps_output, parse_path_marker,
-        preferred_env_var, preferred_ssh_auth_sock, preferred_ssh_auth_sock_from, resolve_with,
-        resolve_with_retry,
+        parse_env_marker_output, parse_env_var_from_ps_output, parse_path_marker, path_diagnostics,
+        preferred_env_var, preferred_ssh_auth_sock, preferred_ssh_auth_sock_from,
+        resolve_with_retry, ssh_auth_sock_diagnostics, EnvSourceLookup, EnvValueSource,
     };
     use crate::test_support::env_lock;
     use std::collections::HashMap;
@@ -492,6 +706,37 @@ mod tests {
     use std::path::PathBuf;
     use std::time::Duration;
     use uuid::Uuid;
+
+    #[derive(Default)]
+    struct FakeLookup {
+        process_env: HashMap<String, String>,
+        launchctl_env: HashMap<String, String>,
+        ancestor_process_env: HashMap<String, String>,
+        interactive_shell_env: HashMap<String, String>,
+        login_shell_path: Option<String>,
+    }
+
+    impl EnvSourceLookup for FakeLookup {
+        fn process_env_var(&self, key: &str) -> Option<String> {
+            self.process_env.get(key).cloned()
+        }
+
+        fn launchctl_env_var(&self, key: &str) -> Option<String> {
+            self.launchctl_env.get(key).cloned()
+        }
+
+        fn ancestor_process_env_var(&self, key: &str) -> Option<String> {
+            self.ancestor_process_env.get(key).cloned()
+        }
+
+        fn interactive_shell_env_var(&self, key: &str) -> Option<String> {
+            self.interactive_shell_env.get(key).cloned()
+        }
+
+        fn login_shell_path(&self) -> Option<String> {
+            self.login_shell_path.clone()
+        }
+    }
 
     #[test]
     fn preferred_ssh_auth_sock_prefers_process_env() {
@@ -518,7 +763,8 @@ mod tests {
 
     #[test]
     fn preferred_ssh_auth_sock_uses_launchctl_fallback_when_env_missing() {
-        let resolved = resolve_with(None, || Some("/tmp/launchctl.sock".to_string()));
+        let resolved =
+            preferred_ssh_auth_sock_from(None, Some("/tmp/launchctl.sock".to_string()), None, None);
 
         assert_eq!(resolved, Some("/tmp/launchctl.sock".to_string()));
     }
@@ -637,6 +883,57 @@ mod tests {
                 std::env::remove_var("GH_TOKEN_SENDBIRD");
             },
         }
+    }
+
+    #[test]
+    fn path_diagnostics_reports_preferred_and_final_path() {
+        let mut lookup = FakeLookup::default();
+        lookup
+            .process_env
+            .insert("PATH".to_string(), "/usr/local/bin:/usr/bin".to_string());
+        lookup.interactive_shell_env.insert(
+            "PATH".to_string(),
+            "/opt/homebrew/bin:/usr/local/bin".to_string(),
+        );
+        lookup.login_shell_path = Some("/usr/bin:/bin".to_string());
+
+        let diagnostics = path_diagnostics(&lookup);
+
+        assert_eq!(
+            diagnostics.preferred_env_source,
+            Some(EnvValueSource::Process)
+        );
+        assert_eq!(
+            diagnostics.preferred_env_value.as_deref(),
+            Some("/usr/local/bin:/usr/bin")
+        );
+        assert_eq!(
+            diagnostics.merged_base_value,
+            "/usr/local/bin:/usr/bin:/bin".to_string()
+        );
+        assert!(diagnostics
+            .final_value
+            .contains("/usr/local/bin:/usr/bin:/bin"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn ssh_auth_sock_diagnostics_reports_selected_source() {
+        let socket_path = PathBuf::from(format!("/tmp/gdiag-{}.sock", Uuid::new_v4().simple()));
+        let listener = UnixListener::bind(&socket_path).unwrap();
+        let mut lookup = FakeLookup::default();
+        lookup.launchctl_env.insert(
+            "SSH_AUTH_SOCK".to_string(),
+            socket_path.to_string_lossy().into_owned(),
+        );
+
+        let diagnostics = ssh_auth_sock_diagnostics(&lookup);
+
+        assert_eq!(diagnostics.selected_source, Some(EnvValueSource::Launchctl));
+        assert_eq!(diagnostics.selected_value.as_deref(), socket_path.to_str());
+
+        drop(listener);
+        let _ = std::fs::remove_file(socket_path);
     }
 
     #[test]

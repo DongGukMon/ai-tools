@@ -1,3 +1,4 @@
+use std::io::Write as _;
 use std::sync::{Arc, OnceLock};
 
 /// Debug-only log macros. Calls are compiled out entirely in release builds.
@@ -20,7 +21,8 @@ pub fn emit_log(level: &str, tag: &str, message: &str) {
         log_sink.on_log(level, tag, message);
     }
 
-    eprintln!("[grove:{}] [{}] {}", tag, level, message);
+    let mut stderr = std::io::stderr().lock();
+    let _ = writeln!(stderr, "[grove:{}] [{}] {}", tag, level, message);
 }
 
 #[allow(unused_macros)]

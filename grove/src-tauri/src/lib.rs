@@ -30,6 +30,12 @@ async fn get_app_config() -> Result<AppConfig, String> {
 }
 
 #[tauri::command]
+async fn get_process_env_diagnostics(
+) -> Result<grove_core::process_env::ProcessEnvDiagnostics, String> {
+    blocking(|| Ok(grove_core::process_env::process_env_diagnostics())).await
+}
+
+#[tauri::command]
 async fn save_app_config(config: AppConfig) -> Result<(), String> {
     blocking(move || grove_core::config::save_app_config(&config)).await
 }
@@ -346,6 +352,7 @@ pub fn run() {
             // Config/Theme (W1)
             get_terminal_theme,
             get_app_config,
+            get_process_env_diagnostics,
             save_app_config,
             save_terminal_layouts,
             load_terminal_layouts,
