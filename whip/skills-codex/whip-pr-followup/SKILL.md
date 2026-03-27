@@ -96,9 +96,26 @@ By file:
   - path/to/other.go: Y threads
 Outdated threads: N (included but flagged)
 Candidate parallel groups: N (based on file independence)
+
+| # | Reviewer | File:Line | Summary | Severity |
+|---|----------|-----------|---------|----------|
+| 1 | @bot     | auto-fix.yml:159 | 라벨 API 실패 시 auto-fixing 상태 stuck | P2 |
+| 2 | @bot     | auto-fix.yml:151 | cancel 시 라벨 복원 안 됨 | P1 |
 ```
 
-This summary helps the operator understand the scope before entering the triage form.
+- The per-thread table translates `problem_statement` into the operator's conversation language
+- Keep it concise — one line per thread
+
+### Context enrichment
+
+For each thread, before rendering the webform, fetch additional context:
+
+1. **Diff hunk**: Use the `diff_hunk` field from the review comment API (`GET /repos/{owner}/{repo}/pulls/{pr}/comments`) to capture the code context around the comment
+2. **AI analysis**: Generate a brief analysis for each thread:
+   - What the reviewer is asking and why
+   - Pros/cons of addressing vs not addressing
+   - Suggested action (fix / reply / skip) with reasoning
+   - This analysis is presented as collapsible content in the webform
 
 ### Duplicate-thread clustering
 
@@ -123,24 +140,77 @@ In the form, keep per-thread controls, but note the cluster so the operator can 
 
 Generate a webform schema dynamically from the normalized issues. The form mixes read-only context with per-issue inputs.
 
-Schema structure:
+### Review group structure
+
+GitHub review comments are submitted in groups (a single review submission can contain multiple threads). Group threads by their parent review submission:
+
+- Use a **separator** (`c_md` with `---` and review group header) between groups
+- At the group level, provide a **"Hide this review group on PR page"** checkbox to minimize all comments in the group after triage
+- Threads without a parent review (individual comments) form their own group
+
+### Webform timeout
+
+Calculate timeout as `thread_count × 3 minutes` (minimum 10 minutes). Pass this as the `--timeout` flag to `webform`.
+
+### Schema structure
 
 ```
 form "PR Review Triage — #<pr_number>"
 
 summary c_md "Overview" body="<Phase 3 summary as markdown>"
 
-# Repeated per issue:
-issue1_ctx c_md "Issue 1" body="**@<reviewer>** · `<file_path>:<line>` · [thread](<thread_url>)\n\n> <top_comment truncated to ~300 chars>\n\n**Replies**: <replies_summary>\n\n**Summary**: <problem_statement>\n\n_Outdated: <yes/no>_"
-issue1_instruction ta "How to handle" ph="e.g., fix the validation, reply explaining this is intentional, skip..."
+# --- Review Group 1: @reviewer-a (submitted 2 comments) ---
+group1_header c_md "Review Group" body="---\n### Review by @<reviewer> · <timestamp>\n_<N> comments in this review_"
+group1_hide cb "Hide this review group on PR page"
+
+issue1_ctx c_md "Issue 1" body="**@<reviewer>** · `<file_path>:<line>` · [thread](<thread_url>)\n\n> <translated top_comment>\n\n<details><summary>Original</summary>\n\n> <top_comment>\n\n</details>\n\n<details><summary>Diff</summary>\n\n```<lang>\n<diff_hunk>\n```\n\n</details>\n\n<details><summary>Suggestion</summary>\n\n<analysis with pros/cons and recommended action>\n\n</details>"
+issue1_instruction ta "How to handle" rows=4 ph="e.g., fix the validation, reply explaining this is intentional, skip..."
 issue1_auto_resolve cb "Auto comment+resolve"
 
 issue2_ctx c_md "Issue 2" body="..."
-issue2_instruction ta "How to handle" ph="..."
+issue2_instruction ta "How to handle" rows=4 ph="..."
 issue2_auto_resolve cb "Auto comment+resolve"
 
-# ... repeat for all issues
+# --- Review Group 2: @reviewer-b ---
+group2_header c_md "Review Group" body="---\n### Review by @<reviewer-b> · <timestamp>\n_<N> comments_"
+group2_hide cb "Hide this review group on PR page"
+
+issue3_ctx c_md "Issue 3" body="..."
+issue3_instruction ta "How to handle" rows=4 ph="..."
+issue3_auto_resolve cb "Auto comment+resolve"
+
+# ... repeat for all groups and issues
 ```
+
+### Context rendering rules
+
+Each issue context block has two layers — **visible by default** and **expandable on demand**:
+
+**Always visible:**
+1. **Outdated badge**: If outdated, `⚠️ OUTDATED` before everything else
+2. **Metadata line**: `@reviewer · file:line · [thread](url)`
+3. **Translated comment**: Blockquoted, translated to operator's conversation language — this is what the operator reads to make a decision
+
+**Expandable (collapsible `<details>` blocks):**
+4. **Original comment**: `<details><summary>Original</summary>` — reviewer's exact words
+5. **Code context**: `<details><summary>Diff</summary>` — diff hunk around the comment line
+6. **AI Suggestion**: `<details><summary>Suggestion</summary>` — analysis with pros/cons and recommended action
+
+### Group-level hide behavior
+
+When the operator checks "Hide this review group on PR page", after all thread-level actions are completed, minimize every comment in that review group using the GitHub GraphQL API:
+
+```bash
+gh api graphql -f query='
+  mutation($id: ID!) {
+    minimizeComment(input: {subjectId: $id, classifier: OUTDATED}) {
+      minimizedComment { isMinimized }
+    }
+  }
+' -f id='<comment_node_id>'
+```
+
+This hides the AI review comments from the PR page to reduce visual noise. Resolve remains per-comment via `auto_resolve`.
 
 ### Webform execution (Codex)
 
