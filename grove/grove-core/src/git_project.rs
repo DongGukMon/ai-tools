@@ -1091,7 +1091,7 @@ fn glob_matches(pattern: &str, name: &str) -> bool {
     pi == pat.len()
 }
 
-fn sync_env_files(
+pub(crate) fn sync_env_files(
     source_dir: &Path,
     worktree_dir: &Path,
     include: &[String],
