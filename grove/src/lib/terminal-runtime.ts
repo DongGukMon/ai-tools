@@ -192,6 +192,7 @@ class TerminalPaneRuntime {
   private onTrackpadMouseUp: (() => void) | null = null;
   private onTrackpadMouseMoveCapture: ((event: MouseEvent) => void) | null = null;
   private onFocusIn: (() => void) | null = null;
+  private onCompositionKeydown: ((event: KeyboardEvent) => void) | null = null;
   private ownerDocument: Document | null = null;
   private readonly unlistenLayoutSync: () => void;
 
@@ -443,6 +444,11 @@ class TerminalPaneRuntime {
       this.onTrackpadMouseMoveCapture = null;
     }
 
+    if (this.onCompositionKeydown) {
+      this.container.removeEventListener("keydown", this.onCompositionKeydown, true);
+      this.onCompositionKeydown = null;
+    }
+
     this.ownerDocument = null;
     this.container = null;
   }
@@ -540,13 +546,26 @@ class TerminalPaneRuntime {
 
   private installCompositionListeners() {
     const textarea = this.term.textarea;
-    if (!textarea) return;
+    if (!textarea || !this.container) return;
     textarea.addEventListener("compositionstart", () => {
       this.composing = true;
     });
     textarea.addEventListener("compositionend", () => {
       this.composing = false;
     });
+
+    // Prevent keydown events from reaching xterm.js's textarea during
+    // composition. Capture-phase on the container fires BEFORE the
+    // textarea's handlers, so xterm.js cannot modify the textarea
+    // (reposition, clear, etc.) in ways that break the IME mid-composition.
+    // This is critical for Korean double consonants (ㅆ) and compound
+    // vowels (ㅖ) which require Shift during composition.
+    this.onCompositionKeydown = (event: KeyboardEvent) => {
+      if (this.composing) {
+        event.stopPropagation();
+      }
+    };
+    this.container.addEventListener("keydown", this.onCompositionKeydown, true);
   }
 
   private hasLayoutDimensions() {
