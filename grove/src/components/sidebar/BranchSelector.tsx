@@ -8,6 +8,7 @@ import { runCommand } from "../../lib/command";
 interface Props {
   projectId: string;
   currentBranch: string | null;
+  resolvedDefaultBranch: string;
   anchorRef: React.RefObject<HTMLElement | null>;
   onSelect: (branch: string | null) => void;
   onClose: () => void;
@@ -16,6 +17,7 @@ interface Props {
 export function BranchSelector({
   projectId,
   currentBranch,
+  resolvedDefaultBranch,
   anchorRef,
   onSelect,
   onClose,
@@ -165,7 +167,7 @@ export function BranchSelector({
                 "opacity-0": currentBranch !== null,
               })}
             />
-            <span className={cn("truncate")}>Auto-detect (default)</span>
+            <span className={cn("truncate")}>{resolvedDefaultBranch} (default)</span>
           </button>
         )}
 

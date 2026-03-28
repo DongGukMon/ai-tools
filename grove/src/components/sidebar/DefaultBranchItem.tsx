@@ -90,6 +90,7 @@ function DefaultBranchItem({ project }: Props) {
             title="Click to change base branch"
           >
             {displayBranch}
+            <span className={cn("ml-1 text-muted-foreground")}>(source)</span>
           </span>
         }
         title={project.sourcePath}
@@ -140,6 +141,7 @@ function DefaultBranchItem({ project }: Props) {
         <BranchSelector
           projectId={project.id}
           currentBranch={project.baseBranch}
+          resolvedDefaultBranch={project.resolvedDefaultBranch}
           anchorRef={branchLabelRef}
           onSelect={handleBranchSelect}
           onClose={() => setSelectorOpen(false)}
