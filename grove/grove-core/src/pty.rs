@@ -155,13 +155,21 @@ fn preferred_utf8_locale() -> String {
     for key in ["LC_ALL", "LC_CTYPE", "LANG"] {
         if let Ok(value) = env::var(key) {
             let trimmed = value.trim();
-            if !trimmed.is_empty() && is_utf8_locale(trimmed) {
+            if !trimmed.is_empty() && is_utf8_locale(trimmed) && is_usable_locale(trimmed) {
                 return trimmed.to_string();
             }
         }
     }
 
     "C.UTF-8".to_string()
+}
+
+/// Bare "UTF-8" / "UTF8" are not valid POSIX locale names and cause tools
+/// like zsh and tmux to mishandle multi-byte input. Require a proper locale
+/// prefix (e.g. "en_US.UTF-8", "C.UTF-8").
+fn is_usable_locale(locale: &str) -> bool {
+    let upper = locale.to_ascii_uppercase();
+    upper != "UTF-8" && upper != "UTF8"
 }
 
 pub fn create(
@@ -947,9 +955,12 @@ fn ensure_grove_tmux_session(
 }
 
 fn grove_tmux_environment(session_name: &str) -> Vec<(&'static str, String)> {
+    let locale = preferred_utf8_locale();
     let mut vars = vec![
         ("GROVE_TMUX_SESSION", session_name.to_string()),
         ("PATH", enriched_path().to_string()),
+        ("LANG", locale.clone()),
+        ("LC_CTYPE", locale),
     ];
     if let Some(ssh_auth_sock) = preferred_ssh_auth_sock() {
         vars.push(("SSH_AUTH_SOCK", ssh_auth_sock));
@@ -1577,6 +1588,16 @@ mod tests {
         assert!(is_utf8_locale("ko_KR.UTF-8"));
         assert!(is_utf8_locale("en_US.UTF8"));
         assert!(!is_utf8_locale("C"));
+    }
+
+    #[test]
+    fn rejects_bare_utf8_as_unusable_locale() {
+        assert!(!is_usable_locale("UTF-8"));
+        assert!(!is_usable_locale("UTF8"));
+        assert!(!is_usable_locale("utf-8"));
+        assert!(is_usable_locale("en_US.UTF-8"));
+        assert!(is_usable_locale("ko_KR.UTF-8"));
+        assert!(is_usable_locale("C.UTF-8"));
     }
 
     #[test]
