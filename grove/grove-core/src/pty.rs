@@ -219,6 +219,7 @@ pub fn create(
         .map_err(|e| e.to_string())?;
 
     let mut cmd = CommandBuilder::new("tmux");
+    cmd.arg("-u");
     cmd.arg("attach-session");
     cmd.arg("-t");
     cmd.arg(&session_name);
@@ -976,7 +977,7 @@ fn grove_real_zdotdir() -> String {
 
 fn create_tmux_session(session_name: &str, cwd: &str) -> Result<bool, String> {
     let mut command = Command::new("tmux");
-    command.args(["new-session", "-d", "-s", session_name, "-c", cwd]);
+    command.args(["-u", "new-session", "-d", "-s", session_name, "-c", cwd]);
     for (key, value) in grove_tmux_environment(session_name) {
         command.arg("-e").arg(format!("{key}={value}"));
     }

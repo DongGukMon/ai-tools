@@ -459,18 +459,11 @@ class TerminalPaneRuntime {
         return;
       }
 
+      // On trackpad, a mousemove with buttons=0 can arrive just before the
+      // real mouseup. Reset the flag but do NOT dispatch a synthetic mouseup —
+      // the browser sends the real mouseup which xterm.js needs for correct
+      // text selection and tmux mouse-release handling.
       awaitingPointerRelease = false;
-      event.stopImmediatePropagation();
-      container.dispatchEvent(
-        new MouseEvent("mouseup", {
-          bubbles: true,
-          cancelable: true,
-          button: 0,
-          buttons: 0,
-          clientX: event.clientX,
-          clientY: event.clientY,
-        }),
-      );
     };
     this.onFocusIn = () => {
       if (this.ptyId) {
