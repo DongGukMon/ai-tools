@@ -195,6 +195,7 @@ export function useWorktreePrUrl(input: WorktreePrLookupInput) {
 
   return {
     isLoading: entry.loading,
+    hasFetchedBefore: entry.fetchedAt != null,
     pullRequest: entry.pullRequest,
     url: entry.pullRequest?.url ?? null,
     status: entry.pullRequest?.status ?? null,

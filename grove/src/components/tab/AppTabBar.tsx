@@ -72,7 +72,7 @@ function SelectedWorktreePrAction({ worktreePath }: { worktreePath: string | nul
 
     return null;
   }, [missionSelectedItem, missions, projects, worktreePath]);
-  const { isLoading, pullRequest } = useWorktreePrUrl(
+  const { isLoading, hasFetchedBefore, pullRequest } = useWorktreePrUrl(
     target?.kind === "worktree" ? target : {
       projectOrg: "",
       projectRepo: "",
@@ -91,7 +91,7 @@ function SelectedWorktreePrAction({ worktreePath }: { worktreePath: string | nul
   let title = "Create pull request";
   let colorClass = "border-transparent bg-[#1f883d] text-white hover:bg-[#1a7f37]";
 
-  if (isLoading) {
+  if (isLoading && !hasFetchedBefore) {
     label = "Checking PR";
     title = "Checking pull request status";
     colorClass = "border-transparent bg-[#57606a] text-white hover:bg-[#4f5864]";
