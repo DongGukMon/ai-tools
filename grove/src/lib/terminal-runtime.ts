@@ -192,7 +192,6 @@ class TerminalPaneRuntime {
   private onTrackpadMouseUp: (() => void) | null = null;
   private onTrackpadMouseMoveCapture: ((event: MouseEvent) => void) | null = null;
   private onFocusIn: (() => void) | null = null;
-  private onCompositionKeydown: ((event: KeyboardEvent) => void) | null = null;
   private ownerDocument: Document | null = null;
   private readonly unlistenLayoutSync: () => void;
 
@@ -444,11 +443,6 @@ class TerminalPaneRuntime {
       this.onTrackpadMouseMoveCapture = null;
     }
 
-    if (this.onCompositionKeydown && this.ownerDocument) {
-      this.ownerDocument.removeEventListener("keydown", this.onCompositionKeydown, true);
-      this.onCompositionKeydown = null;
-    }
-
     this.ownerDocument = null;
     this.container = null;
   }
@@ -547,24 +541,41 @@ class TerminalPaneRuntime {
   private installCompositionListeners() {
     const textarea = this.term.textarea;
     if (!textarea) return;
+
+    // xterm.js's CompositionHelper.updateCompositionElements() recursively
+    // repositions the textarea via setTimeout(0) during composition. On
+    // macOS WKWebView this repeated style mutation breaks the IME — pressing
+    // Shift (for ㅆ, ㅖ) causes the composition to end prematurely.
+    //
+    // Fix: use a MutationObserver to freeze the textarea's inline style
+    // attribute while composition is active. The first positioning by
+    // xterm.js is allowed (captured as snapshot), and all subsequent style
+    // mutations are reverted to that snapshot.
+    let styleSnapshot: string | null = null;
+    let observer: MutationObserver | null = null;
+    let reverting = false;
+
     textarea.addEventListener("compositionstart", () => {
       this.composing = true;
+      // Let xterm.js position the textarea once, then freeze
+      requestAnimationFrame(() => {
+        if (!this.composing) return;
+        styleSnapshot = textarea.getAttribute("style");
+        observer = new MutationObserver(() => {
+          if (!this.composing || !styleSnapshot || reverting) return;
+          reverting = true;
+          textarea.setAttribute("style", styleSnapshot);
+          reverting = false;
+        });
+        observer.observe(textarea, { attributes: true, attributeFilter: ["style"] });
+      });
     });
     textarea.addEventListener("compositionend", () => {
       this.composing = false;
+      observer?.disconnect();
+      observer = null;
+      styleSnapshot = null;
     });
-
-    // Block keydown events from reaching xterm.js during IME composition.
-    // Use document capture phase — the earliest interception point — so
-    // no handler anywhere in the DOM tree can modify the textarea and
-    // break the IME (e.g., Shift for ㅆ, ㅖ on macOS WKWebView).
-    const doc = textarea.ownerDocument;
-    this.onCompositionKeydown = (event: KeyboardEvent) => {
-      if (this.composing && event.target === textarea) {
-        event.stopImmediatePropagation();
-      }
-    };
-    doc.addEventListener("keydown", this.onCompositionKeydown, true);
   }
 
   private hasLayoutDimensions() {
