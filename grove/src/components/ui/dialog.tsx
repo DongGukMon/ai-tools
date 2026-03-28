@@ -51,7 +51,7 @@ function Dialog(props: DialogProps) {
                 variant="ghost"
                 size="icon"
                 className={cn(
-                  "ml-auto size-6 text-[var(--color-text-tertiary)] hover:text-foreground",
+                  "ml-auto size-6 cursor-pointer text-[var(--color-text-tertiary)] hover:text-foreground",
                 )}
               >
                 <XIcon />

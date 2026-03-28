@@ -12,7 +12,7 @@ import type { Project } from "../../types";
 import { useProjectStore } from "../../store/project";
 import { useToast } from "../../store/toast";
 import { overlay } from "../../lib/overlay";
-import EnvSyncDialog from "./EnvSyncDialog";
+import ProjectSettingsDialog from "./ProjectSettingsDialog";
 import DefaultBranchItem from "./DefaultBranchItem";
 import WorktreeItem from "./WorktreeItem";
 import { IconButton } from "../ui/button";
@@ -84,10 +84,10 @@ const ProjectItem = memo(function ProjectItem({ project }: Props) {
     setRenaming(false);
   };
 
-  const handleEnvSyncSettings = (e: React.MouseEvent) => {
+  const handleProjectSettings = (e: React.MouseEvent) => {
     e.stopPropagation();
     overlay.open<boolean>(({ resolve, close }) => (
-      <EnvSyncDialog projectId={project.id} resolve={resolve} close={close} />
+      <ProjectSettingsDialog projectId={project.id} resolve={resolve} close={close} />
     ));
   };
 
@@ -169,8 +169,8 @@ const ProjectItem = memo(function ProjectItem({ project }: Props) {
             <Pencil className={cn("h-[13px] w-[13px]")} />
           </IconButton>
           <IconButton
-            onClick={handleEnvSyncSettings}
-            title="Env sync settings"
+            onClick={handleProjectSettings}
+            title="Project settings"
           >
             <Settings className={cn("h-[13px] w-[13px]")} />
           </IconButton>
