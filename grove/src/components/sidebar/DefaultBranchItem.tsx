@@ -8,6 +8,7 @@ import { useSidebarLeafActivation } from "../../hooks/useSidebarLeafActivation";
 import { AiStatusIcons } from "./WorktreeItem";
 import SidebarLeafItem from "./SidebarLeafItem";
 import { useAiWorktreeSessions, useWorktreeBell } from "./worktree-status";
+import { BranchSelector } from "./BranchSelector";
 
 interface Props {
   project: Project;
@@ -15,14 +16,16 @@ interface Props {
 
 function DefaultBranchItem({ project }: Props) {
   const [refreshing, setRefreshing] = useState(false);
-  const { selectedWorktree, selectWorktree, refreshProject } =
+  const [selectorOpen, setSelectorOpen] = useState(false);
+  const { selectedWorktree, selectWorktree, refreshProject, setBaseBranch } =
     useProjectStore();
   const { toast } = useToast();
 
+  const displayBranch = project.resolvedDefaultBranch;
   const sourceWorktree = {
     name: "source",
     path: project.sourcePath,
-    branch: "main",
+    branch: displayBranch,
   };
   const isSelected = selectedWorktree?.path === project.sourcePath;
   const hasBell = useWorktreeBell(project.sourcePath);
@@ -46,51 +49,100 @@ function DefaultBranchItem({ project }: Props) {
     }
   };
 
+  const handleBranchClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectorOpen(true);
+  };
+
+  const handleBranchSelect = async (branch: string | null) => {
+    setSelectorOpen(false);
+    try {
+      await setBaseBranch(project.id, branch);
+      toast(
+        "success",
+        branch
+          ? `Base branch set to '${branch}'`
+          : "Base branch reset to auto-detect",
+      );
+    } catch {
+      // Toasts are handled by the command layer.
+    }
+  };
+
   return (
-    <SidebarLeafItem
-      icon={(
-        <GitBranch className={cn("h-[13px] w-[13px] shrink-0", {
-          "text-orange-500": hasBell,
-        })} />
+    <div className={cn("relative")}>
+      <SidebarLeafItem
+        icon={
+          <GitBranch
+            className={cn("h-[13px] w-[13px] shrink-0", {
+              "text-orange-500": hasBell,
+            })}
+          />
+        }
+        label={
+          <span
+            className={cn("min-w-0 flex-1 truncate cursor-pointer", {
+              "hover:underline": !refreshing,
+            })}
+            onClick={handleBranchClick}
+            title="Click to change base branch"
+          >
+            {displayBranch}
+          </span>
+        }
+        title={project.sourcePath}
+        isSelected={isSelected}
+        disabled={refreshing}
+        onActivate={handleActivate}
+        status={<AiStatusIcons sessions={aiSessions} />}
+        action={
+          refreshing ? (
+            <Loader2
+              className={cn(
+                "h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground",
+              )}
+            />
+          ) : (
+            <button
+              className={cn(
+                "h-4 w-4 flex items-center justify-center rounded-sm transition-colors",
+                {
+                  "opacity-30 cursor-not-allowed": project.sourceHasChanges,
+                  "opacity-100 text-accent hover:text-foreground":
+                    !project.sourceHasChanges && project.sourceBehindRemote,
+                  "opacity-50 hover:opacity-100 hover:text-foreground":
+                    !project.sourceHasChanges &&
+                    !project.sourceBehindRemote &&
+                    isSelected,
+                  "opacity-0 group-hover:opacity-100 hover:text-foreground":
+                    !project.sourceHasChanges &&
+                    !project.sourceBehindRemote &&
+                    !isSelected,
+                },
+              )}
+              onClick={handleRefresh}
+              disabled={project.sourceHasChanges}
+              title={
+                project.sourceHasChanges
+                  ? "Commit or stash working changes before syncing"
+                  : "Sync source repo"
+              }
+            >
+              <RotateCw className={cn("h-3 w-3")} />
+            </button>
+          )
+        }
+      />
+
+      {selectorOpen && (
+        <BranchSelector
+          projectId={project.id}
+          currentBranch={project.baseBranch}
+          onSelect={handleBranchSelect}
+          onClose={() => setSelectorOpen(false)}
+        />
       )}
-      label="main"
-      title={project.sourcePath}
-      isSelected={isSelected}
-      disabled={refreshing}
-      onActivate={handleActivate}
-      status={<AiStatusIcons sessions={aiSessions} />}
-      action={refreshing ? (
-        <Loader2 className={cn("h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground")} />
-      ) : (
-        <button
-          className={cn(
-            "h-4 w-4 flex items-center justify-center rounded-sm transition-colors",
-            {
-              "opacity-30 cursor-not-allowed": project.sourceHasChanges,
-              "opacity-100 text-accent hover:text-foreground":
-                !project.sourceHasChanges && project.sourceBehindRemote,
-              "opacity-50 hover:opacity-100 hover:text-foreground":
-                !project.sourceHasChanges &&
-                !project.sourceBehindRemote &&
-                isSelected,
-              "opacity-0 group-hover:opacity-100 hover:text-foreground":
-                !project.sourceHasChanges &&
-                !project.sourceBehindRemote &&
-                !isSelected,
-            },
-          )}
-          onClick={handleRefresh}
-          disabled={project.sourceHasChanges}
-          title={
-            project.sourceHasChanges
-              ? "Commit or stash working changes before syncing"
-              : "Sync source repo"
-          }
-        >
-          <RotateCw className={cn("h-3 w-3")} />
-        </button>
-      )}
-    />
+    </div>
   );
 }
 
