@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { ChevronDown, GitBranch, Loader2, RotateCw } from "lucide-react";
+import { ArrowLeftRight, GitBranch, Loader2, RotateCw } from "lucide-react";
 import type { Project } from "../../types";
 import { useProjectStore } from "../../store/project";
 import { useToast } from "../../store/toast";
@@ -81,22 +81,13 @@ function DefaultBranchItem({ project }: Props) {
           />
         }
         label={
-          <span className={cn("min-w-0 flex-1 truncate")}>
-            {displayBranch}
-            <span className={cn("ml-1 text-muted-foreground")}>(source)</span>
-          </span>
-        }
-        title={project.sourcePath}
-        isSelected={isSelected}
-        disabled={refreshing}
-        onActivate={handleActivate}
-        status={
-          <>
-            <AiStatusIcons sessions={aiSessions} />
+          <span className={cn("min-w-0 flex-1 flex items-center gap-1")}>
+            <span className={cn("truncate")}>{displayBranch}</span>
+            <span className={cn("shrink-0 text-muted-foreground")}>(source)</span>
             <button
               ref={switchBtnRef}
               className={cn(
-                "h-4 w-4 flex items-center justify-center rounded-sm transition-colors",
+                "shrink-0 flex items-center justify-center rounded-sm transition-colors",
                 {
                   "opacity-0 group-hover:opacity-100 hover:text-foreground":
                     !isSelected,
@@ -107,10 +98,15 @@ function DefaultBranchItem({ project }: Props) {
               onClick={handleSwitchClick}
               title="Change base branch"
             >
-              <ChevronDown className={cn("h-3 w-3")} />
+              <ArrowLeftRight className={cn("h-3 w-3")} />
             </button>
-          </>
+          </span>
         }
+        title={project.sourcePath}
+        isSelected={isSelected}
+        disabled={refreshing}
+        onActivate={handleActivate}
+        status={<AiStatusIcons sessions={aiSessions} />}
         action={
           refreshing ? (
             <Loader2
