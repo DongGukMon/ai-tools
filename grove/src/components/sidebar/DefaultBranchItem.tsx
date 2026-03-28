@@ -81,25 +81,9 @@ function DefaultBranchItem({ project }: Props) {
           />
         }
         label={
-          <span className={cn("min-w-0 flex-1 flex items-center gap-1")}>
-            <span className={cn("truncate")}>{displayBranch}</span>
-            <span className={cn("shrink-0 text-muted-foreground")}>(source)</span>
-            <button
-              ref={switchBtnRef}
-              className={cn(
-                "shrink-0 cursor-pointer flex items-center justify-center rounded-sm transition-colors",
-                {
-                  "opacity-0 group-hover:opacity-100 hover:text-foreground":
-                    !isSelected,
-                  "opacity-50 hover:opacity-100 hover:text-foreground":
-                    isSelected,
-                },
-              )}
-              onClick={handleSwitchClick}
-              title="Change base branch"
-            >
-              <ArrowLeftRight className={cn("h-3 w-3")} />
-            </button>
+          <span className={cn("min-w-0 flex-1 truncate")}>
+            {displayBranch}
+            <span className={cn("ml-1 text-muted-foreground")}>(source)</span>
           </span>
         }
         title={project.sourcePath}
@@ -115,33 +99,51 @@ function DefaultBranchItem({ project }: Props) {
               )}
             />
           ) : (
-            <button
-              className={cn(
-                "h-4 w-4 flex items-center justify-center rounded-sm transition-colors",
-                {
-                  "opacity-30 cursor-not-allowed": project.sourceHasChanges,
-                  "opacity-100 text-accent hover:text-foreground":
-                    !project.sourceHasChanges && project.sourceBehindRemote,
-                  "opacity-50 hover:opacity-100 hover:text-foreground":
-                    !project.sourceHasChanges &&
-                    !project.sourceBehindRemote &&
-                    isSelected,
-                  "opacity-0 group-hover:opacity-100 hover:text-foreground":
-                    !project.sourceHasChanges &&
-                    !project.sourceBehindRemote &&
-                    !isSelected,
-                },
-              )}
-              onClick={handleRefresh}
-              disabled={project.sourceHasChanges}
-              title={
-                project.sourceHasChanges
-                  ? "Commit or stash working changes before syncing"
-                  : "Sync source repo"
-              }
-            >
-              <RotateCw className={cn("h-3 w-3")} />
-            </button>
+            <span className={cn("flex items-center gap-0.5")}>
+              <button
+                ref={switchBtnRef}
+                className={cn(
+                  "h-4 w-4 cursor-pointer flex items-center justify-center rounded-sm transition-colors",
+                  {
+                    "opacity-0 group-hover:opacity-100 hover:text-foreground":
+                      !isSelected,
+                    "opacity-50 hover:opacity-100 hover:text-foreground":
+                      isSelected,
+                  },
+                )}
+                onClick={handleSwitchClick}
+                title="Change base branch"
+              >
+                <ArrowLeftRight className={cn("h-3 w-3")} />
+              </button>
+              <button
+                className={cn(
+                  "h-4 w-4 cursor-pointer flex items-center justify-center rounded-sm transition-colors",
+                  {
+                    "opacity-30 cursor-not-allowed": project.sourceHasChanges,
+                    "opacity-100 text-accent hover:text-foreground":
+                      !project.sourceHasChanges && project.sourceBehindRemote,
+                    "opacity-50 hover:opacity-100 hover:text-foreground":
+                      !project.sourceHasChanges &&
+                      !project.sourceBehindRemote &&
+                      isSelected,
+                    "opacity-0 group-hover:opacity-100 hover:text-foreground":
+                      !project.sourceHasChanges &&
+                      !project.sourceBehindRemote &&
+                      !isSelected,
+                  },
+                )}
+                onClick={handleRefresh}
+                disabled={project.sourceHasChanges}
+                title={
+                  project.sourceHasChanges
+                    ? "Commit or stash working changes before syncing"
+                    : "Sync source repo"
+                }
+              >
+                <RotateCw className={cn("h-3 w-3")} />
+              </button>
+            </span>
           )
         }
       />
