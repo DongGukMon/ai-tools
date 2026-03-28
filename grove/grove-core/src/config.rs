@@ -24,20 +24,10 @@ pub struct ProjectEntry {
     pub env_sync: Option<EnvSyncConfig>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct EnvSyncConfig {
-    pub enabled: bool,
     #[serde(default)]
     pub include_patterns: Vec<String>,
-}
-
-impl Default for EnvSyncConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            include_patterns: Vec::new(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

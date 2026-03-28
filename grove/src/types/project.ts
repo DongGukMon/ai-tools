@@ -27,6 +27,5 @@ export interface WorktreePullRequest {
 }
 
 export interface EnvSyncConfig {
-  enabled: boolean;
   include_patterns: string[];
 }

@@ -1208,10 +1208,8 @@ pub fn add_worktree_impl(project_id: &str, name: &str) -> Result<Worktree, Strin
     }
 
     if let Some(ref env_sync) = entry.env_sync {
-        if env_sync.enabled {
-            if let Err(e) = sync_env_files(source, &worktree_path, &env_sync.include_patterns) {
-                eprintln!("[grove] env sync warning: {e}");
-            }
+        if let Err(e) = sync_env_files(source, &worktree_path, &env_sync.include_patterns) {
+            eprintln!("[grove] env sync warning: {e}");
         }
     }
 

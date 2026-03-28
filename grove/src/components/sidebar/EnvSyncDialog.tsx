@@ -13,7 +13,6 @@ interface Props {
 }
 
 export default function EnvSyncDialog({ projectId, resolve, close }: Props) {
-  const [enabled, setEnabled] = useState(false);
   const [entries, setEntries] = useState<string[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -31,7 +30,6 @@ export default function EnvSyncDialog({ projectId, resolve, close }: Props) {
         if (cancelled) return;
         setEntries(gitignored);
         if (config) {
-          setEnabled(config.enabled);
           setSelected(new Set(config.include_patterns));
         }
       } catch (err) {
@@ -62,7 +60,6 @@ export default function EnvSyncDialog({ projectId, resolve, close }: Props) {
     setError("");
     try {
       const config: EnvSyncConfig = {
-        enabled,
         include_patterns: Array.from(selected).sort(),
       };
       await setEnvSync(projectId, config);
@@ -83,17 +80,6 @@ export default function EnvSyncDialog({ projectId, resolve, close }: Props) {
           </p>
         ) : (
           <>
-            <label className={cn("flex items-center gap-2 text-sm")}>
-              <input
-                type="checkbox"
-                checked={enabled}
-                onChange={(e) => setEnabled(e.target.checked)}
-                className={cn("accent-primary")}
-              />
-              <span className={cn("text-foreground")}>
-                Enable env sync
-              </span>
-            </label>
             <div className={cn("space-y-1.5")}>
               <label className={cn("text-xs font-medium text-muted-foreground")}>
                 Include items
