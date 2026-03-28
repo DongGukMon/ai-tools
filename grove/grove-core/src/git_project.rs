@@ -1022,34 +1022,73 @@ pub fn reorder_projects_impl(project_ids: Vec<String>) -> Result<(), String> {
     config::save_config(&config)
 }
 
-pub fn list_gitignored_entries_impl(project_id: &str) -> Result<Vec<String>, String> {
+pub fn list_gitignore_patterns_impl(project_id: &str) -> Result<Vec<String>, String> {
     let entry = find_project_entry(project_id)?;
     let source_dir = managed_source_dir(&entry)?;
-    let source = source_dir.as_path();
-    if !source.exists() {
+    let gitignore_path = source_dir.join(".gitignore");
+    if !gitignore_path.exists() {
         return Ok(Vec::new());
     }
-    let output = run_git_output(
-        source,
-        &["ls-files", "--others", "--ignored", "--exclude-standard"],
-    )?;
-    let mut top_level: Vec<String> = output
+    let content = std::fs::read_to_string(&gitignore_path)
+        .map_err(|e| format!("Failed to read .gitignore: {e}"))?;
+    let patterns: Vec<String> = content
         .lines()
-        .filter_map(|line| {
-            let path = line.trim();
-            if path.is_empty() {
-                return None;
-            }
-            Some(match path.find('/') {
-                Some(idx) => path[..idx].to_string(),
-                None => path.to_string(),
-            })
-        })
+        .map(|line| line.trim())
+        .filter(|line| !line.is_empty() && !line.starts_with('#') && !line.starts_with('!'))
+        .map(|line| line.to_string())
         .collect::<std::collections::BTreeSet<String>>()
         .into_iter()
         .collect();
-    top_level.sort();
-    Ok(top_level)
+    Ok(patterns)
+}
+
+fn gitignore_pattern_matches(pattern: &str, rel_path: &str) -> bool {
+    let first_component = match rel_path.find('/') {
+        Some(idx) => &rel_path[..idx],
+        None => rel_path,
+    };
+
+    if pattern.ends_with('/') {
+        // Directory pattern: e.g. "node_modules/" matches "node_modules/foo/bar"
+        let prefix = &pattern[..pattern.len() - 1];
+        rel_path.starts_with(&format!("{prefix}/")) || rel_path == prefix
+    } else if pattern.contains('*') {
+        // Glob pattern: e.g. "*.log" matches against first path component
+        glob_matches(pattern, first_component)
+    } else {
+        // Plain name: exact match against first path component
+        first_component == pattern
+    }
+}
+
+fn glob_matches(pattern: &str, name: &str) -> bool {
+    let pat = pattern.as_bytes();
+    let nam = name.as_bytes();
+    let (mut pi, mut ni) = (0, 0);
+    let (mut star_pi, mut star_ni) = (usize::MAX, 0);
+
+    while ni < nam.len() {
+        if pi < pat.len() && (pat[pi] == b'?' || pat[pi] == nam[ni]) {
+            pi += 1;
+            ni += 1;
+        } else if pi < pat.len() && pat[pi] == b'*' {
+            star_pi = pi;
+            star_ni = ni;
+            pi += 1;
+        } else if star_pi != usize::MAX {
+            pi = star_pi + 1;
+            star_ni += 1;
+            ni = star_ni;
+        } else {
+            return false;
+        }
+    }
+
+    while pi < pat.len() && pat[pi] == b'*' {
+        pi += 1;
+    }
+
+    pi == pat.len()
 }
 
 fn sync_env_files(
@@ -1071,7 +1110,7 @@ fn sync_env_files(
         }
         let included = include
             .iter()
-            .any(|pat| rel.starts_with(&format!("{pat}/")) || rel == pat.as_str());
+            .any(|pat| gitignore_pattern_matches(pat, rel));
         if !included {
             continue;
         }

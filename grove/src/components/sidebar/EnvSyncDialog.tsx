@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { EnvSyncConfig } from "../../types";
-import { getEnvSync, setEnvSync, listGitignoredEntries } from "../../lib/platform";
+import { getEnvSync, setEnvSync, listGitignorePatterns } from "../../lib/platform";
 import { getCommandErrorMessage } from "../../lib/platform";
 import { Button } from "../ui/button";
 import { Dialog } from "../ui/dialog";
@@ -26,7 +26,7 @@ export default function EnvSyncDialog({ projectId, resolve, close }: Props) {
       try {
         const [config, gitignored] = await Promise.all([
           getEnvSync(projectId),
-          listGitignoredEntries(projectId),
+          listGitignorePatterns(projectId),
         ]);
         if (cancelled) return;
         setEntries(gitignored);
@@ -100,7 +100,7 @@ export default function EnvSyncDialog({ projectId, resolve, close }: Props) {
               </label>
               {entries.length === 0 ? (
                 <p className={cn("text-xs text-muted-foreground")}>
-                  No environment files found in source
+                  No .gitignore patterns found
                 </p>
               ) : (
                 <div

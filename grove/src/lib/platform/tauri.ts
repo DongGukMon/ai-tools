@@ -264,8 +264,8 @@ export async function getEnvSync(projectId: string): Promise<EnvSyncConfig | nul
   return platform.invoke<EnvSyncConfig | null>("get_env_sync", { projectId });
 }
 
-export async function listGitignoredEntries(projectId: string): Promise<string[]> {
-  return platform.invoke<string[]>("list_gitignored_entries", { projectId });
+export async function listGitignorePatterns(projectId: string): Promise<string[]> {
+  return platform.invoke<string[]>("list_gitignore_patterns", { projectId });
 }
 
 // === PTY COMMANDS (W3) ===

@@ -167,8 +167,8 @@ async fn get_env_sync(
 }
 
 #[tauri::command]
-async fn list_gitignored_entries(project_id: String) -> Result<Vec<String>, String> {
-    blocking(move || grove_core::git_project::list_gitignored_entries_impl(&project_id)).await
+async fn list_gitignore_patterns(project_id: String) -> Result<Vec<String>, String> {
+    blocking(move || grove_core::git_project::list_gitignore_patterns_impl(&project_id)).await
 }
 
 // === MISSION COMMANDS (W5) ===
@@ -435,7 +435,7 @@ pub fn run() {
             set_base_branch,
             set_env_sync,
             get_env_sync,
-            list_gitignored_entries,
+            list_gitignore_patterns,
             // Mission (W5)
             list_missions,
             create_mission,
