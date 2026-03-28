@@ -186,6 +186,7 @@ class TerminalPaneRuntime {
   private pendingOutput: Uint8Array[] = [];
   private disposed = false;
   private lastError: string | null = null;
+  private composing = false;
 
   private onTrackpadMouseDown: (() => void) | null = null;
   private onTrackpadMouseUp: (() => void) | null = null;
@@ -248,7 +249,10 @@ class TerminalPaneRuntime {
       // Let the browser's native IME handle all composition events without
       // xterm.js interference — returning true would cause preventDefault()
       // which breaks Korean/CJK input on macOS WKWebView.
-      if (isTerminalCompositionEvent(event)) return false;
+      // We track composition state ourselves because WKWebView may report
+      // isComposing=false for modifier keys (Shift, etc.) mid-composition,
+      // which breaks double consonants (ㅆ) and compound vowels (ㅖ).
+      if (this.composing || isTerminalCompositionEvent(event)) return false;
       if (event.type !== "keydown") return true;
 
       if (isMacClearTerminalShortcut(event)) {
@@ -524,6 +528,7 @@ class TerminalPaneRuntime {
 
     if (!this.term.element) {
       this.term.open(this.container);
+      this.installCompositionListeners();
       this.startHydration();
       return;
     }
@@ -531,6 +536,17 @@ class TerminalPaneRuntime {
     if (this.term.element.parentElement !== this.container) {
       this.container.appendChild(this.term.element);
     }
+  }
+
+  private installCompositionListeners() {
+    const textarea = this.term.textarea;
+    if (!textarea) return;
+    textarea.addEventListener("compositionstart", () => {
+      this.composing = true;
+    });
+    textarea.addEventListener("compositionend", () => {
+      this.composing = false;
+    });
   }
 
   private hasLayoutDimensions() {

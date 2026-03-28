@@ -27,7 +27,7 @@ const TMUX_GROVE_PANE_ID_OPTION: &str = "@grove_pane_id";
 const TMUX_STATUS_OPTION: &str = "status";
 const TMUX_STATUS_OFF_VALUE: &str = "off";
 const TMUX_MOUSE_OPTION: &str = "mouse";
-const TMUX_MOUSE_OFF_VALUE: &str = "off";
+const TMUX_MOUSE_ON_VALUE: &str = "on";
 const TMUX_MONITOR_BELL_OPTION: &str = "monitor-bell";
 const TMUX_MONITOR_BELL_ON_VALUE: &str = "on";
 const TMUX_ESCAPE_TIME_OPTION: &str = "escape-time";
@@ -1033,7 +1033,7 @@ fn refresh_grove_tmux_environment(session_name: &str) -> Result<(), String> {
 /// attach even for sessions created before the option existed.
 fn enforce_grove_tmux_options(session_name: &str) -> Result<(), String> {
     tmux_set_option(session_name, TMUX_STATUS_OPTION, TMUX_STATUS_OFF_VALUE)?;
-    tmux_set_option(session_name, TMUX_MOUSE_OPTION, TMUX_MOUSE_OFF_VALUE)?;
+    tmux_set_option(session_name, TMUX_MOUSE_OPTION, TMUX_MOUSE_ON_VALUE)?;
     tmux_set_window_option(
         session_name,
         TMUX_MONITOR_BELL_OPTION,
@@ -1866,7 +1866,7 @@ mod tests {
             tmux_session_option(&session_name, TMUX_MOUSE_OPTION)
                 .unwrap()
                 .as_deref(),
-            Some(TMUX_MOUSE_OFF_VALUE)
+            Some(TMUX_MOUSE_ON_VALUE)
         );
         assert_eq!(
             tmux_session_environment_value(&session_name, "GROVE_TMUX_SESSION")
@@ -1899,7 +1899,7 @@ mod tests {
             tmux_session_option(&session_name, TMUX_MOUSE_OPTION)
                 .unwrap()
                 .as_deref(),
-            Some(TMUX_MOUSE_OFF_VALUE)
+            Some(TMUX_MOUSE_ON_VALUE)
         );
         assert_eq!(
             tmux_session_environment_value(&session_name, "GROVE_TMUX_SESSION")
@@ -2036,7 +2036,7 @@ mod tests {
             tmux_session_option(&session_name, TMUX_MOUSE_OPTION)
                 .unwrap()
                 .as_deref(),
-            Some(TMUX_MOUSE_OFF_VALUE),
+            Some(TMUX_MOUSE_ON_VALUE),
             "mouse must be restored to on on attach"
         );
 
