@@ -602,10 +602,8 @@ fn project_from_entry(entry: ProjectEntry) -> Project {
     let source_has_changes = path.exists() && has_local_source_changes(path);
     let source_behind_remote = check_source_behind_remote(&entry.source_path);
 
-    let resolved_default_branch = entry
-        .base_branch
-        .clone()
-        .unwrap_or_else(|| remote_default_branch(path).unwrap_or_else(|_| "main".to_string()));
+    let resolved_default_branch =
+        remote_default_branch(path).unwrap_or_else(|_| "main".to_string());
 
     Project {
         id: entry.id,

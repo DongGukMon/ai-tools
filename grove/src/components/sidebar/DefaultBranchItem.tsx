@@ -22,7 +22,7 @@ function DefaultBranchItem({ project }: Props) {
     useProjectStore();
   const { toast } = useToast();
 
-  const displayBranch = project.resolvedDefaultBranch;
+  const displayBranch = project.baseBranch ?? project.resolvedDefaultBranch;
   const sourceWorktree = {
     name: "source",
     path: project.sourcePath,

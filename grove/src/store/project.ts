@@ -324,13 +324,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
     });
     set((state) => ({
       projects: state.projects.map((p) =>
-        p.id === projectId
-          ? {
-              ...p,
-              baseBranch: branch,
-              resolvedDefaultBranch: branch ?? p.resolvedDefaultBranch,
-            }
-          : p,
+        p.id === projectId ? { ...p, baseBranch: branch } : p,
       ),
     }));
   },
