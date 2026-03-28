@@ -245,8 +245,11 @@ class TerminalPaneRuntime {
     });
 
     this.term.attachCustomKeyEventHandler((event) => {
+      // Let the browser's native IME handle all composition events without
+      // xterm.js interference — returning true would cause preventDefault()
+      // which breaks Korean/CJK input on macOS WKWebView.
+      if (isTerminalCompositionEvent(event)) return false;
       if (event.type !== "keydown") return true;
-      if (isTerminalCompositionEvent(event)) return true;
 
       if (isMacClearTerminalShortcut(event)) {
         event.preventDefault();
