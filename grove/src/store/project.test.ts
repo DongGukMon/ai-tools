@@ -43,6 +43,8 @@ function makeProject(worktrees: Worktree[]): Project {
     sourcePath: "/tmp/source",
     sourceHasChanges: false,
     sourceBehindRemote: false,
+    baseBranch: null,
+    resolvedDefaultBranch: "main",
     worktrees,
   };
 }
