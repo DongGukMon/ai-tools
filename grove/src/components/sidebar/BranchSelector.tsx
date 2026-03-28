@@ -156,7 +156,7 @@ export function BranchSelector({
         {!loading && !error && (
           <button
             className={cn(
-              "flex w-full items-center gap-2 px-3 py-1 text-left text-xs transition-colors hover:bg-secondary/50",
+              "flex w-full cursor-pointer items-center gap-2 px-3 py-1 text-left text-xs transition-colors hover:bg-secondary/50 hover:text-foreground",
               { "text-foreground": currentBranch === null },
             )}
             onClick={() => onSelect(null)}
@@ -177,7 +177,7 @@ export function BranchSelector({
             <button
               key={branch}
               className={cn(
-                "flex w-full items-center gap-2 px-3 py-1 text-left text-xs transition-colors hover:bg-secondary/50",
+                "flex w-full cursor-pointer items-center gap-2 px-3 py-1 text-left text-xs transition-colors hover:bg-secondary/50 hover:text-foreground",
                 { "text-foreground": branch === currentBranch },
               )}
               onClick={() => onSelect(branch)}
