@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { GitBranch, Loader2, RotateCw } from "lucide-react";
+import { ChevronDown, GitBranch, Loader2, RotateCw } from "lucide-react";
 import type { Project } from "../../types";
 import { useProjectStore } from "../../store/project";
 import { useToast } from "../../store/toast";
@@ -17,7 +17,7 @@ interface Props {
 function DefaultBranchItem({ project }: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const [selectorOpen, setSelectorOpen] = useState(false);
-  const branchLabelRef = useRef<HTMLSpanElement>(null);
+  const switchBtnRef = useRef<HTMLButtonElement>(null);
   const { selectedWorktree, selectWorktree, refreshProject, setBaseBranch } =
     useProjectStore();
   const { toast } = useToast();
@@ -50,9 +50,9 @@ function DefaultBranchItem({ project }: Props) {
     }
   };
 
-  const handleBranchClick = (e: React.MouseEvent) => {
+  const handleSwitchClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setSelectorOpen(true);
+    setSelectorOpen((prev) => !prev);
   };
 
   const handleBranchSelect = async (branch: string | null) => {
@@ -81,14 +81,7 @@ function DefaultBranchItem({ project }: Props) {
           />
         }
         label={
-          <span
-            ref={branchLabelRef}
-            className={cn("min-w-0 flex-1 truncate cursor-pointer", {
-              "hover:underline": !refreshing,
-            })}
-            onClick={handleBranchClick}
-            title="Click to change base branch"
-          >
+          <span className={cn("min-w-0 flex-1 truncate")}>
             {displayBranch}
             <span className={cn("ml-1 text-muted-foreground")}>(source)</span>
           </span>
@@ -97,7 +90,27 @@ function DefaultBranchItem({ project }: Props) {
         isSelected={isSelected}
         disabled={refreshing}
         onActivate={handleActivate}
-        status={<AiStatusIcons sessions={aiSessions} />}
+        status={
+          <>
+            <AiStatusIcons sessions={aiSessions} />
+            <button
+              ref={switchBtnRef}
+              className={cn(
+                "h-4 w-4 flex items-center justify-center rounded-sm transition-colors",
+                {
+                  "opacity-0 group-hover:opacity-100 hover:text-foreground":
+                    !isSelected,
+                  "opacity-50 hover:opacity-100 hover:text-foreground":
+                    isSelected,
+                },
+              )}
+              onClick={handleSwitchClick}
+              title="Change base branch"
+            >
+              <ChevronDown className={cn("h-3 w-3")} />
+            </button>
+          </>
+        }
         action={
           refreshing ? (
             <Loader2
@@ -142,7 +155,7 @@ function DefaultBranchItem({ project }: Props) {
           projectId={project.id}
           currentBranch={project.baseBranch}
           resolvedDefaultBranch={project.resolvedDefaultBranch}
-          anchorRef={branchLabelRef}
+          anchorRef={switchBtnRef}
           onSelect={handleBranchSelect}
           onClose={() => setSelectorOpen(false)}
         />
