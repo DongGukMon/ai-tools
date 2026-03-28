@@ -6,7 +6,7 @@ settings:
 
 patchedDependencies:
   '@xterm/xterm':
-    hash: 35d72b0712bd16b476cfd1b6f775ef80f85046a802093f4194081639180bdc13
+    hash: fa17bed3436ecd0c1e60f5373e7d1f1bed8c4e51f111141c95fd1477544021da
     path: patches/@xterm__xterm.patch
 
 importers:
@@ -54,7 +54,7 @@ importers:
         version: 0.19.0
       '@xterm/xterm':
         specifier: ^6
-        version: 6.0.0(patch_hash=35d72b0712bd16b476cfd1b6f775ef80f85046a802093f4194081639180bdc13)
+        version: 6.0.0(patch_hash=fa17bed3436ecd0c1e60f5373e7d1f1bed8c4e51f111141c95fd1477544021da)
       allotment:
         specifier: ^1
         version: 1.20.5(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -4300,7 +4300,7 @@ snapshots:
 
   '@xterm/addon-webgl@0.19.0': {}
 
-  '@xterm/xterm@6.0.0(patch_hash=35d72b0712bd16b476cfd1b6f775ef80f85046a802093f4194081639180bdc13)': {}
+  '@xterm/xterm@6.0.0(patch_hash=fa17bed3436ecd0c1e60f5373e7d1f1bed8c4e51f111141c95fd1477544021da)': {}
 
   abbrev@1.1.1: {}
 
