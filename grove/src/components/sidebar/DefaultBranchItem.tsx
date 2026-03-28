@@ -87,7 +87,7 @@ function DefaultBranchItem({ project }: Props) {
             <button
               ref={switchBtnRef}
               className={cn(
-                "shrink-0 flex items-center justify-center rounded-sm transition-colors",
+                "shrink-0 cursor-pointer flex items-center justify-center rounded-sm transition-colors",
                 {
                   "opacity-0 group-hover:opacity-100 hover:text-foreground":
                     !isSelected,
