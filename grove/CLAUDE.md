@@ -5,6 +5,7 @@ Tauri v2 macOS app — Git project manager + split terminal + diff viewer.
 ## Feature Docs
 
 - [Terminal Broadcast](docs/terminal-broadcast.md) — PiP, Mirror, consumer model, persistence policy
+- [Grove Hooks Runtime Design](docs/grove-hooks-runtime-design.md) — Claude/Codex hook parity, CODEX_HOME overlay delivery, status tracking architecture
 
 ## Stack
 

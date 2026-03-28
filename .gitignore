@@ -30,6 +30,10 @@ grove/src-electron/native/index.js
 # Local files
 blog-post.md
 docs/superpowers/
+**/superpowers
+**/superpowers/**
+**/.superpowers
+**/.superpowers/**
 .claude/
 *.exe
 *.dll
