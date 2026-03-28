@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Check, Loader2, Search } from "lucide-react";
 import { cn } from "../../lib/cn";
 import * as tauri from "../../lib/platform";
@@ -7,6 +8,7 @@ import { runCommand } from "../../lib/command";
 interface Props {
   projectId: string;
   currentBranch: string | null;
+  anchorRef: React.RefObject<HTMLElement | null>;
   onSelect: (branch: string | null) => void;
   onClose: () => void;
 }
@@ -14,6 +16,7 @@ interface Props {
 export function BranchSelector({
   projectId,
   currentBranch,
+  anchorRef,
   onSelect,
   onClose,
 }: Props) {
@@ -21,8 +24,19 @@ export function BranchSelector({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [position, setPosition] = useState<{ top: number; left: number }>({
+    top: 0,
+    left: 0,
+  });
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const anchor = anchorRef.current;
+    if (!anchor) return;
+    const rect = anchor.getBoundingClientRect();
+    setPosition({ top: rect.bottom + 4, left: rect.left });
+  }, [anchorRef]);
 
   const fetchBranches = () => {
     setLoading(true);
@@ -88,11 +102,12 @@ export function BranchSelector({
     b.toLowerCase().includes(search.toLowerCase()),
   );
 
-  return (
+  return createPortal(
     <div
       ref={containerRef}
+      style={{ top: position.top, left: position.left }}
       className={cn(
-        "absolute left-0 top-full z-50 mt-1 w-64 rounded-md border border-border bg-popover shadow-lg",
+        "fixed z-50 w-64 rounded-md border border-border bg-popover shadow-lg",
       )}
     >
       <div
@@ -181,6 +196,7 @@ export function BranchSelector({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { GitBranch, Loader2, RotateCw } from "lucide-react";
 import type { Project } from "../../types";
 import { useProjectStore } from "../../store/project";
@@ -17,6 +17,7 @@ interface Props {
 function DefaultBranchItem({ project }: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const [selectorOpen, setSelectorOpen] = useState(false);
+  const branchLabelRef = useRef<HTMLSpanElement>(null);
   const { selectedWorktree, selectWorktree, refreshProject, setBaseBranch } =
     useProjectStore();
   const { toast } = useToast();
@@ -70,7 +71,7 @@ function DefaultBranchItem({ project }: Props) {
   };
 
   return (
-    <div className={cn("relative")}>
+    <div>
       <SidebarLeafItem
         icon={
           <GitBranch
@@ -81,6 +82,7 @@ function DefaultBranchItem({ project }: Props) {
         }
         label={
           <span
+            ref={branchLabelRef}
             className={cn("min-w-0 flex-1 truncate cursor-pointer", {
               "hover:underline": !refreshing,
             })}
@@ -138,6 +140,7 @@ function DefaultBranchItem({ project }: Props) {
         <BranchSelector
           projectId={project.id}
           currentBranch={project.baseBranch}
+          anchorRef={branchLabelRef}
           onSelect={handleBranchSelect}
           onClose={() => setSelectorOpen(false)}
         />
