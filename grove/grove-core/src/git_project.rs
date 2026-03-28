@@ -1022,11 +1022,44 @@ pub fn reorder_projects_impl(project_ids: Vec<String>) -> Result<(), String> {
     config::save_config(&config)
 }
 
+pub fn list_gitignored_entries_impl(project_id: &str) -> Result<Vec<String>, String> {
+    let entry = find_project_entry(project_id)?;
+    let source_dir = managed_source_dir(&entry)?;
+    let source = source_dir.as_path();
+    if !source.exists() {
+        return Ok(Vec::new());
+    }
+    let output = run_git_output(
+        source,
+        &["ls-files", "--others", "--ignored", "--exclude-standard"],
+    )?;
+    let mut top_level: Vec<String> = output
+        .lines()
+        .filter_map(|line| {
+            let path = line.trim();
+            if path.is_empty() {
+                return None;
+            }
+            Some(match path.find('/') {
+                Some(idx) => path[..idx].to_string(),
+                None => path.to_string(),
+            })
+        })
+        .collect::<std::collections::BTreeSet<String>>()
+        .into_iter()
+        .collect();
+    top_level.sort();
+    Ok(top_level)
+}
+
 fn sync_env_files(
     source_dir: &Path,
     worktree_dir: &Path,
-    exclude: &[String],
+    include: &[String],
 ) -> Result<(), String> {
+    if include.is_empty() {
+        return Ok(());
+    }
     let output = run_git_output(
         source_dir,
         &["ls-files", "--others", "--ignored", "--exclude-standard"],
@@ -1036,10 +1069,10 @@ fn sync_env_files(
         if rel.is_empty() {
             continue;
         }
-        let dominated = exclude
+        let included = include
             .iter()
             .any(|pat| rel.starts_with(&format!("{pat}/")) || rel == pat.as_str());
-        if dominated {
+        if !included {
             continue;
         }
         let src = source_dir.join(rel);
@@ -1137,7 +1170,7 @@ pub fn add_worktree_impl(project_id: &str, name: &str) -> Result<Worktree, Strin
 
     if let Some(ref env_sync) = entry.env_sync {
         if env_sync.enabled {
-            if let Err(e) = sync_env_files(source, &worktree_path, &env_sync.exclude_patterns) {
+            if let Err(e) = sync_env_files(source, &worktree_path, &env_sync.include_patterns) {
                 eprintln!("[grove] env sync warning: {e}");
             }
         }

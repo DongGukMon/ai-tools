@@ -280,6 +280,10 @@ export async function getEnvSync(_projectId: string): Promise<EnvSyncConfig | nu
   throw new Error("Not implemented");
 }
 
+export async function listGitignoredEntries(_projectId: string): Promise<string[]> {
+  throw new Error("Not implemented");
+}
+
 // === PTY COMMANDS (W3) ===
 
 export async function createPty(

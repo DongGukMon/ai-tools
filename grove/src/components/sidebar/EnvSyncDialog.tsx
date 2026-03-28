@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { EnvSyncConfig } from "../../types";
-import { getEnvSync, setEnvSync } from "../../lib/platform";
+import { getEnvSync, setEnvSync, listGitignoredEntries } from "../../lib/platform";
 import { getCommandErrorMessage } from "../../lib/platform";
 import { Button } from "../ui/button";
 import { Dialog } from "../ui/dialog";
@@ -14,7 +14,8 @@ interface Props {
 
 export default function EnvSyncDialog({ projectId, resolve, close }: Props) {
   const [enabled, setEnabled] = useState(false);
-  const [excludeText, setExcludeText] = useState("");
+  const [entries, setEntries] = useState<string[]>([]);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -23,13 +24,15 @@ export default function EnvSyncDialog({ projectId, resolve, close }: Props) {
     let cancelled = false;
     (async () => {
       try {
-        const config = await getEnvSync(projectId);
+        const [config, gitignored] = await Promise.all([
+          getEnvSync(projectId),
+          listGitignoredEntries(projectId),
+        ]);
         if (cancelled) return;
+        setEntries(gitignored);
         if (config) {
           setEnabled(config.enabled);
-          setExcludeText(config.exclude_patterns.join("\n"));
-        } else {
-          setExcludeText("node_modules");
+          setSelected(new Set(config.include_patterns));
         }
       } catch (err) {
         if (!cancelled) setError(getCommandErrorMessage(err));
@@ -42,16 +45,25 @@ export default function EnvSyncDialog({ projectId, resolve, close }: Props) {
     };
   }, [projectId]);
 
+  const toggleEntry = (entry: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(entry)) {
+        next.delete(entry);
+      } else {
+        next.add(entry);
+      }
+      return next;
+    });
+  };
+
   const handleSave = async () => {
     setSaving(true);
     setError("");
     try {
       const config: EnvSyncConfig = {
         enabled,
-        exclude_patterns: excludeText
-          .split("\n")
-          .map((l) => l.trim())
-          .filter(Boolean),
+        include_patterns: Array.from(selected).sort(),
       };
       await setEnvSync(projectId, config);
       resolve(true);
@@ -84,18 +96,34 @@ export default function EnvSyncDialog({ projectId, resolve, close }: Props) {
             </label>
             <div className={cn("space-y-1.5")}>
               <label className={cn("text-xs font-medium text-muted-foreground")}>
-                Exclude patterns (one per line)
+                Include items
               </label>
-              <textarea
-                value={excludeText}
-                onChange={(e) => setExcludeText(e.target.value)}
-                rows={4}
-                className={cn(
-                  "w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground",
-                  "placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-ring",
-                )}
-                placeholder={"node_modules\n.idea"}
-              />
+              {entries.length === 0 ? (
+                <p className={cn("text-xs text-muted-foreground")}>
+                  No environment files found in source
+                </p>
+              ) : (
+                <div
+                  className={cn(
+                    "max-h-48 overflow-y-auto rounded-md border border-border bg-background p-2 space-y-1",
+                  )}
+                >
+                  {entries.map((entry) => (
+                    <label
+                      key={entry}
+                      className={cn("flex items-center gap-2 text-sm cursor-pointer")}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selected.has(entry)}
+                        onChange={() => toggleEntry(entry)}
+                        className={cn("accent-primary")}
+                      />
+                      <span className={cn("text-foreground truncate")}>{entry}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
             </div>
             {error && (
               <p className={cn("text-xs text-destructive")}>{error}</p>

@@ -27,19 +27,15 @@ pub struct ProjectEntry {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EnvSyncConfig {
     pub enabled: bool,
-    #[serde(default = "default_exclude_patterns")]
-    pub exclude_patterns: Vec<String>,
-}
-
-fn default_exclude_patterns() -> Vec<String> {
-    vec!["node_modules".to_string()]
+    #[serde(default)]
+    pub include_patterns: Vec<String>,
 }
 
 impl Default for EnvSyncConfig {
     fn default() -> Self {
         Self {
             enabled: false,
-            exclude_patterns: default_exclude_patterns(),
+            include_patterns: Vec::new(),
         }
     }
 }
