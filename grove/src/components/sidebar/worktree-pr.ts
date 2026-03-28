@@ -1,12 +1,12 @@
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import type { WorktreePullRequest } from "../../types";
 import { create } from "zustand";
 import { runCommandSafely } from "../../lib/command";
 import { getWorktreePrUrl } from "../../lib/platform";
 
 const WORKTREE_PR_RESULT_CACHE_VERSION = 1;
-const WORKTREE_PR_FOUND_CACHE_TTL_MS = 60_000;
-const WORKTREE_PR_MISSING_CACHE_TTL_MS = 10_000;
+const WORKTREE_PR_FOUND_CACHE_TTL_MS = 120_000;
+const WORKTREE_PR_MISSING_CACHE_TTL_MS = 180_000;
 
 export interface WorktreePrLookupInput {
   projectOrg: string;
@@ -143,6 +143,20 @@ export const useWorktreePrStore = create<WorktreePrState>((set, get) => ({
   },
 }));
 
+export function invalidateWorktreePr(key: string): void {
+  const entry = useWorktreePrStore.getState().entries[key];
+  if (!entry) {
+    return;
+  }
+
+  useWorktreePrStore.setState((state) => ({
+    entries: {
+      ...state.entries,
+      [key]: { ...entry, fetchedAt: null },
+    },
+  }));
+}
+
 export function resetWorktreePrLookupState(): void {
   inflightRequests.clear();
   useWorktreePrStore.setState({ entries: {} });
@@ -193,11 +207,19 @@ export function useWorktreePrUrl(input: WorktreePrLookupInput) {
     };
   }, [entry.fetchedAt, input.worktreePath, key]);
 
+  const refresh = useCallback(() => {
+    if (!key || entry.loading) {
+      return;
+    }
+    invalidateWorktreePr(key);
+  }, [key, entry.loading]);
+
   return {
     isLoading: entry.loading,
     hasFetchedBefore: entry.fetchedAt != null,
     pullRequest: entry.pullRequest,
     url: entry.pullRequest?.url ?? null,
     status: entry.pullRequest?.status ?? null,
+    refresh,
   };
 }

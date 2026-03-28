@@ -72,7 +72,7 @@ function SelectedWorktreePrAction({ worktreePath }: { worktreePath: string | nul
 
     return null;
   }, [missionSelectedItem, missions, projects, worktreePath]);
-  const { isLoading, hasFetchedBefore, pullRequest } = useWorktreePrUrl(
+  const { isLoading, hasFetchedBefore, pullRequest, refresh } = useWorktreePrUrl(
     target?.kind === "worktree" ? target : {
       projectOrg: "",
       projectRepo: "",
@@ -122,6 +122,7 @@ function SelectedWorktreePrAction({ worktreePath }: { worktreePath: string | nul
       return;
     }
 
+    refresh();
     void runCommand(() => createWorktreePr(target.worktreePath), {
       errorToast: "Failed to create pull request",
     });
