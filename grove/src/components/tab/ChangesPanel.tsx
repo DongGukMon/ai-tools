@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useKeyHandler } from "../../hooks/useKeyHandler";
 import { useDiffStore } from "../../store/diff";
 import { useDiff } from "../../hooks/useDiff";
 import { useResolvedSidebarSelection } from "../../hooks/useResolvedSidebarSelection";
@@ -209,6 +210,20 @@ function WorkingChangesView({
   // Local selection state
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
   const [selectedSection, setSelectedSection] = useState<"staged" | "unstaged">("unstaged");
+
+  useKeyHandler("Escape", () => setSelectedPaths(new Set()), selectedPaths.size > 0);
+
+  const isStaged = selectedSection === "staged";
+  useKeyHandler(" ", () => {
+    const action = isStaged ? store.unstageFile : store.stageFile;
+    const paths = [...selectedPaths];
+    setSelectedPaths(new Set());
+    (async () => {
+      for (const path of paths) {
+        await action(path);
+      }
+    })();
+  }, selectedPaths.size > 0);
   const lastClickedRef = useRef<{ section: "staged" | "unstaged"; path: string } | null>(null);
 
   // Multi-file diffs loaded at component level
@@ -274,35 +289,12 @@ function WorkingChangesView({
     [],
   );
 
-  const isStaged = selectedSection === "staged";
-
   const handleMarqueeSelect = useCallback(
     (section: "staged" | "unstaged", ids: Set<string>) => {
       setSelectedPaths(ids);
       setSelectedSection(section);
     },
     [],
-  );
-
-  // Keyboard
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === " " && selectedPaths.size > 0) {
-        e.preventDefault();
-        const action = isStaged ? store.unstageFile : store.stageFile;
-        const paths = [...selectedPaths];
-        setSelectedPaths(new Set());
-        (async () => {
-          for (const path of paths) {
-            await action(path);
-          }
-        })();
-      }
-      if (e.key === "Escape") {
-        setSelectedPaths(new Set());
-      }
-    },
-    [selectedPaths, isStaged, store],
   );
 
   const fileListRef = useRef<HTMLDivElement>(null);
@@ -321,7 +313,6 @@ function WorkingChangesView({
           ref={fileListRef}
           className={cn("flex flex-col h-full bg-sidebar overflow-hidden outline-none")}
           tabIndex={0}
-          onKeyDown={handleKeyDown}
         >
           <div className={cn("flex-1 flex flex-col min-h-0")}>
             <FileSection

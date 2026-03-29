@@ -4,6 +4,7 @@ import DiffHunk from "./DiffHunk";
 import { cn } from "../../lib/cn";
 import { useDiffStore } from "../../store/diff";
 import { useLineSelection } from "../../hooks/useLineSelection";
+import { useKeyHandler } from "../../hooks/useKeyHandler";
 
 const EMPTY_SET = new Set<number>();
 
@@ -20,39 +21,31 @@ export default function DiffViewer({ diffs, isStaged, isCommitView }: Props) {
   const unstageLines = useDiffStore((s) => s.unstageLines);
   const clearSelection = useDiffStore((s) => s.clearSelection);
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === " ") {
-        e.preventDefault();
-        // Find first file with selected lines and act on those
-        for (const diff of diffs) {
-          const fileLines = selectedLines.get(diff.path);
-          if (fileLines && fileLines.size > 0) {
-            const linesByHunk = new Map<number, number[]>();
-            for (const lineIdx of fileLines) {
-              for (let hi = 0; hi < diff.hunks.length; hi++) {
-                if (diff.hunks[hi].lines.some((l) => l.index === lineIdx)) {
-                  const arr = linesByHunk.get(hi) ?? [];
-                  arr.push(lineIdx);
-                  linesByHunk.set(hi, arr);
-                  break;
-                }
-              }
+  useKeyHandler("Escape", () => clearSelection(), selectedLines.size > 0);
+
+  useKeyHandler(" ", () => {
+    for (const diff of diffs) {
+      const fileLines = selectedLines.get(diff.path);
+      if (fileLines && fileLines.size > 0) {
+        const linesByHunk = new Map<number, number[]>();
+        for (const lineIdx of fileLines) {
+          for (let hi = 0; hi < diff.hunks.length; hi++) {
+            if (diff.hunks[hi].lines.some((l) => l.index === lineIdx)) {
+              const arr = linesByHunk.get(hi) ?? [];
+              arr.push(lineIdx);
+              linesByHunk.set(hi, arr);
+              break;
             }
-            const action = isStaged ? unstageLines : stageLines;
-            for (const [hunkIdx, lines] of linesByHunk) {
-              action(diff.path, hunkIdx, lines);
-            }
-            break;
           }
         }
+        const action = isStaged ? unstageLines : stageLines;
+        for (const [hunkIdx, lines] of linesByHunk) {
+          action(diff.path, hunkIdx, lines);
+        }
+        break;
       }
-      if (e.key === "Escape") {
-        clearSelection();
-      }
-    },
-    [diffs, selectedLines, isStaged, stageLines, unstageLines, clearSelection],
-  );
+    }
+  }, selectedLines.size > 0);
 
   if (diffs.length === 0) {
     return (
@@ -67,7 +60,6 @@ export default function DiffViewer({ diffs, isStaged, isCommitView }: Props) {
       ref={containerRef}
       className={cn("h-full overflow-y-auto outline-none")}
       tabIndex={0}
-      onKeyDown={handleKeyDown}
       onClick={(e) => {
         // Click on empty space (not on a gutter line or button) clears line selection
         if (!(e.target as HTMLElement).closest("[data-gutter-line]")) {

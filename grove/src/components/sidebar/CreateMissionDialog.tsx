@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMissionStore } from "../../store/mission";
 import { useToast } from "../../store/toast";
 import { getCommandErrorMessage } from "../../lib/platform";
+import { useKeyHandler } from "../../hooks/useKeyHandler";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
 import { cn } from "../../lib/cn";
@@ -16,6 +17,8 @@ function CreateMissionDialog({ onClose }: Props) {
   const [loading, setLoading] = useState(false);
   const { createMission } = useMissionStore();
   const { toast } = useToast();
+
+  useKeyHandler("Escape", () => onClose(), !loading);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,9 +49,6 @@ function CreateMissionDialog({ onClose }: Props) {
           autoFocus
           disabled={loading}
           className="mb-2"
-          onKeyDown={(e) => {
-            if (e.key === "Escape") onClose();
-          }}
         />
         {error && (
           <div className={cn("text-[11px] text-[var(--color-danger)] mb-2 break-all leading-relaxed")}>
