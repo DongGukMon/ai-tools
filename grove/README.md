@@ -5,7 +5,10 @@ Git project manager with split terminal and diff viewer for macOS. Each project 
 ## Features
 
 - **Multi-project sidebar** — Add git projects by URL, drag to reorder, manage worktrees per project
+- **Missions** — Group projects into missions for cross-repo workflows
 - **Split terminal** — Horizontal/vertical splits with persistent layouts per worktree
+- **Terminal broadcast** — Mirror terminal output across panes, Picture-in-Picture floating terminal
+- **Tabbed panels** — Switch between changes, diff, and terminal views per worktree
 - **Diff viewer** — Commit history, file diffs, hunk/line-level stage/unstage/discard
 - **AI status tracking** — Real-time running/idle/attention indicators for Claude Code and Codex sessions
 - **Terminal themes** — Preset themes + auto-detect from Terminal.app
@@ -15,9 +18,10 @@ Git project manager with split terminal and diff viewer for macOS. Each project 
 
 1. **Add a project** — Clone a git repo by URL. Grove keeps a source clone on `main`.
 2. **Create worktrees** — Branch off into git worktrees for parallel work.
-3. **Split terminals** — Each worktree gets its own split terminal layout that persists across restarts.
-4. **Review changes** — Use the diff panel to browse commits, stage/unstage hunks or individual lines, and discard changes.
-5. **Track AI sessions** — Claude Code and Codex sessions running in terminals show live status badges in the sidebar.
+3. **Group into missions** — Organize related projects into missions for cross-repo work.
+4. **Split terminals** — Each worktree gets its own split terminal layout that persists across restarts. Broadcast output via Mirror or PiP.
+5. **Review changes** — Use tabbed panels to browse commits, stage/unstage hunks or individual lines, and discard changes.
+6. **Track AI sessions** — Claude Code and Codex sessions running in terminals show live status badges in the sidebar.
 
 ## App Data
 
