@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useProjectStore } from "../../store/project";
 import { useToast } from "../../store/toast";
 import { getCommandErrorMessage } from "../../lib/platform";
-import { useKeyHandler } from "../../hooks/useKeyHandler";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
 import { cn } from "../../lib/cn";
@@ -17,8 +16,6 @@ function AddProjectDialog({ onClose }: Props) {
   const [loading, setLoading] = useState(false);
   const { addProject } = useProjectStore();
   const { toast } = useToast();
-
-  useKeyHandler("Escape", () => onClose(), !loading);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,6 +46,9 @@ function AddProjectDialog({ onClose }: Props) {
           autoFocus
           disabled={loading}
           className="mb-2"
+          onKeyDown={(e) => {
+            if (e.key === "Escape") onClose();
+          }}
         />
         <div className={cn("text-[11px] text-[var(--color-text-tertiary)] mb-2 leading-relaxed")}>
           Supports HTTPS and SSH Git URLs.

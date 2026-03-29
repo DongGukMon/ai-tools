@@ -10,7 +10,6 @@ import type { Project } from "../../types";
 import { useProjectStore } from "../../store/project";
 import { useToast } from "../../store/toast";
 import { overlay } from "../../lib/overlay";
-import { useKeyHandler } from "../../hooks/useKeyHandler";
 import DefaultBranchItem from "./DefaultBranchItem";
 import WorktreeItem from "./WorktreeItem";
 import { IconButton } from "../ui/button";
@@ -44,8 +43,6 @@ const ProjectItem = memo(function ProjectItem({ project }: Props) {
   const [worktreeName, setWorktreeName] = useState("");
   const { addWorktree, removeProject } = useProjectStore();
   const { toast } = useToast();
-
-  useKeyHandler("Escape", () => setAdding(false), adding && !addingLoading);
 
   const handleAddWorktree = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -158,6 +155,9 @@ const ProjectItem = memo(function ProjectItem({ project }: Props) {
                     disabled={addingLoading}
                     onBlur={() => {
                       if (!worktreeName.trim() && !addingLoading) setAdding(false);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape" && !addingLoading) setAdding(false);
                     }}
                   />
                   {addingLoading && (
