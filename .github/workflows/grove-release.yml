@@ -82,6 +82,18 @@ jobs:
           }
           EOF
 
+      - name: Setup Go (for vaultkey)
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: vaultkey/go.mod
+          cache-dependency-path: vaultkey/go.sum
+
+      - name: Build vaultkey from source
+        run: |
+          cd vaultkey
+          go build -o "$HOME/.local/bin/vaultkey" ./cmd/vaultkey
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
       - name: Load signing key from vaultkey
         uses: ./vaultkey-action
         with:
@@ -90,6 +102,7 @@ jobs:
           password: ${{ secrets.VAULTKEY_PASSWORD }}
           secrets: |
             TAURI_SIGNING_PRIVATE_KEY=grove/ci TAURI_SIGNING_PRIVATE_KEY
+          skip-install: true
 
       - name: Build universal macOS binary
         # Apple codesign/notarize — uncomment env block when Apple Developer Account is ready:
