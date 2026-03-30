@@ -18,6 +18,14 @@
       "../resources/icons/icon.ico"
     ]
   },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/bang9/ai-tools/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEY3NTlDMERGOTg4MUZDRDMKUldUVC9JR1kzOEJaOTEybFlpc0ZzekFRTGJBV3pZUmVGdm9GTkd1TlVGR1FiVSsvK2s2R1lXZVYK"
+    }
+  },
   "app": {
     "windows": [
       {
