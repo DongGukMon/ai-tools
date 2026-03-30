@@ -92,8 +92,8 @@ jobs:
             exit 1
           fi
 
-          output=$(vaultkey get app TEST_SECRET)
-          if [ "$output" != "$EXPECTED_SECRET" ]; then
-            echo "vaultkey get returned unexpected value" >&2
+          # Verify vault state was cleaned up by the action
+          if [ -d "$HOME/.vaultkey/repo" ]; then
+            echo "vault repo should have been cleaned up" >&2
             exit 1
           fi
