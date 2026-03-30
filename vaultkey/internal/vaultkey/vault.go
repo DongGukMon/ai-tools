@@ -14,17 +14,31 @@ import (
 	"sort"
 	"strings"
 
+	"golang.org/x/crypto/argon2"
 	"golang.org/x/crypto/pbkdf2"
 )
 
 const (
-	pbkdf2Iterations = 600_000
-	saltSize         = 32
-	nonceSize        = 12 // AES-GCM standard
-	keySize          = 32 // AES-256
-	vaultVersion     = 1
-	vaultFileName    = "vault.json"
+	pbkdf2Iterations    = 600_000
+	saltSize            = 32
+	nonceSize           = 12 // AES-GCM standard
+	keySize             = 32 // AES-256
+	currentVaultVersion = 2
+	vaultFileName       = "vault.json"
+	kdfArgon2id         = "argon2id"
 )
+
+type KDFParams struct {
+	Memory      uint32 `json:"memory"`
+	Iterations  uint32 `json:"iterations"`
+	Parallelism uint8  `json:"parallelism"`
+}
+
+var defaultKDFParams = KDFParams{
+	Memory:      65536, // 64 MB
+	Iterations:  3,
+	Parallelism: 4,
+}
 
 type EncryptedValue struct {
 	Nonce      string `json:"nonce"`
@@ -32,9 +46,11 @@ type EncryptedValue struct {
 }
 
 type VaultFile struct {
-	Version int                                  `json:"version"`
-	Salt    string                               `json:"salt"`
-	Scopes  map[string]map[string]EncryptedValue `json:"scopes"`
+	Version   int                                  `json:"version"`
+	Salt      string                               `json:"salt"`
+	KDF       string                               `json:"kdf,omitempty"`
+	KDFParams *KDFParams                           `json:"kdf_params,omitempty"`
+	Scopes    map[string]map[string]EncryptedValue `json:"scopes"`
 }
 
 type Vault struct {
@@ -67,7 +83,7 @@ func LoadVault(repoPath, password string) (*Vault, error) {
 		return nil, fmt.Errorf("parsing vault.json: %w", err)
 	}
 
-	if v.data.Version != vaultVersion {
+	if v.data.Version < 1 || v.data.Version > currentVaultVersion {
 		return nil, fmt.Errorf("unsupported vault version: %d", v.data.Version)
 	}
 
@@ -76,7 +92,7 @@ func LoadVault(repoPath, password string) (*Vault, error) {
 		return nil, fmt.Errorf("decoding salt: %w", err)
 	}
 
-	v.key = deriveKey(password, salt)
+	v.key = deriveKey(password, salt, v.data.Version, v.data.KDFParams)
 	return v, nil
 }
 
@@ -100,13 +116,16 @@ func CreateVault(repoPath, password string) (*Vault, error) {
 		return nil, fmt.Errorf("generating salt: %w", err)
 	}
 
+	params := defaultKDFParams
 	v := &Vault{
 		path: vaultPath,
-		key:  deriveKey(password, salt),
+		key:  deriveKey(password, salt, currentVaultVersion, &params),
 		data: VaultFile{
-			Version: vaultVersion,
-			Salt:    base64.StdEncoding.EncodeToString(salt),
-			Scopes:  make(map[string]map[string]EncryptedValue),
+			Version:   currentVaultVersion,
+			Salt:      base64.StdEncoding.EncodeToString(salt),
+			KDF:       kdfArgon2id,
+			KDFParams: &params,
+			Scopes:    make(map[string]map[string]EncryptedValue),
 		},
 	}
 
@@ -117,6 +136,13 @@ func CreateVault(repoPath, password string) (*Vault, error) {
 }
 
 func (v *Vault) Set(scope, key, value string) error {
+	if err := v.setWithoutSave(scope, key, value); err != nil {
+		return err
+	}
+	return v.save()
+}
+
+func (v *Vault) setWithoutSave(scope, key, value string) error {
 	nonce := make([]byte, nonceSize)
 	if _, err := rand.Read(nonce); err != nil {
 		return fmt.Errorf("generating nonce: %w", err)
@@ -132,7 +158,12 @@ func (v *Vault) Set(scope, key, value string) error {
 		return fmt.Errorf("creating GCM: %w", err)
 	}
 
-	ciphertext := gcm.Seal(nil, nonce, []byte(value), nil)
+	var aad []byte
+	if v.data.Version >= 2 {
+		aad = buildAAD(scope, key)
+	}
+
+	ciphertext := gcm.Seal(nil, nonce, []byte(value), aad)
 
 	if v.data.Scopes[scope] == nil {
 		v.data.Scopes[scope] = make(map[string]EncryptedValue)
@@ -143,7 +174,7 @@ func (v *Vault) Set(scope, key, value string) error {
 		Ciphertext: base64.StdEncoding.EncodeToString(ciphertext),
 	}
 
-	return v.save()
+	return nil
 }
 
 func (v *Vault) Get(scope, key string) (string, error) {
@@ -177,7 +208,12 @@ func (v *Vault) Get(scope, key string) (string, error) {
 		return "", fmt.Errorf("creating GCM: %w", err)
 	}
 
-	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
+	var aad []byte
+	if v.data.Version >= 2 {
+		aad = buildAAD(scope, key)
+	}
+
+	plaintext, err := gcm.Open(nil, nonce, ciphertext, aad)
 	if err != nil {
 		return "", fmt.Errorf("decryption failed (wrong password?): %w", err)
 	}
@@ -232,6 +268,74 @@ func (v *Vault) save() error {
 	return nil
 }
 
-func deriveKey(password string, salt []byte) []byte {
+func deriveKey(password string, salt []byte, version int, params *KDFParams) []byte {
+	if version >= 2 && params != nil {
+		return argon2.IDKey([]byte(password), salt, params.Iterations, params.Memory, params.Parallelism, keySize)
+	}
 	return pbkdf2.Key([]byte(password), salt, pbkdf2Iterations, keySize, sha256.New)
+}
+
+func buildAAD(scope, key string) []byte {
+	return []byte(scope + "/" + key)
+}
+
+// Version returns the vault format version.
+func (v *Vault) Version() int {
+	return v.data.Version
+}
+
+// IsLegacy returns true if the vault uses the v1 format.
+func (v *Vault) IsLegacy() bool {
+	return v.data.Version < 2
+}
+
+// Migrate re-encrypts a v1 vault to v2 (Argon2id KDF + GCM AAD).
+// Returns the number of secrets migrated. If already v2, returns (0, nil).
+func (v *Vault) Migrate(password string) (int, error) {
+	if v.data.Version >= 2 {
+		return 0, nil
+	}
+
+	// Phase 1: Decrypt all secrets with v1 key
+	type entry struct {
+		scope, key, value string
+	}
+	var entries []entry
+	for scope, keys := range v.data.Scopes {
+		for key := range keys {
+			val, err := v.Get(scope, key)
+			if err != nil {
+				return 0, fmt.Errorf("decrypting %s/%s during migration: %w", scope, key, err)
+			}
+			entries = append(entries, entry{scope, key, val})
+		}
+	}
+
+	// Phase 2: Generate new salt and derive new key with Argon2id
+	newSalt := make([]byte, saltSize)
+	if _, err := rand.Read(newSalt); err != nil {
+		return 0, fmt.Errorf("generating new salt: %w", err)
+	}
+
+	params := defaultKDFParams
+	v.data.Version = currentVaultVersion
+	v.data.Salt = base64.StdEncoding.EncodeToString(newSalt)
+	v.data.KDF = kdfArgon2id
+	v.data.KDFParams = &params
+	v.key = deriveKey(password, newSalt, currentVaultVersion, &params)
+
+	// Phase 3: Re-encrypt all secrets with new key + AAD
+	v.data.Scopes = make(map[string]map[string]EncryptedValue)
+	for _, e := range entries {
+		if err := v.setWithoutSave(e.scope, e.key, e.value); err != nil {
+			return 0, fmt.Errorf("re-encrypting %s/%s during migration: %w", e.scope, e.key, err)
+		}
+	}
+
+	// Phase 4: Save once
+	if err := v.save(); err != nil {
+		return 0, fmt.Errorf("saving migrated vault: %w", err)
+	}
+
+	return len(entries), nil
 }

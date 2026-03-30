@@ -29,7 +29,7 @@ func main() {
 	root.PersistentFlags().StringVar(&passwordFlag, "password", "", "vault password (or use VAULTKEY_PASSWORD env)")
 	root.PersistentFlags().BoolVar(&ciFlag, "ci", false, "CI mode: skip interactive prompts")
 
-	root.AddCommand(initCmd(), setCmd(), getCmd(), listCmd(), deleteCmd(), pushCmd(), pullCmd(), upgradeCmd())
+	root.AddCommand(initCmd(), setCmd(), getCmd(), listCmd(), deleteCmd(), pushCmd(), pullCmd(), upgradeCmd(), migrateCmd())
 
 	if err := root.Execute(); err != nil {
 		os.Exit(1)
@@ -127,6 +127,10 @@ func setCmd() *cobra.Command {
 			v, err := vaultkey.LoadVault(cfg.RepoPath, pw)
 			if err != nil {
 				return err
+			}
+
+			if v.IsLegacy() {
+				fmt.Fprintln(os.Stderr, "Warning: vault uses legacy v1 format. Run 'vaultkey migrate' to upgrade to Argon2id.")
 			}
 
 			if err := v.Set(scope, key, value); err != nil {
@@ -302,6 +306,51 @@ func upgradeCmd() *cobra.Command {
 				BinaryName: "vaultkey",
 				Version:    version,
 			})
+		},
+	}
+}
+
+func migrateCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "migrate",
+		Short: "Migrate vault from v1 (PBKDF2) to v2 (Argon2id + AAD)",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := vaultkey.LoadConfig()
+			if err != nil {
+				return err
+			}
+
+			pw, err := vaultkey.GetPassword(passwordFlag)
+			if err != nil {
+				return err
+			}
+
+			// Pull latest before mutation
+			_ = vaultkey.GitPull(cfg.RepoPath)
+
+			v, err := vaultkey.LoadVault(cfg.RepoPath, pw)
+			if err != nil {
+				return err
+			}
+
+			count, err := v.Migrate(pw)
+			if err != nil {
+				return err
+			}
+
+			if count == 0 {
+				fmt.Fprintln(os.Stderr, "Vault is already v2, nothing to migrate.")
+				return nil
+			}
+
+			fmt.Fprintf(os.Stderr, "Migrated %d secret(s) to v2 (Argon2id + AAD).\n", count)
+
+			if err := vaultkey.GitSync(cfg.RepoPath); err != nil {
+				return fmt.Errorf("sync failed: %w", err)
+			}
+			fmt.Fprintln(os.Stderr, "Synced.")
+			return nil
 		},
 	}
 }
