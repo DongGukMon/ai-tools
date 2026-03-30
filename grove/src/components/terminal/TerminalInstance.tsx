@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Radio } from "lucide-react";
+import { ChevronDown, ChevronUp, Radio, X } from "lucide-react";
 import { useTerminalStore } from "../../store/terminal";
 import { useBroadcastStore } from "../../store/broadcast";
 import { usePanelLayoutStore } from "../../store/panel-layout";
@@ -9,7 +9,7 @@ import { requestTerminalLayoutSync } from "../../lib/terminal-layout-sync";
 import { acquireTerminalRuntime } from "../../lib/terminal-runtime";
 import { shouldAttachPrimaryRuntime } from "../../lib/broadcast-policy";
 import { restoreBroadcastSessionSize } from "../../lib/broadcast-session";
-import { Button } from "../ui/button";
+import { Button, IconButton } from "../ui/button";
 
 interface Props {
   paneId: string;
@@ -19,6 +19,7 @@ interface Props {
 function TerminalInstance({ paneId, ptyId }: Props) {
   const termRef = useRef<HTMLDivElement>(null);
   const runtimeRef = useRef<ReturnType<typeof acquireTerminalRuntime> | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const theme = useTerminalStore((s) => s.theme);
   const isFocused = useTerminalStore((s) => s.focusedPtyId === ptyId);
   const setFocusedPtyId = useTerminalStore((s) => s.setFocusedPtyId);
@@ -30,6 +31,23 @@ function TerminalInstance({ paneId, ptyId }: Props) {
   const snapshot = mirrorSession?.snapshot ?? pipSession?.snapshot ?? null;
   const markBellPty = useTerminalStore((s) => s.markBellPty);
   const [error, setError] = useState<string | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+
+  const closeSearch = useCallback(() => {
+    setSearchOpen(false);
+    setSearchTerm("");
+    runtimeRef.current?.clearSearch();
+    runtimeRef.current?.focus();
+  }, []);
+
+  const openSearch = useCallback(() => {
+    setSearchOpen(true);
+    requestAnimationFrame(() => {
+      searchInputRef.current?.focus();
+      searchInputRef.current?.select();
+    });
+  }, []);
 
   const handleClick = useCallback(() => {
     setFocusedPtyId(ptyId);
@@ -51,6 +69,7 @@ function TerminalInstance({ paneId, ptyId }: Props) {
     });
     runtime.setErrorHandler(setError);
     runtime.setBellHandler(markBellPty);
+    runtime.setSearchHandler(openSearch);
     runtime.attach(container);
     requestTerminalLayoutSync({ paneId, source: "attach" });
 
@@ -58,11 +77,12 @@ function TerminalInstance({ paneId, ptyId }: Props) {
       runtime.setFocusHandler(null);
       runtime.setErrorHandler(null);
       runtime.setBellHandler(null);
+      runtime.setSearchHandler(null);
       runtime.detach(container);
       runtime.release();
       runtimeRef.current = null;
     };
-  }, [isBroadcasting, markBellPty, paneId, setFocusedPtyId, theme]);
+  }, [isBroadcasting, markBellPty, openSearch, paneId, setFocusedPtyId, theme]);
 
   useEffect(() => {
     runtimeRef.current?.setPtyId(ptyId);
@@ -93,6 +113,60 @@ function TerminalInstance({ paneId, ptyId }: Props) {
       onClick={handleClick}
     >
       <div ref={termRef} className={cn("terminal-instance h-full w-full")} />
+      {searchOpen && (
+        <div
+          className={cn("absolute top-2 right-4 z-20 flex items-center gap-1 rounded-md border border-border bg-sidebar px-2 py-1 shadow-lg")}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <input
+            ref={searchInputRef}
+            type="text"
+            value={searchTerm}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              if (e.target.value) {
+                runtimeRef.current?.findNext(e.target.value);
+              } else {
+                runtimeRef.current?.clearSearch();
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                closeSearch();
+              } else if (e.key === "Enter" && searchTerm) {
+                if (e.shiftKey) {
+                  runtimeRef.current?.findPrevious(searchTerm);
+                } else {
+                  runtimeRef.current?.findNext(searchTerm);
+                }
+              }
+            }}
+            className={cn("h-6 w-40 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground")}
+            placeholder="Search..."
+          />
+          <IconButton
+            className={cn("h-5 w-5")}
+            onClick={() => searchTerm && runtimeRef.current?.findPrevious(searchTerm)}
+            title="Previous (Shift+Enter)"
+          >
+            <ChevronUp className={cn("h-3 w-3")} />
+          </IconButton>
+          <IconButton
+            className={cn("h-5 w-5")}
+            onClick={() => searchTerm && runtimeRef.current?.findNext(searchTerm)}
+            title="Next (Enter)"
+          >
+            <ChevronDown className={cn("h-3 w-3")} />
+          </IconButton>
+          <IconButton
+            className={cn("h-5 w-5")}
+            onClick={closeSearch}
+            title="Close (Esc)"
+          >
+            <X className={cn("h-3 w-3")} />
+          </IconButton>
+        </div>
+      )}
       <div className={cn("terminal-pane-dim", { "terminal-pane-dim-active": !isFocused })} />
       {isBroadcasting && (
         <div className={cn("absolute inset-0 z-10")}>
