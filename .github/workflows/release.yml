@@ -36,7 +36,7 @@ jobs:
           PREV_TAG=$(git tag --sort=-v:refname | grep '^v' | sed -n '2p')
 
           BODY=""
-          PRODUCTS="whip claude-irc redit vaultkey webform rewind"
+          PRODUCTS="whip claude-irc redit vaultkey webform rewind grove"
           EXCLUDED_COMMIT_PATTERN='^chore: update plugin versions to '
 
           for product in $PRODUCTS; do
@@ -105,6 +105,15 @@ jobs:
     uses: ./.github/workflows/rewind-release.yml
     with:
       version: ${{ github.ref_name }}
+
+  grove:
+    needs: [create-release]
+    uses: ./.github/workflows/grove-release.yml
+    with:
+      version: ${{ github.ref_name }}
+    secrets:
+      VAULTKEY_PASSWORD: ${{ secrets.VAULTKEY_PASSWORD }}
+      GH_TOKEN_VAULTKEY: ${{ secrets.GH_TOKEN_VAULTKEY }}
 
   marketplace:
     needs: [claude-irc, redit, vaultkey, webform, whip, rewind]
