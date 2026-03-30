@@ -1,0 +1,148 @@
+name: "grove: Release"
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+    secrets:
+      VAULTKEY_PASSWORD:
+        required: true
+      GH_TOKEN_VAULTKEY:
+        required: true
+
+jobs:
+  release:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Validate release version
+        env:
+          RAW_VERSION: ${{ inputs.version }}
+        run: |
+          version="$RAW_VERSION"
+          semver_tag_pattern='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*)|[0-9A-Za-z-][0-9A-Za-z-]*)(\.((0|[1-9][0-9]*)|[0-9A-Za-z-][0-9A-Za-z-]*))*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'
+          case "$version" in
+            *$'\n'*|*$'\r'*)
+              echo "Invalid release version: must be a single-line semver tag" >&2
+              exit 1
+              ;;
+          esac
+          if ! printf '%s' "$version" | grep -Eq "$semver_tag_pattern"; then
+            echo "Invalid release version: must match semver tag format" >&2
+            exit 1
+          fi
+          printf 'RELEASE_VERSION=%s\n' "$version" >> "$GITHUB_ENV"
+          app_version="${version#v}"
+          printf 'APP_VERSION=%s\n' "$app_version" >> "$GITHUB_ENV"
+
+      - name: Load signing key from vaultkey
+        uses: ./vaultkey-action
+        with:
+          vault-repo: bang9/vaultkey-store
+          gh-pat: ${{ secrets.GH_TOKEN_VAULTKEY }}
+          password: ${{ secrets.VAULTKEY_PASSWORD }}
+          secrets: |
+            TAURI_SIGNING_PRIVATE_KEY=grove/ci TAURI_SIGNING_PRIVATE_KEY
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: grove/src-tauri
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install dependencies
+        run: cd grove && pnpm install --frozen-lockfile
+
+      - name: Generate Tauri config override
+        run: |
+          build_version="$(date '+%y%m%d%H%M')"
+          cat > /tmp/grove-tauri-config.json <<EOF
+          {
+            "version": "$APP_VERSION",
+            "bundle": {
+              "macOS": {
+                "bundleVersion": "$build_version"
+              }
+            }
+          }
+          EOF
+
+      - name: Build universal macOS binary
+        # Apple codesign/notarize — uncomment env block when Apple Developer Account is ready:
+        # env:
+        #   APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+        #   APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        #   APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        #   APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        #   APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+        #   APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+        run: |
+          cd grove
+          pnpm tauri build \
+            --target universal-apple-darwin \
+            --bundles dmg,updater \
+            --config /tmp/grove-tauri-config.json
+
+      - name: Prepare release artifacts
+        run: |
+          cd grove/target/universal-apple-darwin/release/bundle
+          mkdir -p /tmp/grove-release
+          cp dmg/*.dmg /tmp/grove-release/grove-${APP_VERSION}-universal-macos.dmg
+          cp macos/*.app.tar.gz /tmp/grove-release/grove.app.tar.gz
+          cp macos/*.app.tar.gz.sig /tmp/grove-release/grove.app.tar.gz.sig
+
+      - name: Generate latest.json for updater
+        run: |
+          signature="$(cat /tmp/grove-release/grove.app.tar.gz.sig)"
+          pub_date="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+          cat > /tmp/grove-release/latest.json <<EOF
+          {
+            "version": "$APP_VERSION",
+            "notes": "Release $RELEASE_VERSION",
+            "pub_date": "$pub_date",
+            "platforms": {
+              "darwin-universal": {
+                "url": "https://github.com/bang9/ai-tools/releases/download/${RELEASE_VERSION}/grove.app.tar.gz",
+                "signature": "$signature"
+              }
+            }
+          }
+          EOF
+
+      - name: Generate checksums
+        run: |
+          cd /tmp/grove-release
+          shasum -a 256 grove-*.dmg grove.app.tar.gz > grove-checksums.txt
+
+      - name: Upload to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "$RELEASE_VERSION" \
+            /tmp/grove-release/grove-${APP_VERSION}-universal-macos.dmg \
+            /tmp/grove-release/grove.app.tar.gz \
+            /tmp/grove-release/grove.app.tar.gz.sig \
+            /tmp/grove-release/latest.json \
+            /tmp/grove-release/grove-checksums.txt
