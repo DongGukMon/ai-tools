@@ -117,7 +117,7 @@ jobs:
           cd grove
           pnpm tauri build \
             --target aarch64-apple-darwin \
-            --bundles dmg \
+            --bundles app,dmg \
             --config /tmp/grove-tauri-config.json
 
       - name: Prepare release artifacts
