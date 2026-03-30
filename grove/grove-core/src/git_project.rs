@@ -1031,7 +1031,7 @@ pub fn add_worktree_impl(project_id: &str, name: &str) -> Result<Worktree, Strin
     }
 
     // Fetch latest from origin
-    let _ = run_git(source, &["fetch", "origin"]);
+    let _ = run_git(source, &["fetch", "--prune", "origin"]);
 
     let default_branch = match &entry.base_branch {
         Some(branch) => {
