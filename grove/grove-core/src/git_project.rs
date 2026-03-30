@@ -600,10 +600,11 @@ fn project_from_entry(entry: ProjectEntry) -> Project {
 
     let path = std::path::Path::new(&entry.source_path);
     let source_has_changes = path.exists() && has_local_source_changes(path);
-    let source_behind_remote = check_source_behind_remote(&entry.source_path);
 
     let resolved_default_branch =
         remote_default_branch(path).unwrap_or_else(|_| "main".to_string());
+    let source_behind_remote =
+        check_source_behind_remote(&entry.source_path, &resolved_default_branch);
 
     Project {
         id: entry.id,
@@ -671,14 +672,14 @@ fn project_load_worker_count(project_count: usize) -> usize {
         .max(1)
 }
 
-fn check_source_behind_remote(source_path: &str) -> bool {
+fn check_source_behind_remote(source_path: &str, default_branch: &str) -> bool {
     let path = std::path::Path::new(source_path);
     if !path.exists() {
         return false;
     }
 
     let _ = maybe_fetch_source_remote(path);
-    source_head_differs_from_default_remote(path)
+    source_head_differs_from_remote(path, default_branch)
 }
 
 fn has_local_source_changes(source: &Path) -> bool {
@@ -725,16 +726,12 @@ fn source_remote_refresh_due(source: &Path) -> bool {
     }
 }
 
-fn source_head_differs_from_default_remote(source: &Path) -> bool {
+fn source_head_differs_from_remote(source: &Path, default_branch: &str) -> bool {
     let repo = match Repository::open(source) {
         Ok(repo) => repo,
         Err(_) => return false,
     };
 
-    let default_branch = match remote_default_branch(source) {
-        Ok(branch) => branch,
-        Err(_) => return false,
-    };
     let remote_ref = format!("refs/remotes/origin/{default_branch}");
 
     let head = match repo.head().and_then(|head| head.peel_to_commit()) {
@@ -1036,11 +1033,21 @@ pub fn add_worktree_impl(project_id: &str, name: &str) -> Result<Worktree, Strin
     // Fetch latest from origin
     let _ = run_git(source, &["fetch", "origin"]);
 
-    let default_branch = entry
-        .base_branch
-        .clone()
-        .map(Ok)
-        .unwrap_or_else(|| remote_default_branch(source))?;
+    let default_branch = match &entry.base_branch {
+        Some(branch) => {
+            let remote_ref = format!("refs/remotes/origin/{branch}");
+            if run_git(source, &["show-ref", "--verify", &remote_ref]).is_ok() {
+                branch.clone()
+            } else {
+                eprintln!(
+                    "Configured base branch '{}' not found on remote, falling back to auto-detect",
+                    branch
+                );
+                remote_default_branch(source)?
+            }
+        }
+        None => remote_default_branch(source)?,
+    };
 
     let worktree_path = source
         .parent()
@@ -1293,7 +1300,7 @@ pub fn get_remote_branches_impl(project_id: &str) -> Result<Vec<String>, String>
         return Err(format!("Source directory not found: {}", entry.source_path));
     }
 
-    let _ = run_git(source, &["fetch", "origin"]);
+    let _ = maybe_fetch_source_remote(source);
 
     let mut branches = remote_branch_names(source)?;
     branches.sort();
@@ -3022,5 +3029,149 @@ exec /bin/sh -c "$remote_cmd"
 
         assert!(ssh_log.contains("argv=git@fakehost\x1fgit-upload-pack"));
         assert!(ssh_log.contains("ssh_auth_sock=/tmp/grove-refresh-test.sock"));
+    }
+
+    // === Base branch tests ===
+
+    #[test]
+    fn set_base_branch_happy_path() {
+        let _lock = env_lock();
+        let home = TestHome::new();
+        let base_dir = home.root.join("grove-data");
+        let remotes_dir = home.root.join("remotes");
+        let source_dir = base_dir
+            .join("github.com")
+            .join("bang9")
+            .join("grove")
+            .join("source");
+        let (remote_dir, seed_dir) = create_bare_remote(&remotes_dir, "grove", "main");
+        commit_and_push(&seed_dir, &remote_dir, "main", "README.md", "# Hello\n", "init");
+        run_git_ok(&seed_dir, &["checkout", "-b", "develop"]);
+        commit_and_push(&seed_dir, &remote_dir, "develop", "dev.md", "dev\n", "dev commit");
+
+        fs::create_dir_all(source_dir.parent().unwrap()).unwrap();
+        let remote_url = remote_dir.to_string_lossy().to_string();
+        run_git_ok(source_dir.parent().unwrap(), &["clone", &remote_url, "source"]);
+
+        let entry = project_entry("p1", "https://github.com/bang9/grove.git", &source_dir);
+        save_test_config(&base_dir, vec![entry]);
+
+        set_base_branch_impl("p1", Some("develop".to_string())).unwrap();
+
+        let config = config::load_config();
+        assert_eq!(config.projects[0].base_branch, Some("develop".to_string()));
+    }
+
+    #[test]
+    fn set_base_branch_rejects_nonexistent_branch() {
+        let _lock = env_lock();
+        let home = TestHome::new();
+        let base_dir = home.root.join("grove-data");
+        let remotes_dir = home.root.join("remotes");
+        let source_dir = base_dir
+            .join("github.com")
+            .join("bang9")
+            .join("grove")
+            .join("source");
+        let (remote_dir, seed_dir) = create_bare_remote(&remotes_dir, "grove", "main");
+        commit_and_push(&seed_dir, &remote_dir, "main", "README.md", "# Hello\n", "init");
+
+        fs::create_dir_all(source_dir.parent().unwrap()).unwrap();
+        let remote_url = remote_dir.to_string_lossy().to_string();
+        run_git_ok(source_dir.parent().unwrap(), &["clone", &remote_url, "source"]);
+
+        let entry = project_entry("p1", "https://github.com/bang9/grove.git", &source_dir);
+        save_test_config(&base_dir, vec![entry]);
+
+        let result = set_base_branch_impl("p1", Some("nonexistent".to_string()));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not found in remote"));
+    }
+
+    #[test]
+    fn set_base_branch_none_resets_to_auto_detect() {
+        let _lock = env_lock();
+        let home = TestHome::new();
+        let base_dir = home.root.join("grove-data");
+        let remotes_dir = home.root.join("remotes");
+        let source_dir = base_dir
+            .join("github.com")
+            .join("bang9")
+            .join("grove")
+            .join("source");
+        let (remote_dir, seed_dir) = create_bare_remote(&remotes_dir, "grove", "main");
+        commit_and_push(&seed_dir, &remote_dir, "main", "README.md", "# Hello\n", "init");
+
+        fs::create_dir_all(source_dir.parent().unwrap()).unwrap();
+        let remote_url = remote_dir.to_string_lossy().to_string();
+        run_git_ok(source_dir.parent().unwrap(), &["clone", &remote_url, "source"]);
+
+        let mut entry = project_entry("p1", "https://github.com/bang9/grove.git", &source_dir);
+        entry.base_branch = Some("main".to_string());
+        save_test_config(&base_dir, vec![entry]);
+
+        set_base_branch_impl("p1", None).unwrap();
+
+        let config = config::load_config();
+        assert_eq!(config.projects[0].base_branch, None);
+    }
+
+    #[test]
+    fn add_worktree_uses_configured_base_branch() {
+        let _lock = env_lock();
+        let home = TestHome::new();
+        let base_dir = home.root.join("grove-data");
+        let remotes_dir = home.root.join("remotes");
+        let source_dir = base_dir
+            .join("github.com")
+            .join("bang9")
+            .join("grove")
+            .join("source");
+        let (remote_dir, seed_dir) = create_bare_remote(&remotes_dir, "grove", "main");
+        commit_and_push(&seed_dir, &remote_dir, "main", "README.md", "# Hello\n", "init");
+        run_git_ok(&seed_dir, &["checkout", "-b", "develop"]);
+        commit_and_push(&seed_dir, &remote_dir, "develop", "dev.md", "dev\n", "dev commit");
+
+        fs::create_dir_all(source_dir.parent().unwrap()).unwrap();
+        let remote_url = remote_dir.to_string_lossy().to_string();
+        run_git_ok(source_dir.parent().unwrap(), &["clone", &remote_url, "source"]);
+
+        let mut entry = project_entry("p1", "https://github.com/bang9/grove.git", &source_dir);
+        entry.base_branch = Some("develop".to_string());
+        save_test_config(&base_dir, vec![entry]);
+
+        let worktree = add_worktree_impl("p1", "my-feature").unwrap();
+        assert_eq!(worktree.name, "my-feature");
+
+        // Verify the new branch was created from develop, not main
+        let log = run_git_output(
+            std::path::Path::new(&worktree.path),
+            &["log", "--oneline", "-1"],
+        )
+        .unwrap();
+        assert!(log.contains("dev commit"));
+    }
+
+    #[test]
+    fn config_round_trip_preserves_base_branch() {
+        let _lock = env_lock();
+        let home = TestHome::new();
+        let base_dir = home.root.join("grove-data");
+
+        let mut entry = project_entry("p1", "https://github.com/bang9/grove.git", &base_dir.join("source"));
+        entry.base_branch = Some("develop".to_string());
+        save_test_config(&base_dir, vec![entry]);
+
+        let loaded = config::load_config();
+        assert_eq!(loaded.projects[0].base_branch, Some("develop".to_string()));
+
+        // None round-trip
+        let mut entry2 = project_entry("p2", "https://github.com/bang9/other.git", &base_dir.join("source2"));
+        entry2.base_branch = None;
+        save_test_config(&base_dir, vec![loaded.projects[0].clone(), entry2]);
+
+        let loaded2 = config::load_config();
+        assert_eq!(loaded2.projects[0].base_branch, Some("develop".to_string()));
+        assert_eq!(loaded2.projects[1].base_branch, None);
     }
 }

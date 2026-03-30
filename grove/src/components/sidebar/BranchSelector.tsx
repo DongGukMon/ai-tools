@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Check, Loader2, Search } from "lucide-react";
 import { cn } from "../../lib/cn";
@@ -32,15 +32,26 @@ export function BranchSelector({
   });
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
-  useLayoutEffect(() => {
+  const updatePosition = useCallback(() => {
     const anchor = anchorRef.current;
     if (!anchor) return;
     const rect = anchor.getBoundingClientRect();
     setPosition({ top: rect.bottom + 4, left: rect.left });
   }, [anchorRef]);
 
-  const fetchBranches = () => {
+  useLayoutEffect(() => {
+    updatePosition();
+  }, [updatePosition]);
+
+  useEffect(() => {
+    window.addEventListener("resize", updatePosition);
+    return () => window.removeEventListener("resize", updatePosition);
+  }, [updatePosition]);
+
+  const fetchBranches = useCallback(() => {
     setLoading(true);
     setError(null);
     runCommand(() => tauri.getRemoteBranches(projectId), {
@@ -53,35 +64,11 @@ export function BranchSelector({
         ),
       )
       .finally(() => setLoading(false));
-  };
+  }, [projectId]);
 
   useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-
-    runCommand(() => tauri.getRemoteBranches(projectId), {
-      errorToast: false,
-    })
-      .then((result) => {
-        if (!cancelled) {
-          setBranches(result);
-          setLoading(false);
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setError(
-            err instanceof Error ? err.message : "Failed to load branches",
-          );
-          setLoading(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId]);
+    fetchBranches();
+  }, [fetchBranches]);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -93,15 +80,17 @@ export function BranchSelector({
         containerRef.current &&
         !containerRef.current.contains(e.target as Node)
       ) {
-        onClose();
+        onCloseRef.current();
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [onClose]);
+  }, []);
 
-  const filtered = branches.filter((b) =>
-    b.toLowerCase().includes(search.toLowerCase()),
+  const filtered = branches.filter(
+    (b) =>
+      b !== resolvedDefaultBranch &&
+      b.toLowerCase().includes(search.toLowerCase()),
   );
 
   return createPortal(
@@ -126,7 +115,7 @@ export function BranchSelector({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Escape") onClose();
+            if (e.key === "Escape") onCloseRef.current();
           }}
           placeholder="Search branches..."
           className={cn(
@@ -167,7 +156,9 @@ export function BranchSelector({
                 "opacity-0": currentBranch !== null,
               })}
             />
-            <span className={cn("truncate")}>{resolvedDefaultBranch} (default)</span>
+            <span className={cn("truncate")}>
+              {resolvedDefaultBranch} (default)
+            </span>
           </button>
         )}
 

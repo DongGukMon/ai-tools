@@ -245,6 +245,14 @@ export async function setWorktreeOrder(_projectId: string, _order: string[]): Pr
   throw new Error("Not implemented");
 }
 
+export async function getRemoteBranches(_projectId: string): Promise<string[]> {
+  throw new Error("Not implemented");
+}
+
+export async function setBaseBranch(_projectId: string, _branch: string | null): Promise<void> {
+  throw new Error("Not implemented");
+}
+
 export async function openExternal(url: string): Promise<void> {
   return platform.invoke("open_external", { url });
 }
