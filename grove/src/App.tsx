@@ -4,6 +4,8 @@ import { ToastContainer } from "./components/ui/toast";
 import { OverlayContainer } from "./lib/overlay";
 import { initBackendLogPipe } from "./lib/logger";
 import { usePreventFullscreenEscape } from "./hooks/usePreventFullscreenEscape";
+import { checkForUpdates } from "./lib/updater";
+import { useToastStore } from "./store/toast";
 
 function App() {
   usePreventFullscreenEscape();
@@ -16,6 +18,15 @@ function App() {
       else { cleanup = fn; }
     });
     return () => { cancelled = true; cleanup?.(); };
+  }, []);
+
+  useEffect(() => {
+    checkForUpdates((version) => {
+      useToastStore.getState().addToast(
+        "info",
+        `Update available: v${version}. Restart the app to update.`,
+      );
+    });
   }, []);
 
   return (
