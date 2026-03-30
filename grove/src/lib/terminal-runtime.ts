@@ -1,10 +1,17 @@
 import { FitAddon } from "@xterm/addon-fit";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
+import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal } from "@xterm/xterm";
 import type { TerminalTheme } from "../types";
 import { subscribeTerminalLayoutSync } from "./terminal-layout-sync";
-import { clearPtyScrollback, platform, resizePty, writePty } from "./platform";
+import {
+  clearPtyScrollback,
+  openExternal,
+  platform,
+  resizePty,
+  writePty,
+} from "./platform";
 import {
   getMacShortcutSequence,
   isMacClearTerminalShortcut,
@@ -29,6 +36,15 @@ export interface TerminalPaneActivity {
   paneId: string;
   ptyId: string;
   source: ActivitySource;
+}
+
+function isSafeExternalUrl(uri: string): boolean {
+  try {
+    const { protocol } = new URL(uri);
+    return protocol === "http:" || protocol === "https:" || protocol === "mailto:";
+  } catch {
+    return false;
+  }
 }
 
 function toXtermTheme(theme: TerminalTheme | null) {
@@ -232,6 +248,13 @@ class TerminalPaneRuntime {
     const unicode11 = new Unicode11Addon();
     this.term.loadAddon(unicode11);
     this.term.unicode.activeVersion = "11";
+
+    const webLinksAddon = new WebLinksAddon((_event, uri) => {
+      if (isSafeExternalUrl(uri)) {
+        openExternal(uri).catch(() => {});
+      }
+    });
+    this.term.loadAddon(webLinksAddon);
 
     this.dataDisposable = this.term.onData((data) => {
       if (!this.ptyId) {
