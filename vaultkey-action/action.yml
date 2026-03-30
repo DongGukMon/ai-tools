@@ -329,3 +329,16 @@ runs:
           echo "::add-mask::$(escape_workflow_command "$VALUE")"
           write_github_env "$ENV_NAME" "$VALUE"
         done <<< "$INPUT_SECRETS"
+
+    - name: Cleanup vault state
+      shell: bash
+      run: |
+        # Remove vault clone so later steps cannot access other secrets
+        rm -rf ~/.vaultkey/repo ~/.vaultkey/config.json
+        # Remove VAULTKEY_PASSWORD from GITHUB_ENV so later steps cannot decrypt
+        # Note: GITHUB_ENV is append-only, but we can overwrite with empty value
+        {
+          printf 'VAULTKEY_PASSWORD<<VAULTKEY_CLEANUP_EOF\n'
+          printf '\n'
+          printf 'VAULTKEY_CLEANUP_EOF\n'
+        } >> "$GITHUB_ENV"
