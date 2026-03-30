@@ -368,6 +368,27 @@ pub fn clear_scrollback(id: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn reap_child_after_close(mut child: Box<dyn portable_pty::Child + Send + Sync>) {
+    match child.try_wait() {
+        Ok(Some(_)) => return,
+        Ok(None) => {}
+        Err(error) => {
+            eprintln!("Warning: failed to poll PTY child before close: {error}");
+        }
+    }
+
+    let kill_error = child.kill().err();
+    if let Err(wait_error) = child.wait() {
+        if let Some(kill_error) = kill_error {
+            eprintln!(
+                "Warning: failed to terminate PTY child during close: {kill_error}; failed to reap child: {wait_error}"
+            );
+        } else {
+            eprintln!("Warning: failed to reap PTY child during close: {wait_error}");
+        }
+    }
+}
+
 pub fn close(id: &str) -> Result<(), String> {
     let session_name = {
         let reg = registry().lock().map_err(|e| e.to_string())?;
@@ -379,8 +400,10 @@ pub fn close(id: &str) -> Result<(), String> {
     kill_tmux_session_if_exists(&session_name)?;
 
     let mut reg = registry().lock().map_err(|e| e.to_string())?;
-    if let Some(mut instance) = reg.remove(id) {
-        let _ = instance.child.kill();
+    if let Some(instance) = reg.remove(id) {
+        std::thread::spawn(move || {
+            reap_child_after_close(instance.child);
+        });
     }
 
     Ok(())
@@ -1415,9 +1438,12 @@ mod tests {
     use super::*;
     use crate::test_support::env_lock;
     use crate::TerminalPaneSnapshotInput;
+    use std::fmt;
     use std::fs;
+    use std::io;
     use std::path::{Path, PathBuf};
     use std::process::Output;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::thread::sleep;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
     use uuid::Uuid;
@@ -1458,6 +1484,20 @@ mod tests {
         panic!("timed out waiting for {}", path.display());
     }
 
+    fn wait_for_atomic(counter: &AtomicUsize, expected: usize, context: &str) {
+        for _ in 0..20 {
+            if counter.load(Ordering::SeqCst) == expected {
+                return;
+            }
+            sleep(Duration::from_millis(25));
+        }
+
+        panic!(
+            "timed out waiting for {context}; expected {expected}, got {}",
+            counter.load(Ordering::SeqCst)
+        );
+    }
+
     struct TmuxSessionGuard {
         session_name: String,
     }
@@ -1478,6 +1518,98 @@ mod tests {
 
     impl PtyEventSink for NoopSink {
         fn on_output(&self, _pty_id: &str, _data: &[u8]) {}
+    }
+
+    #[derive(Clone, Copy)]
+    enum MockChildMode {
+        Running,
+        Exited,
+    }
+
+    #[derive(Default)]
+    struct MockChildState {
+        try_wait_calls: AtomicUsize,
+        kill_calls: AtomicUsize,
+        wait_calls: AtomicUsize,
+    }
+
+    struct MockChild {
+        mode: MockChildMode,
+        state: Arc<MockChildState>,
+    }
+
+    impl fmt::Debug for MockChild {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.debug_struct("MockChild").finish_non_exhaustive()
+        }
+    }
+
+    impl portable_pty::ChildKiller for MockChild {
+        fn kill(&mut self) -> io::Result<()> {
+            self.state.kill_calls.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+
+        fn clone_killer(&self) -> Box<dyn portable_pty::ChildKiller + Send + Sync> {
+            Box::new(Self {
+                mode: self.mode,
+                state: Arc::clone(&self.state),
+            })
+        }
+    }
+
+    impl portable_pty::Child for MockChild {
+        fn try_wait(&mut self) -> io::Result<Option<portable_pty::ExitStatus>> {
+            self.state.try_wait_calls.fetch_add(1, Ordering::SeqCst);
+            match self.mode {
+                MockChildMode::Running => Ok(None),
+                MockChildMode::Exited => Ok(Some(portable_pty::ExitStatus::with_exit_code(0))),
+            }
+        }
+
+        fn wait(&mut self) -> io::Result<portable_pty::ExitStatus> {
+            self.state.wait_calls.fetch_add(1, Ordering::SeqCst);
+            Ok(portable_pty::ExitStatus::with_exit_code(0))
+        }
+
+        fn process_id(&self) -> Option<u32> {
+            Some(42)
+        }
+    }
+
+    fn register_mock_pty(child: MockChild, session_name: String) -> String {
+        let pty_id = format!("pty-{}", Uuid::new_v4().simple());
+        let pair = native_pty_system()
+            .openpty(PtySize {
+                rows: 24,
+                cols: 80,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .unwrap();
+        let writer = pair.master.take_writer().unwrap();
+        drop(pair.slave);
+        let tracked = Arc::new(Mutex::new(PtyRuntimeState::new(
+            "/tmp/grove/worktree".into(),
+            Some(42),
+            session_name.clone(),
+            None,
+            None,
+        )));
+
+        registry().lock().unwrap().insert(
+            pty_id.clone(),
+            PtyInstance {
+                session_name,
+                worktree_path: "/tmp/grove/worktree".into(),
+                writer,
+                master: pair.master,
+                child: Box::new(child),
+                tracked,
+            },
+        );
+
+        pty_id
     }
 
     fn run_zdotdir_tmux_child_assertions() {
@@ -2204,5 +2336,53 @@ mod tests {
         let state = tracked.lock().unwrap();
         assert!(state.scrollback.is_empty());
         assert!(!state.scrollback_truncated);
+    }
+
+    #[test]
+    fn close_reaps_running_child_after_signalling_termination() {
+        if Command::new("tmux").arg("-V").output().is_err() {
+            return;
+        }
+
+        let state = Arc::new(MockChildState::default());
+        let session_name = format!("grove-test-close-running-{}", Uuid::new_v4().simple());
+        let pty_id = register_mock_pty(
+            MockChild {
+                mode: MockChildMode::Running,
+                state: Arc::clone(&state),
+            },
+            session_name,
+        );
+
+        close(&pty_id).unwrap();
+
+        wait_for_atomic(&state.wait_calls, 1, "running child wait");
+        assert_eq!(state.try_wait_calls.load(Ordering::SeqCst), 1);
+        assert_eq!(state.kill_calls.load(Ordering::SeqCst), 1);
+        assert_eq!(state.wait_calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn close_reaps_already_exited_child_without_signalling_it_again() {
+        if Command::new("tmux").arg("-V").output().is_err() {
+            return;
+        }
+
+        let state = Arc::new(MockChildState::default());
+        let session_name = format!("grove-test-close-exited-{}", Uuid::new_v4().simple());
+        let pty_id = register_mock_pty(
+            MockChild {
+                mode: MockChildMode::Exited,
+                state: Arc::clone(&state),
+            },
+            session_name,
+        );
+
+        close(&pty_id).unwrap();
+
+        wait_for_atomic(&state.try_wait_calls, 1, "exited child try_wait");
+        assert_eq!(state.try_wait_calls.load(Ordering::SeqCst), 1);
+        assert_eq!(state.kill_calls.load(Ordering::SeqCst), 0);
+        assert_eq!(state.wait_calls.load(Ordering::SeqCst), 0);
     }
 }
