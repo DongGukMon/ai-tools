@@ -418,6 +418,7 @@ pub fn run() {
             get_behind_count,
             merge_default_branch,
         ])
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             if let Err(error) = grove_core::pty::cleanup_stale_tmux_sessions_on_startup() {
                 eprintln!(
