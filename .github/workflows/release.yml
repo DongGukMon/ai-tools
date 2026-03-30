@@ -113,7 +113,7 @@ jobs:
       version: ${{ github.ref_name }}
     secrets:
       VAULTKEY_PASSWORD: ${{ secrets.VAULTKEY_PASSWORD }}
-      GH_TOKEN_VAULTKEY: ${{ secrets.GH_TOKEN_VAULTKEY }}
+      GH_PAT: ${{ secrets.GH_PAT }}
 
   marketplace:
     needs: [claude-irc, redit, vaultkey, webform, whip, rewind]

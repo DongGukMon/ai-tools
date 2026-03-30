@@ -9,7 +9,7 @@ on:
     secrets:
       VAULTKEY_PASSWORD:
         required: true
-      GH_TOKEN_VAULTKEY:
+      GH_PAT:
         required: true
 
 jobs:
@@ -46,8 +46,8 @@ jobs:
       - name: Load signing key from vaultkey
         uses: ./vaultkey-action
         with:
-          vault-repo: bang9/vaultkey-store
-          gh-pat: ${{ secrets.GH_TOKEN_VAULTKEY }}
+          vault-repo: bang9/vaultkey-secrets
+          gh-pat: ${{ secrets.GH_PAT }}
           password: ${{ secrets.VAULTKEY_PASSWORD }}
           secrets: |
             TAURI_SIGNING_PRIVATE_KEY=grove/ci TAURI_SIGNING_PRIVATE_KEY
