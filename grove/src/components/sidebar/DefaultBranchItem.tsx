@@ -23,6 +23,7 @@ function DefaultBranchItem({ project }: Props) {
   const { toast } = useToast();
 
   const displayBranch = project.baseBranch ?? project.resolvedDefaultBranch;
+  const branchLabel = project.baseBranch ? "(base)" : "(base·default)";
   const sourceWorktree = {
     name: "source",
     path: project.sourcePath,
@@ -83,7 +84,7 @@ function DefaultBranchItem({ project }: Props) {
         label={
           <span className={cn("min-w-0 flex-1 truncate")}>
             {displayBranch}
-            <span className={cn("ml-1 text-muted-foreground")}>(source)</span>
+            <span className={cn("ml-1 text-muted-foreground")}>{branchLabel}</span>
           </span>
         }
         title={project.sourcePath}
