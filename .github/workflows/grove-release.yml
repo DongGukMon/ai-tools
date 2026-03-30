@@ -48,7 +48,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-apple-darwin,x86_64-apple-darwin
+          targets: aarch64-apple-darwin
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
@@ -116,15 +116,15 @@ jobs:
         run: |
           cd grove
           pnpm tauri build \
-            --target universal-apple-darwin \
+            --target aarch64-apple-darwin \
             --bundles dmg,updater \
             --config /tmp/grove-tauri-config.json
 
       - name: Prepare release artifacts
         run: |
-          cd grove/target/universal-apple-darwin/release/bundle
+          cd grove/target/aarch64-apple-darwin/release/bundle
           mkdir -p /tmp/grove-release
-          cp dmg/*.dmg /tmp/grove-release/grove-${APP_VERSION}-universal-macos.dmg
+          cp dmg/*.dmg /tmp/grove-release/grove-${APP_VERSION}-arm64-macos.dmg
           cp macos/*.app.tar.gz /tmp/grove-release/grove.app.tar.gz
           cp macos/*.app.tar.gz.sig /tmp/grove-release/grove.app.tar.gz.sig
 
@@ -138,7 +138,7 @@ jobs:
             "notes": "Release $RELEASE_VERSION",
             "pub_date": "$pub_date",
             "platforms": {
-              "darwin-universal": {
+              "darwin-aarch64": {
                 "url": "https://github.com/bang9/ai-tools/releases/download/${RELEASE_VERSION}/grove.app.tar.gz",
                 "signature": "$signature"
               }
@@ -149,14 +149,14 @@ jobs:
       - name: Generate checksums
         run: |
           cd /tmp/grove-release
-          shasum -a 256 grove-*.dmg grove.app.tar.gz > grove-checksums.txt
+          shasum -a 256 *.dmg grove.app.tar.gz > grove-checksums.txt
 
       - name: Upload to GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release upload "$RELEASE_VERSION" \
-            /tmp/grove-release/grove-${APP_VERSION}-universal-macos.dmg \
+            /tmp/grove-release/grove-${APP_VERSION}-arm64-macos.dmg \
             /tmp/grove-release/grove.app.tar.gz \
             /tmp/grove-release/grove.app.tar.gz.sig \
             /tmp/grove-release/latest.json \
