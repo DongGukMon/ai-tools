@@ -128,12 +128,10 @@ jobs:
           tar czf /tmp/grove-release/grove.app.tar.gz grove.app
 
           # Sign updater archive
-          echo "$TAURI_SIGNING_PRIVATE_KEY" > /tmp/grove-signing.key
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD="" \
           pnpm --dir "$GITHUB_WORKSPACE/grove" tauri signer sign \
-            --private-key-path /tmp/grove-signing.key \
+            --private-key "$TAURI_SIGNING_PRIVATE_KEY" \
             /tmp/grove-release/grove.app.tar.gz
-          rm -f /tmp/grove-signing.key
 
       - name: Build DMG
         run: |
