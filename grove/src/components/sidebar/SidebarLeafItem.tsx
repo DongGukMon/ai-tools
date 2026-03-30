@@ -10,6 +10,7 @@ interface Props {
   onActivate: () => void;
   status?: ReactNode;
   action?: ReactNode;
+  forceShowAction?: boolean;
 }
 
 function SidebarLeafItem({
@@ -21,6 +22,7 @@ function SidebarLeafItem({
   onActivate,
   status,
   action,
+  forceShowAction = false,
 }: Props) {
   return (
     <div
@@ -39,7 +41,18 @@ function SidebarLeafItem({
       {icon}
       <span className={cn("min-w-0 flex-1 truncate")}>{label}</span>
       {status}
-      {action}
+      <span
+        className={cn(
+          "flex shrink-0 items-center justify-end overflow-hidden transition-all duration-150",
+          {
+            "max-w-0 opacity-0": !isSelected && !forceShowAction,
+            "max-w-[40px] opacity-100": isSelected || forceShowAction,
+            "group-hover:max-w-[40px] group-hover:opacity-100": true,
+          },
+        )}
+      >
+        {action}
+      </span>
     </div>
   );
 }

@@ -84,7 +84,7 @@ function DefaultBranchItem({ project }: Props) {
         label={
           <span className={cn("min-w-0 flex-1 truncate")}>
             {displayBranch}
-            <span className={cn("ml-1 text-muted-foreground")}>{branchLabel}</span>
+            <span className={cn("ml-1 text-muted-foreground/60")}>{branchLabel}</span>
           </span>
         }
         title={project.sourcePath}
@@ -92,6 +92,7 @@ function DefaultBranchItem({ project }: Props) {
         disabled={refreshing}
         onActivate={handleActivate}
         status={<AiStatusIcons sessions={aiSessions} />}
+        forceShowAction={project.sourceBehindRemote}
         action={
           refreshing ? (
             <Loader2
@@ -104,13 +105,7 @@ function DefaultBranchItem({ project }: Props) {
               <button
                 ref={switchBtnRef}
                 className={cn(
-                  "h-4 w-4 cursor-pointer flex items-center justify-center rounded-sm transition-colors",
-                  {
-                    "opacity-0 group-hover:opacity-100 hover:text-foreground":
-                      !isSelected,
-                    "opacity-50 hover:opacity-100 hover:text-foreground":
-                      isSelected,
-                  },
+                  "h-4 w-4 cursor-pointer flex items-center justify-center rounded-sm transition-colors hover:text-foreground",
                 )}
                 onClick={handleSwitchClick}
                 title="Change base branch"
@@ -119,19 +114,10 @@ function DefaultBranchItem({ project }: Props) {
               </button>
               <button
                 className={cn(
-                  "h-4 w-4 cursor-pointer flex items-center justify-center rounded-sm transition-colors",
+                  "h-4 w-4 cursor-pointer flex items-center justify-center rounded-sm transition-colors hover:text-foreground",
                   {
                     "opacity-30 cursor-not-allowed": project.sourceHasChanges,
-                    "opacity-100 text-accent hover:text-foreground":
-                      !project.sourceHasChanges && project.sourceBehindRemote,
-                    "opacity-50 hover:opacity-100 hover:text-foreground":
-                      !project.sourceHasChanges &&
-                      !project.sourceBehindRemote &&
-                      isSelected,
-                    "opacity-0 group-hover:opacity-100 hover:text-foreground":
-                      !project.sourceHasChanges &&
-                      !project.sourceBehindRemote &&
-                      !isSelected,
+                    "text-accent": !project.sourceHasChanges && project.sourceBehindRemote,
                   },
                 )}
                 onClick={handleRefresh}

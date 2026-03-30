@@ -119,11 +119,7 @@ function WorktreeItem({
         <button
           type="button"
           className={cn(
-            "h-4 w-4 flex items-center justify-center rounded-sm transition-colors",
-            {
-              "opacity-50 hover:opacity-100 hover:text-foreground": isSelected,
-              "opacity-0 group-hover:opacity-100 hover:text-foreground": !isSelected,
-            },
+            "h-4 w-4 flex items-center justify-center rounded-sm transition-colors hover:text-foreground",
           )}
           onClick={handleRemoveClick}
           title="Remove worktree"
