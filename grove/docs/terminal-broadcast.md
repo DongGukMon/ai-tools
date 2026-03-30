@@ -36,16 +36,16 @@ Consumer slots:
   Reusing only `worktreePath` is insufficient because the shared PiP container can otherwise keep the wrong runtime attached.
 - Removing a worktree must clear any PiP or mirror state that references that worktree's PTYs.
 
-### Broadcast State Machine
+### Broadcast State
 
 ```
-idle ──[mirror button]──→ broadcasting(mirror)
-idle ──[tab switch]─────→ broadcasting(pip)
-broadcasting ──[stop]───→ idle (restore original size)
+idle ──[mirror button]──→ mirroring(ptyId)
+idle ──[leave Terminal]─→ pip(worktreePath)
+mirroring / pip ──[stop]─→ idle (restore original size)
 ```
 
-- Mirrors: many global entries keyed by `ptyId`
-- PiP: many worktree-local entries keyed by `worktreePath`
+- Mirrors: PTY-global entries keyed by `ptyId`
+- PiP: worktree-local entries keyed by `worktreePath`
 - State: `BroadcastStore` (Zustand, in-memory only)
 - Deterministic transitions: replacing PiP for one worktree must not affect another worktree's PiP or any mirror entry
 
@@ -53,8 +53,8 @@ broadcasting ──[stop]───→ idle (restore original size)
 
 ### PiP (Picture-in-Picture)
 
-- **Trigger**: automatic when switching from Terminal tab to Changes/Browser tab
-- **Position**: 360x200 overlay at bottom-right of tab content
+- **Trigger**: automatic when leaving the Terminal tab for any non-terminal tab, as long as the focused PTY exists, is not already mirrored, and no PiP is active for that worktree
+- **Position**: bottom-right PiP window with default width `360px`; height is derived from a `9:16` aspect ratio and the width is user-resizable
 - **Scope**: one PiP slot per worktree space
 - **Behavior**: attaches the selected worktree's focused pane runtime to the shared PiP container
 - **Worktree switch**: detaches the previous worktree's PiP consumer and attaches the newly selected worktree's PiP consumer
@@ -67,7 +67,7 @@ broadcasting ──[stop]───→ idle (restore original size)
 
 - **Trigger**: mirror button in terminal toolbar (copy icon)
 - **Position**: new tab in Global Terminal
-- **Title**: `org/repo > worktree name`
+- **Title**: derived from the current project label and worktree name; if no project is resolved, the label falls back to `Terminal`
 - **Indicator**: red live-ping dot on top-left corner of the terminal icon
 - **Dismiss**: close the mirror tab or click Stop on the original pane overlay
 - **Lifecycle**: manual — user explicitly adds/removes. Not auto-removed on tab switch.

@@ -3,8 +3,11 @@ import Layout from "./Layout";
 import { ToastContainer } from "./components/ui/toast";
 import { OverlayContainer } from "./lib/overlay";
 import { initBackendLogPipe } from "./lib/logger";
+import { usePreventFullscreenEscape } from "./hooks/usePreventFullscreenEscape";
 
 function App() {
+  usePreventFullscreenEscape();
+
   useEffect(() => {
     let cancelled = false;
     let cleanup: (() => void) | undefined;

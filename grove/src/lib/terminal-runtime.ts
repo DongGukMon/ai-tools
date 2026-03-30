@@ -1,10 +1,18 @@
 import { FitAddon } from "@xterm/addon-fit";
+import { SearchAddon } from "@xterm/addon-search";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
+import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal } from "@xterm/xterm";
 import type { TerminalTheme } from "../types";
 import { subscribeTerminalLayoutSync } from "./terminal-layout-sync";
-import { clearPtyScrollback, platform, resizePty, writePty } from "./platform";
+import {
+  clearPtyScrollback,
+  openExternal,
+  platform,
+  resizePty,
+  writePty,
+} from "./platform";
 import {
   getMacShortcutSequence,
   isMacClearTerminalShortcut,
@@ -29,6 +37,15 @@ export interface TerminalPaneActivity {
   paneId: string;
   ptyId: string;
   source: ActivitySource;
+}
+
+function isSafeExternalUrl(uri: string): boolean {
+  try {
+    const { protocol } = new URL(uri);
+    return protocol === "http:" || protocol === "https:" || protocol === "mailto:";
+  } catch {
+    return false;
+  }
 }
 
 function toXtermTheme(theme: TerminalTheme | null) {
@@ -165,6 +182,7 @@ class TerminalPaneRuntime {
   readonly paneId: string;
   readonly term: Terminal;
   readonly fitAddon: FitAddon;
+  readonly searchAddon: SearchAddon;
   launchCwd?: string;
 
   private ptyId = "";
@@ -191,6 +209,7 @@ class TerminalPaneRuntime {
   private onTrackpadMouseUp: (() => void) | null = null;
   private onTrackpadMouseMoveCapture: ((event: MouseEvent) => void) | null = null;
   private onFocusIn: (() => void) | null = null;
+  private searchHandler: (() => void) | null = null;
   private ownerDocument: Document | null = null;
   private readonly unlistenLayoutSync: () => void;
 
@@ -233,6 +252,16 @@ class TerminalPaneRuntime {
     this.term.loadAddon(unicode11);
     this.term.unicode.activeVersion = "11";
 
+    const webLinksAddon = new WebLinksAddon((_event, uri) => {
+      if (isSafeExternalUrl(uri)) {
+        openExternal(uri).catch(() => {});
+      }
+    });
+    this.term.loadAddon(webLinksAddon);
+
+    this.searchAddon = new SearchAddon();
+    this.term.loadAddon(this.searchAddon);
+
     this.dataDisposable = this.term.onData((data) => {
       if (!this.ptyId) {
         return;
@@ -247,6 +276,13 @@ class TerminalPaneRuntime {
     this.term.attachCustomKeyEventHandler((event) => {
       if (event.type !== "keydown") return true;
       if (isTerminalCompositionEvent(event)) return true;
+
+      if (event.metaKey && event.key === "f") {
+        event.preventDefault();
+        event.stopPropagation();
+        this.searchHandler?.();
+        return false;
+      }
 
       if (isMacClearTerminalShortcut(event)) {
         event.preventDefault();
@@ -381,6 +417,22 @@ class TerminalPaneRuntime {
 
   setBellHandler(handler: BellHandler | null) {
     this.bellHandler = handler;
+  }
+
+  setSearchHandler(handler: (() => void) | null) {
+    this.searchHandler = handler;
+  }
+
+  findNext(term: string): boolean {
+    return this.searchAddon.findNext(term);
+  }
+
+  findPrevious(term: string): boolean {
+    return this.searchAddon.findPrevious(term);
+  }
+
+  clearSearch() {
+    this.searchAddon.clearDecorations();
   }
 
   attach(container: HTMLDivElement) {
