@@ -131,6 +131,16 @@ async fn set_worktree_order(project_id: String, order: Vec<String>) -> Result<()
     blocking(move || grove_core::git_project::set_worktree_order_impl(&project_id, order)).await
 }
 
+#[tauri::command]
+async fn get_remote_branches(project_id: String) -> Result<Vec<String>, String> {
+    blocking(move || grove_core::git_project::get_remote_branches_impl(&project_id)).await
+}
+
+#[tauri::command]
+async fn set_base_branch(project_id: String, branch: Option<String>) -> Result<(), String> {
+    blocking(move || grove_core::git_project::set_base_branch_impl(&project_id, branch)).await
+}
+
 // === MISSION COMMANDS (W5) ===
 
 #[tauri::command]
@@ -372,6 +382,8 @@ pub fn run() {
             get_worktree_pr_url,
             create_worktree_pr,
             set_worktree_order,
+            get_remote_branches,
+            set_base_branch,
             // Mission (W5)
             list_missions,
             create_mission,

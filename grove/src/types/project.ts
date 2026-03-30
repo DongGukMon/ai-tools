@@ -8,6 +8,8 @@ export interface Project {
   worktrees: Worktree[];
   sourceHasChanges: boolean;
   sourceBehindRemote: boolean;
+  baseBranch: string | null;
+  resolvedDefaultBranch: string;
 }
 
 export interface Worktree {

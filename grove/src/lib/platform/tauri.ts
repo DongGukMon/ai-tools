@@ -229,6 +229,14 @@ export async function setWorktreeOrder(projectId: string, order: string[]): Prom
   return platform.invoke<void>("set_worktree_order", { projectId, order });
 }
 
+export async function getRemoteBranches(projectId: string): Promise<string[]> {
+  return platform.invoke<string[]>("get_remote_branches", { projectId });
+}
+
+export async function setBaseBranch(projectId: string, branch: string | null): Promise<void> {
+  return platform.invoke("set_base_branch", { projectId, branch });
+}
+
 export async function openExternal(url: string): Promise<void> {
   return platform.invoke("open_external", { url });
 }

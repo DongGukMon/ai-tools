@@ -481,6 +481,7 @@ mod tests {
             repo: repo_name.to_string(),
             source_path: source_dir.to_string_lossy().to_string(),
             worktree_order: Vec::new(),
+            base_branch: None,
         }
     }
 
