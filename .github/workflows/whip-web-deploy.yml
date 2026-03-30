@@ -37,10 +37,20 @@ jobs:
         working-directory: whip/dashboard-web
         run: pnpm build
 
+      - name: Load Cloudflare secrets from vaultkey
+        uses: ./vaultkey-action
+        with:
+          gh-pat: ${{ secrets.GH_PAT }}
+          vault-repo: ${{ secrets.VAULT_REPO }}
+          password: ${{ secrets.VAULTKEY_PASSWORD }}
+          secrets: |
+            CLOUDFLARE_API_TOKEN=cloudflare CLOUDFLARE_API_TOKEN
+            CLOUDFLARE_ACCOUNT_ID=cloudflare CLOUDFLARE_ACCOUNT_ID
+
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          apiToken: ${{ env.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy dist --project-name=whip-dashboard
           workingDirectory: whip/dashboard-web

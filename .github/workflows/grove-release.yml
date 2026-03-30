@@ -11,6 +11,8 @@ on:
         required: true
       GH_PAT:
         required: true
+      VAULT_REPO:
+        required: true
 
 jobs:
   release:
@@ -46,7 +48,7 @@ jobs:
       - name: Load signing key from vaultkey
         uses: ./vaultkey-action
         with:
-          vault-repo: bang9/vaultkey-secrets
+          vault-repo: ${{ secrets.VAULT_REPO }}
           gh-pat: ${{ secrets.GH_PAT }}
           password: ${{ secrets.VAULTKEY_PASSWORD }}
           secrets: |

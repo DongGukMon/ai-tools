@@ -114,6 +114,7 @@ jobs:
     secrets:
       VAULTKEY_PASSWORD: ${{ secrets.VAULTKEY_PASSWORD }}
       GH_PAT: ${{ secrets.GH_PAT }}
+      VAULT_REPO: ${{ secrets.VAULT_REPO }}
 
   marketplace:
     needs: [claude-irc, redit, vaultkey, webform, whip, rewind]
