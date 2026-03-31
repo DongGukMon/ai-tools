@@ -407,6 +407,7 @@ fn make_project_entry(
         source_path,
         worktree_order: Vec::new(),
         base_branch: None,
+        collapsed: false,
     }
 }
 
@@ -1857,6 +1858,7 @@ mod tests {
             source_path: source_dir.to_string_lossy().to_string(),
             worktree_order: Vec::new(),
             base_branch: None,
+            collapsed: false,
         }
     }
 

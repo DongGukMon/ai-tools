@@ -471,6 +471,7 @@ mod tests {
             source_path: "/tmp/grove/source".into(),
             worktree_order: Vec::new(),
             base_branch: None,
+            collapsed: false,
         }
     }
 

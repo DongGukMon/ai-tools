@@ -6,6 +6,7 @@ const missions = [
     id: "m1",
     name: "Mission 1",
     missionDir: "/tmp/missions/m1",
+    collapsed: false,
     projects: [
       {
         projectId: "p1",

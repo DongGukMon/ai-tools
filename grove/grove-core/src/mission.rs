@@ -233,6 +233,7 @@ fn create_mission_with_paths(
         name: name.to_string(),
         projects: vec![],
         mission_dir: mission_dir.to_string_lossy().to_string(),
+        collapsed: false,
     };
 
     store.missions.push(mission.clone());
@@ -500,6 +501,7 @@ mod tests {
             source_path: source_dir.to_string_lossy().to_string(),
             worktree_order: Vec::new(),
             base_branch: None,
+            collapsed: false,
         }
     }
 
@@ -532,6 +534,7 @@ mod tests {
                     path: "/tmp/missions/abcd1234/my-repo".into(),
                 }],
                 mission_dir: String::new(),
+                collapsed: false,
             }],
         };
 
@@ -619,6 +622,7 @@ mod tests {
                         },
                     ],
                     mission_dir: String::new(),
+                    collapsed: false,
                 }],
             },
         )
