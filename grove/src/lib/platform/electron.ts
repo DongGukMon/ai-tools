@@ -249,6 +249,10 @@ export async function getRemoteBranches(_projectId: string): Promise<string[]> {
   throw new Error("Not implemented");
 }
 
+export async function renameProject(_projectId: string, _name: string): Promise<void> {
+  throw new Error("Not implemented");
+}
+
 export async function setBaseBranch(_projectId: string, _branch: string | null): Promise<void> {
   throw new Error("Not implemented");
 }

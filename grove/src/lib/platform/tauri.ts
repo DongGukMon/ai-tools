@@ -233,6 +233,10 @@ export async function getRemoteBranches(projectId: string): Promise<string[]> {
   return platform.invoke<string[]>("get_remote_branches", { projectId });
 }
 
+export async function renameProject(projectId: string, name: string): Promise<void> {
+  return platform.invoke("rename_project", { projectId, name });
+}
+
 export async function setBaseBranch(projectId: string, branch: string | null): Promise<void> {
   return platform.invoke("set_base_branch", { projectId, branch });
 }

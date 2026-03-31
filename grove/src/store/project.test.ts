@@ -18,6 +18,7 @@ vi.mock("../lib/platform", () => ({
   removeProject: vi.fn(),
   addWorktree: vi.fn(),
   removeWorktree: vi.fn(),
+  renameProject: vi.fn(),
 }));
 
 import * as tauri from "../lib/platform";
@@ -216,6 +217,22 @@ describe("useProjectStore", () => {
 
     expect(useBroadcastStore.getState().mirrors["pty-feature"]).toBeUndefined();
     expect(useBroadcastStore.getState().pips[selectedWorktree.path]).toBeUndefined();
+  });
+
+  it("renames a project and updates state", async () => {
+    useProjectStore.setState({
+      projects: [makeProject([])],
+      selectedWorktree: null,
+      loading: false,
+    });
+
+    vi.mocked(tauri.renameProject).mockResolvedValue();
+
+    await useProjectStore.getState().renameProject("project-1", "my-custom-name");
+
+    const project = useProjectStore.getState().projects[0];
+    expect(project.name).toBe("my-custom-name");
+    expect(tauri.renameProject).toHaveBeenCalledWith("project-1", "my-custom-name");
   });
 
   it("keeps the current selection when removing a different worktree", async () => {

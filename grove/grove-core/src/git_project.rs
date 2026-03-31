@@ -1307,6 +1307,22 @@ pub fn get_remote_branches_impl(project_id: &str) -> Result<Vec<String>, String>
     Ok(branches)
 }
 
+pub fn rename_project_impl(project_id: &str, name: String) -> Result<(), String> {
+    let trimmed = name.trim().to_string();
+    if trimmed.is_empty() {
+        return Err("Project name cannot be empty".to_string());
+    }
+
+    let mut config = config::load_config();
+    let entry = config
+        .projects
+        .iter_mut()
+        .find(|p| p.id == project_id)
+        .ok_or_else(|| format!("Project not found: {project_id}"))?;
+    entry.name = trimmed;
+    config::save_config(&config)
+}
+
 pub fn set_base_branch_impl(project_id: &str, branch: Option<String>) -> Result<(), String> {
     if let Some(ref branch_name) = branch {
         let entry = find_project_entry(project_id)?;

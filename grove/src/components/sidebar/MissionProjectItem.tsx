@@ -30,9 +30,10 @@ function MissionProjectItem({ missionId, project }: Props) {
     selectedItem?.projectId === project.projectId;
 
   const projectData = projects.find((p) => p.id === project.projectId);
-  const displayName = projectData
-    ? `${projectData.org}/${projectData.repo}`
-    : project.branch;
+  const projectLabel = projectData && projectData.name !== projectData.repo
+    ? projectData.name
+    : projectData && `${projectData.org}/${projectData.repo}`;
+  const displayName = projectLabel ?? project.branch;
   const disabled = deletingMission || deletingProject;
   const handleActivate = useSidebarLeafActivation({
     disabled,

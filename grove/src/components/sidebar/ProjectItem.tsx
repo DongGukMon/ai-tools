@@ -3,6 +3,7 @@ import {
   X,
   Sprout,
   GitBranch,
+  Pencil,
 } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -41,7 +42,9 @@ const ProjectItem = memo(function ProjectItem({ project }: Props) {
   const [adding, setAdding] = useState(false);
   const [addingLoading, setAddingLoading] = useState(false);
   const [worktreeName, setWorktreeName] = useState("");
-  const { addWorktree, removeProject } = useProjectStore();
+  const [renaming, setRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState("");
+  const { addWorktree, removeProject, renameProject } = useProjectStore();
   const { toast } = useToast();
 
   const handleAddWorktree = async (e: React.FormEvent) => {
@@ -59,6 +62,25 @@ const ProjectItem = memo(function ProjectItem({ project }: Props) {
     } finally {
       setAddingLoading(false);
     }
+  };
+
+  const displayName = project.name !== project.repo ? project.name : `${project.org}/${project.repo}`;
+
+  const handleStartRename = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setRenameValue(displayName);
+    setRenaming(true);
+  };
+
+  const handleRename = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = renameValue.trim() || project.repo;
+    try {
+      await renameProject(project.id, name);
+    } catch {
+      // Toasts are handled by the command layer.
+    }
+    setRenaming(false);
   };
 
   const handleRemoveProject = async (e: React.MouseEvent) => {
@@ -108,10 +130,36 @@ const ProjectItem = memo(function ProjectItem({ project }: Props) {
           "text-accent": expanded,
           "text-muted-foreground": !expanded,
         })} />
-        <span className={cn("truncate font-medium")}>
-          {project.org}/{project.repo}
-        </span>
+        {renaming ? (
+          <form onSubmit={handleRename} className={cn("flex-1 min-w-0")}>
+            <input
+              className={cn(
+                "w-full bg-transparent text-[13px] font-medium text-foreground outline-none",
+                "placeholder:text-muted-foreground/50",
+              )}
+              type="text"
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              autoFocus
+              onBlur={() => setRenaming(false)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") setRenaming(false);
+              }}
+              onClick={(e) => e.stopPropagation()}
+            />
+          </form>
+        ) : (
+          <span className={cn("truncate font-medium")} title={`${project.org}/${project.repo}`}>
+            {displayName}
+          </span>
+        )}
         <div className={cn("ml-auto flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity")}>
+          <IconButton
+            onClick={handleStartRename}
+            title="Rename project"
+          >
+            <Pencil className={cn("h-[13px] w-[13px]")} />
+          </IconButton>
           <IconButton
             onClick={handleRemoveProject}
             title="Remove project"

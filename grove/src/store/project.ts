@@ -25,6 +25,7 @@ interface ProjectState {
   removeWorktree: (projectId: string, name: string) => Promise<void>;
   selectWorktree: (worktree: Worktree | null) => void;
   setWorktreeOrder: (projectId: string, order: string[]) => Promise<void>;
+  renameProject: (projectId: string, name: string) => Promise<void>;
   setBaseBranch: (projectId: string, branch: string | null) => Promise<void>;
   toggleProjectCollapse: (id: string) => void;
 }
@@ -314,6 +315,17 @@ export const useProjectStore = create<ProjectState>((set) => ({
         p.id === projectId
           ? { ...p, worktrees: reorderWorktrees(p.worktrees, order) }
           : p,
+      ),
+    }));
+  },
+
+  renameProject: async (projectId: string, name: string) => {
+    await runCommand(() => tauri.renameProject(projectId, name), {
+      errorToast: "Failed to rename project",
+    });
+    set((state) => ({
+      projects: state.projects.map((p) =>
+        p.id === projectId ? { ...p, name } : p,
       ),
     }));
   },
