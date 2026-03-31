@@ -43,6 +43,12 @@ export default function ProjectSettingsDialog({ projectId, resolve, close }: Pro
     };
   }, [projectId]);
 
+  const allSelected = entries.length > 0 && entries.every((e) => selected.has(e));
+
+  const toggleAll = () => {
+    setSelected(allSelected ? new Set() : new Set(entries));
+  };
+
   const toggleEntry = (entry: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -131,6 +137,30 @@ export default function ProjectSettingsDialog({ projectId, resolve, close }: Pro
                 "max-h-52 overflow-y-auto rounded-[var(--radius-md)] border border-border bg-secondary/20 p-1",
               )}
             >
+              <label
+                className={cn(
+                  "flex items-center gap-2.5 rounded-[var(--radius-md)] px-2 py-[7px]",
+                  "cursor-pointer select-none transition-colors",
+                  "border-b border-border/50 mb-1",
+                  {
+                    "text-foreground": allSelected,
+                    "text-muted-foreground hover:bg-secondary/60 hover:text-foreground":
+                      !allSelected,
+                  },
+                )}
+              >
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={toggleAll}
+                  className={cn(
+                    "h-3.5 w-3.5 shrink-0 cursor-pointer accent-ring",
+                  )}
+                />
+                <span className={cn("text-[12px] font-medium")}>
+                  Select all
+                </span>
+              </label>
               {entries.map((entry) => (
                 <label
                   key={entry}
