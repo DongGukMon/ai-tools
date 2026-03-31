@@ -430,8 +430,17 @@ pub fn close_ptys_for_worktree(worktree_path: &str) -> Result<(), String> {
 }
 
 pub fn cleanup_stale_tmux_sessions_on_startup() -> Result<(), String> {
-    let preserved_sessions =
+    let mut preserved_sessions =
         restorable_grove_tmux_sessions_from_layouts(&config::load_terminal_layouts_impl()?)?;
+
+    // Also preserve global terminal sessions stored in panel-layouts.json
+    if let Ok(panel_raw) = config::load_panel_layouts_impl() {
+        match restorable_grove_tmux_sessions_from_panel_layouts(&panel_raw) {
+            Ok(global_sessions) => preserved_sessions.extend(global_sessions),
+            Err(e) => eprintln!("Warning: {e} — global terminal sessions may not be preserved"),
+        }
+    }
+
     cleanup_stale_tmux_sessions(list_grove_tmux_sessions()?, &preserved_sessions)
 }
 
@@ -499,6 +508,33 @@ fn restorable_grove_tmux_sessions_from_layouts(raw: &str) -> Result<HashSet<Stri
 
     for (worktree_path, layout) in layouts {
         collect_restorable_tmux_sessions(&worktree_path, &layout, &mut session_names);
+    }
+
+    Ok(session_names)
+}
+
+fn restorable_grove_tmux_sessions_from_panel_layouts(
+    raw: &str,
+) -> Result<HashSet<String>, String> {
+    let panels: Value = serde_json::from_str(raw)
+        .map_err(|error| format!("Failed to parse panel-layouts.json: {error}"))?;
+
+    let mut session_names = HashSet::new();
+    let base_dir = config::load_app_config().base_dir;
+
+    if let Some(tabs) = panels
+        .get("globalTerminal")
+        .and_then(|gt| gt.get("tabs"))
+        .and_then(Value::as_array)
+    {
+        for tab in tabs {
+            if tab.get("mirrorPtyId").and_then(Value::as_str).is_some() {
+                continue;
+            }
+            if let Some(pane_id) = tab.get("paneId").and_then(Value::as_str) {
+                session_names.insert(grove_tmux_session_name(&base_dir, pane_id));
+            }
+        }
     }
 
     Ok(session_names)
