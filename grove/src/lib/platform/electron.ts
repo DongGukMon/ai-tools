@@ -241,24 +241,24 @@ export async function createWorktreePr(worktreePath: string): Promise<void> {
 }
 
 // Phase 2: 드래그 재정렬 완료 시 호출하여 커스텀 순서를 영속화
-export async function setWorktreeOrder(_projectId: string, _order: string[]): Promise<void> {
-  throw new Error("Not implemented");
+export async function setWorktreeOrder(projectId: string, order: string[]): Promise<void> {
+  return platform.invoke("set_worktree_order", { projectId, order });
 }
 
-export async function getRemoteBranches(_projectId: string): Promise<string[]> {
-  throw new Error("Not implemented");
+export async function getRemoteBranches(projectId: string): Promise<string[]> {
+  return platform.invoke<string[]>("get_remote_branches", { projectId });
 }
 
-export async function renameProject(_projectId: string, _name: string): Promise<void> {
-  throw new Error("Not implemented");
+export async function renameProject(projectId: string, name: string): Promise<void> {
+  return platform.invoke("rename_project", { projectId, name });
 }
 
-export async function setProjectCollapsed(_projectId: string, _collapsed: boolean): Promise<void> {
-  throw new Error("Not implemented");
+export async function setProjectCollapsed(projectId: string, collapsed: boolean): Promise<void> {
+  return platform.invoke("set_project_collapsed", { projectId, collapsed });
 }
 
-export async function setBaseBranch(_projectId: string, _branch: string | null): Promise<void> {
-  throw new Error("Not implemented");
+export async function setBaseBranch(projectId: string, branch: string | null): Promise<void> {
+  return platform.invoke("set_base_branch", { projectId, branch });
 }
 
 export async function openExternal(url: string): Promise<void> {

@@ -203,6 +203,21 @@ pub async fn create_worktree_pr(worktree_path: String) -> Result<()> {
 }
 
 #[napi]
+pub async fn set_worktree_order(project_id: String, order: Vec<String>) -> Result<()> {
+    blocking_core(move || grove_core::git_project::set_worktree_order_impl(&project_id, order)).await
+}
+
+#[napi]
+pub async fn get_remote_branches(project_id: String) -> Result<String> {
+    blocking_json(move || grove_core::git_project::get_remote_branches_impl(&project_id)).await
+}
+
+#[napi]
+pub async fn set_base_branch(project_id: String, branch: Option<String>) -> Result<()> {
+    blocking_core(move || grove_core::git_project::set_base_branch_impl(&project_id, branch)).await
+}
+
+#[napi]
 pub async fn create_pty(
     pty_id: String,
     pane_id: String,
