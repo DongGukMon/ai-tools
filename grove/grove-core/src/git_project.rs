@@ -1047,17 +1047,18 @@ fn gitignore_pattern_matches(pattern: &str, rel_path: &str) -> bool {
         Some(idx) => &rel_path[..idx],
         None => rel_path,
     };
+    let basename = rel_path.rsplit('/').next().unwrap_or(rel_path);
 
     if pattern.ends_with('/') {
         // Directory pattern: e.g. "node_modules/" matches "node_modules/foo/bar"
         let prefix = &pattern[..pattern.len() - 1];
         rel_path.starts_with(&format!("{prefix}/")) || rel_path == prefix
     } else if pattern.contains('*') {
-        // Glob pattern: e.g. "*.log" matches against first path component
-        glob_matches(pattern, first_component)
+        // Glob pattern: match against first component AND basename (gitignore semantics)
+        glob_matches(pattern, first_component) || glob_matches(pattern, basename)
     } else {
-        // Plain name: exact match against first path component
-        first_component == pattern
+        // Plain name: match first component OR basename (gitignore semantics)
+        first_component == pattern || basename == pattern
     }
 }
 
@@ -1105,7 +1106,7 @@ pub(crate) fn sync_env_files(
     )?;
     for line in output.lines() {
         let rel = line.trim();
-        if rel.is_empty() {
+        if rel.is_empty() || rel.contains("..") {
             continue;
         }
         let included = include
@@ -1485,7 +1486,11 @@ pub fn set_env_sync_impl(
         .iter_mut()
         .find(|p| p.id == project_id)
         .ok_or_else(|| format!("Project not found: {project_id}"))?;
-    entry.env_sync = Some(env_sync);
+    entry.env_sync = if env_sync.include_patterns.is_empty() {
+        None
+    } else {
+        Some(env_sync)
+    };
     config::save_config(&grove_config)
 }
 
@@ -3339,5 +3344,73 @@ exec /bin/sh -c "$remote_cmd"
         let loaded2 = config::load_config();
         assert_eq!(loaded2.projects[0].base_branch, Some("develop".to_string()));
         assert_eq!(loaded2.projects[1].base_branch, None);
+    }
+
+    // ── Env sync matching tests ──
+
+    #[test]
+    fn gitignore_pattern_matches_directory_pattern() {
+        // "node_modules/" should match paths under that directory
+        assert!(super::gitignore_pattern_matches("node_modules/", "node_modules/express/index.js"));
+        assert!(super::gitignore_pattern_matches("node_modules/", "node_modules/foo"));
+        assert!(!super::gitignore_pattern_matches("node_modules/", "node_modules_backup/foo"));
+        assert!(!super::gitignore_pattern_matches("node_modules/", "src/node_modules/foo"));
+    }
+
+    #[test]
+    fn gitignore_pattern_matches_glob_first_component() {
+        // "*.log" should match root-level log files
+        assert!(super::gitignore_pattern_matches("*.log", "app.log"));
+        assert!(super::gitignore_pattern_matches("*.log", "error.log"));
+        assert!(!super::gitignore_pattern_matches("*.log", "app.txt"));
+    }
+
+    #[test]
+    fn gitignore_pattern_matches_glob_basename() {
+        // "*.log" should also match log files in subdirectories (gitignore semantics)
+        assert!(super::gitignore_pattern_matches("*.log", "logs/app.log"));
+        assert!(super::gitignore_pattern_matches("*.log", "deep/nested/debug.log"));
+    }
+
+    #[test]
+    fn gitignore_pattern_matches_plain_name_first_component() {
+        // ".env" should match the file or directory at root
+        assert!(super::gitignore_pattern_matches(".env", ".env"));
+        assert!(super::gitignore_pattern_matches(".env", ".env/foo"));
+        assert!(!super::gitignore_pattern_matches(".env", ".env.local"));
+    }
+
+    #[test]
+    fn gitignore_pattern_matches_plain_name_basename() {
+        // ".env" should also match by basename in subdirectories
+        assert!(super::gitignore_pattern_matches(".env", "config/.env"));
+        assert!(super::gitignore_pattern_matches(".env.production", "config/.env.production"));
+    }
+
+    #[test]
+    fn gitignore_pattern_matches_complex_glob() {
+        assert!(super::gitignore_pattern_matches(".pnp.*", ".pnp.cjs"));
+        assert!(super::gitignore_pattern_matches(".pnp.*", ".pnp.loader.mjs"));
+        assert!(!super::gitignore_pattern_matches(".pnp.*", ".pnp"));
+    }
+
+    #[test]
+    fn glob_matches_basic_patterns() {
+        assert!(super::glob_matches("*.txt", "hello.txt"));
+        assert!(super::glob_matches("test.*", "test.rs"));
+        assert!(super::glob_matches("*", "anything"));
+        assert!(super::glob_matches("a*b", "axyzb"));
+        assert!(!super::glob_matches("*.txt", "hello.rs"));
+        assert!(!super::glob_matches("a*b", "axyzc"));
+    }
+
+    #[test]
+    fn path_traversal_skipped_in_sync() {
+        // Path traversal guard is in sync_env_files (rel.contains("..")),
+        // not in the matching function. Matching itself does not reject ".."
+        // because the guard runs before matching is ever called.
+        // This test documents that ".." paths contain a basename that could
+        // match, which is why the sync-level guard is critical.
+        assert!(super::gitignore_pattern_matches(".env", "../.env"));
     }
 }

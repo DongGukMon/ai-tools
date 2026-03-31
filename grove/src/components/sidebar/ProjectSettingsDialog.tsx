@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import type { EnvSyncConfig } from "../../types";
-import { getEnvSync, setEnvSync, listGitignorePatterns } from "../../lib/platform";
-import { getCommandErrorMessage } from "../../lib/platform";
+import { getEnvSync, setEnvSync, listGitignorePatterns, getCommandErrorMessage } from "../../lib/platform";
 import { Button } from "../ui/button";
 import { Dialog } from "../ui/dialog";
 import { cn } from "../../lib/cn";
