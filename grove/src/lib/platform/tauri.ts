@@ -237,6 +237,10 @@ export async function renameProject(projectId: string, name: string): Promise<vo
   return platform.invoke("rename_project", { projectId, name });
 }
 
+export async function setProjectCollapsed(projectId: string, collapsed: boolean): Promise<void> {
+  return platform.invoke("set_project_collapsed", { projectId, collapsed });
+}
+
 export async function setBaseBranch(projectId: string, branch: string | null): Promise<void> {
   return platform.invoke("set_base_branch", { projectId, branch });
 }
@@ -428,6 +432,10 @@ export async function createMission(name: string): Promise<Mission> {
 
 export async function deleteMission(id: string): Promise<void> {
   return platform.invoke("delete_mission", { id });
+}
+
+export async function setMissionCollapsed(missionId: string, collapsed: boolean): Promise<void> {
+  return platform.invoke("set_mission_collapsed", { missionId, collapsed });
 }
 
 export async function addProjectToMission(

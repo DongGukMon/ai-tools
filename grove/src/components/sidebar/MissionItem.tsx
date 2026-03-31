@@ -21,9 +21,7 @@ interface Props {
 }
 
 function MissionItem({ mission }: Props) {
-  const collapsed = useMissionStore(
-    (s) => !!s.collapsedMissions[mission.id],
-  );
+  const collapsed = mission.collapsed;
   const deleting = useMissionStore(
     (s) => !!s.deletingMissions[mission.id],
   );

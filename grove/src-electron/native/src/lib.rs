@@ -160,6 +160,11 @@ pub async fn rename_project(project_id: String, name: String) -> Result<()> {
 }
 
 #[napi]
+pub async fn set_project_collapsed(project_id: String, collapsed: bool) -> Result<()> {
+    blocking_core(move || grove_core::git_project::set_project_collapsed_impl(&project_id, collapsed)).await
+}
+
+#[napi]
 pub async fn is_source_dirty(project_id: String) -> Result<bool> {
     blocking_core(move || grove_core::git_project::is_source_dirty_impl(&project_id)).await
 }

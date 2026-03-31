@@ -7,7 +7,6 @@ import { useTerminalStore } from "./terminal";
 interface MissionState {
   missions: Mission[];
   selectedItem: { missionId: string; projectId?: string } | null;
-  collapsedMissions: Record<string, boolean>;
   deletingMissions: Record<string, boolean>;
   deletingMissionProjects: Record<string, boolean>;
   loading: boolean;
@@ -25,7 +24,6 @@ interface MissionState {
 export const useMissionStore = create<MissionState>((set, get) => ({
   missions: [],
   selectedItem: null,
-  collapsedMissions: {},
   deletingMissions: {},
   deletingMissionProjects: {},
   loading: false,
@@ -79,7 +77,6 @@ export const useMissionStore = create<MissionState>((set, get) => ({
 
       set((state) => {
         const { [id]: _, ...remainingDeleting } = state.deletingMissions;
-        const { [id]: __, ...remainingCollapsed } = state.collapsedMissions;
         const remainingDeletingProjects = Object.fromEntries(
           Object.entries(state.deletingMissionProjects).filter(
             ([key]) => !key.startsWith(`${id}:`),
@@ -92,7 +89,6 @@ export const useMissionStore = create<MissionState>((set, get) => ({
           selectedItem: nextSelected,
           deletingMissions: remainingDeleting,
           deletingMissionProjects: remainingDeletingProjects,
-          collapsedMissions: remainingCollapsed,
         };
       });
     } catch (error) {
@@ -197,12 +193,15 @@ export const useMissionStore = create<MissionState>((set, get) => ({
   },
 
   toggleCollapse: (missionId: string) => {
+    const mission = get().missions.find((m) => m.id === missionId);
+    if (!mission) return;
+    const collapsed = !mission.collapsed;
     set((state) => ({
-      collapsedMissions: {
-        ...state.collapsedMissions,
-        [missionId]: !state.collapsedMissions[missionId],
-      },
+      missions: state.missions.map((m) =>
+        m.id === missionId ? { ...m, collapsed } : m,
+      ),
     }));
+    tauri.setMissionCollapsed(missionId, collapsed).catch(() => {});
   },
 
   getSelectedPath: () => {

@@ -93,6 +93,11 @@ async fn rename_project(project_id: String, name: String) -> Result<(), String> 
 }
 
 #[tauri::command]
+async fn set_project_collapsed(project_id: String, collapsed: bool) -> Result<(), String> {
+    blocking(move || grove_core::git_project::set_project_collapsed_impl(&project_id, collapsed)).await
+}
+
+#[tauri::command]
 async fn is_source_dirty(project_id: String) -> Result<bool, String> {
     blocking(move || grove_core::git_project::is_source_dirty_impl(&project_id)).await
 }
@@ -161,6 +166,11 @@ async fn create_mission(name: String) -> Result<grove_core::mission::Mission, St
 #[tauri::command]
 async fn delete_mission(id: String) -> Result<(), String> {
     blocking(move || grove_core::mission::delete_mission(&id)).await
+}
+
+#[tauri::command]
+async fn set_mission_collapsed(mission_id: String, collapsed: bool) -> Result<(), String> {
+    blocking(move || grove_core::mission::set_mission_collapsed(&mission_id, collapsed)).await
 }
 
 #[tauri::command]
@@ -380,6 +390,7 @@ pub fn run() {
             remove_project,
             reorder_projects,
             rename_project,
+            set_project_collapsed,
             is_source_dirty,
             refresh_project,
             add_worktree,
@@ -394,6 +405,7 @@ pub fn run() {
             list_missions,
             create_mission,
             delete_mission,
+            set_mission_collapsed,
             add_project_to_mission,
             remove_project_from_mission,
             open_external,

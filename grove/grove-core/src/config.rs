@@ -18,6 +18,8 @@ pub struct ProjectEntry {
     pub worktree_order: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub base_branch: Option<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub collapsed: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

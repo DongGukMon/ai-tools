@@ -12,7 +12,6 @@ import { overlay } from "../lib/overlay";
 interface ProjectState {
   projects: Project[];
   selectedWorktree: Worktree | null;
-  collapsedProjects: Record<string, boolean>;
   loading: boolean;
 
   loadProjects: () => Promise<void>;
@@ -109,7 +108,6 @@ function sourceWorktreeForProject(project: Project): Worktree {
 export const useProjectStore = create<ProjectState>((set) => ({
   projects: [],
   selectedWorktree: null,
-  collapsedProjects: {},
   loading: false,
 
   loadProjects: async () => {
@@ -342,11 +340,14 @@ export const useProjectStore = create<ProjectState>((set) => ({
   },
 
   toggleProjectCollapse: (id: string) => {
+    const project = useProjectStore.getState().projects.find((p) => p.id === id);
+    if (!project) return;
+    const collapsed = !project.collapsed;
     set((state) => ({
-      collapsedProjects: {
-        ...state.collapsedProjects,
-        [id]: !state.collapsedProjects[id],
-      },
+      projects: state.projects.map((p) =>
+        p.id === id ? { ...p, collapsed } : p,
+      ),
     }));
+    tauri.setProjectCollapsed(id, collapsed).catch(() => {});
   },
 }));

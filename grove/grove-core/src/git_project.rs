@@ -618,6 +618,7 @@ fn project_from_entry(entry: ProjectEntry) -> Project {
         source_behind_remote,
         base_branch: entry.base_branch,
         resolved_default_branch,
+        collapsed: entry.collapsed,
     }
 }
 
@@ -1305,6 +1306,17 @@ pub fn get_remote_branches_impl(project_id: &str) -> Result<Vec<String>, String>
     let mut branches = remote_branch_names(source)?;
     branches.sort();
     Ok(branches)
+}
+
+pub fn set_project_collapsed_impl(project_id: &str, collapsed: bool) -> Result<(), String> {
+    let mut config = config::load_config();
+    let entry = config
+        .projects
+        .iter_mut()
+        .find(|p| p.id == project_id)
+        .ok_or_else(|| format!("Project not found: {project_id}"))?;
+    entry.collapsed = collapsed;
+    config::save_config(&config)
 }
 
 pub fn rename_project_impl(project_id: &str, name: String) -> Result<(), String> {

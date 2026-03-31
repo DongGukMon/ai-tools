@@ -253,6 +253,10 @@ export async function renameProject(_projectId: string, _name: string): Promise<
   throw new Error("Not implemented");
 }
 
+export async function setProjectCollapsed(_projectId: string, _collapsed: boolean): Promise<void> {
+  throw new Error("Not implemented");
+}
+
 export async function setBaseBranch(_projectId: string, _branch: string | null): Promise<void> {
   throw new Error("Not implemented");
 }

@@ -25,6 +25,8 @@ pub struct Mission {
     /// Absolute path to ~/.grove/missions/{id}. Populated at load time, not persisted.
     #[serde(default, skip_deserializing)]
     pub mission_dir: String,
+    #[serde(default)]
+    pub collapsed: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -41,6 +43,8 @@ struct PersistedMission {
     name: String,
     #[serde(default)]
     projects: Vec<MissionProject>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    collapsed: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -146,6 +150,7 @@ pub(crate) fn load_missions_from_path(path: &Path) -> MissionStore {
                 name: mission.name,
                 projects: mission.projects,
                 mission_dir: String::new(),
+                collapsed: mission.collapsed,
             })
             .collect(),
     }
@@ -164,6 +169,7 @@ pub(crate) fn save_missions_to_path(path: &Path, store: &MissionStore) -> Result
                 id: mission.id.clone(),
                 name: mission.name.clone(),
                 projects: mission.projects.clone(),
+                collapsed: mission.collapsed,
             })
             .collect(),
     };
@@ -351,6 +357,18 @@ fn remove_project_from_mission_with_paths(
         .projects
         .retain(|project| project.project_id != project_id);
     save_missions_to_path(store_path, &store)
+}
+
+pub fn set_mission_collapsed(id: &str, collapsed: bool) -> Result<(), String> {
+    let path = missions_path()?;
+    let mut store = load_missions_from_path(&path);
+    let mission = store
+        .missions
+        .iter_mut()
+        .find(|m| m.id == id)
+        .ok_or_else(|| format!("Mission not found: {id}"))?;
+    mission.collapsed = collapsed;
+    save_missions_to_path(&path, &store)
 }
 
 pub fn delete_mission(id: &str) -> Result<(), String> {

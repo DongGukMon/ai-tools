@@ -10,6 +10,7 @@ export interface Project {
   sourceBehindRemote: boolean;
   baseBranch: string | null;
   resolvedDefaultBranch: string;
+  collapsed: boolean;
 }
 
 export interface Worktree {

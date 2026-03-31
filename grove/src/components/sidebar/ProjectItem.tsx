@@ -36,9 +36,8 @@ const ProjectItem = memo(function ProjectItem({ project }: Props) {
     opacity: isDragging ? 0.5 : 1,
   };
 
-  const collapsed = useProjectStore((s) => !!s.collapsedProjects[project.id]);
   const toggleCollapse = useProjectStore((s) => s.toggleProjectCollapse);
-  const expanded = !collapsed;
+  const expanded = !project.collapsed;
   const [adding, setAdding] = useState(false);
   const [addingLoading, setAddingLoading] = useState(false);
   const [worktreeName, setWorktreeName] = useState("");

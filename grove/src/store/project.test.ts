@@ -19,6 +19,7 @@ vi.mock("../lib/platform", () => ({
   addWorktree: vi.fn(),
   removeWorktree: vi.fn(),
   renameProject: vi.fn(),
+  setProjectCollapsed: vi.fn(),
 }));
 
 import * as tauri from "../lib/platform";
@@ -46,6 +47,7 @@ function makeProject(worktrees: Worktree[]): Project {
     sourceBehindRemote: false,
     baseBranch: null,
     resolvedDefaultBranch: "main",
+    collapsed: false,
     worktrees,
   };
 }
@@ -78,11 +80,7 @@ describe("useProjectStore", () => {
     runCommandSafelyMock.mockImplementation(
       async (action: () => Promise<unknown>) => action(),
     );
-    useProjectStore.setState({
-      projects: [],
-      selectedWorktree: null,
-      loading: false,
-    });
+    useProjectStore.setState({ projects: [], selectedWorktree: null, loading: false });
     useTerminalStore.setState({
       sessions: {},
       activeWorktree: null,

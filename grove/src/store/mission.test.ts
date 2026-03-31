@@ -17,6 +17,7 @@ vi.mock("../lib/platform", () => ({
   deleteMission: vi.fn(),
   addProjectToMission: vi.fn(),
   removeProjectFromMission: vi.fn(),
+  setMissionCollapsed: vi.fn().mockResolvedValue(undefined),
 }));
 
 import * as tauri from "../lib/platform";
@@ -39,6 +40,7 @@ function makeMission(
     name: `Mission ${id}`,
     projects,
     missionDir: `/tmp/missions/${id}`,
+    collapsed: false,
   };
 }
 
@@ -54,7 +56,6 @@ describe("useMissionStore", () => {
     useMissionStore.setState({
       missions: [],
       selectedItem: null,
-      collapsedMissions: {},
       deletingMissions: {},
       deletingMissionProjects: {},
       loading: false,
@@ -72,11 +73,13 @@ describe("useMissionStore", () => {
 
   describe("toggleCollapse", () => {
     it("toggles collapsed state for a mission", () => {
-      useMissionStore.getState().toggleCollapse("m1");
-      expect(useMissionStore.getState().collapsedMissions["m1"]).toBe(true);
+      useMissionStore.setState({ missions: [makeMission("m1")] });
 
       useMissionStore.getState().toggleCollapse("m1");
-      expect(useMissionStore.getState().collapsedMissions["m1"]).toBe(false);
+      expect(useMissionStore.getState().missions[0].collapsed).toBe(true);
+
+      useMissionStore.getState().toggleCollapse("m1");
+      expect(useMissionStore.getState().missions[0].collapsed).toBe(false);
     });
   });
 

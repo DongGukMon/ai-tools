@@ -9,4 +9,5 @@ export interface Mission {
   name: string;
   projects: MissionProject[];
   missionDir: string;
+  collapsed: boolean;
 }
