@@ -77,9 +77,11 @@ export default function ProjectSettingsDialog({ projectId, resolve, close }: Pro
     }
   };
 
+  if (loading) return null;
+
   return (
     <Dialog open onClose={close} title="Project Settings" className="max-w-sm">
-      <div className={cn("flex min-h-[200px] flex-col")}>
+      <div className={cn("flex flex-col")}>
         <div className={cn("space-y-1")}>
           <h3 className={cn("text-[13px] font-medium text-foreground")}>Env Sync</h3>
           <p className={cn("text-[12px] leading-relaxed text-muted-foreground")}>
@@ -88,34 +90,7 @@ export default function ProjectSettingsDialog({ projectId, resolve, close }: Pro
         </div>
 
         <div className={cn("mt-3 flex-1")}>
-          {loading && (
-            <div
-              className={cn(
-                "rounded-[var(--radius-md)] border border-border p-1.5",
-              )}
-            >
-              {[1, 2, 3, 4].map((i) => (
-                <div
-                  key={i}
-                  className={cn(
-                    "flex items-center gap-2.5 px-2 py-[7px]",
-                  )}
-                >
-                  <div
-                    className={cn(
-                      "h-3.5 w-3.5 shrink-0 rounded-[3px] bg-secondary",
-                    )}
-                  />
-                  <div
-                    className={cn("h-3.5 rounded-[3px] bg-secondary")}
-                    style={{ width: `${45 + i * 12}%` }}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-
-          {!loading && entries.length === 0 && (
+          {entries.length === 0 && (
             <div
               className={cn(
                 "flex items-center justify-center rounded-[var(--radius-md)] border border-dashed border-border py-10",
