@@ -197,6 +197,18 @@ async fn open_external(url: String) -> Result<(), String> {
     .await
 }
 
+#[tauri::command]
+async fn reveal_in_finder(path: String) -> Result<(), String> {
+    blocking(move || {
+        std::process::Command::new("open")
+            .arg(&path)
+            .status()
+            .map(|_| ())
+            .map_err(|e| format!("Failed to reveal path: {e}"))
+    })
+    .await
+}
+
 // === PTY COMMANDS (W3) ===
 
 #[tauri::command]
@@ -409,6 +421,7 @@ pub fn run() {
             add_project_to_mission,
             remove_project_from_mission,
             open_external,
+            reveal_in_finder,
             // PTY (W3)
             create_pty,
             write_pty,

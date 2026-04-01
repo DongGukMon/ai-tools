@@ -319,6 +319,12 @@ function registerIpcHandlers() {
         return;
       }
 
+      if (command === "reveal_in_finder") {
+        const p = requireStringArg(args, "path");
+        shell.openPath(p);
+        return;
+      }
+
       return invokeNative(targetWindow, command, args);
     },
   );

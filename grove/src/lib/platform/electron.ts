@@ -265,6 +265,10 @@ export async function openExternal(url: string): Promise<void> {
   return platform.invoke("open_external", { url });
 }
 
+export async function revealInFinder(path: string): Promise<void> {
+  return platform.invoke("reveal_in_finder", { path });
+}
+
 // === PTY COMMANDS (W3) ===
 
 export async function createPty(

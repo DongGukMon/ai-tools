@@ -14,6 +14,7 @@ import {
   useAiWorktreeSessions,
   useWorktreeBell,
 } from "./worktree-status";
+import SidebarContextMenu from "./SidebarContextMenu";
 
 // ── Icon mapping ──
 
@@ -74,8 +75,7 @@ function WorktreeItem({
     onSelect: () => selectWorktree(worktree),
   });
 
-  const handleRemoveClick = async (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleRemove = async () => {
     const confirmed = await overlay.confirm({
       title: "Remove worktree?",
       description: (
@@ -101,33 +101,35 @@ function WorktreeItem({
   };
 
   return (
-    <SidebarLeafItem
-      icon={(
-        <GitBranch className={cn("h-[13px] w-[13px] shrink-0", {
-          "text-orange-500": hasBell,
-        })} />
-      )}
-      label={displayName}
-      title={worktree.path}
-      isSelected={isSelected}
-      disabled={removing}
-      onActivate={handleActivate}
-      status={<AiStatusIcons sessions={aiSessions} />}
-      action={removing ? (
-        <Loader2 className={cn("h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground")} />
-      ) : (
-        <button
-          type="button"
-          className={cn(
-            "h-4 w-4 flex items-center justify-center rounded-sm transition-colors hover:text-foreground",
-          )}
-          onClick={handleRemoveClick}
-          title="Remove worktree"
-        >
-          <X className={cn("h-3 w-3")} />
-        </button>
-      )}
-    />
+    <SidebarContextMenu path={worktree.path}>
+      <SidebarLeafItem
+        icon={(
+          <GitBranch className={cn("h-[13px] w-[13px] shrink-0", {
+            "text-orange-500": hasBell,
+          })} />
+        )}
+        label={displayName}
+        title={worktree.path}
+        isSelected={isSelected}
+        disabled={removing}
+        onActivate={handleActivate}
+        status={<AiStatusIcons sessions={aiSessions} />}
+        action={removing ? (
+          <Loader2 className={cn("h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground")} />
+        ) : (
+          <button
+            type="button"
+            className={cn(
+              "h-4 w-4 flex items-center justify-center rounded-sm transition-colors hover:text-foreground",
+            )}
+            onClick={(e) => { e.stopPropagation(); handleRemove(); }}
+            title="Remove worktree"
+          >
+            <X className={cn("h-3 w-3")} />
+          </button>
+        )}
+      />
+    </SidebarContextMenu>
   );
 }
 

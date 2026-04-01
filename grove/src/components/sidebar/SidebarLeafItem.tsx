@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { forwardRef, type ReactNode } from "react";
 import { cn } from "../../lib/cn";
 
 interface Props {
@@ -13,7 +13,7 @@ interface Props {
   forceShowAction?: boolean;
 }
 
-function SidebarLeafItem({
+const SidebarLeafItem = forwardRef<HTMLDivElement, Props>(function SidebarLeafItem({
   icon,
   label,
   title,
@@ -23,9 +23,10 @@ function SidebarLeafItem({
   status,
   action,
   forceShowAction = false,
-}: Props) {
+}, ref) {
   return (
     <div
+      ref={ref}
       className={cn(
         "group flex w-full items-center gap-2 rounded-md px-2 py-1 text-[13px] transition-all duration-150 cursor-pointer select-none",
         {
@@ -55,6 +56,6 @@ function SidebarLeafItem({
       </span>
     </div>
   );
-}
+});
 
 export default SidebarLeafItem;

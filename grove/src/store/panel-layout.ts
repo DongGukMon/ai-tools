@@ -7,6 +7,8 @@ export interface GlobalTerminalTab {
   title: string;
   /** When set, this tab mirrors an existing PTY instead of spawning a new one */
   mirrorPtyId?: string;
+  /** Override cwd for this tab (defaults to baseDir when omitted) */
+  cwd?: string;
 }
 
 interface GlobalTerminalLayout {
@@ -39,7 +41,7 @@ interface PanelLayoutStore {
   updateChanges: (ratios: number[]) => void;
   updatePipWidth: (width: number) => void;
   updateGlobalTerminal: (layout: Partial<GlobalTerminalLayout>) => void;
-  addGlobalTerminalTab: () => GlobalTerminalTab;
+  addGlobalTerminalTab: (opts?: { title?: string; cwd?: string }) => GlobalTerminalTab;
   addGlobalTerminalMirrorTab: (title: string, ptyId: string) => GlobalTerminalTab;
   removeGlobalTerminalTab: (tabId: string) => void;
   setActiveGlobalTerminalTab: (tabId: string) => void;
@@ -178,7 +180,7 @@ export const usePanelLayoutStore = create<PanelLayoutStore>((set, get) => ({
     debouncedSave({ ...getFullLayouts(get), globalTerminal: updated });
   },
 
-  addGlobalTerminalTab: () => {
+  addGlobalTerminalTab: (opts?: { title?: string; cwd?: string }) => {
     const gt = get().globalTerminal;
     const maxNum = gt.tabs.reduce((max, t) => {
       const m = t.title.match(/^Terminal (\d+)$/);
@@ -187,7 +189,8 @@ export const usePanelLayoutStore = create<PanelLayoutStore>((set, get) => ({
     const tab: GlobalTerminalTab = {
       id: crypto.randomUUID(),
       paneId: crypto.randomUUID(),
-      title: `Terminal ${maxNum + 1}`,
+      title: opts?.title ?? `Terminal ${maxNum + 1}`,
+      cwd: opts?.cwd,
     };
     const updated: GlobalTerminalLayout = {
       ...gt,

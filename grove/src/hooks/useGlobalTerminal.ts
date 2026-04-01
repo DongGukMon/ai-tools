@@ -46,13 +46,14 @@ export function useGlobalTerminal() {
           errorToast: false,
         });
 
+        const cwd = tab.cwd ?? config.baseDir;
         await runCommand(
           () =>
             ipcCreatePty({
               ptyId,
               paneId: tab.paneId,
-              worktreePath: config.baseDir,
-              cwd: config.baseDir,
+              worktreePath: cwd,
+              cwd,
               cols: 80,
               rows: 24,
             }),
@@ -113,8 +114,8 @@ export function useGlobalTerminal() {
     }
   }, [tabs, theme, createPtyForTab]);
 
-  const addTab = useCallback(() => {
-    usePanelLayoutStore.getState().addGlobalTerminalTab();
+  const addTab = useCallback((opts?: { title?: string; cwd?: string }) => {
+    return usePanelLayoutStore.getState().addGlobalTerminalTab(opts);
   }, []);
 
   const addMirrorTab = useCallback((title: string, ptyId: string) => {

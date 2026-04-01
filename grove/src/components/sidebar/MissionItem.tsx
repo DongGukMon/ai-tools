@@ -15,6 +15,7 @@ import MissionProjectItem from "./MissionProjectItem";
 import AddProjectToMissionDialog from "./AddProjectToMissionDialog";
 import { cn } from "../../lib/cn";
 import { overlay } from "../../lib/overlay";
+import SidebarContextMenu from "./SidebarContextMenu";
 
 interface Props {
   mission: Mission;
@@ -61,6 +62,7 @@ function MissionItem({ mission }: Props) {
   };
 
   return (
+    <SidebarContextMenu path={mission.missionDir}>
     <div className={cn("px-1.5")}>
       <div
         className={cn(
@@ -151,6 +153,7 @@ function MissionItem({ mission }: Props) {
         </div>
       </div>
     </div>
+    </SidebarContextMenu>
   );
 }
 
