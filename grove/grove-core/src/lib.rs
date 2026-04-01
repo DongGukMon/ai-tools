@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 pub use config::AppConfig;
-pub use config::EnvSyncConfig;
+pub use config::ProjectEnvSyncConfig;
 pub use logger::LogEventSink;
 pub use pty::PtyEventSink;
 pub use terminal_theme::{DetectedThemeResult, TerminalTheme};

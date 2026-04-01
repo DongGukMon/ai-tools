@@ -26,6 +26,6 @@ export interface WorktreePullRequest {
   status: WorktreePullRequestStatus;
 }
 
-export interface EnvSyncConfig {
+export interface ProjectEnvSyncConfig {
   include_patterns: string[];
 }

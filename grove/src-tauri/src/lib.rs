@@ -154,7 +154,7 @@ async fn set_base_branch(project_id: String, branch: Option<String>) -> Result<(
 #[tauri::command]
 async fn set_env_sync(
     project_id: String,
-    config: grove_core::config::EnvSyncConfig,
+    config: grove_core::config::ProjectEnvSyncConfig,
 ) -> Result<(), String> {
     blocking(move || grove_core::git_project::set_env_sync_impl(&project_id, config)).await
 }
@@ -162,7 +162,7 @@ async fn set_env_sync(
 #[tauri::command]
 async fn get_env_sync(
     project_id: String,
-) -> Result<Option<grove_core::config::EnvSyncConfig>, String> {
+) -> Result<Option<grove_core::config::ProjectEnvSyncConfig>, String> {
     blocking(move || grove_core::git_project::get_env_sync_impl(&project_id)).await
 }
 

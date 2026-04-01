@@ -21,11 +21,11 @@ pub struct ProjectEntry {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub collapsed: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub env_sync: Option<EnvSyncConfig>,
+    pub env_sync: Option<ProjectEnvSyncConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct EnvSyncConfig {
+pub struct ProjectEnvSyncConfig {
     #[serde(default)]
     pub include_patterns: Vec<String>,
 }

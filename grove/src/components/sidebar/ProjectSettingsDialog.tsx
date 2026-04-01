@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { EnvSyncConfig } from "../../types";
+import type { ProjectEnvSyncConfig } from "../../types";
 import { getEnvSync, setEnvSync, listGitignorePatterns, getCommandErrorMessage } from "../../lib/platform";
 import { Button } from "../ui/button";
 import { Dialog } from "../ui/dialog";
@@ -29,7 +29,8 @@ export default function ProjectSettingsDialog({ projectId, resolve, close }: Pro
         if (cancelled) return;
         setEntries(gitignored);
         if (config) {
-          setSelected(new Set(config.include_patterns));
+          const validPatterns = config.include_patterns.filter((p) => gitignored.includes(p));
+          setSelected(new Set(validPatterns));
         }
       } catch (err) {
         if (!cancelled) setError(getCommandErrorMessage(err));
@@ -64,7 +65,7 @@ export default function ProjectSettingsDialog({ projectId, resolve, close }: Pro
     setSaving(true);
     setError("");
     try {
-      const config: EnvSyncConfig = {
+      const config: ProjectEnvSyncConfig = {
         include_patterns: Array.from(selected).sort(),
       };
       await setEnvSync(projectId, config);
@@ -194,7 +195,7 @@ export default function ProjectSettingsDialog({ projectId, resolve, close }: Pro
             size="sm"
             className={cn("cursor-pointer")}
             onClick={handleSave}
-            disabled={loading || saving || entries.length === 0}
+            disabled={loading || saving}
           >
             {saving ? "Saving..." : "Save"}
           </Button>
