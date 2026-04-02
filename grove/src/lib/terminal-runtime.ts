@@ -1,7 +1,7 @@
 import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
-
+import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal } from "@xterm/xterm";
 import type { TerminalTheme } from "../types";
@@ -12,6 +12,8 @@ import {
   resizePty,
   writePty,
 } from "./platform";
+import { useTerminalStore } from "../store/terminal";
+import { isSafeExternalUrl, openUrl } from "./url-open";
 
 import {
   getMacShortcutSequence,
@@ -244,6 +246,15 @@ class TerminalPaneRuntime {
     this.term.loadAddon(unicode11);
     this.term.unicode.activeVersion = "11";
 
+    const webLinksAddon = new WebLinksAddon((_event, uri) => {
+      if (!isSafeExternalUrl(uri)) return;
+      // Claude Code fullscreen handles link clicks via the open wrapper,
+      // so skip the addon handler to avoid duplicate opens.
+      const session = useTerminalStore.getState().aiSessions[this.ptyId];
+      if (session?.tool === "claude") return;
+      openUrl(uri);
+    });
+    this.term.loadAddon(webLinksAddon);
 
     this.searchAddon = new SearchAddon();
     this.term.loadAddon(this.searchAddon);
