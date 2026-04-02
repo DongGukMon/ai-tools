@@ -14,7 +14,7 @@ Grove stores app-wide configuration in `~/.grove/config.json`.
 
 `preferences` is the home for user-selectable Grove behavior such as link opening policy and preferred IDE. It is nested under `AppConfig`, but it is intentionally narrower in scope than the full app config.
 
-At the time of writing, the preferences layer only provides persistence and I/O. There is no UI for editing these values yet, and the runtime consumers for link routing and IDE launching have not been wired yet.
+The preferences layer provides persistence, I/O, and a Zustand store (`usePreferencesStore`). Terminal link routing is wired via `terminalLinkOpenMode` (see [Terminal Link Open](open-link.md)). There is no preferences UI yet, and IDE launching has not been wired yet.
 
 ## Storage Model
 
@@ -212,7 +212,6 @@ Persisted and exposed:
 Not implemented yet:
 
 - preferences UI
-- terminal link routing based on `terminalLinkOpenMode`
 - project/worktree `Open in IDE` action using `preferredIde`
 
 ## Relevant Files
@@ -227,3 +226,5 @@ Not implemented yet:
 | `src-electron/main.ts` | Electron IPC JSON routing |
 | `src/lib/platform/tauri.ts` | Tauri frontend wrappers |
 | `src/lib/platform/electron.ts` | Electron frontend wrappers |
+| `src/store/preferences.ts` | Zustand store with init/save |
+| `src/lib/url-open.ts` | Runtime consumer of `terminalLinkOpenMode` |
