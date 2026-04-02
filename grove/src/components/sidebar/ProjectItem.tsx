@@ -13,6 +13,12 @@ import { useProjectStore } from "../../store/project";
 import { useToast } from "../../store/toast";
 import { overlay } from "../../lib/overlay";
 import ProjectSettingsDialog from "./ProjectSettingsDialog";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "../ui/context-menu";
 import DefaultBranchItem from "./DefaultBranchItem";
 import WorktreeItem from "./WorktreeItem";
 import { IconButton } from "../ui/button";
@@ -84,8 +90,7 @@ const ProjectItem = memo(function ProjectItem({ project }: Props) {
     setRenaming(false);
   };
 
-  const handleProjectSettings = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleProjectSettings = () => {
     overlay.open<boolean>(({ resolve, close }) => (
       <ProjectSettingsDialog projectId={project.id} resolve={resolve} close={close} />
     ));
@@ -126,9 +131,11 @@ const ProjectItem = memo(function ProjectItem({ project }: Props) {
 
   return (
     <div ref={setNodeRef} style={style} className={cn("px-1.5")}>
+      <ContextMenu>
+      <ContextMenuTrigger asChild>
       <div
         className={cn(
-          "group flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] text-foreground transition-all duration-150 cursor-pointer select-none hover:bg-secondary/50",
+          "group flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] leading-5 text-foreground transition-all duration-150 cursor-pointer select-none hover:bg-secondary/50",
         )}
         onClick={() => toggleCollapse(project.id)}
         {...attributes}
@@ -161,27 +168,31 @@ const ProjectItem = memo(function ProjectItem({ project }: Props) {
             {displayName}
           </span>
         )}
-        <div className={cn("ml-auto flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity")}>
+        <div className={cn("ml-auto hidden shrink-0 items-center group-hover:flex")}>
           <IconButton
+            className={cn("h-5 w-5")}
             onClick={handleStartRename}
             title="Rename project"
           >
-            <Pencil className={cn("h-[13px] w-[13px]")} />
+            <Pencil className={cn("h-[11px] w-[11px]")} />
           </IconButton>
           <IconButton
-            onClick={handleProjectSettings}
-            title="Project settings"
-          >
-            <Settings className={cn("h-[13px] w-[13px]")} />
-          </IconButton>
-          <IconButton
+            className={cn("h-5 w-5")}
             onClick={handleRemoveProject}
             title="Remove project"
           >
-            <X className={cn("h-[13px] w-[13px]")} />
+            <X className={cn("h-[11px] w-[11px]")} />
           </IconButton>
         </div>
       </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem onSelect={handleProjectSettings}>
+          <Settings className={cn("mr-1.5 h-3.5 w-3.5")} />
+          Project Settings
+        </ContextMenuItem>
+      </ContextMenuContent>
+      </ContextMenu>
 
       <div className={cn(
         "grid transition-[grid-template-rows] duration-200 ease-out",
