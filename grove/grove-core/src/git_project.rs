@@ -1025,21 +1025,58 @@ pub fn reorder_projects_impl(project_ids: Vec<String>) -> Result<(), String> {
 pub fn list_gitignore_patterns_impl(project_id: &str) -> Result<Vec<String>, String> {
     let entry = find_project_entry(project_id)?;
     let source_dir = managed_source_dir(&entry)?;
-    let gitignore_path = source_dir.join(".gitignore");
-    if !gitignore_path.exists() {
+
+    let files_output = run_git_output(
+        &source_dir,
+        &["ls-files", "--others", "--ignored", "--exclude-standard"],
+    )?;
+
+    let files: Vec<&str> = files_output
+        .lines()
+        .map(|l| l.trim())
+        .filter(|l| !l.is_empty() && !l.contains(".."))
+        .collect();
+
+    if files.is_empty() {
         return Ok(Vec::new());
     }
-    let content = std::fs::read_to_string(&gitignore_path)
-        .map_err(|e| format!("Failed to read .gitignore: {e}"))?;
-    let patterns: Vec<String> = content
-        .lines()
-        .map(|line| line.trim())
-        .filter(|line| !line.is_empty() && !line.starts_with('#') && !line.starts_with('!'))
-        .map(|line| line.to_string())
-        .collect::<std::collections::BTreeSet<String>>()
-        .into_iter()
-        .collect();
-    Ok(patterns)
+
+    let input = files.join("\n");
+    let output = std::process::Command::new("git")
+        .args(["check-ignore", "--stdin", "-v"])
+        .current_dir(&source_dir)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .and_then(|mut child| {
+            use std::io::Write;
+            if let Some(ref mut stdin) = child.stdin {
+                stdin.write_all(input.as_bytes()).ok();
+            }
+            drop(child.stdin.take());
+            child.wait_with_output()
+        })
+        .map_err(|e| format!("git check-ignore failed: {e}"))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut patterns = std::collections::BTreeSet::new();
+
+    for line in stdout.lines() {
+        let Some((rule_part, _)) = line.split_once('\t') else {
+            continue;
+        };
+        let pattern = rule_part
+            .find(':')
+            .and_then(|i| rule_part[i + 1..].find(':').map(|j| &rule_part[i + 1 + j + 1..]))
+            .map(|p| p.trim())
+            .unwrap_or("");
+        if !pattern.is_empty() {
+            patterns.insert(pattern.to_string());
+        }
+    }
+
+    Ok(patterns.into_iter().collect())
 }
 
 pub(crate) fn sync_env_files(

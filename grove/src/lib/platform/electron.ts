@@ -272,16 +272,16 @@ export async function revealInFinder(path: string): Promise<void> {
 
 // === ENV SYNC COMMANDS ===
 
-export async function setEnvSync(_projectId: string, _config: ProjectEnvSyncConfig): Promise<void> {
-  throw new Error("Not implemented");
+export async function setEnvSync(projectId: string, config: ProjectEnvSyncConfig): Promise<void> {
+  return platform.invoke("set_env_sync", { projectId, config });
 }
 
-export async function getEnvSync(_projectId: string): Promise<ProjectEnvSyncConfig | null> {
-  throw new Error("Not implemented");
+export async function getEnvSync(projectId: string): Promise<ProjectEnvSyncConfig | null> {
+  return platform.invoke<ProjectEnvSyncConfig | null>("get_env_sync", { projectId });
 }
 
-export async function listGitignorePatterns(_projectId: string): Promise<string[]> {
-  throw new Error("Not implemented");
+export async function listGitignorePatterns(projectId: string): Promise<string[]> {
+  return platform.invoke<string[]>("list_gitignore_patterns", { projectId });
 }
 
 // === PTY COMMANDS (W3) ===
