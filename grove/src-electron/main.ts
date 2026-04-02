@@ -16,6 +16,7 @@ const RENDERER_DEV_URL =
 const JSON_RESPONSE_COMMANDS = new Set([
   "get_terminal_theme",
   "get_app_config",
+  "get_grove_preferences",
   "get_process_env_diagnostics",
   "list_projects",
   "add_project",
@@ -121,6 +122,13 @@ function serializeArgs(
 
   if (command === "save_app_config" && "config" in serialized) {
     serialized.config = JSON.stringify(serialized.config);
+  }
+
+  if (
+    command === "save_grove_preferences" &&
+    "preferences" in serialized
+  ) {
+    serialized.preferences = JSON.stringify(serialized.preferences);
   }
 
   if (

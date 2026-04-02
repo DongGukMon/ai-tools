@@ -99,6 +99,11 @@ pub async fn get_app_config() -> Result<String> {
 }
 
 #[napi]
+pub async fn get_grove_preferences() -> Result<String> {
+    blocking_json(|| Ok(grove_core::config::get_grove_preferences_impl())).await
+}
+
+#[napi]
 pub async fn get_process_env_diagnostics() -> Result<String> {
     blocking_json(|| Ok(grove_core::process_env::process_env_diagnostics())).await
 }
@@ -107,6 +112,12 @@ pub async fn get_process_env_diagnostics() -> Result<String> {
 pub async fn save_app_config(config: String) -> Result<()> {
     let config = from_json::<grove_core::AppConfig>(&config, "AppConfig")?;
     blocking_core(move || grove_core::config::save_app_config(&config)).await
+}
+
+#[napi]
+pub async fn save_grove_preferences(preferences: String) -> Result<()> {
+    let preferences = from_json::<grove_core::GrovePreferences>(&preferences, "GrovePreferences")?;
+    blocking_core(move || grove_core::config::save_grove_preferences(&preferences)).await
 }
 
 #[napi]
@@ -161,7 +172,10 @@ pub async fn rename_project(project_id: String, name: String) -> Result<()> {
 
 #[napi]
 pub async fn set_project_collapsed(project_id: String, collapsed: bool) -> Result<()> {
-    blocking_core(move || grove_core::git_project::set_project_collapsed_impl(&project_id, collapsed)).await
+    blocking_core(move || {
+        grove_core::git_project::set_project_collapsed_impl(&project_id, collapsed)
+    })
+    .await
 }
 
 #[napi]
@@ -204,7 +218,8 @@ pub async fn create_worktree_pr(worktree_path: String) -> Result<()> {
 
 #[napi]
 pub async fn set_worktree_order(project_id: String, order: Vec<String>) -> Result<()> {
-    blocking_core(move || grove_core::git_project::set_worktree_order_impl(&project_id, order)).await
+    blocking_core(move || grove_core::git_project::set_worktree_order_impl(&project_id, order))
+        .await
 }
 
 #[napi]

@@ -1,7 +1,7 @@
 mod eventbus;
 use grove_core::{
     AppConfig, BehindInfo, CommitInfo, CreatePtyRequest, CreatePtyRestore, CreatePtyResult,
-    DetectedThemeResult, FileDiff, FileStatus, Project, PtyBellEvent,
+    DetectedThemeResult, FileDiff, FileStatus, GrovePreferences, Project, PtyBellEvent,
     SaveTerminalSessionSnapshotRequest, TerminalSessionSnapshot, Worktree, WorktreePullRequest,
 };
 
@@ -30,6 +30,11 @@ async fn get_app_config() -> Result<AppConfig, String> {
 }
 
 #[tauri::command]
+async fn get_grove_preferences() -> Result<GrovePreferences, String> {
+    blocking(|| Ok(grove_core::config::get_grove_preferences_impl())).await
+}
+
+#[tauri::command]
 async fn get_process_env_diagnostics(
 ) -> Result<grove_core::process_env::ProcessEnvDiagnostics, String> {
     blocking(|| Ok(grove_core::process_env::process_env_diagnostics())).await
@@ -38,6 +43,11 @@ async fn get_process_env_diagnostics(
 #[tauri::command]
 async fn save_app_config(config: AppConfig) -> Result<(), String> {
     blocking(move || grove_core::config::save_app_config(&config)).await
+}
+
+#[tauri::command]
+async fn save_grove_preferences(preferences: GrovePreferences) -> Result<(), String> {
+    blocking(move || grove_core::config::save_grove_preferences(&preferences)).await
 }
 
 #[tauri::command]
@@ -94,7 +104,8 @@ async fn rename_project(project_id: String, name: String) -> Result<(), String> 
 
 #[tauri::command]
 async fn set_project_collapsed(project_id: String, collapsed: bool) -> Result<(), String> {
-    blocking(move || grove_core::git_project::set_project_collapsed_impl(&project_id, collapsed)).await
+    blocking(move || grove_core::git_project::set_project_collapsed_impl(&project_id, collapsed))
+        .await
 }
 
 #[tauri::command]
@@ -389,8 +400,10 @@ pub fn run() {
             // Config/Theme (W1)
             get_terminal_theme,
             get_app_config,
+            get_grove_preferences,
             get_process_env_diagnostics,
             save_app_config,
+            save_grove_preferences,
             save_terminal_layouts,
             load_terminal_layouts,
             save_panel_layouts,

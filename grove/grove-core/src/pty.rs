@@ -513,9 +513,7 @@ fn restorable_grove_tmux_sessions_from_layouts(raw: &str) -> Result<HashSet<Stri
     Ok(session_names)
 }
 
-fn restorable_grove_tmux_sessions_from_panel_layouts(
-    raw: &str,
-) -> Result<HashSet<String>, String> {
+fn restorable_grove_tmux_sessions_from_panel_layouts(raw: &str) -> Result<HashSet<String>, String> {
     let panels: Value = serde_json::from_str(raw)
         .map_err(|error| format!("Failed to parse panel-layouts.json: {error}"))?;
 
