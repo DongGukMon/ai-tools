@@ -3,6 +3,7 @@ import Layout from "./Layout";
 import { ToastContainer } from "./components/ui/toast";
 import { OverlayContainer } from "./lib/overlay";
 import { initBackendLogPipe } from "./lib/logger";
+import { initUrlOpenPipe } from "./lib/url-open";
 import { usePreventNativeBehaviors } from "./hooks/usePreventNativeBehaviors";
 import { checkForUpdates } from "./lib/updater";
 import { useToastStore } from "./store/toast";
@@ -14,6 +15,16 @@ function App() {
     let cancelled = false;
     let cleanup: (() => void) | undefined;
     initBackendLogPipe().then((fn) => {
+      if (cancelled) { fn?.(); }
+      else { cleanup = fn; }
+    });
+    return () => { cancelled = true; cleanup?.(); };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    let cleanup: (() => void) | undefined;
+    initUrlOpenPipe().then((fn) => {
       if (cancelled) { fn?.(); }
       else { cleanup = fn; }
     });

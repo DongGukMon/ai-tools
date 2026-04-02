@@ -9,6 +9,7 @@ pub mod terminal_theme;
 #[cfg(test)]
 mod test_support;
 pub mod tool_hooks;
+pub mod url_open;
 pub mod worktree_lifecycle;
 
 use serde::{Deserialize, Serialize};
@@ -18,6 +19,7 @@ pub use config::{AppConfig, GrovePreferences, PreferredIde, TerminalLinkOpenMode
 pub use logger::LogEventSink;
 pub use pty::PtyEventSink;
 pub use terminal_theme::{DetectedThemeResult, TerminalTheme};
+pub use url_open::UrlOpenSink;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

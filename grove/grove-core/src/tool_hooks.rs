@@ -61,6 +61,9 @@ fn install() -> Result<(), String> {
     let codex_wrapper = bin_dir.join("codex");
     write_executable(&codex_wrapper, &codex_wrapper_script())?;
 
+    let open_wrapper = bin_dir.join("open");
+    write_executable(&open_wrapper, open_wrapper_script())?;
+
     install_zdotdir(&home)?;
 
     Ok(())
@@ -217,6 +220,25 @@ REAL_CODEX="$(find_real_codex)" || {{ echo "codex: not found" >&2; exit 127; }}
 "$REAL_CODEX" "$@"
 "#
     )
+}
+
+fn open_wrapper_script() -> &'static str {
+    r#"#!/usr/bin/env bash
+# Grove-managed open wrapper — routes HTTP(S) URLs through Grove.
+GROVE_SOCK="$HOME/.grove/open-url.sock"
+for arg in "$@"; do
+  case "$arg" in
+    http://*|https://*)
+      if [ -S "$GROVE_SOCK" ]; then
+        printf '%s' "$arg" | /usr/bin/nc -U "$GROVE_SOCK" -w 1 2>/dev/null
+        exit 0
+      fi
+      exec /usr/bin/open "$@"
+      ;;
+  esac
+done
+exec /usr/bin/open "$@"
+"#
 }
 
 #[cfg(test)]
