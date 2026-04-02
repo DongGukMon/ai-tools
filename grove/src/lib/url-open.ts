@@ -1,20 +1,6 @@
-import type { TerminalLinkOpenMode } from "../types";
-import { getGrovePreferences, openExternal, platform } from "./platform";
+import { openExternal, platform } from "./platform";
 import { log } from "./logger";
-
-let cachedMode: TerminalLinkOpenMode | null = null;
-
-async function getLinkOpenMode(): Promise<TerminalLinkOpenMode> {
-  if (!cachedMode) {
-    const prefs = await getGrovePreferences();
-    cachedMode = prefs.terminalLinkOpenMode;
-  }
-  return cachedMode;
-}
-
-export function invalidateLinkOpenModeCache() {
-  cachedMode = null;
-}
+import { usePreferencesStore } from "../store/preferences";
 
 export function isSafeExternalUrl(uri: string): boolean {
   try {
@@ -35,8 +21,8 @@ function isLocalhostUrl(url: string): boolean {
 }
 
 /** Open a URL with preference-based routing. */
-export async function openUrl(url: string) {
-  const mode = await getLinkOpenMode();
+export function openUrl(url: string) {
+  const mode = usePreferencesStore.getState().terminalLinkOpenMode;
 
   const useInternal =
     mode === "internal" ||

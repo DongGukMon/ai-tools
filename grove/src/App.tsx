@@ -6,6 +6,7 @@ import { initBackendLogPipe } from "./lib/logger";
 import { initUrlOpenPipe } from "./lib/url-open";
 import { usePreventNativeBehaviors } from "./hooks/usePreventNativeBehaviors";
 import { checkForUpdates } from "./lib/updater";
+import { usePreferencesStore } from "./store/preferences";
 import { useToastStore } from "./store/toast";
 
 function App() {
@@ -30,6 +31,8 @@ function App() {
     });
     return () => { cancelled = true; cleanup?.(); };
   }, []);
+
+  useEffect(() => { usePreferencesStore.getState().init(); }, []);
 
   useEffect(() => {
     checkForUpdates((version) => {
