@@ -8,11 +8,13 @@ import type { TerminalTheme } from "../types";
 import { subscribeTerminalLayoutSync } from "./terminal-layout-sync";
 import {
   clearPtyScrollback,
-  openExternal,
   platform,
   resizePty,
   writePty,
 } from "./platform";
+import { useTerminalStore } from "../store/terminal";
+import { isSafeExternalUrl, openUrl } from "./url-open";
+
 import {
   getMacShortcutSequence,
   isMacClearTerminalShortcut,
@@ -39,14 +41,6 @@ export interface TerminalPaneActivity {
   source: ActivitySource;
 }
 
-function isSafeExternalUrl(uri: string): boolean {
-  try {
-    const { protocol } = new URL(uri);
-    return protocol === "http:" || protocol === "https:" || protocol === "mailto:";
-  } catch {
-    return false;
-  }
-}
 
 function toXtermTheme(theme: TerminalTheme | null) {
   if (!theme) {
@@ -253,9 +247,12 @@ class TerminalPaneRuntime {
     this.term.unicode.activeVersion = "11";
 
     const webLinksAddon = new WebLinksAddon((_event, uri) => {
-      if (isSafeExternalUrl(uri)) {
-        openExternal(uri).catch(() => {});
-      }
+      if (!isSafeExternalUrl(uri)) return;
+      // Claude Code fullscreen handles link clicks via the open wrapper,
+      // so skip the addon handler to avoid duplicate opens.
+      const session = useTerminalStore.getState().aiSessions[this.ptyId];
+      if (session?.tool === "claude") return;
+      openUrl(uri);
     });
     this.term.loadAddon(webLinksAddon);
 

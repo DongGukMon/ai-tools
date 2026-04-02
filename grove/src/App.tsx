@@ -3,12 +3,14 @@ import Layout from "./Layout";
 import { ToastContainer } from "./components/ui/toast";
 import { OverlayContainer } from "./lib/overlay";
 import { initBackendLogPipe } from "./lib/logger";
-import { usePreventFullscreenEscape } from "./hooks/usePreventFullscreenEscape";
+import { initUrlOpenPipe } from "./lib/url-open";
+import { usePreventNativeBehaviors } from "./hooks/usePreventNativeBehaviors";
 import { checkForUpdates } from "./lib/updater";
+import { usePreferencesStore } from "./store/preferences";
 import { useToastStore } from "./store/toast";
 
 function App() {
-  usePreventFullscreenEscape();
+  usePreventNativeBehaviors();
 
   useEffect(() => {
     let cancelled = false;
@@ -19,6 +21,18 @@ function App() {
     });
     return () => { cancelled = true; cleanup?.(); };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    let cleanup: (() => void) | undefined;
+    initUrlOpenPipe().then((fn) => {
+      if (cancelled) { fn?.(); }
+      else { cleanup = fn; }
+    });
+    return () => { cancelled = true; cleanup?.(); };
+  }, []);
+
+  useEffect(() => { usePreferencesStore.getState().init(); }, []);
 
   useEffect(() => {
     checkForUpdates((version) => {

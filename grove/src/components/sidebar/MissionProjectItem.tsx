@@ -7,6 +7,7 @@ import { cn } from "../../lib/cn";
 import { overlay } from "../../lib/overlay";
 import { useSidebarLeafActivation } from "../../hooks/useSidebarLeafActivation";
 import SidebarLeafItem from "./SidebarLeafItem";
+import SidebarContextMenu from "./SidebarContextMenu";
 
 interface Props {
   missionId: string;
@@ -58,31 +59,33 @@ function MissionProjectItem({ missionId, project }: Props) {
   };
 
   return (
-    <SidebarLeafItem
-      icon={<FolderGit2 className={cn("h-[13px] w-[13px] shrink-0")} />}
-      label={displayName}
-      title={project.path}
-      isSelected={isSelected}
-      disabled={disabled}
-      onActivate={handleActivate}
-      action={deletingProject ? (
-        <Loader2 className={cn("h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground")} />
-      ) : (
-        <button
-          className={cn(
-            "h-4 w-4 cursor-pointer items-center justify-center rounded-sm transition-colors",
-            {
-              "flex opacity-50 hover:opacity-100 hover:text-foreground": isSelected,
-              "hidden group-hover:flex hover:text-foreground": !isSelected,
-            },
-          )}
-          onClick={handleRemove}
-          title="Remove from mission"
-        >
-          <X className={cn("h-3 w-3")} />
-        </button>
-      )}
-    />
+    <SidebarContextMenu path={project.path}>
+      <SidebarLeafItem
+        icon={<FolderGit2 className={cn("h-[13px] w-[13px] shrink-0")} />}
+        label={displayName}
+        title={project.path}
+        isSelected={isSelected}
+        disabled={disabled}
+        onActivate={handleActivate}
+        action={deletingProject ? (
+          <Loader2 className={cn("h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground")} />
+        ) : (
+          <button
+            className={cn(
+              "h-4 w-4 cursor-pointer items-center justify-center rounded-sm transition-colors",
+              {
+                "flex opacity-50 hover:opacity-100 hover:text-foreground": isSelected,
+                "hidden group-hover:flex hover:text-foreground": !isSelected,
+              },
+            )}
+            onClick={handleRemove}
+            title="Remove from mission"
+          >
+            <X className={cn("h-3 w-3")} />
+          </button>
+        )}
+      />
+    </SidebarContextMenu>
   );
 }
 

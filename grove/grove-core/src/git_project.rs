@@ -1555,7 +1555,7 @@ pub fn refresh_project_impl(project_id: &str) -> Result<Project, String> {
         return Err(format!("Source directory not found: {}", entry.source_path));
     }
 
-    refresh_source_repo(source)?;
+    refresh_source_repo(source, entry.base_branch.as_deref())?;
     Ok(project_from_entry(entry))
 }
 
@@ -1794,8 +1794,22 @@ fn restore_source_sync_stash(source: &Path, stash_ref: &str, context: &str) -> R
     Ok(())
 }
 
-fn refresh_source_repo(source: &Path) -> Result<(), String> {
-    let default_branch = remote_default_branch(source)?;
+fn refresh_source_repo(source: &Path, base_branch: Option<&str>) -> Result<(), String> {
+    let default_branch = match base_branch {
+        Some(branch) => {
+            let remote_ref = format!("refs/remotes/origin/{branch}");
+            if run_git(source, &["show-ref", "--verify", &remote_ref]).is_ok() {
+                branch.to_string()
+            } else {
+                eprintln!(
+                    "Configured base branch '{}' not found on remote, falling back to auto-detect",
+                    branch
+                );
+                remote_default_branch(source)?
+            }
+        }
+        None => remote_default_branch(source)?,
+    };
     let sync_stash_ref = create_source_sync_stash(source)?;
 
     let restore_after_error = |base: String| -> Result<(), String> {
@@ -2017,6 +2031,7 @@ mod tests {
             projects,
             base_dir: Some(base_dir.to_string_lossy().to_string()),
             terminal_theme: None,
+            preferences: None,
         })
         .unwrap();
     }
@@ -2922,6 +2937,84 @@ mod tests {
     }
 
     #[test]
+    fn refresh_project_uses_configured_base_branch_instead_of_remote_default() {
+        let _lock = env_lock();
+        let home = TestHome::new();
+        let base_dir = home.root.join("grove-data");
+        let source_dir = base_dir
+            .join("github.com")
+            .join("bang9")
+            .join("grove")
+            .join("source");
+        let remotes_dir = home.root.join("remotes");
+        let (remote_dir, seed_dir) =
+            create_bare_remote(&remotes_dir, "grove-base-branch", "trunk");
+
+        commit_and_push(
+            &seed_dir,
+            &remote_dir,
+            "trunk",
+            "README.md",
+            "# Grove v1\n",
+            "Initial commit",
+        );
+
+        // Create a "develop" branch on the remote
+        run_git_ok(&seed_dir, &["checkout", "-b", "develop"]);
+        commit_and_push(
+            &seed_dir,
+            &remote_dir,
+            "develop",
+            "dev.md",
+            "# Dev\n",
+            "Dev commit",
+        );
+
+        fs::create_dir_all(source_dir.parent().unwrap()).unwrap();
+        let remote_dir_str = remote_dir.to_string_lossy().to_string();
+        let source_dir_str = source_dir.to_string_lossy().to_string();
+        run_git_ok(
+            source_dir.parent().unwrap(),
+            &["clone", &remote_dir_str, &source_dir_str],
+        );
+
+        // Save config with base_branch set to "develop"
+        let mut entry = project_entry(
+            "project-base",
+            "https://github.com/bang9/grove.git",
+            &source_dir,
+        );
+        entry.base_branch = Some("develop".to_string());
+        save_test_config(&base_dir, vec![entry]);
+
+        // Push a new commit to develop on the remote
+        run_git_ok(&seed_dir, &["checkout", "develop"]);
+        commit_and_push(
+            &seed_dir,
+            &remote_dir,
+            "develop",
+            "dev.md",
+            "# Dev v2\n",
+            "Update dev",
+        );
+
+        let project = refresh_project_impl("project-base").unwrap();
+
+        // Should be on "develop", NOT "trunk"
+        assert_eq!(
+            run_git_output(&source_dir, &["branch", "--show-current"]).unwrap(),
+            "develop"
+        );
+        // Remote changes on develop should be pulled
+        assert_eq!(
+            fs::read_to_string(source_dir.join("dev.md")).unwrap(),
+            "# Dev v2\n"
+        );
+        // base_branch should be preserved in the returned project
+        assert_eq!(project.base_branch, Some("develop".to_string()));
+    }
+
+    #[test]
     fn refresh_project_restores_tracked_dirty_changes_after_sync() {
         let _lock = env_lock();
         let home = TestHome::new();
@@ -3250,13 +3343,30 @@ exec /bin/sh -c "$remote_cmd"
             .join("grove")
             .join("source");
         let (remote_dir, seed_dir) = create_bare_remote(&remotes_dir, "grove", "main");
-        commit_and_push(&seed_dir, &remote_dir, "main", "README.md", "# Hello\n", "init");
+        commit_and_push(
+            &seed_dir,
+            &remote_dir,
+            "main",
+            "README.md",
+            "# Hello\n",
+            "init",
+        );
         run_git_ok(&seed_dir, &["checkout", "-b", "develop"]);
-        commit_and_push(&seed_dir, &remote_dir, "develop", "dev.md", "dev\n", "dev commit");
+        commit_and_push(
+            &seed_dir,
+            &remote_dir,
+            "develop",
+            "dev.md",
+            "dev\n",
+            "dev commit",
+        );
 
         fs::create_dir_all(source_dir.parent().unwrap()).unwrap();
         let remote_url = remote_dir.to_string_lossy().to_string();
-        run_git_ok(source_dir.parent().unwrap(), &["clone", &remote_url, "source"]);
+        run_git_ok(
+            source_dir.parent().unwrap(),
+            &["clone", &remote_url, "source"],
+        );
 
         let entry = project_entry("p1", "https://github.com/bang9/grove.git", &source_dir);
         save_test_config(&base_dir, vec![entry]);
@@ -3279,11 +3389,21 @@ exec /bin/sh -c "$remote_cmd"
             .join("grove")
             .join("source");
         let (remote_dir, seed_dir) = create_bare_remote(&remotes_dir, "grove", "main");
-        commit_and_push(&seed_dir, &remote_dir, "main", "README.md", "# Hello\n", "init");
+        commit_and_push(
+            &seed_dir,
+            &remote_dir,
+            "main",
+            "README.md",
+            "# Hello\n",
+            "init",
+        );
 
         fs::create_dir_all(source_dir.parent().unwrap()).unwrap();
         let remote_url = remote_dir.to_string_lossy().to_string();
-        run_git_ok(source_dir.parent().unwrap(), &["clone", &remote_url, "source"]);
+        run_git_ok(
+            source_dir.parent().unwrap(),
+            &["clone", &remote_url, "source"],
+        );
 
         let entry = project_entry("p1", "https://github.com/bang9/grove.git", &source_dir);
         save_test_config(&base_dir, vec![entry]);
@@ -3305,11 +3425,21 @@ exec /bin/sh -c "$remote_cmd"
             .join("grove")
             .join("source");
         let (remote_dir, seed_dir) = create_bare_remote(&remotes_dir, "grove", "main");
-        commit_and_push(&seed_dir, &remote_dir, "main", "README.md", "# Hello\n", "init");
+        commit_and_push(
+            &seed_dir,
+            &remote_dir,
+            "main",
+            "README.md",
+            "# Hello\n",
+            "init",
+        );
 
         fs::create_dir_all(source_dir.parent().unwrap()).unwrap();
         let remote_url = remote_dir.to_string_lossy().to_string();
-        run_git_ok(source_dir.parent().unwrap(), &["clone", &remote_url, "source"]);
+        run_git_ok(
+            source_dir.parent().unwrap(),
+            &["clone", &remote_url, "source"],
+        );
 
         let mut entry = project_entry("p1", "https://github.com/bang9/grove.git", &source_dir);
         entry.base_branch = Some("main".to_string());
@@ -3333,13 +3463,30 @@ exec /bin/sh -c "$remote_cmd"
             .join("grove")
             .join("source");
         let (remote_dir, seed_dir) = create_bare_remote(&remotes_dir, "grove", "main");
-        commit_and_push(&seed_dir, &remote_dir, "main", "README.md", "# Hello\n", "init");
+        commit_and_push(
+            &seed_dir,
+            &remote_dir,
+            "main",
+            "README.md",
+            "# Hello\n",
+            "init",
+        );
         run_git_ok(&seed_dir, &["checkout", "-b", "develop"]);
-        commit_and_push(&seed_dir, &remote_dir, "develop", "dev.md", "dev\n", "dev commit");
+        commit_and_push(
+            &seed_dir,
+            &remote_dir,
+            "develop",
+            "dev.md",
+            "dev\n",
+            "dev commit",
+        );
 
         fs::create_dir_all(source_dir.parent().unwrap()).unwrap();
         let remote_url = remote_dir.to_string_lossy().to_string();
-        run_git_ok(source_dir.parent().unwrap(), &["clone", &remote_url, "source"]);
+        run_git_ok(
+            source_dir.parent().unwrap(),
+            &["clone", &remote_url, "source"],
+        );
 
         let mut entry = project_entry("p1", "https://github.com/bang9/grove.git", &source_dir);
         entry.base_branch = Some("develop".to_string());
@@ -3363,7 +3510,11 @@ exec /bin/sh -c "$remote_cmd"
         let home = TestHome::new();
         let base_dir = home.root.join("grove-data");
 
-        let mut entry = project_entry("p1", "https://github.com/bang9/grove.git", &base_dir.join("source"));
+        let mut entry = project_entry(
+            "p1",
+            "https://github.com/bang9/grove.git",
+            &base_dir.join("source"),
+        );
         entry.base_branch = Some("develop".to_string());
         save_test_config(&base_dir, vec![entry]);
 
@@ -3371,7 +3522,11 @@ exec /bin/sh -c "$remote_cmd"
         assert_eq!(loaded.projects[0].base_branch, Some("develop".to_string()));
 
         // None round-trip
-        let mut entry2 = project_entry("p2", "https://github.com/bang9/other.git", &base_dir.join("source2"));
+        let mut entry2 = project_entry(
+            "p2",
+            "https://github.com/bang9/other.git",
+            &base_dir.join("source2"),
+        );
         entry2.base_branch = None;
         save_test_config(&base_dir, vec![loaded.projects[0].clone(), entry2]);
 

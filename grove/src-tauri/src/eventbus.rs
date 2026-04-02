@@ -41,8 +41,17 @@ impl grove_core::LogEventSink for TauriLogSink {
     }
 }
 
+pub struct TauriUrlOpenSink(pub AppHandle);
+
+impl grove_core::UrlOpenSink for TauriUrlOpenSink {
+    fn on_url(&self, url: &str) {
+        let _ = self.0.emit("grove:open-url", url.to_string());
+    }
+}
+
 pub fn init(app: &AppHandle) {
     grove_core::logger::set_log_sink(Arc::new(TauriLogSink(app.clone())));
+    grove_core::url_open::start(Arc::new(TauriUrlOpenSink(app.clone())));
 }
 
 pub fn pty_sink(app: AppHandle) -> Arc<dyn grove_core::PtyEventSink> {

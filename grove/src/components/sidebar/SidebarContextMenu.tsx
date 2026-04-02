@@ -43,11 +43,11 @@ function SidebarContextMenu({ path, children, extraItems }: SidebarContextMenuPr
         {extraItems}
         {extraItems && <ContextMenuSeparator />}
         <ContextMenuItem onSelect={handleRevealInFinder}>
-          <FolderOpen className={cn("mr-2 h-4 w-4")} />
+          <FolderOpen className={cn("mr-1.5 h-3.5 w-3.5")} />
           Open in Finder
         </ContextMenuItem>
         <ContextMenuItem onSelect={handleOpenInGlobalTerminal}>
-          <Terminal className={cn("mr-2 h-4 w-4")} />
+          <Terminal className={cn("mr-1.5 h-3.5 w-3.5")} />
           Open in Global Terminal
         </ContextMenuItem>
       </ContextMenuContent>

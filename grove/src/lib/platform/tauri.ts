@@ -4,6 +4,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import type {
   TerminalTheme,
   AppConfig,
+  GrovePreferences,
   ProcessEnvDiagnostics,
   Project,
   Worktree,
@@ -141,12 +142,22 @@ export async function getAppConfig(): Promise<AppConfig> {
   return platform.invoke<AppConfig>("get_app_config");
 }
 
+export async function getGrovePreferences(): Promise<GrovePreferences> {
+  return platform.invoke<GrovePreferences>("get_grove_preferences");
+}
+
 export async function getProcessEnvDiagnostics(): Promise<ProcessEnvDiagnostics> {
   return platform.invoke<ProcessEnvDiagnostics>("get_process_env_diagnostics");
 }
 
 export async function saveAppConfig(config: AppConfig): Promise<void> {
   return platform.invoke("save_app_config", { config });
+}
+
+export async function saveGrovePreferences(
+  preferences: GrovePreferences,
+): Promise<void> {
+  return platform.invoke("save_grove_preferences", { preferences });
 }
 
 // === TERMINAL LAYOUT PERSISTENCE ===

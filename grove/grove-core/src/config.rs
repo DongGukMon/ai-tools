@@ -30,6 +30,46 @@ pub struct ProjectEnvSyncConfig {
     pub include_patterns: Vec<String>,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum TerminalLinkOpenMode {
+    #[default]
+    External,
+    Internal,
+    ExternalWithLocalhostInternal,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(default, rename_all = "camelCase")]
+pub struct PreferredIde {
+    pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub open_command: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default, rename_all = "camelCase")]
+pub struct GrovePreferences {
+    pub terminal_link_open_mode: TerminalLinkOpenMode,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub preferred_ide: Option<PreferredIde>,
+}
+
+impl Default for GrovePreferences {
+    fn default() -> Self {
+        Self {
+            terminal_link_open_mode: TerminalLinkOpenMode::ExternalWithLocalhostInternal,
+            preferred_ide: Some(PreferredIde {
+                id: "webstorm".into(),
+                display_name: None,
+                open_command: None,
+            }),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default, rename_all = "camelCase")]
 pub struct GroveConfig {
@@ -39,13 +79,29 @@ pub struct GroveConfig {
     pub base_dir: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub terminal_theme: Option<TerminalTheme>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub preferences: Option<GrovePreferences>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(default, rename_all = "camelCase")]
 pub struct AppConfig {
+    #[serde(default = "default_base_dir")]
     pub base_dir: String,
+    #[serde(default)]
     pub terminal_theme: Option<TerminalTheme>,
+    #[serde(default)]
+    pub preferences: GrovePreferences,
+}
+
+impl Default for AppConfig {
+    fn default() -> Self {
+        Self {
+            base_dir: default_base_dir(),
+            terminal_theme: None,
+            preferences: GrovePreferences::default(),
+        }
+    }
 }
 
 pub fn default_base_dir() -> String {
@@ -144,6 +200,7 @@ fn load_app_config_from_path(path: &Path) -> AppConfig {
             .filter(|base_dir| !base_dir.trim().is_empty())
             .unwrap_or_else(default_base_dir),
         terminal_theme: config.terminal_theme,
+        preferences: config.preferences.unwrap_or_default(),
     }
 }
 
@@ -155,6 +212,24 @@ fn save_app_config_to_path(path: &Path, app_config: &AppConfig) -> Result<(), St
     let mut config = load_config_from_path(path);
     config.base_dir = Some(app_config.base_dir.clone());
     config.terminal_theme = app_config.terminal_theme.clone();
+    config.preferences = Some(app_config.preferences.clone());
+    save_config_to_path(path, &config)
+}
+
+pub fn load_grove_preferences() -> GrovePreferences {
+    load_app_config().preferences
+}
+
+pub fn save_grove_preferences(preferences: &GrovePreferences) -> Result<(), String> {
+    save_grove_preferences_to_path(&config_path(), preferences)
+}
+
+fn save_grove_preferences_to_path(
+    path: &Path,
+    preferences: &GrovePreferences,
+) -> Result<(), String> {
+    let mut config = load_config_from_path(path);
+    config.preferences = Some(preferences.clone());
     save_config_to_path(path, &config)
 }
 
@@ -256,13 +331,21 @@ fn update_terminal_session_snapshot_store_at_path<R>(
 }
 
 pub fn get_app_config_impl() -> AppConfig {
-    let saved = load_app_config();
+    let AppConfig {
+        base_dir,
+        terminal_theme,
+        preferences,
+    } = load_app_config();
     AppConfig {
-        base_dir: saved.base_dir,
-        terminal_theme: saved
-            .terminal_theme
+        base_dir,
+        terminal_theme: terminal_theme
             .or_else(|| Some(crate::terminal_theme::detect_terminal_theme().theme)),
+        preferences,
     }
+}
+
+pub fn get_grove_preferences_impl() -> GrovePreferences {
+    load_grove_preferences()
 }
 
 // ── Panel layout persistence ──
@@ -469,6 +552,17 @@ mod tests {
         }
     }
 
+    fn sample_preferences() -> GrovePreferences {
+        GrovePreferences {
+            terminal_link_open_mode: TerminalLinkOpenMode::Internal,
+            preferred_ide: Some(PreferredIde {
+                id: "cursor".into(),
+                display_name: Some("Cursor".into()),
+                open_command: None,
+            }),
+        }
+    }
+
     fn sample_project() -> ProjectEntry {
         ProjectEntry {
             id: "project-1".into(),
@@ -579,6 +673,7 @@ mod tests {
         assert_eq!(config.projects[0].id, "project-1");
         assert_eq!(config.base_dir, None);
         assert!(config.terminal_theme.is_none());
+        assert!(config.preferences.is_none());
 
         let _ = fs::remove_dir_all(path.parent().unwrap());
     }
@@ -627,6 +722,7 @@ mod tests {
                 .map(|theme| theme.font_family.as_str()),
             Some("Menlo")
         );
+        assert!(config.preferences.is_none());
 
         let _ = fs::remove_dir_all(path.parent().unwrap());
     }
@@ -639,6 +735,7 @@ mod tests {
             &serde_json::to_string_pretty(&AppConfig {
                 base_dir: "/Users/test/.grove".into(),
                 terminal_theme: None,
+                preferences: GrovePreferences::default(),
             })
             .unwrap(),
         );
@@ -646,6 +743,7 @@ mod tests {
         let app_config = load_app_config_from_path(&path);
 
         assert_eq!(app_config.base_dir, "/Users/test/.grove");
+        assert_eq!(app_config.preferences, GrovePreferences::default());
 
         let _ = fs::remove_dir_all(path.parent().unwrap());
     }
@@ -658,6 +756,7 @@ mod tests {
         let app_config = load_app_config_from_path(&path);
 
         assert_eq!(app_config.base_dir, default_base_dir());
+        assert_eq!(app_config.preferences, GrovePreferences::default());
 
         let _ = fs::remove_dir_all(path.parent().unwrap());
     }
@@ -686,6 +785,7 @@ mod tests {
             &AppConfig {
                 base_dir: "/Users/test/.grove".into(),
                 terminal_theme: Some(sample_theme()),
+                preferences: sample_preferences(),
             },
         )
         .unwrap();
@@ -696,6 +796,7 @@ mod tests {
         assert_eq!(config.projects[0].id, "project-1");
         assert_eq!(config.base_dir.as_deref(), Some("/Users/test/.grove"));
         assert!(config.terminal_theme.is_some());
+        assert_eq!(config.preferences, Some(sample_preferences()));
 
         let _ = fs::remove_dir_all(path.parent().unwrap());
     }
@@ -709,6 +810,7 @@ mod tests {
             &serde_json::to_string_pretty(&AppConfig {
                 base_dir: "/Users/test/.grove".into(),
                 terminal_theme: Some(theme.clone()),
+                preferences: sample_preferences(),
             })
             .unwrap(),
         );
@@ -728,6 +830,38 @@ mod tests {
                 .map(|saved_theme| saved_theme.background.as_str()),
             Some(theme.background.as_str())
         );
+        assert_eq!(saved.preferences, Some(sample_preferences()));
+
+        let _ = fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn save_grove_preferences_preserves_existing_app_settings() {
+        let path = temp_config_path();
+        let theme = sample_theme();
+        write_fixture(
+            &path,
+            &serde_json::to_string_pretty(&AppConfig {
+                base_dir: "/Users/test/.grove".into(),
+                terminal_theme: Some(theme.clone()),
+                preferences: GrovePreferences::default(),
+            })
+            .unwrap(),
+        );
+
+        save_grove_preferences_to_path(&path, &sample_preferences()).unwrap();
+
+        let saved = load_config_from_path(&path);
+
+        assert_eq!(saved.base_dir.as_deref(), Some("/Users/test/.grove"));
+        assert_eq!(
+            saved
+                .terminal_theme
+                .as_ref()
+                .map(|saved_theme| saved_theme.background.as_str()),
+            Some(theme.background.as_str())
+        );
+        assert_eq!(saved.preferences, Some(sample_preferences()));
 
         let _ = fs::remove_dir_all(path.parent().unwrap());
     }

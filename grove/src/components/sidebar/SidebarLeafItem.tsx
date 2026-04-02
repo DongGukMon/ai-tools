@@ -13,7 +13,7 @@ interface Props {
   forceShowAction?: boolean;
 }
 
-const SidebarLeafItem = forwardRef<HTMLDivElement, Props>(function SidebarLeafItem({
+const SidebarLeafItem = forwardRef<HTMLDivElement, Props & React.HTMLAttributes<HTMLDivElement>>(function SidebarLeafItem({
   icon,
   label,
   title,
@@ -23,10 +23,12 @@ const SidebarLeafItem = forwardRef<HTMLDivElement, Props>(function SidebarLeafIt
   status,
   action,
   forceShowAction = false,
+  ...rest
 }, ref) {
   return (
     <div
       ref={ref}
+      {...rest}
       className={cn(
         "group flex w-full items-center gap-2 rounded-md px-2 py-1 text-[13px] transition-all duration-150 cursor-pointer select-none",
         {

@@ -522,6 +522,7 @@ mod tests {
             projects,
             base_dir: None,
             terminal_theme: None,
+            preferences: None,
         })
         .unwrap();
     }
