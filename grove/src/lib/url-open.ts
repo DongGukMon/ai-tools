@@ -1,5 +1,20 @@
+import type { TerminalLinkOpenMode } from "../types";
 import { getGrovePreferences, openExternal, platform } from "./platform";
 import { log } from "./logger";
+
+let cachedMode: TerminalLinkOpenMode | null = null;
+
+async function getLinkOpenMode(): Promise<TerminalLinkOpenMode> {
+  if (!cachedMode) {
+    const prefs = await getGrovePreferences();
+    cachedMode = prefs.terminalLinkOpenMode;
+  }
+  return cachedMode;
+}
+
+export function invalidateLinkOpenModeCache() {
+  cachedMode = null;
+}
 
 export function isSafeExternalUrl(uri: string): boolean {
   try {
@@ -19,26 +34,20 @@ function isLocalhostUrl(url: string): boolean {
   }
 }
 
-async function handleUrl(url: string) {
-  const prefs = await getGrovePreferences();
-  const mode = prefs.terminalLinkOpenMode;
-
-  if (mode === "internal") {
-    log("url-open", "internal (not implemented):", url);
-    // TODO: open in Grove browser tab
-    openExternal(url).catch(() => {});
-  } else if (mode === "external-with-localhost-internal" && isLocalhostUrl(url)) {
-    log("url-open", "localhost-internal (not implemented):", url);
-    // TODO: open in Grove browser tab
-    openExternal(url).catch(() => {});
-  } else {
-    openExternal(url).catch(() => {});
-  }
-}
-
 /** Open a URL with preference-based routing. */
-export function openUrl(url: string) {
-  handleUrl(url);
+export async function openUrl(url: string) {
+  const mode = await getLinkOpenMode();
+
+  const useInternal =
+    mode === "internal" ||
+    (mode === "external-with-localhost-internal" && isLocalhostUrl(url));
+
+  if (useInternal) {
+    // TODO: open in Grove browser tab
+    log("url-open", "internal (not implemented):", url);
+  }
+
+  openExternal(url).catch(() => {});
 }
 
 /** Listen for URL open requests from the Grove backend (via open-url socket). */
@@ -47,7 +56,7 @@ export async function initUrlOpenPipe(): Promise<(() => void) | undefined> {
     "grove:open-url",
     (url) => {
       log("url-open", "received:", url);
-      handleUrl(url);
+      openUrl(url);
     },
   );
   return unlisten;
