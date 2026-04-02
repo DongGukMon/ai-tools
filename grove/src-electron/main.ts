@@ -34,6 +34,8 @@ const JSON_RESPONSE_COMMANDS = new Set([
   "get_working_diff",
   "get_commit_diff",
   "get_behind_count",
+  "get_env_sync",
+  "list_gitignore_patterns",
 ]);
 
 interface PtyOutputPayload {
@@ -121,6 +123,10 @@ function serializeArgs(
   const serialized: Record<string, unknown> = { ...args };
 
   if (command === "save_app_config" && "config" in serialized) {
+    serialized.config = JSON.stringify(serialized.config);
+  }
+
+  if (command === "set_env_sync" && "config" in serialized) {
     serialized.config = JSON.stringify(serialized.config);
   }
 

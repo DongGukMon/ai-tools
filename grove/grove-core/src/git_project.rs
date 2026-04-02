@@ -408,6 +408,7 @@ fn make_project_entry(
         worktree_order: Vec::new(),
         base_branch: None,
         collapsed: false,
+        env_sync: None,
     }
 }
 
@@ -1021,6 +1022,148 @@ pub fn reorder_projects_impl(project_ids: Vec<String>) -> Result<(), String> {
     config::save_config(&config)
 }
 
+pub fn list_gitignore_patterns_impl(project_id: &str) -> Result<Vec<String>, String> {
+    let entry = find_project_entry(project_id)?;
+    let source_dir = managed_source_dir(&entry)?;
+
+    let files_output = run_git_output(
+        &source_dir,
+        &["ls-files", "--others", "--ignored", "--exclude-standard"],
+    )?;
+
+    let files: Vec<&str> = files_output
+        .lines()
+        .map(|l| l.trim())
+        .filter(|l| !l.is_empty() && !l.contains(".."))
+        .collect();
+
+    if files.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let input = files.join("\n");
+    let output = std::process::Command::new("git")
+        .args(["check-ignore", "--stdin", "-v"])
+        .current_dir(&source_dir)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .and_then(|mut child| {
+            use std::io::Write;
+            if let Some(ref mut stdin) = child.stdin {
+                stdin.write_all(input.as_bytes()).ok();
+            }
+            drop(child.stdin.take());
+            child.wait_with_output()
+        })
+        .map_err(|e| format!("git check-ignore failed: {e}"))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut patterns = std::collections::BTreeSet::new();
+
+    for line in stdout.lines() {
+        let Some((rule_part, _)) = line.split_once('\t') else {
+            continue;
+        };
+        let pattern = rule_part
+            .find(':')
+            .and_then(|i| rule_part[i + 1..].find(':').map(|j| &rule_part[i + 1 + j + 1..]))
+            .map(|p| p.trim())
+            .unwrap_or("");
+        if !pattern.is_empty() {
+            patterns.insert(pattern.to_string());
+        }
+    }
+
+    Ok(patterns.into_iter().collect())
+}
+
+pub(crate) fn sync_env_files(
+    source_dir: &Path,
+    worktree_dir: &Path,
+    include: &[String],
+) -> Result<(), String> {
+    if include.is_empty() {
+        return Ok(());
+    }
+
+    let include_set: std::collections::HashSet<&str> =
+        include.iter().map(String::as_str).collect();
+
+    let files_output = run_git_output(
+        source_dir,
+        &["ls-files", "--others", "--ignored", "--exclude-standard"],
+    )?;
+
+    let files: Vec<&str> = files_output
+        .lines()
+        .map(|l| l.trim())
+        .filter(|l| !l.is_empty() && !l.contains(".."))
+        .collect();
+
+    if files.is_empty() {
+        return Ok(());
+    }
+
+    // Use git check-ignore to resolve which pattern each file matches
+    let input = files.join("\n");
+    let output = std::process::Command::new("git")
+        .args(["check-ignore", "--stdin", "-v"])
+        .current_dir(source_dir)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .and_then(|mut child| {
+            use std::io::Write;
+            if let Some(ref mut stdin) = child.stdin {
+                stdin.write_all(input.as_bytes()).ok();
+            }
+            drop(child.stdin.take());
+            child.wait_with_output()
+        })
+        .map_err(|e| format!("git check-ignore failed: {e}"))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    for line in stdout.lines() {
+        // Format: "<source>:<linenum>:<pattern>\t<pathname>"
+        let Some((rule_part, rel_path)) = line.split_once('\t') else {
+            continue;
+        };
+        let rel_path = rel_path.trim();
+        if rel_path.is_empty() || rel_path.contains("..") {
+            continue;
+        }
+
+        // Extract pattern: skip source path and line number
+        let pattern = rule_part
+            .find(':')
+            .and_then(|i| rule_part[i + 1..].find(':').map(|j| &rule_part[i + 1 + j + 1..]))
+            .map(|p| p.trim())
+            .unwrap_or("");
+
+        if !include_set.contains(pattern) {
+            continue;
+        }
+
+        let src = source_dir.join(rel_path);
+        let dst = worktree_dir.join(rel_path);
+        if !src.is_file() {
+            continue;
+        }
+        if let Some(parent) = dst.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| format!("env sync: mkdir {}: {e}", parent.display()))?;
+        }
+        std::fs::copy(&src, &dst)
+            .map_err(|e| format!("env sync: copy {} -> {}: {e}", src.display(), dst.display()))?;
+    }
+
+    Ok(())
+}
+
 pub fn add_worktree_impl(project_id: &str, name: &str) -> Result<Worktree, String> {
     validate_branch_name(name)?;
 
@@ -1096,6 +1239,12 @@ pub fn add_worktree_impl(project_id: &str, name: &str) -> Result<Worktree, Strin
                 &["worktree", "add", &worktree_path_str, "-b", name, &base_ref],
                 name,
             )?;
+        }
+    }
+
+    if let Some(ref env_sync) = entry.env_sync {
+        if let Err(e) = sync_env_files(source, &worktree_path, &env_sync.include_patterns) {
+            eprintln!("[grove] env sync warning: {e}");
         }
     }
 
@@ -1359,6 +1508,31 @@ pub fn set_base_branch_impl(project_id: &str, branch: Option<String>) -> Result<
         .ok_or_else(|| format!("Project not found: {project_id}"))?;
     entry.base_branch = branch;
     config::save_config(&config)
+}
+
+pub fn set_env_sync_impl(
+    project_id: &str,
+    env_sync: config::ProjectEnvSyncConfig,
+) -> Result<(), String> {
+    let mut grove_config = config::load_config();
+    let entry = grove_config
+        .projects
+        .iter_mut()
+        .find(|p| p.id == project_id)
+        .ok_or_else(|| format!("Project not found: {project_id}"))?;
+    entry.env_sync = if env_sync.include_patterns.is_empty() {
+        None
+    } else {
+        Some(env_sync)
+    };
+    config::save_config(&grove_config)
+}
+
+pub fn get_env_sync_impl(
+    project_id: &str,
+) -> Result<Option<config::ProjectEnvSyncConfig>, String> {
+    let entry = find_project_entry(project_id)?;
+    Ok(entry.env_sync)
 }
 
 pub fn is_source_dirty_impl(project_id: &str) -> Result<bool, String> {
@@ -1874,6 +2048,7 @@ mod tests {
             worktree_order: Vec::new(),
             base_branch: None,
             collapsed: false,
+            env_sync: None,
         }
     }
 
@@ -3359,4 +3534,5 @@ exec /bin/sh -c "$remote_cmd"
         assert_eq!(loaded2.projects[0].base_branch, Some("develop".to_string()));
         assert_eq!(loaded2.projects[1].base_branch, None);
     }
+
 }

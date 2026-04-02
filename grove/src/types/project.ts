@@ -25,3 +25,7 @@ export interface WorktreePullRequest {
   url: string;
   status: WorktreePullRequestStatus;
 }
+
+export interface ProjectEnvSyncConfig {
+  include_patterns: string[];
+}

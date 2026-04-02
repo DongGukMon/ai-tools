@@ -20,6 +20,14 @@ pub struct ProjectEntry {
     pub base_branch: Option<String>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub collapsed: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub env_sync: Option<ProjectEnvSyncConfig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ProjectEnvSyncConfig {
+    #[serde(default)]
+    pub include_patterns: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -566,6 +574,7 @@ mod tests {
             worktree_order: Vec::new(),
             base_branch: None,
             collapsed: false,
+            env_sync: None,
         }
     }
 

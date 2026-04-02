@@ -15,6 +15,7 @@ import type {
   FileDiff,
   Mission,
   MissionProject,
+  ProjectEnvSyncConfig,
 } from "../../types";
 import type { Platform } from "./types";
 
@@ -262,6 +263,20 @@ export async function openExternal(url: string): Promise<void> {
 
 export async function revealInFinder(path: string): Promise<void> {
   return platform.invoke("reveal_in_finder", { path });
+}
+
+// === ENV SYNC COMMANDS ===
+
+export async function setEnvSync(projectId: string, config: ProjectEnvSyncConfig): Promise<void> {
+  return platform.invoke("set_env_sync", { projectId, config });
+}
+
+export async function getEnvSync(projectId: string): Promise<ProjectEnvSyncConfig | null> {
+  return platform.invoke<ProjectEnvSyncConfig | null>("get_env_sync", { projectId });
+}
+
+export async function listGitignorePatterns(projectId: string): Promise<string[]> {
+  return platform.invoke<string[]>("list_gitignore_patterns", { projectId });
 }
 
 // === PTY COMMANDS (W3) ===

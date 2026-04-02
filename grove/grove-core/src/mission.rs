@@ -249,14 +249,25 @@ pub fn add_project_to_mission(
     let dir = missions_dir()?;
     let entry = crate::config::find_project_entry_by_id(project_id)?;
 
-    add_project_to_mission_with_paths(
+    let project = add_project_to_mission_with_paths(
         &store_path,
         &dir,
         mission_id,
         project_id,
         &entry.source_path,
         &entry.repo,
-    )
+    )?;
+
+    // Sync gitignored env files from source if configured
+    if let Some(ref env_sync) = entry.env_sync {
+        let source = Path::new(&entry.source_path);
+        let worktree = Path::new(&project.path);
+        if let Err(e) = crate::git_project::sync_env_files(source, worktree, &env_sync.include_patterns) {
+            eprintln!("[grove] env sync warning (mission): {e}");
+        }
+    }
+
+    Ok(project)
 }
 
 fn add_project_to_mission_with_paths(
@@ -502,6 +513,7 @@ mod tests {
             worktree_order: Vec::new(),
             base_branch: None,
             collapsed: false,
+            env_sync: None,
         }
     }
 

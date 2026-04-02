@@ -233,6 +233,22 @@ pub async fn set_base_branch(project_id: String, branch: Option<String>) -> Resu
 }
 
 #[napi]
+pub async fn set_env_sync(project_id: String, config: String) -> Result<()> {
+    let config = from_json::<grove_core::ProjectEnvSyncConfig>(&config, "ProjectEnvSyncConfig")?;
+    blocking_core(move || grove_core::git_project::set_env_sync_impl(&project_id, config)).await
+}
+
+#[napi]
+pub async fn get_env_sync(project_id: String) -> Result<Option<String>> {
+    blocking_optional_json(move || grove_core::git_project::get_env_sync_impl(&project_id)).await
+}
+
+#[napi]
+pub async fn list_gitignore_patterns(project_id: String) -> Result<String> {
+    blocking_json(move || grove_core::git_project::list_gitignore_patterns_impl(&project_id)).await
+}
+
+#[napi]
 pub async fn create_pty(
     pty_id: String,
     pane_id: String,

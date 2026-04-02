@@ -15,7 +15,9 @@ pub mod worktree_lifecycle;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-pub use config::{AppConfig, GrovePreferences, PreferredIde, TerminalLinkOpenMode};
+pub use config::{
+    AppConfig, GrovePreferences, PreferredIde, ProjectEnvSyncConfig, TerminalLinkOpenMode,
+};
 pub use logger::LogEventSink;
 pub use pty::PtyEventSink;
 pub use terminal_theme::{DetectedThemeResult, TerminalTheme};
