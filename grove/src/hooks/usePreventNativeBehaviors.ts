@@ -24,7 +24,7 @@ export function usePreventNativeBehaviors() {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || !ref.current) return;
       const target = e.target as HTMLElement;
-      if (target.closest(".xterm")) return;
+      if (target.closest(".xterm, [data-radix-menu-content]")) return;
       e.preventDefault();
     };
 
