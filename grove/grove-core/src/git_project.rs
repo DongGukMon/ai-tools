@@ -1026,57 +1026,75 @@ pub fn list_gitignore_patterns_impl(project_id: &str) -> Result<Vec<String>, Str
     let entry = find_project_entry(project_id)?;
     let source_dir = managed_source_dir(&entry)?;
 
-    let files_output = run_git_output(
-        &source_dir,
-        &["ls-files", "--others", "--ignored", "--exclude-standard"],
-    )?;
-
-    let files: Vec<&str> = files_output
-        .lines()
-        .map(|l| l.trim())
-        .filter(|l| !l.is_empty() && !l.contains(".."))
-        .collect();
-
-    if files.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    let input = files.join("\n");
-    let output = std::process::Command::new("git")
-        .args(["check-ignore", "--stdin", "-v"])
-        .current_dir(&source_dir)
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .and_then(|mut child| {
-            use std::io::Write;
-            if let Some(ref mut stdin) = child.stdin {
-                stdin.write_all(input.as_bytes()).ok();
-            }
-            drop(child.stdin.take());
-            child.wait_with_output()
-        })
-        .map_err(|e| format!("git check-ignore failed: {e}"))?;
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
     let mut patterns = std::collections::BTreeSet::new();
 
-    for line in stdout.lines() {
-        let Some((rule_part, _)) = line.split_once('\t') else {
-            continue;
-        };
-        let pattern = rule_part
-            .find(':')
-            .and_then(|i| rule_part[i + 1..].find(':').map(|j| &rule_part[i + 1 + j + 1..]))
-            .map(|p| p.trim())
-            .unwrap_or("");
-        if !pattern.is_empty() {
-            patterns.insert(pattern.to_string());
+    // Read root .gitignore directly (may be untracked)
+    let root_gitignore = source_dir.join(".gitignore");
+    if let Ok(content) = std::fs::read_to_string(&root_gitignore) {
+        collect_gitignore_patterns(&content, &mut patterns);
+    }
+
+    // Find nested .gitignore files from git index only (no filesystem walk)
+    let gitignore_files = run_git_output(
+        &source_dir,
+        &["ls-files", "--cached", "--", "*/.gitignore"],
+    )?;
+    for rel_path in gitignore_files.lines().map(|l| l.trim()).filter(|l| !l.is_empty()) {
+        let abs_path = source_dir.join(rel_path);
+        if let Ok(content) = std::fs::read_to_string(&abs_path) {
+            collect_gitignore_patterns(&content, &mut patterns);
         }
     }
 
+    // Also read .git/info/exclude
+    let git_dir = run_git_output(&source_dir, &["rev-parse", "--git-dir"])?;
+    let exclude_path = Path::new(git_dir.trim()).join("info/exclude");
+    let exclude_path = if exclude_path.is_absolute() {
+        exclude_path
+    } else {
+        source_dir.join(exclude_path)
+    };
+    if let Ok(content) = std::fs::read_to_string(&exclude_path) {
+        collect_gitignore_patterns(&content, &mut patterns);
+    }
+
     Ok(patterns.into_iter().collect())
+}
+
+fn collect_gitignore_patterns(content: &str, patterns: &mut std::collections::BTreeSet<String>) {
+    for line in content.lines() {
+        let line = line.trim();
+        if !line.is_empty()
+            && !line.starts_with('#')
+            && !line.starts_with('!')
+            && is_env_relevant_pattern(line)
+        {
+            patterns.insert(line.to_string());
+        }
+    }
+}
+
+/// Filter out build artifacts, dependencies, and OS junk that nobody
+/// would ever want to sync into a worktree.
+fn is_env_relevant_pattern(pattern: &str) -> bool {
+    let p = pattern.trim_end_matches('/');
+    // Filter directories that either (a) fetch packages dynamically or
+    // (b) generate 100+ files that don't belong in git.
+    const SKIP_DIRS: &[&str] = &[
+        // Package managers (fetched dependencies)
+        "node_modules", "Pods", "vendor", ".gradle", "venv", ".venv",
+        // Build output (100+ generated files)
+        "target", "build", ".build", "DerivedData",
+        ".next", ".nuxt", "__pycache__",
+    ];
+    if SKIP_DIRS.iter().any(|s| p.eq_ignore_ascii_case(s)) {
+        return false;
+    }
+    const SKIP_EXACT: &[&str] = &[];
+    if SKIP_EXACT.contains(&pattern) {
+        return false;
+    }
+    true
 }
 
 pub(crate) fn sync_env_files(
