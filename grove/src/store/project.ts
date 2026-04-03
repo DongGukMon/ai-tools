@@ -119,7 +119,6 @@ type ProjectStateSetter = (
     | ProjectState
     | Partial<ProjectState>
     | ((state: ProjectState) => ProjectState | Partial<ProjectState>),
-  replace?: boolean,
 ) => void;
 
 function beginProjectsSnapshotRequest(
