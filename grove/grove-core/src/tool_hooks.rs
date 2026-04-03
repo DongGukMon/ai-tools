@@ -14,11 +14,7 @@ pub fn is_hookless_tool(tool: &str) -> bool {
 
 /// Returns true if the given AI status belongs to a tool without hooks.
 pub fn needs_idle_detection(ai_status: Option<&str>) -> bool {
-    ai_status.is_some_and(|s| {
-        s.split(':')
-            .next()
-            .is_some_and(is_hookless_tool)
-    })
+    ai_status.is_some_and(|s| s.split(':').next().is_some_and(is_hookless_tool))
 }
 
 /// Returns true if the status suffix is `:running`.

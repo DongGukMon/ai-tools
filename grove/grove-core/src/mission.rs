@@ -262,7 +262,9 @@ pub fn add_project_to_mission(
     if let Some(ref env_sync) = entry.env_sync {
         let source = Path::new(&entry.source_path);
         let worktree = Path::new(&project.path);
-        if let Err(e) = crate::git_project::sync_env_files(source, worktree, &env_sync.include_patterns) {
+        if let Err(e) =
+            crate::git_project::sync_env_files(source, worktree, &env_sync.include_patterns)
+        {
             eprintln!("[grove] env sync warning (mission): {e}");
         }
     }

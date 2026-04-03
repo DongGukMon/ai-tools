@@ -1,6 +1,9 @@
 use crate::config::{self, ProjectEntry};
 use crate::process_env::{interactive_shell_output, preferred_env_var, subprocess_env_pairs};
-use crate::{CloningProject, Project, StartCloneOutcome, Worktree, WorktreePullRequest, WorktreePullRequestStatus};
+use crate::{
+    CloningProject, Project, StartCloneOutcome, Worktree, WorktreePullRequest,
+    WorktreePullRequestStatus,
+};
 use git2::{Oid, Repository};
 use serde::Deserialize;
 use std::collections::HashSet;
@@ -948,13 +951,17 @@ pub fn start_clone_impl(url: &str) -> Result<StartCloneOutcome, String> {
 
     let config = load_reconciled_config()?;
     if let Some(existing) = find_matching_project(&config.projects, &source_path, Some(url)) {
-        return Ok(StartCloneOutcome::AlreadyExists(project_from_entry(existing)));
+        return Ok(StartCloneOutcome::AlreadyExists(project_from_entry(
+            existing,
+        )));
     }
 
     if source_dir.is_dir() {
-        return Ok(StartCloneOutcome::AlreadyExists(
-            recover_existing_project(&source_dir, url, None)?,
-        ));
+        return Ok(StartCloneOutcome::AlreadyExists(recover_existing_project(
+            &source_dir,
+            url,
+            None,
+        )?));
     }
 
     std::fs::create_dir_all(&proj_dir)
@@ -1096,11 +1103,13 @@ pub fn list_gitignore_patterns_impl(project_id: &str) -> Result<Vec<String>, Str
     }
 
     // Find nested .gitignore files from git index only (no filesystem walk)
-    let gitignore_files = run_git_output(
-        &source_dir,
-        &["ls-files", "--cached", "--", "*/.gitignore"],
-    )?;
-    for rel_path in gitignore_files.lines().map(|l| l.trim()).filter(|l| !l.is_empty()) {
+    let gitignore_files =
+        run_git_output(&source_dir, &["ls-files", "--cached", "--", "*/.gitignore"])?;
+    for rel_path in gitignore_files
+        .lines()
+        .map(|l| l.trim())
+        .filter(|l| !l.is_empty())
+    {
         let abs_path = source_dir.join(rel_path);
         if let Ok(content) = std::fs::read_to_string(&abs_path) {
             collect_gitignore_patterns(&content, &mut patterns);
@@ -1143,10 +1152,20 @@ fn is_env_relevant_pattern(pattern: &str) -> bool {
     // (b) generate 100+ files that don't belong in git.
     const SKIP_DIRS: &[&str] = &[
         // Package managers (fetched dependencies)
-        "node_modules", "Pods", "vendor", ".gradle", "venv", ".venv",
+        "node_modules",
+        "Pods",
+        "vendor",
+        ".gradle",
+        "venv",
+        ".venv",
         // Build output (100+ generated files)
-        "target", "build", ".build", "DerivedData",
-        ".next", ".nuxt", "__pycache__",
+        "target",
+        "build",
+        ".build",
+        "DerivedData",
+        ".next",
+        ".nuxt",
+        "__pycache__",
     ];
     if SKIP_DIRS.iter().any(|s| p.eq_ignore_ascii_case(s)) {
         return false;
@@ -1167,8 +1186,7 @@ pub(crate) fn sync_env_files(
         return Ok(());
     }
 
-    let include_set: std::collections::HashSet<&str> =
-        include.iter().map(String::as_str).collect();
+    let include_set: std::collections::HashSet<&str> = include.iter().map(String::as_str).collect();
 
     let files_output = run_git_output(
         source_dir,
@@ -1219,7 +1237,11 @@ pub(crate) fn sync_env_files(
         // Extract pattern: skip source path and line number
         let pattern = rule_part
             .find(':')
-            .and_then(|i| rule_part[i + 1..].find(':').map(|j| &rule_part[i + 1 + j + 1..]))
+            .and_then(|i| {
+                rule_part[i + 1..]
+                    .find(':')
+                    .map(|j| &rule_part[i + 1 + j + 1..])
+            })
             .map(|p| p.trim())
             .unwrap_or("");
 
@@ -1607,9 +1629,7 @@ pub fn set_env_sync_impl(
     config::save_config(&grove_config)
 }
 
-pub fn get_env_sync_impl(
-    project_id: &str,
-) -> Result<Option<config::ProjectEnvSyncConfig>, String> {
+pub fn get_env_sync_impl(project_id: &str) -> Result<Option<config::ProjectEnvSyncConfig>, String> {
     let entry = find_project_entry(project_id)?;
     Ok(entry.env_sync)
 }
@@ -3026,8 +3046,7 @@ mod tests {
             .join("grove")
             .join("source");
         let remotes_dir = home.root.join("remotes");
-        let (remote_dir, seed_dir) =
-            create_bare_remote(&remotes_dir, "grove-base-branch", "trunk");
+        let (remote_dir, seed_dir) = create_bare_remote(&remotes_dir, "grove-base-branch", "trunk");
 
         commit_and_push(
             &seed_dir,
@@ -3613,5 +3632,4 @@ exec /bin/sh -c "$remote_cmd"
         assert_eq!(loaded2.projects[0].base_branch, Some("develop".to_string()));
         assert_eq!(loaded2.projects[1].base_branch, None);
     }
-
 }

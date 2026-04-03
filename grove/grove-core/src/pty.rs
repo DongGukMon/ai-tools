@@ -580,8 +580,7 @@ fn recover_missing_hookless_ai_status(
         .unwrap_or((None, None));
 
     let tool = detect_live_hookless_tool_in_session(session_name)?;
-    let recovered =
-        recover_hookless_ai_status(tool, last_ai_status.as_deref(), last_output_at);
+    let recovered = recover_hookless_ai_status(tool, last_ai_status.as_deref(), last_output_at);
 
     let _ = tmux_set_option(session_name, TMUX_GROVE_AI_STATUS_OPTION, &recovered);
     Some(recovered)
@@ -629,7 +628,9 @@ fn list_process_snapshots() -> Result<Vec<ProcessSnapshot>, String> {
         ));
     }
 
-    Ok(parse_process_snapshots(&String::from_utf8_lossy(&output.stdout)))
+    Ok(parse_process_snapshots(&String::from_utf8_lossy(
+        &output.stdout,
+    )))
 }
 
 fn parse_process_snapshots(output: &str) -> Vec<ProcessSnapshot> {
@@ -662,8 +663,10 @@ fn detect_hookless_tool_from_process_tree(
     pane_pid: u32,
     processes: &[ProcessSnapshot],
 ) -> Option<&'static str> {
-    let parent_by_pid: HashMap<u32, u32> =
-        processes.iter().map(|process| (process.pid, process.ppid)).collect();
+    let parent_by_pid: HashMap<u32, u32> = processes
+        .iter()
+        .map(|process| (process.pid, process.ppid))
+        .collect();
 
     for process in processes {
         let Some(tool) = ["codex"]
@@ -1919,8 +1922,8 @@ mod tests {
             ProcessSnapshot {
                 pid: 120,
                 ppid: 110,
-                command_line:
-                    "node /Users/airenkang/.nvm/versions/node/v23.7.0/bin/codex --yolo".into(),
+                command_line: "node /Users/airenkang/.nvm/versions/node/v23.7.0/bin/codex --yolo"
+                    .into(),
             },
             ProcessSnapshot {
                 pid: 130,
