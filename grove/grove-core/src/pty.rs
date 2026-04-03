@@ -119,6 +119,13 @@ struct PtyRuntimeSnapshot {
     scrollback_truncated: bool,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct ProcessSnapshot {
+    pid: u32,
+    ppid: u32,
+    command_line: String,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum TmuxCaptureScope {
     History,
@@ -562,6 +569,134 @@ fn collect_restorable_tmux_sessions(
     }
 }
 
+fn recover_missing_hookless_ai_status(
+    session_name: &str,
+    tracked: &Arc<Mutex<PtyRuntimeState>>,
+) -> Option<String> {
+    let (last_ai_status, last_output_at) = tracked
+        .lock()
+        .ok()
+        .map(|state| (state.last_ai_status.clone(), state.last_output_at))
+        .unwrap_or((None, None));
+
+    let tool = detect_live_hookless_tool_in_session(session_name)?;
+    let recovered =
+        recover_hookless_ai_status(tool, last_ai_status.as_deref(), last_output_at);
+
+    let _ = tmux_set_option(session_name, TMUX_GROVE_AI_STATUS_OPTION, &recovered);
+    Some(recovered)
+}
+
+fn recover_hookless_ai_status(
+    tool: &str,
+    last_ai_status: Option<&str>,
+    last_output_at: Option<Instant>,
+) -> String {
+    if let Some(previous) = last_ai_status {
+        let previous_tool = previous.split(':').next().unwrap_or_default();
+        if previous_tool == tool && !previous.ends_with(":attention") {
+            return previous.to_string();
+        }
+    }
+
+    if last_output_at.is_some_and(|t| t.elapsed() < CODEX_OUTPUT_IDLE_TIMEOUT) {
+        format!("{tool}:running")
+    } else {
+        format!("{tool}:idle")
+    }
+}
+
+fn detect_live_hookless_tool_in_session(session_name: &str) -> Option<&'static str> {
+    let pane_pid = tmux_pane_pid(session_name).ok().flatten()?;
+    let processes = list_process_snapshots().ok()?;
+    detect_hookless_tool_from_process_tree(pane_pid, &processes)
+}
+
+fn tmux_pane_pid(session_name: &str) -> Result<Option<u32>, String> {
+    Ok(tmux_display_message_value(session_name, "#{pane_pid}")?
+        .and_then(|value| value.parse::<u32>().ok()))
+}
+
+fn list_process_snapshots() -> Result<Vec<ProcessSnapshot>, String> {
+    let output = Command::new("ps")
+        .args(["-Ao", "pid=,ppid=,command="])
+        .output()
+        .map_err(|error| format!("failed to list processes: {error}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "failed to list processes: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+
+    Ok(parse_process_snapshots(&String::from_utf8_lossy(&output.stdout)))
+}
+
+fn parse_process_snapshots(output: &str) -> Vec<ProcessSnapshot> {
+    output
+        .lines()
+        .filter_map(|line| {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                return None;
+            }
+
+            let mut parts = trimmed.split_whitespace();
+            let pid = parts.next()?.parse::<u32>().ok()?;
+            let ppid = parts.next()?.parse::<u32>().ok()?;
+            let command_line = parts.collect::<Vec<_>>().join(" ");
+            if command_line.is_empty() {
+                return None;
+            }
+
+            Some(ProcessSnapshot {
+                pid,
+                ppid,
+                command_line,
+            })
+        })
+        .collect()
+}
+
+fn detect_hookless_tool_from_process_tree(
+    pane_pid: u32,
+    processes: &[ProcessSnapshot],
+) -> Option<&'static str> {
+    let parent_by_pid: HashMap<u32, u32> =
+        processes.iter().map(|process| (process.pid, process.ppid)).collect();
+
+    for process in processes {
+        let Some(tool) = ["codex"]
+            .into_iter()
+            .find(|tool| process_line_mentions_tool(&process.command_line, tool))
+            .filter(|tool| tool_hooks::is_hookless_tool(tool))
+        else {
+            continue;
+        };
+
+        let mut current = Some(process.pid);
+        while let Some(pid) = current {
+            if pid == pane_pid {
+                return Some(tool);
+            }
+            current = parent_by_pid
+                .get(&pid)
+                .copied()
+                .filter(|parent| *parent > 1 && *parent != pid);
+        }
+    }
+
+    None
+}
+
+fn process_line_mentions_tool(command_line: &str, tool: &str) -> bool {
+    command_line.split_whitespace().any(|token| {
+        let token = token.trim_matches(|ch| matches!(ch, '"' | '\'' | '`'));
+        let basename = token.rsplit('/').next().unwrap_or(token);
+        basename == tool
+    })
+}
+
 pub fn poll_bell_events() -> Result<Vec<PtyBellEvent>, String> {
     let tracked_sessions = {
         let reg = registry().lock().map_err(|e| e.to_string())?;
@@ -593,6 +728,8 @@ pub fn poll_bell_events() -> Result<Vec<PtyBellEvent>, String> {
             Ok(value) => value,
             Err(_) => None,
         };
+        let ai_status =
+            ai_status.or_else(|| recover_missing_hookless_ai_status(&session_name, &tracked));
 
         // Hookless tool idle/attention state machine:
         // running → [output idle > 3s] → idle → [30s elapsed] → attention
@@ -1764,6 +1901,64 @@ mod tests {
         assert!(is_usable_locale("en_US.UTF-8"));
         assert!(is_usable_locale("ko_KR.UTF-8"));
         assert!(is_usable_locale("C.UTF-8"));
+    }
+
+    #[test]
+    fn detect_hookless_tool_from_process_tree_matches_wrapper_descendants() {
+        let processes = vec![
+            ProcessSnapshot {
+                pid: 100,
+                ppid: 1,
+                command_line: "-zsh".into(),
+            },
+            ProcessSnapshot {
+                pid: 110,
+                ppid: 100,
+                command_line: "bash /Users/airenkang/.grove/bin/codex --yolo".into(),
+            },
+            ProcessSnapshot {
+                pid: 120,
+                ppid: 110,
+                command_line:
+                    "node /Users/airenkang/.nvm/versions/node/v23.7.0/bin/codex --yolo".into(),
+            },
+            ProcessSnapshot {
+                pid: 130,
+                ppid: 120,
+                command_line:
+                    "/Users/airenkang/.nvm/.../vendor/aarch64-apple-darwin/codex/codex --yolo"
+                        .into(),
+            },
+        ];
+
+        assert_eq!(
+            detect_hookless_tool_from_process_tree(100, &processes),
+            Some("codex")
+        );
+    }
+
+    #[test]
+    fn recover_hookless_ai_status_uses_recent_output_when_previous_status_is_missing() {
+        assert_eq!(
+            recover_hookless_ai_status("codex", None, Some(Instant::now())),
+            "codex:running"
+        );
+        assert_eq!(
+            recover_hookless_ai_status("codex", None, None),
+            "codex:idle"
+        );
+    }
+
+    #[test]
+    fn recover_hookless_ai_status_drops_stale_attention_to_idle() {
+        assert_eq!(
+            recover_hookless_ai_status("codex", Some("codex:attention"), None),
+            "codex:idle"
+        );
+        assert_eq!(
+            recover_hookless_ai_status("codex", Some("codex:idle"), None),
+            "codex:idle"
+        );
     }
 
     #[test]

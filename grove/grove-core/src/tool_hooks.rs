@@ -7,9 +7,18 @@ pub const TMUX_GROVE_AI_STATUS_OPTION: &str = "@grove_ai_status";
 /// Tools with hooks (e.g. Claude Code via `--settings`) report status directly.
 const HOOKLESS_TOOLS: &[&str] = &["codex"];
 
+/// Returns true if the tool name belongs to a hookless tool.
+pub fn is_hookless_tool(tool: &str) -> bool {
+    HOOKLESS_TOOLS.contains(&tool)
+}
+
 /// Returns true if the given AI status belongs to a tool without hooks.
 pub fn needs_idle_detection(ai_status: Option<&str>) -> bool {
-    ai_status.is_some_and(|s| HOOKLESS_TOOLS.iter().any(|t| s.starts_with(t)))
+    ai_status.is_some_and(|s| {
+        s.split(':')
+            .next()
+            .is_some_and(is_hookless_tool)
+    })
 }
 
 /// Returns true if the status suffix is `:running`.
