@@ -42,6 +42,15 @@ pub struct Project {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct CloningProject {
+    pub id: String,
+    pub url: String,
+    pub org: String,
+    pub repo: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Worktree {
     pub name: String,
     pub path: String,
