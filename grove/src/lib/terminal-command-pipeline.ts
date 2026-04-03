@@ -1,5 +1,4 @@
 export type TerminalCommandIcon =
-  | "settings"
   | "mirror"
   | "split-horizontal"
   | "split-vertical"
@@ -12,7 +11,6 @@ export type TerminalCommandAvailability =
   | "focused-pty-multiple";
 
 export type TerminalCommandStep =
-  | { type: "ui"; action: "open-theme-settings" }
   | {
       type: "session";
       action: "split";
@@ -40,7 +38,6 @@ export interface TerminalCommandContext {
   activeWorktree: string | null;
   focusedPtyId: string | null;
   terminalCount: number;
-  openThemeSettings: () => void;
   splitTerminal: (
     direction: "horizontal" | "vertical",
   ) => Promise<void> | void;
@@ -76,11 +73,6 @@ export async function executeTerminalCommand(
 
   for (const step of command.steps) {
     switch (step.type) {
-      case "ui":
-        if (step.action === "open-theme-settings") {
-          context.openThemeSettings();
-        }
-        break;
       case "session":
         if (step.action === "split") {
           await context.splitTerminal(step.direction);

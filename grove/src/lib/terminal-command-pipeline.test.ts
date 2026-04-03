@@ -13,7 +13,6 @@ function makeContext(
     activeWorktree: "/tmp/worktree",
     focusedPtyId: "pty-1",
     terminalCount: 2,
-    openThemeSettings: vi.fn(),
     splitTerminal: vi.fn(),
     closeTerminal: vi.fn(),
     mirrorTerminal: vi.fn(),
@@ -67,21 +66,6 @@ describe("terminal command pipeline", () => {
       addNewline: true,
     });
     expect(context.splitTerminal).toHaveBeenCalledWith("vertical");
-  });
-
-  it("opens theme settings through a ui step", async () => {
-    const context = makeContext();
-    const command: TerminalCommandDefinition = {
-      id: "terminal-settings",
-      label: "Theme settings",
-      title: "Terminal Theme Settings",
-      icon: "settings",
-      steps: [{ type: "ui", action: "open-theme-settings" }],
-    };
-
-    await executeTerminalCommand(command, context);
-
-    expect(context.openThemeSettings).toHaveBeenCalledTimes(1);
   });
 
   it("routes mirror session steps through mirrorTerminal", async () => {

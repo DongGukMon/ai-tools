@@ -16,11 +16,7 @@ import { TERMINAL_TOOLBAR_COMMANDS } from "../lib/terminal-command-registry";
 import { useTerminal } from "./useTerminal";
 import { countLeaves } from "../lib/split-tree";
 
-interface Options {
-  openThemeSettings: () => void;
-}
-
-export function useTerminalCommandPipeline({ openThemeSettings }: Options) {
+export function useTerminalCommandPipeline() {
   const activeWorktree = useTerminalStore((s) => s.activeWorktree);
   const focusedPtyId = useTerminalStore((s) => s.focusedPtyId);
   const activeSession = useTerminalStore((s) =>
@@ -86,7 +82,6 @@ export function useTerminalCommandPipeline({ openThemeSettings }: Options) {
       activeWorktree,
       focusedPtyId,
       terminalCount,
-      openThemeSettings,
       splitTerminal: splitCurrent,
       closeTerminal: closeCurrent,
       mirrorTerminal,
@@ -98,7 +93,6 @@ export function useTerminalCommandPipeline({ openThemeSettings }: Options) {
       focusedPtyId,
       mirrorTerminal,
       terminalCount,
-      openThemeSettings,
       sendText,
       splitCurrent,
     ],

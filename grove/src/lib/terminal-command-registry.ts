@@ -6,13 +6,6 @@ import type {
 
 export const TERMINAL_TOOLBAR_COMMANDS = [
   {
-    id: "terminal-settings",
-    label: "Theme settings",
-    title: "Terminal Theme Settings",
-    icon: "settings",
-    steps: [{ type: "ui", action: "open-theme-settings" }],
-  },
-  {
     id: "terminal-mirror",
     label: "Mirror to Global Terminal",
     title: "Mirror to Global Terminal",
