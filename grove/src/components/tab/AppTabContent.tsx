@@ -229,7 +229,6 @@ function AppTabContent() {
     activeTabId: globalActiveTabId,
     addTab: addGlobalTab,
     removeTab: removeGlobalTab,
-    refreshTab: refreshGlobalTab,
     selectTab: selectGlobalTab,
     getTabPtyId: getGlobalTabPtyId,
     isTabReady: isGlobalTabReady,
@@ -270,7 +269,6 @@ function AppTabContent() {
       isTabReady={isGlobalTabReady}
       onAdd={addGlobalTab}
       onRemove={removeGlobalTab}
-      onRefresh={refreshGlobalTab}
       onSelect={selectGlobalTab}
     />
   ) : null;

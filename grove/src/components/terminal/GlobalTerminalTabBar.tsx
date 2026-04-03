@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { Plus, RotateCw, X } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { cn } from "../../lib/cn";
 import { IconButton } from "../ui/button";
 import type { GlobalTerminalTab } from "../../store/panel-layout";
@@ -30,7 +30,6 @@ interface Props {
   onSelect: (tabId: string) => void;
   onAdd: () => void;
   onClose: (tabId: string) => void;
-  onRefresh: (tabId: string) => void;
 }
 
 function GlobalTerminalTabBar({
@@ -39,7 +38,6 @@ function GlobalTerminalTabBar({
   onSelect,
   onAdd,
   onClose,
-  onRefresh,
 }: Props) {
   return (
     <div className={cn("flex items-center gap-1.5 min-w-0 overflow-x-auto")}>
@@ -72,24 +70,22 @@ function GlobalTerminalTabBar({
             {isMirror && (
               <span className={cn("text-[10px] whitespace-nowrap")}>{tab.title}</span>
             )}
-            <span
-              role="button"
-              tabIndex={-1}
-              onClick={(e) => {
-                e.stopPropagation();
-                (tabs.length > 1 ? onClose : onRefresh)(tab.id);
-              }}
-              className={cn(
-                "shrink-0 rounded-sm p-0.5 opacity-0 group-hover:opacity-100 hover:bg-muted",
-                { "opacity-100": isActive },
-              )}
-            >
-              {tabs.length > 1 ? (
+            {tabs.length > 1 && (
+              <span
+                role="button"
+                tabIndex={-1}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClose(tab.id);
+                }}
+                className={cn(
+                  "shrink-0 rounded-sm p-0.5 opacity-0 group-hover:opacity-100 hover:bg-muted",
+                  { "opacity-100": isActive },
+                )}
+              >
                 <X className={cn("size-2.5")} />
-              ) : (
-                <RotateCw className={cn("size-2.5")} />
-              )}
-            </span>
+              </span>
+            )}
           </button>
         );
       })}

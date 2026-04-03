@@ -100,7 +100,6 @@ interface Props {
   isTabReady: (tabId: string) => boolean;
   onAdd: () => void;
   onRemove: (tabId: string) => void;
-  onRefresh: (tabId: string) => void;
   onSelect: (tabId: string) => void;
 }
 
@@ -111,7 +110,6 @@ function GlobalTerminalPanel({
   isTabReady,
   onAdd,
   onRemove,
-  onRefresh,
   onSelect,
 }: Props) {
   const theme = useTerminalStore((s) => s.theme);
@@ -143,7 +141,6 @@ function GlobalTerminalPanel({
             }}
             onAdd={onAdd}
             onClose={onRemove}
-            onRefresh={onRefresh}
           />
         </div>
         <IconButton onClick={toggle} title={collapsed ? "Expand" : "Collapse"}>
