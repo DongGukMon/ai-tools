@@ -29,3 +29,14 @@ export interface WorktreePullRequest {
 export interface ProjectEnvSyncConfig {
   include_patterns: string[];
 }
+
+export interface CloningProject {
+  id: string;
+  url: string;
+  org: string;
+  repo: string;
+}
+
+export type StartCloneResult =
+  | ({ type: "cloning" } & CloningProject)
+  | ({ type: "alreadyExists" } & Project);

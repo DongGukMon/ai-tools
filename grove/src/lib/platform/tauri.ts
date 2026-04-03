@@ -16,6 +16,7 @@ import type {
   Mission,
   MissionProject,
   ProjectEnvSyncConfig,
+  StartCloneResult,
 } from "../../types";
 import type { Platform } from "./types";
 
@@ -184,8 +185,20 @@ export async function listProjects(): Promise<Project[]> {
   return platform.invoke<Project[]>("list_projects");
 }
 
-export async function addProject(url: string): Promise<Project> {
-  return platform.invoke<Project>("add_project", { url });
+export async function startClone(url: string): Promise<StartCloneResult> {
+  return platform.invoke<StartCloneResult>("start_clone", { url });
+}
+
+export function onCloneCompleted(
+  handler: (payload: { id: string; project: Project }) => void,
+): Promise<import("./types").UnlistenFn> {
+  return platform.listen<{ id: string; project: Project }>("grove:clone-completed", handler);
+}
+
+export function onCloneFailed(
+  handler: (payload: { id: string; error: string }) => void,
+): Promise<import("./types").UnlistenFn> {
+  return platform.listen<{ id: string; error: string }>("grove:clone-failed", handler);
 }
 
 export async function createProject(

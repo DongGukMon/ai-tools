@@ -4,6 +4,8 @@ export type {
   WorktreePullRequest,
   WorktreePullRequestStatus,
   ProjectEnvSyncConfig,
+  CloningProject,
+  StartCloneResult,
 } from "./project";
 export type { Mission, MissionProject } from "./mission";
 export type {
