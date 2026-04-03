@@ -57,3 +57,17 @@ pub fn init(app: &AppHandle) {
 pub fn pty_sink(app: AppHandle) -> Arc<dyn grove_core::PtyEventSink> {
     Arc::new(TauriEventSink(app))
 }
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct CloneCompletedPayload {
+    pub id: String,
+    pub project: grove_core::Project,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct CloneFailedPayload {
+    pub id: String,
+    pub error: String,
+}

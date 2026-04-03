@@ -1,9 +1,12 @@
 mod eventbus;
 use grove_core::{
-    AppConfig, BehindInfo, CommitInfo, CreatePtyRequest, CreatePtyRestore, CreatePtyResult,
-    DetectedThemeResult, FileDiff, FileStatus, GrovePreferences, Project, PtyBellEvent,
-    SaveTerminalSessionSnapshotRequest, TerminalSessionSnapshot, Worktree, WorktreePullRequest,
+    AppConfig, BehindInfo, CloningProject, CommitInfo, CreatePtyRequest, CreatePtyRestore,
+    CreatePtyResult, DetectedThemeResult, FileDiff, FileStatus, GrovePreferences, Project,
+    PtyBellEvent, SaveTerminalSessionSnapshotRequest, TerminalSessionSnapshot, Worktree,
+    WorktreePullRequest,
 };
+use serde::{Deserialize, Serialize};
+use tauri::Emitter;
 
 // === Async helper ===
 
@@ -77,9 +80,49 @@ async fn list_projects() -> Result<Vec<Project>, String> {
     blocking(grove_core::git_project::list_projects_impl).await
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "type")]
+enum StartCloneResult {
+    Cloning(CloningProject),
+    AlreadyExists(grove_core::Project),
+}
+
 #[tauri::command]
-async fn add_project(url: String) -> Result<Project, String> {
-    blocking(move || grove_core::git_project::add_project_impl(&url)).await
+async fn start_clone(app_handle: tauri::AppHandle, url: String) -> Result<StartCloneResult, String> {
+    let clone_url = url.clone();
+    match blocking(move || grove_core::git_project::start_clone_impl(&clone_url)).await {
+        Ok(cloning) => {
+            let id = cloning.id.clone();
+            let bg_url = url.clone();
+            let handle = app_handle.clone();
+
+            // Fire-and-forget background clone
+            tokio::task::spawn_blocking(move || {
+                match grove_core::git_project::run_clone_impl(&bg_url) {
+                    Ok(project) => {
+                        let payload = eventbus::CloneCompletedPayload {
+                            id,
+                            project,
+                        };
+                        let _ = handle.emit("grove:clone-completed", payload);
+                    }
+                    Err(error) => {
+                        let payload = eventbus::CloneFailedPayload { id, error };
+                        let _ = handle.emit("grove:clone-failed", payload);
+                    }
+                }
+            });
+
+            Ok(StartCloneResult::Cloning(cloning))
+        }
+        Err(e) if e.starts_with("__existing__:") => {
+            let json = e.trim_start_matches("__existing__:");
+            let project: grove_core::Project =
+                serde_json::from_str(json).map_err(|e| e.to_string())?;
+            Ok(StartCloneResult::AlreadyExists(project))
+        }
+        Err(e) => Err(e),
+    }
 }
 
 #[tauri::command]
@@ -430,7 +473,7 @@ pub fn run() {
             load_panel_layouts,
             // Git Project (W2)
             list_projects,
-            add_project,
+            start_clone,
             create_project,
             remove_project,
             reorder_projects,
