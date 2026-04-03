@@ -148,6 +148,11 @@ export function useGlobalTerminal() {
     usePanelLayoutStore.getState().removeGlobalTerminalTab(tabId);
   }, []);
 
+  const refreshTab = useCallback((tabId: string) => {
+    addTab();
+    removeTab(tabId);
+  }, [addTab, removeTab]);
+
   const selectTab = useCallback((tabId: string) => {
     usePanelLayoutStore.getState().setActiveGlobalTerminalTab(tabId);
   }, []);
@@ -169,6 +174,7 @@ export function useGlobalTerminal() {
     addMirrorTab,
     removeMirrorTabs,
     removeTab,
+    refreshTab,
     selectTab,
     getTabPtyId,
     isTabReady,
