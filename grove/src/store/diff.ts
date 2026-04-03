@@ -32,7 +32,9 @@ interface DiffState {
   clearSelection: () => void;
 
   stageFile: (path: string) => Promise<void>;
+  stageFiles: (paths: string[]) => Promise<void>;
   unstageFile: (path: string) => Promise<void>;
+  unstageFiles: (paths: string[]) => Promise<void>;
   discardFile: (path: string) => Promise<void>;
   stageHunk: (path: string, hunkIndex: number) => Promise<void>;
   unstageHunk: (path: string, hunkIndex: number) => Promise<void>;
@@ -267,6 +269,14 @@ function createMutationActions() {
         await refresh();
       }, "Failed to stage file");
     },
+    stageFiles: async (paths: string[]) => {
+      const wp = useDiffStore.getState().worktreePath;
+      if (!wp || paths.length === 0) return;
+      await runMutation(async () => {
+        await tauri.stageFiles(wp, paths);
+        await refresh();
+      }, "Failed to stage files");
+    },
     unstageFile: async (path: string) => {
       const wp = useDiffStore.getState().worktreePath;
       if (!wp) return;
@@ -274,6 +284,14 @@ function createMutationActions() {
         await tauri.unstageFile(wp, path);
         await refresh();
       }, "Failed to unstage file");
+    },
+    unstageFiles: async (paths: string[]) => {
+      const wp = useDiffStore.getState().worktreePath;
+      if (!wp || paths.length === 0) return;
+      await runMutation(async () => {
+        await tauri.unstageFiles(wp, paths);
+        await refresh();
+      }, "Failed to unstage files");
     },
     discardFile: async (path: string) => {
       const wp = useDiffStore.getState().worktreePath;

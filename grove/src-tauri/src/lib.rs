@@ -88,7 +88,10 @@ enum StartCloneResult {
 }
 
 #[tauri::command]
-async fn start_clone(app_handle: tauri::AppHandle, url: String) -> Result<StartCloneResult, String> {
+async fn start_clone(
+    app_handle: tauri::AppHandle,
+    url: String,
+) -> Result<StartCloneResult, String> {
     let clone_url = url.clone();
     let outcome = blocking(move || grove_core::git_project::start_clone_impl(&clone_url)).await?;
 
@@ -371,8 +374,18 @@ async fn stage_file(worktree_path: String, path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+async fn stage_files(worktree_path: String, paths: Vec<String>) -> Result<(), String> {
+    blocking(move || grove_core::git_diff::stage_files_impl(&worktree_path, &paths)).await
+}
+
+#[tauri::command]
 async fn unstage_file(worktree_path: String, path: String) -> Result<(), String> {
     blocking(move || grove_core::git_diff::unstage_file_impl(&worktree_path, &path)).await
+}
+
+#[tauri::command]
+async fn unstage_files(worktree_path: String, paths: Vec<String>) -> Result<(), String> {
+    blocking(move || grove_core::git_diff::unstage_files_impl(&worktree_path, &paths)).await
 }
 
 #[tauri::command]
@@ -510,7 +523,9 @@ pub fn run() {
             get_working_diff,
             get_commit_diff,
             stage_file,
+            stage_files,
             unstage_file,
+            unstage_files,
             discard_file,
             stage_hunk,
             unstage_hunk,

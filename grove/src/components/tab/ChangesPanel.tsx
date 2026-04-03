@@ -10,7 +10,7 @@ import { overlay } from "../../lib/overlay";
 import ResizablePanelGroup from "../ui/resizable-panel-group";
 import DiffViewer from "../diff/DiffViewer";
 import type { FileStatus, FileDiff } from "../../types";
-import { FileText, Plus, Minus, Undo2 } from "lucide-react";
+import { FileText, Plus, Minus, Trash2, Undo2 } from "lucide-react";
 import { useMarqueeSelection } from "../../hooks/useMarqueeSelection";
 
 // ── FileItem ──
@@ -289,13 +289,14 @@ function WorkingChangesView({
     (e: React.KeyboardEvent) => {
       if (e.key === " " && selectedPaths.size > 0) {
         e.preventDefault();
-        const action = isStaged ? store.unstageFile : store.stageFile;
         const paths = [...selectedPaths];
         setSelectedPaths(new Set());
-        (async () => {
-          for (const path of paths) {
-            await action(path);
+        void (async () => {
+          if (isStaged) {
+            await store.unstageFiles(paths);
+            return;
           }
+          await store.stageFiles(paths);
         })();
       }
       if (e.key === "Escape") {
@@ -342,12 +343,32 @@ function WorkingChangesView({
               selectedPaths={selectedSection === "unstaged" ? selectedPaths : new Set()}
               onSelectFile={(path, shiftKey) => handleSelectFile("unstaged", unstaged, path, shiftKey)}
               onMarqueeSelect={(ids) => handleMarqueeSelect("unstaged", ids)}
-              renderActions={(file) => (
-                <>
-                  <ActionButton icon={Plus} title="Stage" onClick={() => store.stageFile(file.path)} />
-                  <ActionButton icon={Undo2} title="Discard" onClick={() => store.discardFile(file.path)} confirm="Discard all changes to this file?" />
-                </>
-              )}
+              renderActions={(file) => {
+                const isUntracked = file.status === "untracked";
+                const discardConfirm = isUntracked
+                  ? "Remove this untracked file from the worktree?"
+                  : "Discard all changes to this file?";
+
+                return (
+                  <>
+                    <ActionButton icon={Plus} title="Stage" onClick={() => store.stageFile(file.path)} />
+                    <ActionButton
+                      icon={Undo2}
+                      title="Discard"
+                      onClick={() => store.discardFile(file.path)}
+                      confirm={discardConfirm}
+                    />
+                    {isUntracked && (
+                      <ActionButton
+                        icon={Trash2}
+                        title="Remove"
+                        onClick={() => store.discardFile(file.path)}
+                        confirm="Remove this untracked file from the worktree?"
+                      />
+                    )}
+                  </>
+                );
+              }}
             />
           </div>
         </div>

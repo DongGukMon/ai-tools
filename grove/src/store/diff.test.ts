@@ -8,7 +8,9 @@ vi.mock("../lib/platform", () => ({
   getWorkingDiff: vi.fn(),
   getCommitDiff: vi.fn(),
   stageFile: vi.fn(),
+  stageFiles: vi.fn(),
   unstageFile: vi.fn(),
+  unstageFiles: vi.fn(),
   discardFile: vi.fn(),
   stageHunk: vi.fn(),
   unstageHunk: vi.fn(),
@@ -29,10 +31,13 @@ vi.mock("../store/toast", () => ({
   },
 }));
 
+import * as tauri from "../lib/platform";
+import { runCommandSafely } from "../lib/command";
 import { useDiffStore } from "./diff";
 
 describe("line selection (per-file scoped)", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     useDiffStore.setState({ selectedLines: new Map() });
   });
 
@@ -70,5 +75,38 @@ describe("line selection (per-file scoped)", () => {
     useDiffStore.getState().selectLine("file-b", 2);
     useDiffStore.getState().clearSelection();
     expect(useDiffStore.getState().selectedLines.size).toBe(0);
+  });
+});
+
+describe("batch file mutations", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useDiffStore.setState({
+      worktreePath: "/tmp/repo",
+      selectedView: "changes",
+      selectedFile: null,
+      isViewingStaged: false,
+      selectedLines: new Map(),
+    });
+    vi.mocked(runCommandSafely).mockImplementation(
+      async (action: () => Promise<unknown>) => action() as Promise<null>,
+    );
+    vi.mocked(tauri.getStatus).mockResolvedValue([]);
+    vi.mocked(tauri.stageFiles).mockResolvedValue();
+    vi.mocked(tauri.unstageFiles).mockResolvedValue();
+  });
+
+  it("stageFiles uses one backend batch call and one refresh", async () => {
+    await useDiffStore.getState().stageFiles(["a.ts", "b.ts"]);
+
+    expect(tauri.stageFiles).toHaveBeenCalledWith("/tmp/repo", ["a.ts", "b.ts"]);
+    expect(tauri.getStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it("unstageFiles uses one backend batch call and one refresh", async () => {
+    await useDiffStore.getState().unstageFiles(["a.ts", "b.ts"]);
+
+    expect(tauri.unstageFiles).toHaveBeenCalledWith("/tmp/repo", ["a.ts", "b.ts"]);
+    expect(tauri.getStatus).toHaveBeenCalledTimes(1);
   });
 });

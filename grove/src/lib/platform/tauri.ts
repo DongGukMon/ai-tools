@@ -374,11 +374,25 @@ export async function stageFile(
   return platform.invoke("stage_file", { worktreePath, path });
 }
 
+export async function stageFiles(
+  worktreePath: string,
+  paths: string[],
+): Promise<void> {
+  return platform.invoke("stage_files", { worktreePath, paths });
+}
+
 export async function unstageFile(
   worktreePath: string,
   path: string,
 ): Promise<void> {
   return platform.invoke("unstage_file", { worktreePath, path });
+}
+
+export async function unstageFiles(
+  worktreePath: string,
+  paths: string[],
+): Promise<void> {
+  return platform.invoke("unstage_files", { worktreePath, paths });
 }
 
 export async function discardFile(

@@ -190,16 +190,11 @@ pub fn get_commit_diff_impl(
 // === FILE-LEVEL OPERATIONS ===
 
 pub fn stage_file_impl(worktree_path: &str, file_path: &str) -> Result<(), String> {
-    run_git(worktree_path, &["add", "--", file_path])
+    stage_files_impl(worktree_path, &[file_path.to_string()])
 }
 
 pub fn unstage_file_impl(worktree_path: &str, file_path: &str) -> Result<(), String> {
-    let result = run_git(worktree_path, &["reset", "HEAD", "--", file_path]);
-    if result.is_err() {
-        // No HEAD (initial commit) — remove from index
-        return run_git(worktree_path, &["rm", "--cached", "--", file_path]);
-    }
-    result
+    unstage_files_impl(worktree_path, &[file_path.to_string()])
 }
 
 pub fn discard_file_impl(worktree_path: &str, file_path: &str) -> Result<(), String> {
@@ -208,9 +203,22 @@ pub fn discard_file_impl(worktree_path: &str, file_path: &str) -> Result<(), Str
         // Might be untracked — delete file
         let full_path = Path::new(worktree_path).join(file_path);
         if full_path.exists() {
-            std::fs::remove_file(&full_path).map_err(|e| e.to_string())?;
+            remove_path(&full_path)?;
             return Ok(());
         }
+    }
+    result
+}
+
+pub fn stage_files_impl(worktree_path: &str, file_paths: &[String]) -> Result<(), String> {
+    run_git_with_paths(worktree_path, &["add"], file_paths)
+}
+
+pub fn unstage_files_impl(worktree_path: &str, file_paths: &[String]) -> Result<(), String> {
+    let result = run_git_with_paths(worktree_path, &["reset", "HEAD"], file_paths);
+    if result.is_err() {
+        // No HEAD (initial commit) — remove from index
+        return run_git_with_paths(worktree_path, &["rm", "--cached"], file_paths);
     }
     result
 }
@@ -564,6 +572,32 @@ fn run_git(worktree_path: &str, args: &[&str]) -> Result<(), String> {
     Ok(())
 }
 
+fn run_git_with_paths(
+    worktree_path: &str,
+    prefix_args: &[&str],
+    file_paths: &[String],
+) -> Result<(), String> {
+    if file_paths.is_empty() {
+        return Ok(());
+    }
+
+    let mut args = Vec::with_capacity(prefix_args.len() + file_paths.len() + 1);
+    args.extend_from_slice(prefix_args);
+    args.push("--");
+    args.extend(file_paths.iter().map(String::as_str));
+
+    run_git(worktree_path, &args)
+}
+
+fn remove_path(path: &Path) -> Result<(), String> {
+    let metadata = std::fs::symlink_metadata(path).map_err(|e| e.to_string())?;
+    if metadata.file_type().is_dir() {
+        std::fs::remove_dir_all(path).map_err(|e| e.to_string())
+    } else {
+        std::fs::remove_file(path).map_err(|e| e.to_string())
+    }
+}
+
 fn apply_patch(worktree_path: &str, patch: &str, extra_args: &[&str]) -> Result<(), String> {
     let mut cmd = Command::new("git");
     cmd.arg("apply");
@@ -656,4 +690,117 @@ pub fn merge_default_branch_impl(worktree_path: &str) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::env_lock;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+    use std::process::Command;
+    use uuid::Uuid;
+
+    fn temp_repo(prefix: &str) -> PathBuf {
+        let root = std::env::temp_dir().join(format!("grove-git-diff-{prefix}-{}", Uuid::new_v4()));
+        fs::create_dir_all(&root).unwrap();
+        root
+    }
+
+    fn git(repo: &Path, args: &[&str]) {
+        let output = Command::new("git")
+            .args(args)
+            .current_dir(repo)
+            .env("PATH", enriched_path())
+            .output()
+            .unwrap();
+
+        assert!(
+            output.status.success(),
+            "git {} failed: {}",
+            args.join(" "),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    #[test]
+    fn stage_files_batches_multiple_paths() {
+        let _lock = env_lock();
+        let repo = temp_repo("stage-files");
+
+        git(&repo, &["init"]);
+        fs::write(repo.join("a.txt"), "a\n").unwrap();
+        fs::write(repo.join("b.txt"), "b\n").unwrap();
+
+        stage_files_impl(
+            repo.to_str().unwrap(),
+            &["a.txt".to_string(), "b.txt".to_string()],
+        )
+        .unwrap();
+
+        let mut staged = get_status_impl(repo.to_str().unwrap())
+            .unwrap()
+            .into_iter()
+            .filter(|status| status.staged)
+            .collect::<Vec<_>>();
+        staged.sort_by(|left, right| left.path.cmp(&right.path));
+
+        assert_eq!(staged.len(), 2);
+        assert_eq!(staged[0].path, "a.txt");
+        assert_eq!(staged[0].status, "added");
+        assert_eq!(staged[1].path, "b.txt");
+        assert_eq!(staged[1].status, "added");
+
+        let _ = fs::remove_dir_all(repo);
+    }
+
+    #[test]
+    fn unstage_files_falls_back_to_rm_cached_without_head() {
+        let _lock = env_lock();
+        let repo = temp_repo("unstage-files");
+
+        git(&repo, &["init"]);
+        fs::write(repo.join("a.txt"), "a\n").unwrap();
+        fs::write(repo.join("b.txt"), "b\n").unwrap();
+
+        stage_files_impl(
+            repo.to_str().unwrap(),
+            &["a.txt".to_string(), "b.txt".to_string()],
+        )
+        .unwrap();
+        unstage_files_impl(
+            repo.to_str().unwrap(),
+            &["a.txt".to_string(), "b.txt".to_string()],
+        )
+        .unwrap();
+
+        let mut unstaged = get_status_impl(repo.to_str().unwrap()).unwrap();
+        unstaged.sort_by(|left, right| left.path.cmp(&right.path));
+
+        assert_eq!(unstaged.len(), 2);
+        assert_eq!(unstaged[0].path, "a.txt");
+        assert_eq!(unstaged[0].status, "untracked");
+        assert!(!unstaged[0].staged);
+        assert_eq!(unstaged[1].path, "b.txt");
+        assert_eq!(unstaged[1].status, "untracked");
+        assert!(!unstaged[1].staged);
+
+        let _ = fs::remove_dir_all(repo);
+    }
+
+    #[test]
+    fn discard_file_removes_untracked_directories() {
+        let _lock = env_lock();
+        let repo = temp_repo("discard-dir");
+
+        git(&repo, &["init"]);
+        fs::create_dir_all(repo.join("scratch")).unwrap();
+        fs::write(repo.join("scratch/note.txt"), "temp\n").unwrap();
+
+        discard_file_impl(repo.to_str().unwrap(), "scratch").unwrap();
+
+        assert!(!repo.join("scratch").exists());
+
+        let _ = fs::remove_dir_all(repo);
+    }
 }

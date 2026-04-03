@@ -347,8 +347,18 @@ pub async fn stage_file(worktree_path: String, path: String) -> Result<()> {
 }
 
 #[napi]
+pub async fn stage_files(worktree_path: String, paths: Vec<String>) -> Result<()> {
+    blocking_core(move || grove_core::git_diff::stage_files_impl(&worktree_path, &paths)).await
+}
+
+#[napi]
 pub async fn unstage_file(worktree_path: String, path: String) -> Result<()> {
     blocking_core(move || grove_core::git_diff::unstage_file_impl(&worktree_path, &path)).await
+}
+
+#[napi]
+pub async fn unstage_files(worktree_path: String, paths: Vec<String>) -> Result<()> {
+    blocking_core(move || grove_core::git_diff::unstage_files_impl(&worktree_path, &paths)).await
 }
 
 #[napi]
