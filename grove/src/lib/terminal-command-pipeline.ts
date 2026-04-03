@@ -3,11 +3,13 @@ export type TerminalCommandIcon =
   | "split-horizontal"
   | "split-vertical"
   | "close"
+  | "refresh"
   | "play";
 
 export type TerminalCommandAvailability =
   | "always"
   | "focused-pty"
+  | "focused-pty-single"
   | "focused-pty-multiple";
 
 export type TerminalCommandStep =
@@ -17,6 +19,7 @@ export type TerminalCommandStep =
       direction: "horizontal" | "vertical";
     }
   | { type: "session"; action: "close" }
+  | { type: "session"; action: "refresh" }
   | { type: "session"; action: "mirror" }
   | {
       type: "pty";
@@ -31,6 +34,7 @@ export interface TerminalCommandDefinition {
   title: string;
   icon: TerminalCommandIcon;
   when?: TerminalCommandAvailability;
+  disableWhileExecuting?: boolean;
   steps: TerminalCommandStep[];
 }
 
@@ -42,6 +46,7 @@ export interface TerminalCommandContext {
     direction: "horizontal" | "vertical",
   ) => Promise<void> | void;
   closeTerminal: () => Promise<void> | void;
+  refreshTerminal: () => Promise<void> | void;
   mirrorTerminal: () => void;
   sendText: (
     text: string,
@@ -56,6 +61,8 @@ export function isTerminalCommandEnabled(
   switch (command.when ?? "always") {
     case "focused-pty":
       return Boolean(context.focusedPtyId);
+    case "focused-pty-single":
+      return Boolean(context.focusedPtyId) && context.terminalCount === 1;
     case "focused-pty-multiple":
       return Boolean(context.focusedPtyId) && context.terminalCount > 1;
     case "always":
@@ -78,7 +85,9 @@ export async function executeTerminalCommand(
           await context.splitTerminal(step.direction);
         } else if (step.action === "mirror") {
           context.mirrorTerminal();
-        } else {
+        } else if (step.action === "refresh") {
+          await context.refreshTerminal();
+        } else if (step.action === "close") {
           await context.closeTerminal();
         }
         break;

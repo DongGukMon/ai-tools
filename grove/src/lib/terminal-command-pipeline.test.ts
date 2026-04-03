@@ -15,6 +15,7 @@ function makeContext(
     terminalCount: 2,
     splitTerminal: vi.fn(),
     closeTerminal: vi.fn(),
+    refreshTerminal: vi.fn(),
     mirrorTerminal: vi.fn(),
     sendText: vi.fn(),
     ...overrides,

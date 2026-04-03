@@ -73,6 +73,7 @@ function AppTabContent() {
 
   const [pipDismissedByWorktree, setPipDismissedByWorktree] = useState<Record<string, boolean>>({});
   const prevIsTerminalRef = useRef(isTerminal);
+  const prevWorktreePathRef = useRef(worktreePath);
   const pipContainerRef = useRef<HTMLDivElement>(null);
   const pipRuntimeMapRef = useRef(
     new Map<
@@ -94,7 +95,9 @@ function AppTabContent() {
   // PiP broadcast policy
   useEffect(() => {
     const wasTerminal = prevIsTerminalRef.current;
+    const worktreeChanged = prevWorktreePathRef.current !== worktreePath;
     prevIsTerminalRef.current = isTerminal;
+    prevWorktreePathRef.current = worktreePath;
 
     if (isTerminal) {
       // Returning to Terminal tab — stop PiP broadcast if active
@@ -103,6 +106,7 @@ function AppTabContent() {
         restoreBroadcastSessionSize(ended);
       }
     } else if (
+      !worktreeChanged &&
       worktreePath &&
       shouldStartPipBroadcast({
         isTerminal,

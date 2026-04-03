@@ -42,6 +42,15 @@ export const TERMINAL_TOOLBAR_COMMANDS = [
     ],
   },
   {
+    id: "terminal-refresh",
+    label: "Refresh terminal",
+    title: "Refresh Terminal",
+    icon: "refresh",
+    when: "focused-pty-single",
+    disableWhileExecuting: true,
+    steps: [{ type: "session", action: "refresh" }],
+  },
+  {
     id: "terminal-close",
     label: "Close terminal",
     title: "Close Terminal",

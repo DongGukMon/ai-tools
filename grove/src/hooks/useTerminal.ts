@@ -130,9 +130,20 @@ export function useTerminal() {
     });
   }, [closeTerminalStore]);
 
+  const refreshCurrent = useCallback(async () => {
+    const { activeWorktree, focusedPtyId } = useTerminalStore.getState();
+    if (!activeWorktree || !focusedPtyId) return;
+    await splitCurrent("horizontal");
+    closeTerminalStore(activeWorktree, focusedPtyId);
+    await runCommandSafely(() => ipcClosePty(focusedPtyId), {
+      errorToast: false,
+    });
+  }, [splitCurrent, closeTerminalStore]);
+
   return {
     createTerminal,
     splitCurrent,
     closeCurrent,
+    refreshCurrent,
   };
 }

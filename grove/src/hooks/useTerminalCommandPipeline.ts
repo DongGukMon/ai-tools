@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { writePty } from "../lib/platform";
 import { runCommandSafely } from "../lib/command";
 import {
@@ -22,7 +22,7 @@ export function useTerminalCommandPipeline() {
   const activeSession = useTerminalStore((s) =>
     s.activeWorktree ? (s.sessions[s.activeWorktree] ?? null) : null,
   );
-  const { splitCurrent, closeCurrent } = useTerminal();
+  const { splitCurrent, closeCurrent, refreshCurrent } = useTerminal();
 
   const terminalCount = useMemo(() => {
     return activeSession ? countLeaves(activeSession) : 0;
@@ -84,6 +84,7 @@ export function useTerminalCommandPipeline() {
       terminalCount,
       splitTerminal: splitCurrent,
       closeTerminal: closeCurrent,
+      refreshTerminal: refreshCurrent,
       mirrorTerminal,
       sendText,
     }),
@@ -92,23 +93,49 @@ export function useTerminalCommandPipeline() {
       closeCurrent,
       focusedPtyId,
       mirrorTerminal,
+      refreshCurrent,
       terminalCount,
       sendText,
       splitCurrent,
     ],
   );
 
+  const [executingIds, setExecutingIds] = useState<ReadonlySet<string>>(() => new Set());
+
   const executeCommand = useCallback(
     async (command: TerminalCommandDefinition) => {
+      if (command.disableWhileExecuting) {
+        let alreadyExecuting = false;
+        setExecutingIds((prev) => {
+          if (prev.has(command.id)) {
+            alreadyExecuting = true;
+            return prev;
+          }
+          return new Set(prev).add(command.id);
+        });
+        if (alreadyExecuting) return;
+        try {
+          await executeTerminalCommand(command, context);
+        } finally {
+          setExecutingIds((prev) => {
+            const next = new Set(prev);
+            next.delete(command.id);
+            return next;
+          });
+        }
+        return;
+      }
       await executeTerminalCommand(command, context);
     },
     [context],
   );
 
   const isCommandEnabled = useCallback(
-    (command: TerminalCommandDefinition) =>
-      isTerminalCommandEnabled(command, context),
-    [context],
+    (command: TerminalCommandDefinition) => {
+      if (executingIds.has(command.id)) return false;
+      return isTerminalCommandEnabled(command, context);
+    },
+    [context, executingIds],
   );
 
   return {
