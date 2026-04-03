@@ -161,6 +161,7 @@ const ProjectItem = memo(function ProjectItem({ project }: Props) {
                 if (e.key === "Escape") setRenaming(false);
               }}
               onClick={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
             />
           </form>
         ) : (
