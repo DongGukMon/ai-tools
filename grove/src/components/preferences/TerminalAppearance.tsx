@@ -98,16 +98,16 @@ export default function TerminalAppearance() {
 
   return (
     <div>
-      <h4 className={cn("text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-4")}>
+      <h4 className={cn("text-[12px] font-medium text-foreground mb-4")}>
         Appearance
       </h4>
 
       <div className={cn("flex flex-col gap-5")}>
         {/* Preset Themes */}
         <section>
-          <h3 className={cn("text-[11px] font-medium text-[var(--color-text-tertiary)] uppercase tracking-wider mb-2")}>
+          <h5 className={cn("text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2")}>
             Presets
-          </h3>
+          </h5>
           <div className={cn("grid grid-cols-3 gap-1.5")}>
             {[
               ...(detectedTheme ? [["system", "System"] as const] : []),
@@ -152,12 +152,12 @@ export default function TerminalAppearance() {
 
         {/* Font Settings */}
         <section>
-          <h3 className={cn("text-[11px] font-medium text-[var(--color-text-tertiary)] uppercase tracking-wider mb-2")}>
+          <h5 className={cn("text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2")}>
             Font
-          </h3>
+          </h5>
           <div className={cn("flex flex-col gap-2.5")}>
             <div>
-              <label className={cn("block text-[11px] text-[var(--color-text-secondary)] mb-1")}>
+              <label className={cn("block text-[11px] text-muted-foreground mb-1")}>
                 Font Family
               </label>
               <input
@@ -169,7 +169,7 @@ export default function TerminalAppearance() {
             </div>
             <div>
               <div className={cn("flex items-center justify-between mb-1 max-w-[280px]")}>
-                <label className={cn("text-[11px] text-[var(--color-text-secondary)]")}>
+                <label className={cn("text-[11px] text-muted-foreground")}>
                   Font Size
                 </label>
                 <span className={cn("text-[11px] text-[var(--color-text-tertiary)] tabular-nums")}>
@@ -193,9 +193,9 @@ export default function TerminalAppearance() {
 
         {/* Core Colors */}
         <section>
-          <h3 className={cn("text-[11px] font-medium text-[var(--color-text-tertiary)] uppercase tracking-wider mb-2")}>
+          <h5 className={cn("text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2")}>
             Colors
-          </h3>
+          </h5>
           <div className={cn("flex flex-col gap-2")}>
             <ColorRow label="Background" value={draft.background} onChange={(v) => updateDraft("background", v)} />
             <ColorRow label="Foreground" value={draft.foreground} onChange={(v) => updateDraft("foreground", v)} />
@@ -208,7 +208,7 @@ export default function TerminalAppearance() {
           <button
             type="button"
             onClick={() => setColorsOpen((v) => !v)}
-            className={cn("flex items-center gap-1 text-[11px] font-medium text-[var(--color-text-tertiary)] uppercase tracking-wider hover:text-[var(--color-text-secondary)] transition-colors mb-2")}
+            className={cn("flex items-center gap-1 text-[11px] font-medium text-muted-foreground uppercase tracking-wider hover:text-[var(--color-text-secondary)] transition-colors mb-2")}
           >
             {colorsOpen ? (
               <ChevronDown size={12} strokeWidth={2} />
@@ -233,9 +233,9 @@ export default function TerminalAppearance() {
 
         {/* Preview */}
         <section>
-          <h3 className={cn("text-[11px] font-medium text-[var(--color-text-tertiary)] uppercase tracking-wider mb-2")}>
+          <h5 className={cn("text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-2")}>
             Preview
-          </h3>
+          </h5>
           <div
             className={cn("rounded-[var(--radius-md)] border border-[var(--color-border)] p-3 text-[12px] leading-[1.6] overflow-hidden")}
             style={{
@@ -291,7 +291,7 @@ function ColorRow({
 }) {
   return (
     <div className={cn("flex items-center justify-between gap-2 max-w-[280px]")}>
-      <span className={cn("text-[11px] text-[var(--color-text-secondary)]")}>
+      <span className={cn("text-[11px] text-muted-foreground")}>
         {label}
       </span>
       <div className={cn("flex items-center gap-1.5")}>

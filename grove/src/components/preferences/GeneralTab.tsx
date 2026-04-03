@@ -36,11 +36,11 @@ export default function GeneralTab() {
       <h3 className={cn("text-sm font-semibold text-foreground mb-6")}>General</h3>
 
       <div>
-        <label className={cn("block text-[12px] text-muted-foreground mb-1.5")}>
+        <h4 className={cn("text-[12px] font-medium text-foreground mb-1.5")}>
           Preferred IDE
-        </label>
+        </h4>
         <p className={cn("text-[11px] text-muted-foreground/70 mb-2")}>
-          프로젝트를 열 때 사용할 IDE
+          IDE to open projects with
         </p>
         <select
           value={preferredIde?.id ?? ""}

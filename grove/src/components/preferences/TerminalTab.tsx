@@ -11,17 +11,17 @@ const LINK_OPEN_OPTIONS: {
   {
     value: "external",
     label: "External Browser",
-    description: "모든 링크를 외부 브라우저에서 열기",
+    description: "Open all links in an external browser",
   },
   {
     value: "internal",
     label: "Grove Browser",
-    description: "모든 링크를 Grove 내장 브라우저에서 열기",
+    description: "Open all links in Grove's built-in browser",
   },
   {
     value: "external-with-localhost-internal",
     label: "Localhost in Grove, others External",
-    description: "localhost 링크만 내장 브라우저, 나머지는 외부 브라우저",
+    description: "Open localhost links in Grove, everything else externally",
   },
 ];
 
@@ -39,11 +39,11 @@ export default function TerminalTab() {
 
       {/* Link Open Mode */}
       <div className={cn("mb-6")}>
-        <label className={cn("block text-[12px] text-muted-foreground mb-1.5")}>
+        <h4 className={cn("text-[12px] font-medium text-foreground mb-1.5")}>
           Link Open Mode
-        </label>
+        </h4>
         <p className={cn("text-[11px] text-muted-foreground/70 mb-2")}>
-          터미널에서 링크를 클릭할 때 열리는 위치
+          Where links open when clicked in the terminal
         </p>
         <select
           value={terminalLinkOpenMode}

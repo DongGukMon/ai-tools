@@ -9,6 +9,7 @@ Tauri v2 macOS app — Git project manager + split terminal + diff viewer.
 - [Grove Hooks Runtime Design](docs/grove-hooks-runtime-design.md) — Claude/Codex hook parity, CODEX_HOME overlay delivery, status tracking architecture
 - [Context Menu](docs/context-menu.md) — Sidebar right-click menu, SidebarContextMenu wrapper, extending with extraItems
 - [Terminal Link Open](docs/open-link.md) — URL interception via open wrapper, Unix socket routing, preference-based link handling
+- [Preferences UI](docs/preferences-ui.md) — Modal structure, heading hierarchy rules, file layout, data flow
 
 ## Stack
 

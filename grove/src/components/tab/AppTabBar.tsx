@@ -130,8 +130,7 @@ function SelectedWorktreePrAction({ worktreePath }: { worktreePath: string | nul
   };
 
   return (
-    <div className={cn("ml-auto flex min-w-0 items-center gap-2 pl-2")}>
-      <div className={cn("hidden h-4 w-px bg-border/70 md:block")} />
+    <div className={cn("flex min-w-0 items-center gap-2")}>
       <button
         type="button"
         onClick={handleClick}
@@ -258,15 +257,23 @@ function AppTabBar() {
           )}
         </div>
 
-        <IconButton
-          onClick={() => setPreferencesOpen(true)}
-          title="Preferences"
-          aria-label="Preferences"
-        >
-          <Settings className={cn("size-3")} />
-        </IconButton>
+        {/* Workspace actions */}
+        <div className={cn("ml-auto flex items-center gap-1.5 pl-2")}>
+          <SelectedWorktreePrAction worktreePath={worktreePath} />
+        </div>
 
-        <SelectedWorktreePrAction worktreePath={worktreePath} />
+        <div className={cn("hidden h-4 w-px bg-border/70 md:block")} />
+
+        {/* Global actions */}
+        <div className={cn("flex items-center gap-1.5")}>
+          <IconButton
+            onClick={() => setPreferencesOpen(true)}
+            title="Preferences"
+            aria-label="Preferences"
+          >
+            <Settings className={cn("size-3")} />
+          </IconButton>
+        </div>
       </div>
       <PreferencesModal
         open={preferencesOpen}

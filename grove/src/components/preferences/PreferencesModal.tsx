@@ -28,7 +28,7 @@ export default function PreferencesModal({ open, onClose }: Props) {
     <Dialog open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
       <DialogContent
         className={cn(
-          "gap-0 p-0 sm:max-w-2xl overflow-hidden",
+          "gap-0 p-0 sm:max-w-4xl overflow-hidden",
         )}
         showCloseButton
       >
@@ -36,7 +36,7 @@ export default function PreferencesModal({ open, onClose }: Props) {
         <DialogDescription className={cn("sr-only")}>
           Application preferences
         </DialogDescription>
-        <div className={cn("flex h-[480px]")}>
+        <div className={cn("flex h-[720px]")}>
           {/* Left: Tab Navigation */}
           <nav className={cn("flex w-[160px] shrink-0 flex-col gap-0.5 border-r border-border bg-secondary/30 p-2 pt-3")}>
             {TABS.map((tab) => (
