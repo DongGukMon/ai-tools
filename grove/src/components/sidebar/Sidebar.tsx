@@ -6,13 +6,14 @@ import { usePanelLayoutStore } from "../../store/panel-layout";
 import { PanelModeSwitch } from "./PanelModeSwitch";
 import ProjectTree from "./ProjectTree";
 import AddProjectDialog from "./AddProjectDialog";
+import CloningProjectItem from "./CloningProjectItem";
 import CreateMissionDialog from "./CreateMissionDialog";
 import MissionPanel from "./MissionPanel";
 import { IconButton } from "../ui/button";
 import { cn } from "../../lib/cn";
 
 function Sidebar() {
-  const { projects, loading } = useProject();
+  const { projects, cloningProjects, loading } = useProject();
   const { loading: missionsLoading } = useMission();
   const sidebarMode = usePanelLayoutStore((s) => s.sidebarMode);
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -54,7 +55,7 @@ function Sidebar() {
           ))}
         </div>
       );
-    } else if (projects.length === 0) {
+    } else if (projects.length === 0 && cloningProjects.length === 0) {
       content = (
         <div className={cn("flex flex-col items-center justify-center gap-2 px-3 py-10")}>
           <span className={cn("text-xs text-muted-foreground")}>No projects yet</span>
@@ -67,7 +68,14 @@ function Sidebar() {
         </div>
       );
     } else {
-      content = <ProjectTree projects={projects} />;
+      content = (
+        <>
+          {cloningProjects.map((cp) => (
+            <CloningProjectItem key={cp.id} project={cp} />
+          ))}
+          <ProjectTree projects={projects} />
+        </>
+      );
     }
   } else if (missionsLoading) {
     content = (
