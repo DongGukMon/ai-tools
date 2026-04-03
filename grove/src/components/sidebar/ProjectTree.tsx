@@ -15,16 +15,18 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 import { restrictToVerticalAxis, restrictToParentElement } from "@dnd-kit/modifiers";
-import type { Project } from "../../types";
+import type { Project, CloningProject } from "../../types";
 import { useProjectStore } from "../../store/project";
 import { cn } from "../../lib/cn";
 import ProjectItem from "./ProjectItem";
+import CloningProjectItem from "./CloningProjectItem";
 
 interface Props {
   projects: Project[];
+  cloningProjects: CloningProject[];
 }
 
-function ProjectTree({ projects }: Props) {
+function ProjectTree({ projects, cloningProjects }: Props) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const reorderProjects = useProjectStore((s) => s.reorderProjects);
 
@@ -78,6 +80,9 @@ function ProjectTree({ projects }: Props) {
         <div className={cn("space-y-1 py-0.5")}>
           {projects.map((project) => (
             <ProjectItem key={project.id} project={project} />
+          ))}
+          {cloningProjects.map((cp) => (
+            <CloningProjectItem key={cp.id} project={cp} />
           ))}
         </div>
       </SortableContext>

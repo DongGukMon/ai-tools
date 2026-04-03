@@ -21,9 +21,6 @@ const CloningProjectItem = memo(function CloningProjectItem({ project }: Props) 
         <span className={cn("truncate font-medium")} title={displayName}>
           {displayName}
         </span>
-        <span className={cn("ml-auto shrink-0 text-[11px] text-muted-foreground animate-pulse")}>
-          Cloning...
-        </span>
       </div>
     </div>
   );

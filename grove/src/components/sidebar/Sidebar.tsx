@@ -6,7 +6,6 @@ import { usePanelLayoutStore } from "../../store/panel-layout";
 import { PanelModeSwitch } from "./PanelModeSwitch";
 import ProjectTree from "./ProjectTree";
 import AddProjectDialog from "./AddProjectDialog";
-import CloningProjectItem from "./CloningProjectItem";
 import CreateMissionDialog from "./CreateMissionDialog";
 import MissionPanel from "./MissionPanel";
 import { IconButton } from "../ui/button";
@@ -68,14 +67,7 @@ function Sidebar() {
         </div>
       );
     } else {
-      content = (
-        <>
-          {cloningProjects.map((cp) => (
-            <CloningProjectItem key={cp.id} project={cp} />
-          ))}
-          <ProjectTree projects={projects} />
-        </>
-      );
+      content = <ProjectTree projects={projects} cloningProjects={cloningProjects} />;
     }
   } else if (missionsLoading) {
     content = (

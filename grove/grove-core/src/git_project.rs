@@ -1,6 +1,6 @@
 use crate::config::{self, ProjectEntry};
 use crate::process_env::{interactive_shell_output, preferred_env_var, subprocess_env_pairs};
-use crate::{CloningProject, Project, Worktree, WorktreePullRequest, WorktreePullRequestStatus};
+use crate::{CloningProject, Project, StartCloneOutcome, Worktree, WorktreePullRequest, WorktreePullRequestStatus};
 use git2::{Oid, Repository};
 use serde::Deserialize;
 use std::collections::HashSet;
@@ -939,9 +939,8 @@ pub fn add_project_impl(url: &str) -> Result<Project, String> {
 }
 
 /// Validates URL, checks for duplicates, creates directories.
-/// Returns CloningProject on success — caller is responsible for running the actual clone.
-/// Returns Err("__existing__:JSON") if the project already exists (caller should parse the JSON as Project).
-pub fn start_clone_impl(url: &str) -> Result<CloningProject, String> {
+/// Returns `Cloning` when a new clone should be started, or `AlreadyExists` if the project is already registered.
+pub fn start_clone_impl(url: &str) -> Result<StartCloneOutcome, String> {
     let (host, org, repo) = parse_git_url(url)?;
     let proj_dir = project_dir(&host, &org, &repo);
     let source_dir = proj_dir.join("source");
@@ -949,15 +948,13 @@ pub fn start_clone_impl(url: &str) -> Result<CloningProject, String> {
 
     let config = load_reconciled_config()?;
     if let Some(existing) = find_matching_project(&config.projects, &source_path, Some(url)) {
-        let project = project_from_entry(existing);
-        let json = serde_json::to_string(&project).map_err(|e| e.to_string())?;
-        return Err(format!("__existing__:{json}"));
+        return Ok(StartCloneOutcome::AlreadyExists(project_from_entry(existing)));
     }
 
     if source_dir.is_dir() {
-        let project = recover_existing_project(&source_dir, url, None)?;
-        let json = serde_json::to_string(&project).map_err(|e| e.to_string())?;
-        return Err(format!("__existing__:{json}"));
+        return Ok(StartCloneOutcome::AlreadyExists(
+            recover_existing_project(&source_dir, url, None)?,
+        ));
     }
 
     std::fs::create_dir_all(&proj_dir)
@@ -967,12 +964,12 @@ pub fn start_clone_impl(url: &str) -> Result<CloningProject, String> {
 
     let id = uuid::Uuid::new_v4().to_string();
 
-    Ok(CloningProject {
+    Ok(StartCloneOutcome::Cloning(CloningProject {
         id,
         url: url.to_string(),
         org,
         repo,
-    })
+    }))
 }
 
 /// Runs git clone and registers the project in config.

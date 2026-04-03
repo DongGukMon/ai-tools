@@ -90,20 +90,21 @@ enum StartCloneResult {
 #[tauri::command]
 async fn start_clone(app_handle: tauri::AppHandle, url: String) -> Result<StartCloneResult, String> {
     let clone_url = url.clone();
-    match blocking(move || grove_core::git_project::start_clone_impl(&clone_url)).await {
-        Ok(cloning) => {
+    let outcome = blocking(move || grove_core::git_project::start_clone_impl(&clone_url)).await?;
+
+    match outcome {
+        grove_core::StartCloneOutcome::AlreadyExists(project) => {
+            Ok(StartCloneResult::AlreadyExists(project))
+        }
+        grove_core::StartCloneOutcome::Cloning(cloning) => {
             let id = cloning.id.clone();
             let bg_url = url.clone();
             let handle = app_handle.clone();
 
-            // Fire-and-forget background clone
             tokio::task::spawn_blocking(move || {
                 match grove_core::git_project::run_clone_impl(&bg_url) {
                     Ok(project) => {
-                        let payload = eventbus::CloneCompletedPayload {
-                            id,
-                            project,
-                        };
+                        let payload = eventbus::CloneCompletedPayload { id, project };
                         let _ = handle.emit("grove:clone-completed", payload);
                     }
                     Err(error) => {
@@ -115,13 +116,6 @@ async fn start_clone(app_handle: tauri::AppHandle, url: String) -> Result<StartC
 
             Ok(StartCloneResult::Cloning(cloning))
         }
-        Err(e) if e.starts_with("__existing__:") => {
-            let json = e.trim_start_matches("__existing__:");
-            let project: grove_core::Project =
-                serde_json::from_str(json).map_err(|e| e.to_string())?;
-            Ok(StartCloneResult::AlreadyExists(project))
-        }
-        Err(e) => Err(e),
     }
 }
 

@@ -172,12 +172,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
       return;
     }
 
-    const cloning: CloningProject = {
-      id: result.id,
-      url: result.url,
-      org: result.org,
-      repo: result.repo,
-    };
+    const { type: __, ...cloning } = result;
     set((state) => ({
       cloningProjects: [...state.cloningProjects, cloning],
     }));

@@ -49,6 +49,11 @@ pub struct CloningProject {
     pub repo: String,
 }
 
+pub enum StartCloneOutcome {
+    Cloning(CloningProject),
+    AlreadyExists(Project),
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Worktree {
