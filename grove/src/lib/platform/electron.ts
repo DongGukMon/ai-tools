@@ -201,20 +201,24 @@ export async function listProjects(): Promise<Project[]> {
   return platform.invoke<Project[]>("list_projects");
 }
 
+// Electron still uses synchronous add_project — wrap as alreadyExists result
 export async function startClone(url: string): Promise<StartCloneResult> {
-  return platform.invoke<StartCloneResult>("start_clone", { url });
+  const project = await platform.invoke<Project>("add_project", { url });
+  return { type: "alreadyExists", ...project };
 }
 
 export function onCloneCompleted(
-  handler: (payload: { id: string; project: Project }) => void,
+  _handler: (payload: { id: string; project: Project }) => void,
 ): Promise<import("./types").UnlistenFn> {
-  return platform.listen<{ id: string; project: Project }>("grove:clone-completed", handler);
+  // No-op on Electron — startClone is synchronous, result is immediate
+  return Promise.resolve(() => {});
 }
 
 export function onCloneFailed(
-  handler: (payload: { id: string; error: string }) => void,
+  _handler: (payload: { id: string; error: string }) => void,
 ): Promise<import("./types").UnlistenFn> {
-  return platform.listen<{ id: string; error: string }>("grove:clone-failed", handler);
+  // No-op on Electron — startClone is synchronous, errors are thrown directly
+  return Promise.resolve(() => {});
 }
 
 export async function createProject(

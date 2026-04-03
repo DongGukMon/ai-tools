@@ -14,7 +14,7 @@ vi.mock("../lib/command", () => ({
 vi.mock("../lib/platform", () => ({
   listProjects: vi.fn(),
   refreshProject: vi.fn(),
-  addProject: vi.fn(),
+  startClone: vi.fn(),
   removeProject: vi.fn(),
   addWorktree: vi.fn(),
   removeWorktree: vi.fn(),
@@ -80,7 +80,7 @@ describe("useProjectStore", () => {
     runCommandSafelyMock.mockImplementation(
       async (action: () => Promise<unknown>) => action(),
     );
-    useProjectStore.setState({ projects: [], selectedWorktree: null, loading: false });
+    useProjectStore.setState({ projects: [], cloningProjects: [], selectedWorktree: null, loading: false });
     useTerminalStore.setState({
       sessions: {},
       activeWorktree: null,
@@ -136,7 +136,7 @@ describe("useProjectStore", () => {
     );
   });
 
-  it("upserts existing project entries when addProject returns an existing project", async () => {
+  it("upserts existing project when startClone returns alreadyExists", async () => {
     useProjectStore.setState({
       projects: [
         makeProjectWithId("project-1", {
@@ -145,6 +145,7 @@ describe("useProjectStore", () => {
           url: "https://github.com/bang9/grove.git",
         }),
       ],
+      cloningProjects: [],
       selectedWorktree: null,
       loading: false,
     });
@@ -154,11 +155,39 @@ describe("useProjectStore", () => {
       sourcePath: "/tmp/source",
       url: "git@github.com:bang9/grove.git",
     });
-    vi.mocked(tauri.addProject).mockResolvedValue(returnedProject);
+    vi.mocked(tauri.startClone).mockResolvedValue({
+      type: "alreadyExists",
+      ...returnedProject,
+    });
 
-    await useProjectStore.getState().addProject("git@github.com:bang9/grove.git");
+    await useProjectStore.getState().startClone("git@github.com:bang9/grove.git");
 
     expect(useProjectStore.getState().projects).toEqual([returnedProject]);
+    expect(useProjectStore.getState().cloningProjects).toEqual([]);
+  });
+
+  it("adds to cloningProjects when startClone returns cloning", async () => {
+    useProjectStore.setState({
+      projects: [],
+      cloningProjects: [],
+      selectedWorktree: null,
+      loading: false,
+    });
+
+    vi.mocked(tauri.startClone).mockResolvedValue({
+      type: "cloning",
+      id: "clone-1",
+      url: "git@github.com:bang9/grove.git",
+      org: "bang9",
+      repo: "grove",
+    });
+
+    await useProjectStore.getState().startClone("git@github.com:bang9/grove.git");
+
+    expect(useProjectStore.getState().cloningProjects).toEqual([
+      { id: "clone-1", url: "git@github.com:bang9/grove.git", org: "bang9", repo: "grove" },
+    ]);
+    expect(useProjectStore.getState().projects).toEqual([]);
   });
 
   it("selects source worktree after removing the selected worktree", async () => {

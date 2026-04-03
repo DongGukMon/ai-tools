@@ -167,7 +167,8 @@ export const useProjectStore = create<ProjectState>((set) => ({
     });
 
     if (result.type === "alreadyExists") {
-      set((state) => ({ projects: upsertProject(state.projects, result) }));
+      const { type: _, ...project } = result;
+      set((state) => ({ projects: upsertProject(state.projects, project) }));
       return;
     }
 
