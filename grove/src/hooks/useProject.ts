@@ -5,7 +5,10 @@ import { useToastStore } from "../store/toast";
 import * as tauri from "../lib/platform";
 
 export function useProject() {
-  const store = useProjectStore();
+  const projects = useProjectStore((state) => state.projects);
+  const cloningProjects = useProjectStore((state) => state.cloningProjects);
+  const loading = useProjectStore((state) => state.loading);
+  const loadProjects = useProjectStore((state) => state.loadProjects);
 
   useEffect(() => {
     registerSyncJob(
@@ -15,7 +18,7 @@ export function useProject() {
     );
 
     // Initial load (blocking for first render)
-    store.loadProjects().then(() => {
+    loadProjects().then(() => {
       startSyncManager({ runImmediately: false });
     });
 
@@ -31,13 +34,8 @@ export function useProject() {
 
     tauri.onCloneCompleted(({ id, project }) => {
       if (cancelled) return;
-      const { cloningProjects } = useProjectStore.getState();
-      if (!cloningProjects.some((c) => c.id === id)) return;
-
-      useProjectStore.setState((state) => ({
-        cloningProjects: state.cloningProjects.filter((c) => c.id !== id),
-        projects: [...state.projects, project],
-      }));
+      const completed = useProjectStore.getState().completeClone(id, project);
+      if (!completed) return;
       useToastStore.getState().addToast("success", "Project cloned successfully");
     }).then((fn) => {
       if (cancelled) fn();
@@ -64,5 +62,5 @@ export function useProject() {
     };
   }, []);
 
-  return store;
+  return { projects, cloningProjects, loading };
 }

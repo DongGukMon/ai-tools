@@ -14,11 +14,14 @@ interface ProjectState {
   cloningProjects: CloningProject[];
   selectedWorktree: Worktree | null;
   loading: boolean;
+  projectsSnapshotRequestId: number;
+  projectsMutationEpoch: number;
 
   loadProjects: () => Promise<void>;
   syncProjects: () => Promise<void>;
   refreshProject: (id: string) => Promise<Project>;
   startClone: (url: string) => Promise<void>;
+  completeClone: (id: string, project: Project) => boolean;
   reorderProjects: (projectIds: string[]) => Promise<void>;
   removeProject: (id: string) => Promise<void>;
   addWorktree: (projectId: string, name: string) => Promise<Worktree>;
@@ -106,20 +109,97 @@ function sourceWorktreeForProject(project: Project): Worktree {
   };
 }
 
+interface ProjectsSnapshotToken {
+  requestId: number;
+  mutationEpoch: number;
+}
+
+type ProjectStateSetter = (
+  partial:
+    | ProjectState
+    | Partial<ProjectState>
+    | ((state: ProjectState) => ProjectState | Partial<ProjectState>),
+  replace?: boolean,
+) => void;
+
+function beginProjectsSnapshotRequest(
+  get: () => ProjectState,
+  set: ProjectStateSetter,
+  options?: { loading?: boolean },
+): ProjectsSnapshotToken {
+  const requestId = get().projectsSnapshotRequestId + 1;
+  const mutationEpoch = get().projectsMutationEpoch;
+
+  set({
+    projectsSnapshotRequestId: requestId,
+    ...(options?.loading ? { loading: true } : {}),
+  });
+
+  return { requestId, mutationEpoch };
+}
+
+function canApplyProjectsSnapshot(
+  state: ProjectState,
+  token: ProjectsSnapshotToken,
+): boolean {
+  return (
+    state.projectsSnapshotRequestId === token.requestId &&
+    state.projectsMutationEpoch === token.mutationEpoch
+  );
+}
+
+function applyProjectsSnapshot(
+  set: ProjectStateSetter,
+  token: ProjectsSnapshotToken,
+  updater: (state: ProjectState) => Partial<ProjectState>,
+) {
+  set((state) => {
+    if (!canApplyProjectsSnapshot(state, token)) {
+      return {};
+    }
+    return updater(state);
+  });
+}
+
+function finishProjectsSnapshotLoad(
+  set: ProjectStateSetter,
+  token: ProjectsSnapshotToken,
+) {
+  set((state) =>
+    state.projectsSnapshotRequestId === token.requestId
+      ? { loading: false }
+      : {},
+  );
+}
+
+function commitProjectMutation(
+  set: ProjectStateSetter,
+  updater: (state: ProjectState) => Partial<ProjectState>,
+) {
+  set((state) => ({
+    ...updater(state),
+    projectsMutationEpoch: state.projectsMutationEpoch + 1,
+  }));
+}
+
 export const useProjectStore = create<ProjectState>((set) => ({
   projects: [],
   cloningProjects: [],
   selectedWorktree: null,
   loading: false,
+  projectsSnapshotRequestId: 0,
+  projectsMutationEpoch: 0,
 
   loadProjects: async () => {
-    set({ loading: true });
+    const token = beginProjectsSnapshotRequest(useProjectStore.getState, set, {
+      loading: true,
+    });
     try {
       const projects = await runCommandSafely(() => tauri.listProjects(), {
         errorToast: "Failed to load projects",
       });
       if (projects) {
-        set((state) => ({
+        applyProjectsSnapshot(set, token, (state) => ({
           projects,
           selectedWorktree: reconcileSelectedWorktree(
             projects,
@@ -128,16 +208,17 @@ export const useProjectStore = create<ProjectState>((set) => ({
         }));
       }
     } finally {
-      set({ loading: false });
+      finishProjectsSnapshotLoad(set, token);
     }
   },
 
   syncProjects: async () => {
+    const token = beginProjectsSnapshotRequest(useProjectStore.getState, set);
     const projects = await runCommandSafely(() => tauri.listProjects(), {
       errorToast: false,
     });
     if (projects) {
-      set((state) => ({
+      applyProjectsSnapshot(set, token, (state) => ({
         projects,
         selectedWorktree: reconcileSelectedWorktree(
           projects,
@@ -148,16 +229,20 @@ export const useProjectStore = create<ProjectState>((set) => ({
   },
 
   refreshProject: async (id: string) => {
+    const token = beginProjectsSnapshotRequest(useProjectStore.getState, set);
     const project = await runCommand(() => tauri.refreshProject(id), {
       errorToast: "Failed to refresh project",
     });
-    set((state) => ({
-      projects: upsertProject(state.projects, project),
-      selectedWorktree: reconcileSelectedWorktree(
-        upsertProject(state.projects, project),
-        state.selectedWorktree,
-      ),
-    }));
+    applyProjectsSnapshot(set, token, (state) => {
+      const projects = upsertProject(state.projects, project);
+      return {
+        projects,
+        selectedWorktree: reconcileSelectedWorktree(
+          projects,
+          state.selectedWorktree,
+        ),
+      };
+    });
     return project;
   },
 
@@ -168,7 +253,9 @@ export const useProjectStore = create<ProjectState>((set) => ({
 
     if (result.type === "alreadyExists") {
       const { type: _, ...project } = result;
-      set((state) => ({ projects: upsertProject(state.projects, project) }));
+      commitProjectMutation(set, (state) => ({
+        projects: upsertProject(state.projects, project),
+      }));
       return;
     }
 
@@ -178,8 +265,21 @@ export const useProjectStore = create<ProjectState>((set) => ({
     }));
   },
 
+  completeClone: (id, project) => {
+    const { cloningProjects } = useProjectStore.getState();
+    if (!cloningProjects.some((cloning) => cloning.id === id)) {
+      return false;
+    }
+
+    commitProjectMutation(set, (state) => ({
+      cloningProjects: state.cloningProjects.filter((cloning) => cloning.id !== id),
+      projects: upsertProject(state.projects, project),
+    }));
+    return true;
+  },
+
   reorderProjects: async (projectIds: string[]) => {
-    set((state) => {
+    commitProjectMutation(set, (state) => {
       const projectMap = new Map(state.projects.map((p) => [p.id, p]));
       const reordered = projectIds
         .map((id) => projectMap.get(id))
@@ -228,13 +328,16 @@ export const useProjectStore = create<ProjectState>((set) => ({
     await runCommand(() => tauri.removeProject(id), {
       errorToast: "Failed to remove project",
     });
-    set((state) => ({
-      projects: state.projects.filter((p) => p.id !== id),
-      selectedWorktree: reconcileSelectedWorktree(
-        state.projects.filter((p) => p.id !== id),
-        state.selectedWorktree,
-      ),
-    }));
+    commitProjectMutation(set, (state) => {
+      const projects = state.projects.filter((p) => p.id !== id);
+      return {
+        projects,
+        selectedWorktree: reconcileSelectedWorktree(
+          projects,
+          state.selectedWorktree,
+        ),
+      };
+    });
   },
 
   addWorktree: async (projectId: string, name: string) => {
@@ -249,7 +352,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
     }, {
       errorToast: "Failed to create worktree",
     });
-    set((state) => ({
+    commitProjectMutation(set, (state) => ({
       projects: state.projects.map((p) =>
         p.id === projectId
           ? { ...p, worktrees: [...p.worktrees, worktree] }
@@ -303,10 +406,10 @@ export const useProjectStore = create<ProjectState>((set) => ({
           .removeSession(worktreePath, nextSelectedWorktree?.path ?? null);
       }
 
-      set({
+      commitProjectMutation(set, () => ({
         projects: nextProjects,
         selectedWorktree: nextSelectedWorktree,
-      });
+      }));
     });
   },
 
@@ -319,7 +422,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
     await runCommand(() => tauri.setWorktreeOrder(projectId, order), {
       errorToast: "Failed to save worktree order",
     });
-    set((state) => ({
+    commitProjectMutation(set, (state) => ({
       projects: state.projects.map((p) =>
         p.id === projectId
           ? { ...p, worktrees: reorderWorktrees(p.worktrees, order) }
@@ -332,7 +435,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
     await runCommand(() => tauri.renameProject(projectId, name), {
       errorToast: "Failed to rename project",
     });
-    set((state) => ({
+    commitProjectMutation(set, (state) => ({
       projects: state.projects.map((p) =>
         p.id === projectId ? { ...p, name } : p,
       ),
@@ -343,7 +446,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
     await runCommand(() => tauri.setBaseBranch(projectId, branch), {
       errorToast: "Failed to set base branch",
     });
-    set((state) => ({
+    commitProjectMutation(set, (state) => ({
       projects: state.projects.map((p) =>
         p.id === projectId ? { ...p, baseBranch: branch } : p,
       ),
@@ -354,7 +457,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
     const project = useProjectStore.getState().projects.find((p) => p.id === id);
     if (!project) return;
     const collapsed = !project.collapsed;
-    set((state) => ({
+    commitProjectMutation(set, (state) => ({
       projects: state.projects.map((p) =>
         p.id === id ? { ...p, collapsed } : p,
       ),

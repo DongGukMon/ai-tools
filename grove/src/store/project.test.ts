@@ -27,6 +27,16 @@ import { useProjectStore } from "./project";
 import { useBroadcastStore } from "./broadcast";
 import { useTerminalStore } from "./terminal";
 
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 function makeWorktree(name: string, branch = name): Worktree {
   return {
     name,
@@ -80,7 +90,14 @@ describe("useProjectStore", () => {
     runCommandSafelyMock.mockImplementation(
       async (action: () => Promise<unknown>) => action(),
     );
-    useProjectStore.setState({ projects: [], cloningProjects: [], selectedWorktree: null, loading: false });
+    useProjectStore.setState({
+      projects: [],
+      cloningProjects: [],
+      selectedWorktree: null,
+      loading: false,
+      projectsSnapshotRequestId: 0,
+      projectsMutationEpoch: 0,
+    });
     useTerminalStore.setState({
       sessions: {},
       activeWorktree: null,
@@ -276,5 +293,77 @@ describe("useProjectStore", () => {
     await useProjectStore.getState().removeWorktree("project-1", "feature-b");
 
     expect(useProjectStore.getState().selectedWorktree).toEqual(selectedWorktree);
+  });
+
+  it("ignores a stale project snapshot after adding a worktree", async () => {
+    useProjectStore.setState({
+      projects: [makeProject([])],
+      cloningProjects: [],
+      selectedWorktree: null,
+      loading: false,
+    });
+
+    const staleSnapshot = deferred<Project[]>();
+    vi.mocked(tauri.listProjects).mockReturnValueOnce(staleSnapshot.promise);
+
+    const newWorktree = makeWorktree("feature-a");
+    vi.mocked(tauri.addWorktree).mockResolvedValue(newWorktree);
+
+    const syncPromise = useProjectStore.getState().syncProjects();
+    await useProjectStore.getState().addWorktree("project-1", "feature-a");
+
+    staleSnapshot.resolve([makeProject([])]);
+    await syncPromise;
+
+    expect(useProjectStore.getState().projects[0]?.worktrees).toEqual([newWorktree]);
+  });
+
+  it("ignores a stale project snapshot after removing a worktree", async () => {
+    const worktree = makeWorktree("feature-a");
+    useProjectStore.setState({
+      projects: [makeProject([worktree])],
+      cloningProjects: [],
+      selectedWorktree: worktree,
+      loading: false,
+    });
+
+    const staleSnapshot = deferred<Project[]>();
+    vi.mocked(tauri.listProjects).mockReturnValueOnce(staleSnapshot.promise);
+    vi.mocked(tauri.removeWorktree).mockResolvedValue();
+
+    const syncPromise = useProjectStore.getState().syncProjects();
+    await useProjectStore.getState().removeWorktree("project-1", "feature-a");
+
+    staleSnapshot.resolve([makeProject([worktree])]);
+    await syncPromise;
+
+    expect(useProjectStore.getState().projects[0]?.worktrees).toEqual([]);
+  });
+
+  it("applies only the latest snapshot when requests resolve out of order", async () => {
+    useProjectStore.setState({
+      projects: [makeProject([])],
+      cloningProjects: [],
+      selectedWorktree: null,
+      loading: false,
+    });
+
+    const olderSnapshot = deferred<Project[]>();
+    const latestSnapshot = deferred<Project[]>();
+    vi.mocked(tauri.listProjects)
+      .mockReturnValueOnce(olderSnapshot.promise)
+      .mockReturnValueOnce(latestSnapshot.promise);
+
+    const firstSync = useProjectStore.getState().syncProjects();
+    const secondSync = useProjectStore.getState().syncProjects();
+
+    const latestProjects = [makeProject([makeWorktree("feature-b")])];
+    latestSnapshot.resolve(latestProjects);
+    await secondSync;
+
+    olderSnapshot.resolve([makeProject([])]);
+    await firstSync;
+
+    expect(useProjectStore.getState().projects).toEqual(latestProjects);
   });
 });
