@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { unstable_batchedUpdates } from "react-dom";
-import type { Project, Worktree } from "../types";
+import type { Project, Worktree, CloningProject } from "../types";
 import * as tauri from "../lib/platform";
 import { runCommand, runCommandSafely } from "../lib/command";
 import { useTerminalStore } from "./terminal";
@@ -11,13 +11,14 @@ import { overlay } from "../lib/overlay";
 
 interface ProjectState {
   projects: Project[];
+  cloningProjects: CloningProject[];
   selectedWorktree: Worktree | null;
   loading: boolean;
 
   loadProjects: () => Promise<void>;
   syncProjects: () => Promise<void>;
   refreshProject: (id: string) => Promise<Project>;
-  addProject: (url: string) => Promise<Project>;
+  startClone: (url: string) => Promise<void>;
   reorderProjects: (projectIds: string[]) => Promise<void>;
   removeProject: (id: string) => Promise<void>;
   addWorktree: (projectId: string, name: string) => Promise<Worktree>;
@@ -107,6 +108,7 @@ function sourceWorktreeForProject(project: Project): Worktree {
 
 export const useProjectStore = create<ProjectState>((set) => ({
   projects: [],
+  cloningProjects: [],
   selectedWorktree: null,
   loading: false,
 
@@ -159,12 +161,25 @@ export const useProjectStore = create<ProjectState>((set) => ({
     return project;
   },
 
-  addProject: async (url: string) => {
-    const project = await runCommand(() => tauri.addProject(url), {
-      errorToast: "Failed to add project",
+  startClone: async (url: string) => {
+    const result = await runCommand(() => tauri.startClone(url), {
+      errorToast: "Failed to start clone",
     });
-    set((state) => ({ projects: upsertProject(state.projects, project) }));
-    return project;
+
+    if (result.type === "alreadyExists") {
+      set((state) => ({ projects: upsertProject(state.projects, result) }));
+      return;
+    }
+
+    const cloning: CloningProject = {
+      id: result.id,
+      url: result.url,
+      org: result.org,
+      repo: result.repo,
+    };
+    set((state) => ({
+      cloningProjects: [...state.cloningProjects, cloning],
+    }));
   },
 
   reorderProjects: async (projectIds: string[]) => {
