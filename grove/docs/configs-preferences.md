@@ -14,7 +14,7 @@ Grove stores app-wide configuration in `~/.grove/config.json`.
 
 `preferences` is the home for user-selectable Grove behavior such as link opening policy, project list view mode, org ordering, and IDE menu shortcuts. It is nested under `AppConfig`, but it is intentionally narrower in scope than the full app config.
 
-The preferences layer provides persistence, I/O, and a Zustand store (`usePreferencesStore`). Terminal link routing is wired via `terminalLinkOpenMode` (see [Terminal Link Open](open-link.md)). Grove now exposes persisted preferences in the Preferences modal under General and Terminal tabs, including project grouping mode for the Projects sidebar. The Developer tab in that modal is diagnostic-only and does not persist to `config.json`. Sidebar context menus use `ideMenuItems` for ordered `Open in <IDE>` actions.
+The preferences layer provides persistence, I/O, and a Zustand store (`usePreferencesStore`). Terminal link routing is wired via `terminalLinkOpenMode` (see [Terminal Link Open](open-link.md)). Grove now exposes persisted preferences in the Preferences modal under General and Terminal tabs, including project grouping mode for the Projects sidebar. The Developer tab is runtime-only and does not persist to `config.json`; it currently exposes dev console / reload actions plus terminal GC diagnostics. Sidebar context menus use `ideMenuItems` for ordered `Open in <IDE>` actions.
 
 ## Storage Model
 

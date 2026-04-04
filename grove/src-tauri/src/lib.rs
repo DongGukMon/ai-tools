@@ -285,6 +285,17 @@ async fn open_in_ide(path: String, ide_menu_item: IdeMenuItem) -> Result<(), Str
     blocking(move || grove_core::ide::open_in_ide_menu_item(&path, &ide_menu_item)).await
 }
 
+#[tauri::command]
+async fn open_dev_console(window: tauri::WebviewWindow) -> Result<(), String> {
+    window.open_devtools();
+    Ok(())
+}
+
+#[tauri::command]
+async fn reload_app_window(window: tauri::WebviewWindow) -> Result<(), String> {
+    window.reload().map_err(|e| e.to_string())
+}
+
 // === PTY COMMANDS (W3) ===
 
 #[tauri::command]
@@ -530,6 +541,8 @@ pub fn run() {
             open_external,
             reveal_in_finder,
             open_in_ide,
+            open_dev_console,
+            reload_app_window,
             // PTY (W3)
             create_pty,
             write_pty,

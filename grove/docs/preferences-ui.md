@@ -27,7 +27,7 @@ src/components/preferences/
 ├── PreferencesModal.tsx      # Modal shell: Dialog + tab navigation
 ├── GeneralTab.tsx            # General tab: Project view mode + ordered IDE menu editor
 ├── TerminalTab.tsx           # Terminal tab: Link Open Mode + Appearance
-├── DeveloperTab.tsx          # Developer tab: terminal GC diagnostics + manual reconcile
+├── DeveloperTab.tsx          # Developer tab: runtime window actions + terminal GC diagnostics
 └── TerminalAppearance.tsx    # Appearance section: theme presets, font, colors, preview
 ```
 
@@ -41,6 +41,7 @@ User interaction → Zustand store setter → Platform layer → Tauri command �
 
 - Preferences (project view mode, IDE, link mode): `usePreferencesStore` → `saveGrovePreferences()`
 - Terminal theme: `useTerminalStore` → `saveAppConfig()` (requires explicit Apply button)
+- Developer window actions: local component state → platform command → current renderer window
 - Developer diagnostics: local component state → `run_terminal_gc` command → optional in-memory terminal store cleanup
 
 ## General Tab Notes

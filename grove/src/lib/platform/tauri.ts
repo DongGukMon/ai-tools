@@ -292,6 +292,14 @@ export async function openInIde(path: string, ideMenuItem: IdeMenuItem): Promise
   return platform.invoke("open_in_ide", { path, ideMenuItem });
 }
 
+export async function openDevConsole(): Promise<void> {
+  return platform.invoke("open_dev_console");
+}
+
+export async function reloadAppWindow(): Promise<void> {
+  return platform.invoke("reload_app_window");
+}
+
 // === ENV SYNC COMMANDS ===
 
 export async function setEnvSync(projectId: string, config: ProjectEnvSyncConfig): Promise<void> {

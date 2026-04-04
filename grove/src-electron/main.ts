@@ -347,6 +347,16 @@ function registerIpcHandlers() {
         return;
       }
 
+      if (command === "open_dev_console") {
+        targetWindow.webContents.openDevTools();
+        return;
+      }
+
+      if (command === "reload_app_window") {
+        targetWindow.webContents.reload();
+        return;
+      }
+
       return invokeNative(targetWindow, command, args);
     },
   );

@@ -2,12 +2,19 @@ import { useState } from "react";
 import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import { cn } from "../../lib/cn";
 import { TERMINAL_GC_INTERVAL_MS, runTerminalGcNow } from "../../lib/terminal-gc";
-import type { TerminalGcReport } from "../../lib/platform";
+import {
+  getCommandErrorMessage,
+  openDevConsole,
+  reloadAppWindow,
+  type TerminalGcReport,
+} from "../../lib/platform";
 import { useToastStore } from "../../store/toast";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
+import { Separator } from "../ui/separator";
 
 type RunMode = "dry-run" | "apply";
+type WindowAction = "dev-console" | "reload";
 
 interface RunSummary {
   mode: RunMode;
@@ -272,9 +279,31 @@ function ReportLog({
 export default function DeveloperTab() {
   const addToast = useToastStore((s) => s.addToast);
   const [runningMode, setRunningMode] = useState<RunMode | null>(null);
+  const [runningWindowAction, setRunningWindowAction] = useState<WindowAction | null>(null);
   const [summary, setSummary] = useState<RunSummary | null>(null);
   const [reportOpen, setReportOpen] = useState(true);
   const intervalMinutes = Math.round(TERMINAL_GC_INTERVAL_MS / 60_000);
+
+  const handleWindowAction = async (action: WindowAction) => {
+    setRunningWindowAction(action);
+
+    try {
+      if (action === "dev-console") {
+        await openDevConsole();
+      } else {
+        await reloadAppWindow();
+      }
+    } catch (error) {
+      addToast(
+        "error",
+        action === "dev-console"
+          ? `Failed to open dev console: ${getCommandErrorMessage(error)}`
+          : `Failed to reload window: ${getCommandErrorMessage(error)}`,
+      );
+    } finally {
+      setRunningWindowAction(null);
+    }
+  };
 
   const handleRun = async (mode: RunMode) => {
     setRunningMode(mode);
@@ -320,6 +349,47 @@ export default function DeveloperTab() {
   return (
     <div>
       <h3 className={cn("text-sm font-semibold text-foreground mb-6")}>Developer</h3>
+
+      <section>
+        <h4 className={cn("text-[12px] font-medium text-foreground mb-1.5")}>
+          Window Controls
+        </h4>
+        <p className={cn("text-[11px] text-muted-foreground/70 mb-4")}>
+          Open the current renderer dev console or reload the current Grove window without leaving the app.
+        </p>
+
+        <div className={cn("flex items-center gap-2")}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={runningWindowAction !== null}
+            onClick={() => void handleWindowAction("dev-console")}
+          >
+            {runningWindowAction === "dev-console" ? <Loader2 className={cn("animate-spin")} /> : null}
+            Open Dev Console
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={runningWindowAction !== null}
+            onClick={() => void handleWindowAction("reload")}
+          >
+            {runningWindowAction === "reload" ? <Loader2 className={cn("animate-spin")} /> : null}
+            Reload
+          </Button>
+          {runningWindowAction ? (
+            <span className={cn("text-[11px] text-muted-foreground")}>
+              {runningWindowAction === "dev-console"
+                ? "Opening dev console..."
+                : "Reloading window..."}
+            </span>
+          ) : null}
+        </div>
+      </section>
+
+      <Separator className={cn("my-6")} />
 
       <section>
         <h4 className={cn("text-[12px] font-medium text-foreground mb-1.5")}>
