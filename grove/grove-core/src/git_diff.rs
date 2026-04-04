@@ -223,10 +223,7 @@ pub fn remove_untracked_files_impl(
 ) -> Result<(), String> {
     let repo = Repository::open(worktree_path).map_err(|e| e.to_string())?;
     for path in file_paths {
-        let status = repo
-            .status_file(Path::new(path))
-            .map_err(|e| e.to_string())?;
-        if !status.contains(git2::Status::WT_NEW) {
+        if !is_untracked(&repo, path) {
             return Err(format!("'{}' is not an untracked file", path));
         }
         let full_path = Path::new(worktree_path).join(path);
@@ -329,9 +326,36 @@ pub fn discard_lines_impl(
 // === INTERNAL HELPERS ===
 
 fn is_untracked(repo: &Repository, path: &str) -> bool {
-    repo.status_file(Path::new(path))
-        .map(|s| s.contains(git2::Status::WT_NEW))
-        .unwrap_or(false)
+    match repo.status_file(Path::new(path)) {
+        Ok(status) => status.contains(git2::Status::WT_NEW),
+        Err(_) => {
+            let normalized = path.trim_end_matches('/');
+            let prefix = format!("{normalized}/");
+            let mut opts = StatusOptions::new();
+            opts.include_untracked(true).recurse_untracked_dirs(true);
+
+            repo.statuses(Some(&mut opts))
+                .map(|statuses| {
+                    let mut found = false;
+
+                    for entry in statuses.iter() {
+                        let Some(entry_path) = entry.path() else {
+                            continue;
+                        };
+
+                        if entry_path == normalized || entry_path.starts_with(&prefix) {
+                            found = true;
+                            if !entry.status().contains(git2::Status::WT_NEW) {
+                                return false;
+                            }
+                        }
+                    }
+
+                    found
+                })
+                .unwrap_or(false)
+        }
+    }
 }
 
 fn get_unstaged_diff(worktree_path: &str, file_path: &str) -> Result<FileDiff, String> {

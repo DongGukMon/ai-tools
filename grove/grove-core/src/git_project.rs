@@ -1711,12 +1711,6 @@ pub(crate) fn remote_default_branch(source: &Path) -> Result<String, String> {
         return Ok(branch);
     }
 
-    let _ = run_git(source, &["remote", "set-head", "origin", "-a"]);
-
-    if let Ok(branch) = resolve_origin_head(source) {
-        return Ok(branch);
-    }
-
     if let Ok(branches) = local_branch_names(source) {
         if branches.len() == 1 {
             return Ok(branches[0].clone());
@@ -1739,6 +1733,12 @@ pub(crate) fn remote_default_branch(source: &Path) -> Result<String, String> {
 
     let branch = run_git_output(source, &["branch", "--show-current"])?;
     if !branch.is_empty() {
+        return Ok(branch);
+    }
+
+    let _ = run_git(source, &["remote", "set-head", "origin", "-a"]);
+
+    if let Ok(branch) = resolve_origin_head(source) {
         return Ok(branch);
     }
 
@@ -2170,6 +2170,11 @@ mod tests {
         fs::create_dir_all(source_dir).unwrap();
         run_git_ok(source_dir, &["init"]);
         run_git_ok(source_dir, &["remote", "add", "origin", remote_url]);
+        fs::write(
+            Repository::open(source_dir).unwrap().path().join("FETCH_HEAD"),
+            "",
+        )
+        .unwrap();
     }
 
     fn create_bare_remote(root: &Path, name: &str, default_branch: &str) -> (PathBuf, PathBuf) {
