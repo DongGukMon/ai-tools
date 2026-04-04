@@ -210,6 +210,26 @@ pub fn discard_file_impl(worktree_path: &str, file_path: &str) -> Result<(), Str
     result
 }
 
+pub fn discard_files_impl(worktree_path: &str, file_paths: &[String]) -> Result<(), String> {
+    for path in file_paths {
+        discard_file_impl(worktree_path, path)?;
+    }
+    Ok(())
+}
+
+pub fn remove_untracked_files_impl(
+    worktree_path: &str,
+    file_paths: &[String],
+) -> Result<(), String> {
+    for path in file_paths {
+        let full_path = Path::new(worktree_path).join(path);
+        if full_path.exists() {
+            remove_path(&full_path)?;
+        }
+    }
+    Ok(())
+}
+
 pub fn stage_files_impl(worktree_path: &str, file_paths: &[String]) -> Result<(), String> {
     run_git_with_paths(worktree_path, &["add"], file_paths)
 }
@@ -799,6 +819,56 @@ mod tests {
 
         discard_file_impl(repo.to_str().unwrap(), "scratch").unwrap();
 
+        assert!(!repo.join("scratch").exists());
+
+        let _ = fs::remove_dir_all(repo);
+    }
+
+    #[test]
+    fn discard_files_batches_multiple_paths() {
+        let _lock = env_lock();
+        let repo = temp_repo("discard-files");
+
+        git(&repo, &["init"]);
+        fs::write(repo.join("a.txt"), "a\n").unwrap();
+        fs::write(repo.join("b.txt"), "b\n").unwrap();
+        git(&repo, &["add", "."]);
+        git(&repo, &["commit", "-m", "init"]);
+
+        fs::write(repo.join("a.txt"), "updated a\n").unwrap();
+        fs::write(repo.join("b.txt"), "updated b\n").unwrap();
+
+        discard_files_impl(
+            repo.to_str().unwrap(),
+            &["a.txt".to_string(), "b.txt".to_string()],
+        )
+        .unwrap();
+
+        let statuses = get_status_impl(repo.to_str().unwrap()).unwrap();
+        assert!(statuses.is_empty());
+        assert_eq!(fs::read_to_string(repo.join("a.txt")).unwrap(), "a\n");
+        assert_eq!(fs::read_to_string(repo.join("b.txt")).unwrap(), "b\n");
+
+        let _ = fs::remove_dir_all(repo);
+    }
+
+    #[test]
+    fn remove_untracked_files_removes_multiple_paths() {
+        let _lock = env_lock();
+        let repo = temp_repo("remove-untracked-files");
+
+        git(&repo, &["init"]);
+        fs::write(repo.join("a.txt"), "a\n").unwrap();
+        fs::create_dir_all(repo.join("scratch")).unwrap();
+        fs::write(repo.join("scratch/note.txt"), "temp\n").unwrap();
+
+        remove_untracked_files_impl(
+            repo.to_str().unwrap(),
+            &["a.txt".to_string(), "scratch".to_string()],
+        )
+        .unwrap();
+
+        assert!(!repo.join("a.txt").exists());
         assert!(!repo.join("scratch").exists());
 
         let _ = fs::remove_dir_all(repo);

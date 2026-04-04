@@ -367,6 +367,17 @@ pub async fn discard_file(worktree_path: String, path: String) -> Result<()> {
 }
 
 #[napi]
+pub async fn discard_files(worktree_path: String, paths: Vec<String>) -> Result<()> {
+    blocking_core(move || grove_core::git_diff::discard_files_impl(&worktree_path, &paths)).await
+}
+
+#[napi]
+pub async fn remove_untracked_files(worktree_path: String, paths: Vec<String>) -> Result<()> {
+    blocking_core(move || grove_core::git_diff::remove_untracked_files_impl(&worktree_path, &paths))
+        .await
+}
+
+#[napi]
 pub async fn stage_hunk(worktree_path: String, path: String, hunk_index: u32) -> Result<()> {
     blocking_core(move || grove_core::git_diff::stage_hunk_impl(&worktree_path, &path, hunk_index))
         .await

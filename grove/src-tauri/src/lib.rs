@@ -394,6 +394,17 @@ async fn discard_file(worktree_path: String, path: String) -> Result<(), String>
 }
 
 #[tauri::command]
+async fn discard_files(worktree_path: String, paths: Vec<String>) -> Result<(), String> {
+    blocking(move || grove_core::git_diff::discard_files_impl(&worktree_path, &paths)).await
+}
+
+#[tauri::command]
+async fn remove_untracked_files(worktree_path: String, paths: Vec<String>) -> Result<(), String> {
+    blocking(move || grove_core::git_diff::remove_untracked_files_impl(&worktree_path, &paths))
+        .await
+}
+
+#[tauri::command]
 async fn stage_hunk(worktree_path: String, path: String, hunk_index: u32) -> Result<(), String> {
     blocking(move || grove_core::git_diff::stage_hunk_impl(&worktree_path, &path, hunk_index)).await
 }
@@ -527,6 +538,8 @@ pub fn run() {
             unstage_file,
             unstage_files,
             discard_file,
+            discard_files,
+            remove_untracked_files,
             stage_hunk,
             unstage_hunk,
             discard_hunk,

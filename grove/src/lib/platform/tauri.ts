@@ -402,6 +402,20 @@ export async function discardFile(
   return platform.invoke("discard_file", { worktreePath, path });
 }
 
+export async function discardFiles(
+  worktreePath: string,
+  paths: string[],
+): Promise<void> {
+  return platform.invoke("discard_files", { worktreePath, paths });
+}
+
+export async function removeUntrackedFiles(
+  worktreePath: string,
+  paths: string[],
+): Promise<void> {
+  return platform.invoke("remove_untracked_files", { worktreePath, paths });
+}
+
 export async function stageHunk(
   worktreePath: string,
   path: string,

@@ -8,6 +8,13 @@ import { runCommandSafely } from "../../lib/command";
 import * as tauri from "../../lib/platform";
 import { overlay } from "../../lib/overlay";
 import ResizablePanelGroup from "../ui/resizable-panel-group";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "../ui/context-menu";
 import DiffViewer from "../diff/DiffViewer";
 import type { FileStatus, FileDiff } from "../../types";
 import { FileText, Plus, Minus, Trash2, Undo2 } from "lucide-react";
@@ -116,6 +123,8 @@ function FileSection({
   selectedPaths,
   onSelectFile,
   onMarqueeSelect,
+  onContextMenuFile,
+  contextMenuContent,
   renderActions,
 }: {
   title: string;
@@ -123,6 +132,8 @@ function FileSection({
   selectedPaths: Set<string>;
   onSelectFile: (path: string, shiftKey: boolean) => void;
   onMarqueeSelect?: (ids: Set<string>) => void;
+  onContextMenuFile?: (path: string) => void;
+  contextMenuContent?: React.ReactNode;
   renderActions?: (file: FileStatus) => React.ReactNode;
 }) {
   const sectionRef = useRef<HTMLDivElement>(null);
@@ -152,42 +163,50 @@ function FileSection({
           {selectedPaths.size > 0 ? `${selectedPaths.size}/${files.length}` : files.length}
         </span>
       </div>
-      <div
-        ref={sectionRef}
-        className={cn("flex-1 min-h-0 overflow-y-auto relative select-none cursor-default")}
-        {...marquee.handlers}
-      >
-        {files.map((file) => (
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
           <div
-            key={file.path}
-            ref={(el) => {
-              if (el) itemRefsMap.current.set(file.path, el);
-              else itemRefsMap.current.delete(file.path);
-            }}
+            ref={sectionRef}
+            className={cn("flex-1 min-h-0 overflow-y-auto relative select-none cursor-default")}
+            {...marquee.handlers}
           >
-            <FileItem
-              file={file}
-              selected={selectedPaths.has(file.path)}
-              onClick={(e) => onSelectFile(file.path, e.shiftKey)}
-              actions={renderActions?.(file)}
-            />
+            {files.map((file) => (
+              <div
+                key={file.path}
+                ref={(el) => {
+                  if (el) itemRefsMap.current.set(file.path, el);
+                  else itemRefsMap.current.delete(file.path);
+                }}
+                onContextMenu={() => onContextMenuFile?.(file.path)}
+              >
+                <FileItem
+                  file={file}
+                  selected={selectedPaths.has(file.path)}
+                  onClick={(e) => onSelectFile(file.path, e.shiftKey)}
+                  actions={renderActions?.(file)}
+                />
+              </div>
+            ))}
+            {marquee.rect && (
+              <div
+                className={cn("absolute pointer-events-none z-10")}
+                style={{
+                  left: marquee.rect.x,
+                  top: marquee.rect.y,
+                  width: marquee.rect.width,
+                  height: marquee.rect.height,
+                  border: "1px solid rgba(99, 163, 255, 0.5)",
+                  background: "rgba(99, 163, 255, 0.06)",
+                  borderRadius: 2,
+                }}
+              />
+            )}
           </div>
-        ))}
-        {marquee.rect && (
-          <div
-            className={cn("absolute pointer-events-none z-10")}
-            style={{
-              left: marquee.rect.x,
-              top: marquee.rect.y,
-              width: marquee.rect.width,
-              height: marquee.rect.height,
-              border: "1px solid rgba(99, 163, 255, 0.5)",
-              background: "rgba(99, 163, 255, 0.06)",
-              borderRadius: 2,
-            }}
-          />
+        </ContextMenuTrigger>
+        {contextMenuContent && (
+          <ContextMenuContent>{contextMenuContent}</ContextMenuContent>
         )}
-      </div>
+      </ContextMenu>
     </div>
   );
 }
@@ -275,6 +294,11 @@ function WorkingChangesView({
   );
 
   const isStaged = selectedSection === "staged";
+  const allUntracked = selectedSection === "unstaged"
+    && selectedPaths.size > 0
+    && [...selectedPaths].every((path) => {
+      return unstaged.find((file) => file.path === path)?.status === "untracked";
+    });
 
   const handleMarqueeSelect = useCallback(
     (section: "staged" | "unstaged", ids: Set<string>) => {
@@ -315,6 +339,15 @@ function WorkingChangesView({
     }
   }, [selectedPaths]);
 
+  const handleContextMenuFile = useCallback((section: "staged" | "unstaged", path: string) => {
+    if (selectedSection === section && selectedPaths.has(path)) {
+      return;
+    }
+    setSelectedPaths(new Set([path]));
+    setSelectedSection(section);
+    lastClickedRef.current = { section, path };
+  }, [selectedPaths, selectedSection]);
+
   return (
     <ResizablePanelGroup className={cn("h-full")} ratios={ratios} onCommit={onCommit}>
       <ResizablePanelGroup.Pane minSize={160}>
@@ -331,6 +364,20 @@ function WorkingChangesView({
               selectedPaths={selectedSection === "staged" ? selectedPaths : new Set()}
               onSelectFile={(path, shiftKey) => handleSelectFile("staged", staged, path, shiftKey)}
               onMarqueeSelect={(ids) => handleMarqueeSelect("staged", ids)}
+              onContextMenuFile={(path) => handleContextMenuFile("staged", path)}
+              contextMenuContent={selectedSection === "staged" && selectedPaths.size > 0
+                ? (
+                    <ContextMenuItem
+                      onSelect={async () => {
+                        const paths = [...selectedPaths];
+                        setSelectedPaths(new Set());
+                        await store.unstageFiles(paths);
+                      }}
+                    >
+                      Unstage
+                    </ContextMenuItem>
+                  )
+                : undefined}
               renderActions={(file) => (
                 <ActionButton icon={Minus} title="Unstage" onClick={() => store.unstageFile(file.path)} />
               )}
@@ -343,6 +390,59 @@ function WorkingChangesView({
               selectedPaths={selectedSection === "unstaged" ? selectedPaths : new Set()}
               onSelectFile={(path, shiftKey) => handleSelectFile("unstaged", unstaged, path, shiftKey)}
               onMarqueeSelect={(ids) => handleMarqueeSelect("unstaged", ids)}
+              onContextMenuFile={(path) => handleContextMenuFile("unstaged", path)}
+              contextMenuContent={selectedSection === "unstaged" && selectedPaths.size > 0
+                ? (
+                    <>
+                      <ContextMenuItem
+                        onSelect={async () => {
+                          const paths = [...selectedPaths];
+                          setSelectedPaths(new Set());
+                          await store.stageFiles(paths);
+                        }}
+                      >
+                        Stage
+                      </ContextMenuItem>
+                      <ContextMenuSeparator />
+                      <ContextMenuItem
+                        className={cn({ "text-destructive focus:text-destructive": true })}
+                        onSelect={async () => {
+                          const paths = [...selectedPaths];
+                          const confirmed = await overlay.confirm({
+                            title: "Discard Changes",
+                            description: `Discard changes to ${paths.length} file${paths.length > 1 ? "s" : ""}?`,
+                            confirmLabel: "Discard",
+                            variant: "destructive",
+                          });
+                          if (!confirmed) return;
+                          setSelectedPaths(new Set());
+                          await store.discardFiles(paths);
+                        }}
+                      >
+                        Discard
+                      </ContextMenuItem>
+                      {allUntracked && (
+                        <ContextMenuItem
+                          className={cn({ "text-destructive focus:text-destructive": true })}
+                          onSelect={async () => {
+                            const paths = [...selectedPaths];
+                            const confirmed = await overlay.confirm({
+                              title: "Remove Files",
+                              description: `Remove ${paths.length} untracked file${paths.length > 1 ? "s" : ""}?`,
+                              confirmLabel: "Remove",
+                              variant: "destructive",
+                            });
+                            if (!confirmed) return;
+                            setSelectedPaths(new Set());
+                            await store.removeUntrackedFiles(paths);
+                          }}
+                        >
+                          Remove
+                        </ContextMenuItem>
+                      )}
+                    </>
+                  )
+                : undefined}
               renderActions={(file) => {
                 const isUntracked = file.status === "untracked";
                 const discardConfirm = isUntracked

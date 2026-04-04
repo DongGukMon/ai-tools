@@ -36,6 +36,8 @@ interface DiffState {
   unstageFile: (path: string) => Promise<void>;
   unstageFiles: (paths: string[]) => Promise<void>;
   discardFile: (path: string) => Promise<void>;
+  discardFiles: (paths: string[]) => Promise<void>;
+  removeUntrackedFiles: (paths: string[]) => Promise<void>;
   stageHunk: (path: string, hunkIndex: number) => Promise<void>;
   unstageHunk: (path: string, hunkIndex: number) => Promise<void>;
   discardHunk: (path: string, hunkIndex: number) => Promise<void>;
@@ -300,6 +302,22 @@ function createMutationActions() {
         await tauri.discardFile(wp, path);
         await refresh();
       }, "Failed to discard file");
+    },
+    discardFiles: async (paths: string[]) => {
+      const wp = useDiffStore.getState().worktreePath;
+      if (!wp || paths.length === 0) return;
+      await runMutation(async () => {
+        await tauri.discardFiles(wp, paths);
+        await refresh();
+      }, "Failed to discard files");
+    },
+    removeUntrackedFiles: async (paths: string[]) => {
+      const wp = useDiffStore.getState().worktreePath;
+      if (!wp || paths.length === 0) return;
+      await runMutation(async () => {
+        await tauri.removeUntrackedFiles(wp, paths);
+        await refresh();
+      }, "Failed to remove files");
     },
     stageHunk: async (path: string, hunkIndex: number) => {
       const wp = useDiffStore.getState().worktreePath;
