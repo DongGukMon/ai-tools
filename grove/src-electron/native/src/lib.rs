@@ -141,6 +141,11 @@ pub async fn load_panel_layouts() -> Result<String> {
 }
 
 #[napi]
+pub async fn run_terminal_gc(dry_run: bool) -> Result<String> {
+    blocking_json(move || grove_core::pty::run_terminal_gc(dry_run)).await
+}
+
+#[napi]
 pub async fn list_projects() -> Result<String> {
     blocking_json(grove_core::git_project::list_projects_impl).await
 }

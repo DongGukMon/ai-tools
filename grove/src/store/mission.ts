@@ -3,6 +3,7 @@ import type { Mission } from "../types";
 import * as tauri from "../lib/platform";
 import { runCommand, runCommandSafely } from "../lib/command";
 import { useTerminalStore } from "./terminal";
+import { runTerminalGcNow } from "../lib/terminal-gc";
 
 interface MissionState {
   missions: Mission[];
@@ -66,6 +67,7 @@ export const useMissionStore = create<MissionState>((set, get) => ({
     try {
       const mission = get().missions.find((m) => m.id === id);
       if (mission) {
+        useTerminalStore.getState().removeSession(mission.missionDir);
         for (const project of mission.projects) {
           useTerminalStore.getState().removeSession(project.path);
         }
@@ -91,6 +93,7 @@ export const useMissionStore = create<MissionState>((set, get) => ({
           deletingMissionProjects: remainingDeletingProjects,
         };
       });
+      void runTerminalGcNow();
     } catch (error) {
       set((state) => {
         const { [id]: _, ...remainingDeleting } = state.deletingMissions;
@@ -176,6 +179,7 @@ export const useMissionStore = create<MissionState>((set, get) => ({
           deletingMissionProjects: remainingDeletingProjects,
         };
       });
+      void runTerminalGcNow();
     } catch (error) {
       set((state) => {
         const { [deletionKey]: _, ...remainingDeletingProjects } =

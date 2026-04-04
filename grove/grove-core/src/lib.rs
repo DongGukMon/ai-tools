@@ -191,6 +191,23 @@ pub struct SaveTerminalSessionSnapshotRequest {
     pub panes: Vec<TerminalPaneSnapshotInput>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(default, rename_all = "camelCase")]
+pub struct TerminalGcReport {
+    #[serde(default)]
+    pub stale_worktree_paths: Vec<String>,
+    #[serde(default)]
+    pub stale_session_names: Vec<String>,
+    #[serde(default)]
+    pub pruned_worktree_paths: Vec<String>,
+    #[serde(default)]
+    pub killed_session_names: Vec<String>,
+    #[serde(default)]
+    pub skipped_attached_worktree_paths: Vec<String>,
+    #[serde(default)]
+    pub leftover_process_ids: Vec<u32>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TerminalSessionSnapshotStore {

@@ -8,12 +8,14 @@ import {
 import { cn } from "../../lib/cn";
 import GeneralTab from "./GeneralTab";
 import TerminalTab from "./TerminalTab";
+import DeveloperTab from "./DeveloperTab";
 
-type TabId = "general" | "terminal";
+type TabId = "general" | "terminal" | "developer";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "general", label: "General" },
   { id: "terminal", label: "Terminal" },
+  { id: "developer", label: "Developer" },
 ];
 
 interface Props {
@@ -61,6 +63,7 @@ export default function PreferencesModal({ open, onClose }: Props) {
           <div className={cn("flex-1 overflow-y-auto p-6")}>
             {activeTab === "general" && <GeneralTab />}
             {activeTab === "terminal" && <TerminalTab />}
+            {activeTab === "developer" && <DeveloperTab />}
           </div>
         </div>
       </DialogContent>

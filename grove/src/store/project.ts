@@ -8,6 +8,7 @@ import { useBroadcastStore } from "./broadcast";
 import { collectTerminalPanes } from "../lib/terminal-session";
 import { useMissionStore } from "./mission";
 import { overlay } from "../lib/overlay";
+import { runTerminalGcNow } from "../lib/terminal-gc";
 
 interface ProjectState {
   projects: Project[];
@@ -337,6 +338,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
         ),
       };
     });
+    void runTerminalGcNow();
   },
 
   addWorktree: async (projectId: string, name: string) => {
@@ -410,6 +412,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
         selectedWorktree: nextSelectedWorktree,
       }));
     });
+    void runTerminalGcNow();
   },
 
   selectWorktree: (worktree: Worktree | null) => {

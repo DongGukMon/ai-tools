@@ -1,6 +1,6 @@
 # Preferences UI
 
-Unified settings modal accessed via gear icon in AppTabBar. Two tabs: General, Terminal.
+Unified settings modal accessed via gear icon in AppTabBar. Three tabs: General, Terminal, Developer.
 
 ## Heading Hierarchy
 
@@ -8,7 +8,7 @@ All preference components must follow this heading hierarchy for visual and sema
 
 | Level | Tag | Class | Usage |
 |-------|-----|-------|-------|
-| Page title | `<h3>` | `text-sm font-semibold text-foreground` | Tab name — "General", "Terminal" |
+| Page title | `<h3>` | `text-sm font-semibold text-foreground` | Tab name — "General", "Terminal", "Developer" |
 | Section | `<h4>` | `text-[12px] font-medium text-foreground` | Setting group — "Preferred IDE", "Link Open Mode", "Appearance" |
 | Sub-section | `<h5>` | `text-[11px] font-medium text-muted-foreground uppercase tracking-wider` | Within a section — "Presets", "Font", "Colors", "Preview" |
 | Field label | `<label>` | `text-[11px] text-muted-foreground` | Individual input label — "Font Family", "Font Size" |
@@ -27,6 +27,7 @@ src/components/preferences/
 ├── PreferencesModal.tsx      # Modal shell: Dialog + tab navigation
 ├── GeneralTab.tsx            # General tab: Preferred IDE
 ├── TerminalTab.tsx           # Terminal tab: Link Open Mode + Appearance
+├── DeveloperTab.tsx          # Developer tab: terminal GC diagnostics + manual reconcile
 └── TerminalAppearance.tsx    # Appearance section: theme presets, font, colors, preview
 ```
 
@@ -40,3 +41,4 @@ User interaction → Zustand store setter → Platform layer → Tauri command �
 
 - Preferences (IDE, link mode): `usePreferencesStore` → `saveGrovePreferences()`
 - Terminal theme: `useTerminalStore` → `saveAppConfig()` (requires explicit Apply button)
+- Developer diagnostics: local component state → `run_terminal_gc` command → optional in-memory terminal store cleanup

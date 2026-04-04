@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useProjectStore } from "../store/project";
 import { registerSyncJob, startSyncManager, stopSyncManager } from "../lib/sync-manager";
 import { useToastStore } from "../store/toast";
+import { TERMINAL_GC_INTERVAL_MS, TERMINAL_GC_JOB_KEY, runTerminalGcNow } from "../lib/terminal-gc";
 import * as tauri from "../lib/platform";
 
 export function useProject() {
@@ -15,6 +16,13 @@ export function useProject() {
       "projects",
       () => useProjectStore.getState().syncProjects(),
       10_000,
+    );
+    registerSyncJob(
+      TERMINAL_GC_JOB_KEY,
+      async () => {
+        await runTerminalGcNow();
+      },
+      TERMINAL_GC_INTERVAL_MS,
     );
 
     // Initial load (blocking for first render)

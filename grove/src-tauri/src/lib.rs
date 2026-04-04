@@ -2,8 +2,8 @@ mod eventbus;
 use grove_core::{
     AppConfig, BehindInfo, CloningProject, CommitInfo, CreatePtyRequest, CreatePtyRestore,
     CreatePtyResult, DetectedThemeResult, FileDiff, FileStatus, GrovePreferences, Project,
-    PtyBellEvent, SaveTerminalSessionSnapshotRequest, TerminalSessionSnapshot, Worktree,
-    WorktreePullRequest,
+    PtyBellEvent, SaveTerminalSessionSnapshotRequest, TerminalGcReport, TerminalSessionSnapshot,
+    Worktree, WorktreePullRequest,
 };
 use serde::{Deserialize, Serialize};
 use tauri::Emitter;
@@ -346,6 +346,11 @@ async fn load_terminal_session_snapshot(
     blocking(move || grove_core::pty::load_terminal_session_snapshot(&worktree_path)).await
 }
 
+#[tauri::command]
+async fn run_terminal_gc(dry_run: bool) -> Result<TerminalGcReport, String> {
+    blocking(move || grove_core::pty::run_terminal_gc(dry_run)).await
+}
+
 // === GIT DIFF COMMANDS (W4) ===
 
 #[tauri::command]
@@ -528,6 +533,7 @@ pub fn run() {
             poll_pty_bells,
             save_terminal_session_snapshot,
             load_terminal_session_snapshot,
+            run_terminal_gc,
             // Git Diff (W4)
             get_status,
             get_commits,

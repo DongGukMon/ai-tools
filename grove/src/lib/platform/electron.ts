@@ -123,6 +123,15 @@ export interface TerminalSessionSnapshot {
   panes: TerminalPaneSnapshot[];
 }
 
+export interface TerminalGcReport {
+  staleWorktreePaths: string[];
+  staleSessionNames: string[];
+  prunedWorktreePaths: string[];
+  killedSessionNames: string[];
+  skippedAttachedWorktreePaths: string[];
+  leftoverProcessIds: number[];
+}
+
 export function getCommandErrorMessage(error: unknown): string {
   let raw: string;
   if (typeof error === "string") {
@@ -358,6 +367,12 @@ export async function loadTerminalSessionSnapshot(
   return platform.invoke<TerminalSessionSnapshot | null>("load_terminal_session_snapshot", {
     worktreePath,
   });
+}
+
+export async function runTerminalGc(
+  dryRun = false,
+): Promise<TerminalGcReport> {
+  return platform.invoke<TerminalGcReport>("run_terminal_gc", { dryRun });
 }
 
 // === GIT DIFF COMMANDS (W4) ===

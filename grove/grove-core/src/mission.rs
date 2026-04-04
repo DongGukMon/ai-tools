@@ -396,6 +396,20 @@ fn delete_mission_with_paths(
     missions_dir: &Path,
     id: &str,
 ) -> Result<(), String> {
+    delete_mission_with_lifecycle(
+        store_path,
+        missions_dir,
+        id,
+        crate::worktree_lifecycle::default_worktree_lifecycle(),
+    )
+}
+
+fn delete_mission_with_lifecycle(
+    store_path: &Path,
+    missions_dir: &Path,
+    id: &str,
+    lifecycle: &crate::worktree_lifecycle::WorktreeLifecycle,
+) -> Result<(), String> {
     let mission = load_missions_from_path(store_path)
         .missions
         .iter()
@@ -412,6 +426,8 @@ fn delete_mission_with_paths(
     }
 
     let mission_dir = missions_dir.join(id);
+    let mission_dir_str = mission_dir.to_string_lossy().to_string();
+    lifecycle.cleanup(&mission_dir_str);
     if mission_dir.exists() {
         fs::remove_dir_all(&mission_dir)
             .map_err(|e| format!("Failed to remove mission directory: {e}"))?;
@@ -427,6 +443,8 @@ mod tests {
     use super::*;
     use crate::config::{GroveConfig, ProjectEntry};
     use crate::test_support::env_lock;
+    use crate::worktree_lifecycle::{WorktreeLifecycle, WorktreeResource};
+    use std::sync::{Arc, Mutex};
     use uuid::Uuid;
 
     fn temp_missions_path() -> PathBuf {
@@ -529,6 +547,21 @@ mod tests {
         .unwrap();
     }
 
+    struct TrackingResource {
+        calls: Arc<Mutex<Vec<String>>>,
+    }
+
+    impl WorktreeResource for TrackingResource {
+        fn name(&self) -> &str {
+            "tracking"
+        }
+
+        fn on_remove(&self, worktree_path: &str) -> Result<(), String> {
+            self.calls.lock().unwrap().push(worktree_path.to_string());
+            Ok(())
+        }
+    }
+
     #[test]
     fn load_missions_returns_empty_when_file_missing() {
         let path = temp_missions_path();
@@ -603,6 +636,27 @@ mod tests {
 
         let store = load_missions_from_path(&path);
         assert!(store.missions.is_empty());
+
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn delete_mission_cleans_up_mission_root_resources() {
+        let path = temp_missions_path();
+        let missions_dir = path.parent().unwrap().join("missions");
+        let mission = create_mission_with_paths(&path, &missions_dir, "To Delete").unwrap();
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let mut lifecycle = WorktreeLifecycle::default();
+        lifecycle.register(Box::new(TrackingResource {
+            calls: Arc::clone(&calls),
+        }));
+
+        delete_mission_with_lifecycle(&path, &missions_dir, &mission.id, &lifecycle).unwrap();
+
+        assert_eq!(
+            *calls.lock().unwrap(),
+            vec![missions_dir.join(&mission.id).to_string_lossy().to_string()]
+        );
 
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }

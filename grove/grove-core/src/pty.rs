@@ -5,19 +5,21 @@ use crate::{
     worktree_lifecycle::WorktreeResource,
     CreatePtyInitialHydration, CreatePtyInitialHydrationSource, CreatePtyRequest, CreatePtyRestore,
     CreatePtyResult, CreatePtySessionState, PtyBellEvent, SaveTerminalSessionSnapshotRequest,
-    TerminalPaneSnapshot, TerminalPaneSnapshotInput, TerminalRestoreCwdSource,
+    TerminalGcReport, TerminalPaneSnapshot, TerminalPaneSnapshotInput, TerminalRestoreCwdSource,
     TerminalSessionSnapshot,
 };
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::env;
 use std::fmt::Write as _;
 use std::io::{Read, Write};
+use std::path::Path;
 use std::process::{Command, Output};
 use std::sync::{Arc, Mutex, OnceLock};
-use std::time::Instant;
+use std::thread::sleep;
+use std::time::{Duration, Instant};
 
 const MAX_SCROLLBACK_BYTES: usize = 256 * 1024;
 const TMUX_NOT_FOUND_ERROR: &str = "tmux is required but was not found in PATH";
@@ -37,6 +39,7 @@ const PANE_PREFIX_LEN: usize = 8;
 const PANE_HASH_LEN: usize = 4;
 const CODEX_OUTPUT_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
 const HOOKLESS_ATTENTION_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+const TERMINAL_GC_PROCESS_EXIT_GRACE: Duration = Duration::from_millis(250);
 
 pub trait PtyEventSink: Send + Sync + 'static {
     fn on_output(&self, pty_id: &str, data: &[u8]);
@@ -124,6 +127,22 @@ struct ProcessSnapshot {
     pid: u32,
     ppid: u32,
     command_line: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct TerminalGcSessionInfo {
+    session_name: String,
+    worktree_path: String,
+    attached: bool,
+    pane_pid: Option<u32>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+struct TerminalGcPlan {
+    stale_worktree_paths: Vec<String>,
+    stale_session_names: Vec<String>,
+    stale_session_pane_pids: Vec<u32>,
+    skipped_attached_worktree_paths: Vec<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -436,21 +455,51 @@ pub fn close_ptys_for_worktree(worktree_path: &str) -> Result<(), String> {
     Ok(())
 }
 
-pub fn cleanup_stale_tmux_sessions_on_startup() -> Result<(), String> {
-    let mut preserved_sessions =
-        restorable_grove_tmux_sessions_from_layouts(&config::load_terminal_layouts_impl()?)?;
+pub fn run_terminal_gc(dry_run: bool) -> Result<TerminalGcReport, String> {
+    let referenced_paths = collect_referenced_worktree_paths()?;
+    let session_infos = collect_terminal_gc_session_infos()?;
+    let plan = build_terminal_gc_plan(referenced_paths, &session_infos);
 
-    // Also preserve global terminal sessions stored in panel-layouts.json
-    if let Ok(panel_raw) = config::load_panel_layouts_impl() {
-        match restorable_grove_tmux_sessions_from_panel_layouts(&panel_raw) {
-            Ok(global_sessions) => preserved_sessions.extend(global_sessions),
-            Err(e) => eprintln!("Warning: {e} — global terminal sessions may not be preserved"),
+    let mut report = TerminalGcReport {
+        stale_worktree_paths: plan.stale_worktree_paths.clone(),
+        stale_session_names: plan.stale_session_names.clone(),
+        skipped_attached_worktree_paths: plan.skipped_attached_worktree_paths.clone(),
+        ..TerminalGcReport::default()
+    };
+
+    if dry_run {
+        return Ok(report);
+    }
+
+    let leftover_candidates = collect_process_tree_candidates(&plan.stale_session_pane_pids);
+
+    for worktree_path in &plan.stale_worktree_paths {
+        config::remove_terminal_layouts_for_worktree(worktree_path)?;
+        config::remove_terminal_session_snapshot_for_worktree(worktree_path)?;
+        config::remove_panel_layouts_for_worktree(worktree_path)?;
+        report.pruned_worktree_paths.push(worktree_path.clone());
+    }
+
+    for session_name in &plan.stale_session_names {
+        match close_grove_session_by_name(session_name) {
+            Ok(()) => report.killed_session_names.push(session_name.clone()),
+            Err(error) => eprintln!(
+                "Warning: failed to close stale Grove tmux session {session_name}: {error}"
+            ),
         }
     }
 
-    cleanup_stale_tmux_sessions(list_grove_tmux_sessions()?, &preserved_sessions)
+    report.leftover_process_ids = terminate_leftover_processes(&leftover_candidates);
+
+    Ok(report)
 }
 
+pub fn cleanup_stale_tmux_sessions_on_startup() -> Result<(), String> {
+    run_terminal_gc(false).map(|_| ())
+}
+
+#[cfg(test)]
+#[allow(dead_code)]
 fn cleanup_stale_tmux_sessions<I>(
     session_names: I,
     preserved_sessions: &HashSet<String>,
@@ -508,6 +557,283 @@ where
     Ok(())
 }
 
+fn collect_referenced_worktree_paths() -> Result<Vec<String>, String> {
+    let mut paths = BTreeSet::new();
+
+    let terminal_layouts: serde_json::Map<String, Value> =
+        serde_json::from_str(&config::load_terminal_layouts_impl()?)
+            .map_err(|error| format!("Failed to parse terminal-layouts.json: {error}"))?;
+    paths.extend(terminal_layouts.keys().cloned());
+
+    let panel_layouts: serde_json::Map<String, Value> =
+        serde_json::from_str(&config::load_panel_layouts_impl()?)
+            .map_err(|error| format!("Failed to parse panel-layouts.json: {error}"))?;
+    paths.extend(
+        panel_layouts
+            .keys()
+            .filter(|key| Path::new(key).is_absolute())
+            .cloned(),
+    );
+
+    let snapshot_store = config::load_terminal_session_snapshot_store()?;
+    paths.extend(snapshot_store.worktrees.into_keys());
+
+    Ok(paths.into_iter().collect())
+}
+
+fn collect_terminal_gc_session_infos() -> Result<Vec<TerminalGcSessionInfo>, String> {
+    let mut sessions = Vec::new();
+
+    for session_name in list_grove_tmux_sessions()? {
+        let managed = match tmux_session_option(&session_name, TMUX_GROVE_MANAGED_OPTION) {
+            Ok(value) => value,
+            Err(error) if tmux_session_missing(&error) => continue,
+            Err(error) => {
+                eprintln!(
+                    "Warning: failed to inspect tmux session {session_name} during terminal GC: {error}"
+                );
+                continue;
+            }
+        };
+        if managed.as_deref() != Some("1") {
+            continue;
+        }
+
+        let worktree_path = match tmux_session_option(&session_name, TMUX_GROVE_WORKTREE_OPTION) {
+            Ok(Some(value)) if !value.trim().is_empty() => value,
+            Ok(_) => continue,
+            Err(error) if tmux_session_missing(&error) => continue,
+            Err(error) => {
+                eprintln!(
+                    "Warning: failed to inspect tmux worktree metadata for {session_name} during terminal GC: {error}"
+                );
+                continue;
+            }
+        };
+
+        let attached = match tmux_session_attached_count(&session_name) {
+            Ok(value) => value > 0,
+            Err(error) if tmux_session_missing(&error) => continue,
+            Err(error) => {
+                eprintln!(
+                    "Warning: failed to inspect attached client count for {session_name} during terminal GC: {error}"
+                );
+                continue;
+            }
+        };
+
+        sessions.push(TerminalGcSessionInfo {
+            pane_pid: tmux_pane_pid(&session_name).ok().flatten(),
+            session_name,
+            worktree_path,
+            attached,
+        });
+    }
+
+    Ok(sessions)
+}
+
+fn build_terminal_gc_plan(
+    referenced_paths: Vec<String>,
+    session_infos: &[TerminalGcSessionInfo],
+) -> TerminalGcPlan {
+    let mut missing_paths = BTreeSet::new();
+    let mut sessions_by_worktree: BTreeMap<String, Vec<&TerminalGcSessionInfo>> = BTreeMap::new();
+
+    for worktree_path in referenced_paths {
+        if !Path::new(&worktree_path).exists() {
+            missing_paths.insert(worktree_path);
+        }
+    }
+
+    for session in session_infos {
+        if !Path::new(&session.worktree_path).exists() {
+            missing_paths.insert(session.worktree_path.clone());
+        }
+        sessions_by_worktree
+            .entry(session.worktree_path.clone())
+            .or_default()
+            .push(session);
+    }
+
+    let mut stale_worktree_paths = Vec::new();
+    let mut stale_session_names = BTreeSet::new();
+    let mut stale_session_pane_pids = BTreeSet::new();
+    let mut skipped_attached_worktree_paths = Vec::new();
+
+    for worktree_path in missing_paths {
+        let attached_sessions = sessions_by_worktree
+            .get(&worktree_path)
+            .is_some_and(|sessions| sessions.iter().any(|session| session.attached));
+
+        if attached_sessions {
+            skipped_attached_worktree_paths.push(worktree_path);
+            continue;
+        }
+
+        stale_worktree_paths.push(worktree_path.clone());
+
+        if let Some(sessions) = sessions_by_worktree.get(&worktree_path) {
+            for session in sessions.iter().filter(|session| !session.attached) {
+                stale_session_names.insert(session.session_name.clone());
+                if let Some(pane_pid) = session.pane_pid {
+                    stale_session_pane_pids.insert(pane_pid);
+                }
+            }
+        }
+    }
+
+    TerminalGcPlan {
+        stale_worktree_paths,
+        stale_session_names: stale_session_names.into_iter().collect(),
+        stale_session_pane_pids: stale_session_pane_pids.into_iter().collect(),
+        skipped_attached_worktree_paths,
+    }
+}
+
+fn close_grove_session_by_name(session_name: &str) -> Result<(), String> {
+    kill_tmux_session_if_exists(session_name)?;
+
+    let mut removed_instances = Vec::new();
+    {
+        let mut reg = registry().lock().map_err(|e| e.to_string())?;
+        let matching_ids: Vec<String> = reg
+            .iter()
+            .filter(|(_, instance)| instance.session_name == session_name)
+            .map(|(id, _)| id.clone())
+            .collect();
+
+        for id in matching_ids {
+            if let Some(instance) = reg.remove(&id) {
+                removed_instances.push(instance);
+            }
+        }
+    }
+
+    for instance in removed_instances {
+        std::thread::spawn(move || {
+            reap_child_after_close(instance.child);
+        });
+    }
+
+    Ok(())
+}
+
+fn collect_process_tree_candidates(root_pids: &[u32]) -> BTreeSet<u32> {
+    let processes = match list_process_snapshots() {
+        Ok(processes) => processes,
+        Err(error) => {
+            eprintln!("Warning: failed to collect process tree for terminal GC: {error}");
+            return BTreeSet::new();
+        }
+    };
+
+    let children_by_pid: HashMap<u32, Vec<u32>> =
+        processes.iter().fold(HashMap::new(), |mut acc, process| {
+            acc.entry(process.ppid).or_default().push(process.pid);
+            acc
+        });
+
+    let mut candidates = BTreeSet::new();
+    for root_pid in root_pids {
+        let mut stack = vec![*root_pid];
+        while let Some(pid) = stack.pop() {
+            if !candidates.insert(pid) {
+                continue;
+            }
+            if let Some(children) = children_by_pid.get(&pid) {
+                stack.extend(children.iter().copied());
+            }
+        }
+    }
+
+    candidates
+}
+
+fn terminate_leftover_processes(candidate_pids: &BTreeSet<u32>) -> Vec<u32> {
+    if candidate_pids.is_empty() {
+        return Vec::new();
+    }
+
+    sleep(TERMINAL_GC_PROCESS_EXIT_GRACE);
+
+    let live_after_tmux_kill = match list_process_snapshots() {
+        Ok(processes) => processes
+            .into_iter()
+            .map(|process| process.pid)
+            .collect::<HashSet<_>>(),
+        Err(error) => {
+            eprintln!("Warning: failed to inspect leftover processes after terminal GC: {error}");
+            return Vec::new();
+        }
+    };
+
+    let leftover: Vec<u32> = candidate_pids
+        .iter()
+        .copied()
+        .filter(|pid| live_after_tmux_kill.contains(pid))
+        .collect();
+    if leftover.is_empty() {
+        return leftover;
+    }
+
+    if let Err(error) = signal_processes(&leftover, "-TERM") {
+        eprintln!("Warning: failed to terminate leftover processes after terminal GC: {error}");
+        return leftover;
+    }
+
+    sleep(TERMINAL_GC_PROCESS_EXIT_GRACE);
+
+    let still_running = match list_process_snapshots() {
+        Ok(processes) => {
+            let live = processes
+                .into_iter()
+                .map(|process| process.pid)
+                .collect::<HashSet<_>>();
+            leftover
+                .iter()
+                .copied()
+                .filter(|pid| live.contains(pid))
+                .collect::<Vec<_>>()
+        }
+        Err(error) => {
+            eprintln!(
+                "Warning: failed to re-check leftover processes after SIGTERM during terminal GC: {error}"
+            );
+            return leftover;
+        }
+    };
+
+    if !still_running.is_empty() {
+        if let Err(error) = signal_processes(&still_running, "-KILL") {
+            eprintln!("Warning: failed to SIGKILL leftover processes after terminal GC: {error}");
+        }
+    }
+
+    leftover
+}
+
+fn signal_processes(pids: &[u32], signal: &str) -> Result<(), String> {
+    for pid in pids {
+        let output = Command::new("kill")
+            .args([signal, &pid.to_string()])
+            .output()
+            .map_err(|error| format!("failed to execute kill {signal} {pid}: {error}"))?;
+
+        if !output.status.success() {
+            let message = tmux_output_message(&output);
+            if message.contains("No such process") {
+                continue;
+            }
+            return Err(format!("kill {signal} {pid} failed: {message}"));
+        }
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+#[allow(dead_code)]
 fn restorable_grove_tmux_sessions_from_layouts(raw: &str) -> Result<HashSet<String>, String> {
     let layouts: serde_json::Map<String, Value> = serde_json::from_str(raw)
         .map_err(|error| format!("Failed to parse terminal-layouts.json: {error}"))?;
@@ -520,6 +846,8 @@ fn restorable_grove_tmux_sessions_from_layouts(raw: &str) -> Result<HashSet<Stri
     Ok(session_names)
 }
 
+#[cfg(test)]
+#[allow(dead_code)]
 fn restorable_grove_tmux_sessions_from_panel_layouts(raw: &str) -> Result<HashSet<String>, String> {
     let panels: Value = serde_json::from_str(raw)
         .map_err(|error| format!("Failed to parse panel-layouts.json: {error}"))?;
@@ -545,6 +873,8 @@ fn restorable_grove_tmux_sessions_from_panel_layouts(raw: &str) -> Result<HashSe
     Ok(session_names)
 }
 
+#[cfg(test)]
+#[allow(dead_code)]
 fn collect_restorable_tmux_sessions(
     worktree_path: &str,
     node: &Value,
@@ -1670,6 +2000,67 @@ mod tests {
             "timed out waiting for {context}; expected {expected}, got {}",
             counter.load(Ordering::SeqCst)
         );
+    }
+
+    #[test]
+    fn terminal_gc_plan_prunes_missing_paths_and_unattached_sessions() {
+        let existing_path = unique_test_dir("grove-terminal-gc-existing");
+        fs::create_dir_all(&existing_path).unwrap();
+
+        let missing_path = unique_test_dir("grove-terminal-gc-missing");
+        let existing_path_str = existing_path.to_string_lossy().into_owned();
+        let missing_path_str = missing_path.to_string_lossy().into_owned();
+
+        let plan = build_terminal_gc_plan(
+            vec![existing_path_str.clone(), missing_path_str.clone()],
+            &[TerminalGcSessionInfo {
+                session_name: "grove-stale-session".into(),
+                worktree_path: missing_path_str.clone(),
+                attached: false,
+                pane_pid: Some(4242),
+            }],
+        );
+
+        assert_eq!(plan.stale_worktree_paths, vec![missing_path_str]);
+        assert_eq!(plan.stale_session_names, vec!["grove-stale-session"]);
+        assert_eq!(plan.stale_session_pane_pids, vec![4242]);
+        assert!(plan.skipped_attached_worktree_paths.is_empty());
+
+        let _ = fs::remove_dir_all(existing_path);
+    }
+
+    #[test]
+    fn terminal_gc_plan_skips_missing_paths_with_attached_sessions() {
+        let missing_path = unique_test_dir("grove-terminal-gc-attached");
+        let missing_path_str = missing_path.to_string_lossy().into_owned();
+
+        let plan = build_terminal_gc_plan(
+            vec![missing_path_str.clone()],
+            &[TerminalGcSessionInfo {
+                session_name: "grove-attached-session".into(),
+                worktree_path: missing_path_str.clone(),
+                attached: true,
+                pane_pid: Some(99),
+            }],
+        );
+
+        assert!(plan.stale_worktree_paths.is_empty());
+        assert!(plan.stale_session_names.is_empty());
+        assert!(plan.stale_session_pane_pids.is_empty());
+        assert_eq!(plan.skipped_attached_worktree_paths, vec![missing_path_str]);
+    }
+
+    #[test]
+    fn terminal_gc_plan_prunes_missing_layout_paths_without_sessions() {
+        let missing_path = unique_test_dir("grove-terminal-gc-layout-only");
+        let missing_path_str = missing_path.to_string_lossy().into_owned();
+
+        let plan = build_terminal_gc_plan(vec![missing_path_str.clone()], &[]);
+
+        assert_eq!(plan.stale_worktree_paths, vec![missing_path_str]);
+        assert!(plan.stale_session_names.is_empty());
+        assert!(plan.stale_session_pane_pids.is_empty());
+        assert!(plan.skipped_attached_worktree_paths.is_empty());
     }
 
     struct TmuxSessionGuard {

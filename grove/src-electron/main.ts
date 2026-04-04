@@ -29,6 +29,7 @@ const JSON_RESPONSE_COMMANDS = new Set([
   "poll_pty_bells",
   "save_terminal_session_snapshot",
   "load_terminal_session_snapshot",
+  "run_terminal_gc",
   "get_status",
   "get_commits",
   "get_working_diff",
