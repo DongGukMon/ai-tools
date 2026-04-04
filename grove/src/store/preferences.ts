@@ -28,6 +28,16 @@ function toSaveable(get: () => PreferencesStore): GrovePreferences {
   };
 }
 
+function normalizePreferences(prefs: GrovePreferences): GrovePreferences {
+  return {
+    terminalLinkOpenMode:
+      prefs.terminalLinkOpenMode ?? "external-with-localhost-internal",
+    projectViewMode: prefs.projectViewMode ?? "default",
+    collapsedProjectOrgs: prefs.collapsedProjectOrgs ?? [],
+    preferredIde: prefs.preferredIde ?? null,
+  };
+}
+
 export const usePreferencesStore = create<PreferencesStore>((set, get) => ({
   terminalLinkOpenMode: "external-with-localhost-internal",
   projectViewMode: "default",
@@ -36,14 +46,8 @@ export const usePreferencesStore = create<PreferencesStore>((set, get) => ({
   loaded: false,
 
   init: async () => {
-    const prefs = await getGrovePreferences();
-    set({
-      terminalLinkOpenMode: prefs.terminalLinkOpenMode,
-      projectViewMode: prefs.projectViewMode,
-      collapsedProjectOrgs: prefs.collapsedProjectOrgs,
-      preferredIde: prefs.preferredIde,
-      loaded: true,
-    });
+    const prefs = normalizePreferences(await getGrovePreferences());
+    set({ ...prefs, loaded: true });
   },
 
   setTerminalLinkOpenMode: (mode) => {
