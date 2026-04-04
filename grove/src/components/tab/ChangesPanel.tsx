@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useDiffStore } from "../../store/diff";
 import { useDiff } from "../../hooks/useDiff";
 import { useResolvedSidebarSelection } from "../../hooks/useResolvedSidebarSelection";
@@ -294,11 +294,12 @@ function WorkingChangesView({
   );
 
   const isStaged = selectedSection === "staged";
-  const allUntracked = selectedSection === "unstaged"
-    && selectedPaths.size > 0
-    && [...selectedPaths].every((path) => {
-      return unstaged.find((file) => file.path === path)?.status === "untracked";
-    });
+  const allUntracked = useMemo(
+    () => selectedSection === "unstaged"
+      && selectedPaths.size > 0
+      && [...selectedPaths].every((path) => unstaged.find((f) => f.path === path)?.status === "untracked"),
+    [selectedSection, selectedPaths, unstaged],
+  );
 
   const handleMarqueeSelect = useCallback(
     (section: "staged" | "unstaged", ids: Set<string>) => {
@@ -338,6 +339,17 @@ function WorkingChangesView({
       fileListRef.current?.focus();
     }
   }, [selectedPaths]);
+
+  const runDestructiveAction = useCallback(
+    async (title: string, description: string, confirmLabel: string, action: (paths: string[]) => Promise<void>) => {
+      const paths = [...selectedPaths];
+      const confirmed = await overlay.confirm({ title, description, confirmLabel, variant: "destructive" });
+      if (!confirmed) return;
+      setSelectedPaths(new Set());
+      await action(paths);
+    },
+    [selectedPaths],
+  );
 
   const handleContextMenuFile = useCallback((section: "staged" | "unstaged", path: string) => {
     if (selectedSection === section && selectedPaths.has(path)) {
@@ -406,36 +418,24 @@ function WorkingChangesView({
                       <ContextMenuSeparator />
                       <ContextMenuItem
                         className={cn("text-destructive focus:text-destructive")}
-                        onSelect={async () => {
-                          const paths = [...selectedPaths];
-                          const confirmed = await overlay.confirm({
-                            title: "Discard Changes",
-                            description: `Discard changes to ${paths.length} file${paths.length > 1 ? "s" : ""}?`,
-                            confirmLabel: "Discard",
-                            variant: "destructive",
-                          });
-                          if (!confirmed) return;
-                          setSelectedPaths(new Set());
-                          await store.discardFiles(paths);
-                        }}
+                        onSelect={() => runDestructiveAction(
+                          "Discard Changes",
+                          `Discard changes to ${selectedPaths.size} file${selectedPaths.size > 1 ? "s" : ""}?`,
+                          "Discard",
+                          store.discardFiles,
+                        )}
                       >
                         Discard
                       </ContextMenuItem>
                       {allUntracked && (
                         <ContextMenuItem
                           className={cn("text-destructive focus:text-destructive")}
-                          onSelect={async () => {
-                            const paths = [...selectedPaths];
-                            const confirmed = await overlay.confirm({
-                              title: "Remove Files",
-                              description: `Remove ${paths.length} untracked file${paths.length > 1 ? "s" : ""}?`,
-                              confirmLabel: "Remove",
-                              variant: "destructive",
-                            });
-                            if (!confirmed) return;
-                            setSelectedPaths(new Set());
-                            await store.removeUntrackedFiles(paths);
-                          }}
+                          onSelect={() => runDestructiveAction(
+                            "Remove Files",
+                            `Remove ${selectedPaths.size} untracked file${selectedPaths.size > 1 ? "s" : ""}?`,
+                            "Remove",
+                            store.removeUntrackedFiles,
+                          )}
                         >
                           Remove
                         </ContextMenuItem>
