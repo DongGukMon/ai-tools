@@ -1153,6 +1153,14 @@ pub fn save_terminal_session_snapshot(
         return Err("worktreePath is required".to_string());
     }
 
+    if request.panes.is_empty() {
+        config::remove_terminal_session_snapshot_for_worktree(worktree_path)?;
+        return Ok(TerminalSessionSnapshot {
+            worktree_path: worktree_path.to_string(),
+            panes: Vec::new(),
+        });
+    }
+
     let mut seen_pane_ids = HashSet::new();
     let mut panes = Vec::with_capacity(request.panes.len());
     for pane in &request.panes {
@@ -2002,6 +2010,43 @@ mod tests {
         );
     }
 
+    struct TestHome {
+        root: PathBuf,
+        original_home: Option<String>,
+    }
+
+    impl TestHome {
+        fn new() -> Self {
+            let root = unique_test_dir("grove-pty-home");
+            fs::create_dir_all(&root).unwrap();
+
+            let original_home = std::env::var("HOME").ok();
+            unsafe {
+                std::env::set_var("HOME", &root);
+            }
+
+            Self {
+                root,
+                original_home,
+            }
+        }
+    }
+
+    impl Drop for TestHome {
+        fn drop(&mut self) {
+            match &self.original_home {
+                Some(original_home) => unsafe {
+                    std::env::set_var("HOME", original_home);
+                },
+                None => unsafe {
+                    std::env::remove_var("HOME");
+                },
+            }
+
+            let _ = fs::remove_dir_all(&self.root);
+        }
+    }
+
     #[test]
     fn terminal_gc_plan_prunes_missing_paths_and_unattached_sessions() {
         let existing_path = unique_test_dir("grove-terminal-gc-existing");
@@ -2061,6 +2106,42 @@ mod tests {
         assert!(plan.stale_session_names.is_empty());
         assert!(plan.stale_session_pane_pids.is_empty());
         assert!(plan.skipped_attached_worktree_paths.is_empty());
+    }
+
+    #[test]
+    fn empty_snapshot_request_removes_saved_snapshot_for_worktree() {
+        let _env = env_lock();
+        let _home = TestHome::new();
+        let worktree_path = unique_test_dir("grove-terminal-snapshot-clear");
+        fs::create_dir_all(&worktree_path).unwrap();
+        let worktree_path_str = worktree_path.to_string_lossy().into_owned();
+
+        save_terminal_session_snapshot(SaveTerminalSessionSnapshotRequest {
+            worktree_path: worktree_path_str.clone(),
+            panes: vec![TerminalPaneSnapshotInput {
+                pane_id: "pane-1".into(),
+                pty_id: None,
+                launch_cwd: Some(worktree_path_str.clone()),
+            }],
+        })
+        .unwrap();
+        assert!(load_terminal_session_snapshot(&worktree_path_str)
+            .unwrap()
+            .is_some());
+
+        let cleared = save_terminal_session_snapshot(SaveTerminalSessionSnapshotRequest {
+            worktree_path: worktree_path_str.clone(),
+            panes: Vec::new(),
+        })
+        .unwrap();
+
+        assert_eq!(cleared.worktree_path, worktree_path_str);
+        assert!(cleared.panes.is_empty());
+        assert!(load_terminal_session_snapshot(&worktree_path_str)
+            .unwrap()
+            .is_none());
+
+        let _ = fs::remove_dir_all(worktree_path);
     }
 
     struct TmuxSessionGuard {
