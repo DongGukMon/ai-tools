@@ -150,6 +150,15 @@ function ReportStatus({
   summary: RunSummary;
 }) {
   const headline = buildReportHeadline(summary);
+  const statusBadgeLabel = (() => {
+    if (headline.tone === "warning") {
+      return "Findings";
+    }
+    if (headline.tone === "success") {
+      return "Cleaned";
+    }
+    return "No Changes";
+  })();
 
   return (
     <div className={cn("rounded-md border border-border bg-secondary/15 p-4")}>
@@ -158,13 +167,7 @@ function ReportStatus({
           <div className={cn("flex flex-wrap items-center gap-2")}>
             <h5 className={cn("text-[12px] font-medium text-foreground")}>Last Report</h5>
             <Badge variant="outline">{formatRunMode(summary.mode)}</Badge>
-            <Badge variant={toneToBadgeVariant(headline.tone)}>
-              {headline.tone === "warning"
-                ? "Findings"
-                : headline.tone === "success"
-                  ? "Cleaned"
-                  : "No Changes"}
-            </Badge>
+            <Badge variant={toneToBadgeVariant(headline.tone)}>{statusBadgeLabel}</Badge>
           </div>
           <p className={cn("mt-2 text-[13px] text-foreground")}>{headline.title}</p>
           <p className={cn("mt-1 text-[11px] text-muted-foreground/80")}>{headline.detail}</p>
@@ -243,7 +246,7 @@ function ReportLog({
                   key={entry.id}
                   className={cn(
                     "grid grid-cols-[auto_auto_1fr] items-start gap-3 px-3 py-2 font-mono text-[12px]",
-                    index > 0 && "border-t border-border/80",
+                    { "border-t border-border/80": index > 0 },
                   )}
                 >
                   <span className={cn("tabular-nums text-muted-foreground/80")}>
