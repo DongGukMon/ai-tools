@@ -35,6 +35,8 @@ export type TerminalLinkOpenMode =
   | "internal"
   | "external-with-localhost-internal";
 
+export type ProjectViewMode = "default" | "group-by-orgs";
+
 export interface PreferredIde {
   id: string;
   displayName?: string;
@@ -43,6 +45,8 @@ export interface PreferredIde {
 
 export interface GrovePreferences {
   terminalLinkOpenMode: TerminalLinkOpenMode;
+  projectViewMode: ProjectViewMode;
+  collapsedProjectOrgs: string[];
   preferredIde: PreferredIde | null;
 }
 

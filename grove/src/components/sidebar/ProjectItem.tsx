@@ -24,12 +24,17 @@ import WorktreeItem from "./WorktreeItem";
 import { IconButton } from "../ui/button";
 import { cn } from "../../lib/cn";
 import { sanitizeBranchName } from "../../lib/git-utils";
+import { getProjectDisplayName } from "../../lib/project-view";
 
 interface Props {
   project: Project;
+  showOrgPrefix?: boolean;
 }
 
-const ProjectItem = memo(function ProjectItem({ project }: Props) {
+const ProjectItem = memo(function ProjectItem({
+  project,
+  showOrgPrefix = true,
+}: Props) {
   const {
     attributes,
     listeners,
@@ -71,7 +76,7 @@ const ProjectItem = memo(function ProjectItem({ project }: Props) {
     }
   };
 
-  const displayName = project.name !== project.repo ? project.name : `${project.org}/${project.repo}`;
+  const displayName = getProjectDisplayName(project, { showOrgPrefix });
 
   const handleStartRename = (e: React.MouseEvent) => {
     e.stopPropagation();

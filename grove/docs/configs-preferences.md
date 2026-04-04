@@ -1,6 +1,6 @@
 # Grove Configs and Preferences
 
-**Date**: 2026-04-02
+**Date**: 2026-04-04
 
 ## Summary
 
@@ -12,9 +12,9 @@ Grove stores app-wide configuration in `~/.grove/config.json`.
 - `terminalTheme` — saved terminal theme override
 - `preferences` — Grove-specific behavior preferences
 
-`preferences` is the home for user-selectable Grove behavior such as link opening policy and preferred IDE. It is nested under `AppConfig`, but it is intentionally narrower in scope than the full app config.
+`preferences` is the home for user-selectable Grove behavior such as link opening policy, project list view mode, and preferred IDE. It is nested under `AppConfig`, but it is intentionally narrower in scope than the full app config.
 
-The preferences layer provides persistence, I/O, and a Zustand store (`usePreferencesStore`). Terminal link routing is wired via `terminalLinkOpenMode` (see [Terminal Link Open](open-link.md)). Grove now exposes persisted preferences in the Preferences modal under General and Terminal tabs. The Developer tab in that modal is diagnostic-only and does not persist to `config.json`. IDE launching has not been wired yet.
+The preferences layer provides persistence, I/O, and a Zustand store (`usePreferencesStore`). Terminal link routing is wired via `terminalLinkOpenMode` (see [Terminal Link Open](open-link.md)). Grove now exposes persisted preferences in the Preferences modal under General and Terminal tabs, including project grouping mode for the Projects sidebar. The Developer tab in that modal is diagnostic-only and does not persist to `config.json`. IDE launching has not been wired yet.
 
 ## Storage Model
 
@@ -42,6 +42,7 @@ Example:
   "baseDir": "/Volumes/work/grove-data",
   "preferences": {
     "terminalLinkOpenMode": "external-with-localhost-internal",
+    "projectViewMode": "default",
     "preferredIde": {
       "id": "webstorm"
     }
@@ -78,6 +79,8 @@ type TerminalLinkOpenMode =
   | "internal"
   | "external-with-localhost-internal";
 
+type ProjectViewMode = "default" | "group-by-orgs";
+
 interface PreferredIde {
   id: string;
   displayName?: string;
@@ -86,6 +89,8 @@ interface PreferredIde {
 
 interface GrovePreferences {
   terminalLinkOpenMode: TerminalLinkOpenMode;
+  projectViewMode: ProjectViewMode;
+  collapsedProjectOrgs: string[];
   preferredIde: PreferredIde | null;
 }
 ```
@@ -102,6 +107,8 @@ If `preferences` is missing from `config.json`, Grove falls back to `GrovePrefer
 Current defaults:
 
 - `terminalLinkOpenMode = "external-with-localhost-internal"`
+- `projectViewMode = "default"`
+- `collapsedProjectOrgs = []`
 - `preferredIde = { "id": "webstorm" }`
 
 This defaulting is applied when older config files are loaded and do not yet contain a `preferences` block.
@@ -115,6 +122,7 @@ Minimal persisted shape with current defaults:
   "baseDir": "/Users/you/.grove",
   "preferences": {
     "terminalLinkOpenMode": "external-with-localhost-internal",
+    "projectViewMode": "default",
     "preferredIde": {
       "id": "webstorm"
     }
@@ -133,6 +141,8 @@ Full shape with optional IDE metadata:
   },
   "preferences": {
     "terminalLinkOpenMode": "internal",
+    "projectViewMode": "group-by-orgs",
+    "collapsedProjectOrgs": ["sendbird"],
     "preferredIde": {
       "id": "cursor",
       "displayName": "Cursor",
@@ -143,6 +153,8 @@ Full shape with optional IDE metadata:
 ```
 
 `preferredIde` may also be `null`.
+
+`collapsedProjectOrgs` is omitted from `config.json` when it is empty.
 
 ## I/O Interfaces
 
@@ -207,6 +219,7 @@ In particular:
 Persisted and exposed:
 
 - terminal link open policy
+- project view mode selection (`default`, `group-by-orgs`)
 - preferred IDE selection
 - Preferences UI for persisted General and Terminal settings
 

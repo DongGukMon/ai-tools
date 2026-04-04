@@ -39,6 +39,14 @@ pub enum TerminalLinkOpenMode {
     ExternalWithLocalhostInternal,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum ProjectViewMode {
+    #[default]
+    Default,
+    GroupByOrgs,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(default, rename_all = "camelCase")]
 pub struct PreferredIde {
@@ -53,6 +61,10 @@ pub struct PreferredIde {
 #[serde(default, rename_all = "camelCase")]
 pub struct GrovePreferences {
     pub terminal_link_open_mode: TerminalLinkOpenMode,
+    #[serde(default)]
+    pub project_view_mode: ProjectViewMode,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub collapsed_project_orgs: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub preferred_ide: Option<PreferredIde>,
 }
@@ -61,6 +73,8 @@ impl Default for GrovePreferences {
     fn default() -> Self {
         Self {
             terminal_link_open_mode: TerminalLinkOpenMode::ExternalWithLocalhostInternal,
+            project_view_mode: ProjectViewMode::Default,
+            collapsed_project_orgs: Vec::new(),
             preferred_ide: Some(PreferredIde {
                 id: "webstorm".into(),
                 display_name: None,
@@ -555,6 +569,8 @@ mod tests {
     fn sample_preferences() -> GrovePreferences {
         GrovePreferences {
             terminal_link_open_mode: TerminalLinkOpenMode::Internal,
+            project_view_mode: ProjectViewMode::GroupByOrgs,
+            collapsed_project_orgs: vec!["sendbird".into()],
             preferred_ide: Some(PreferredIde {
                 id: "cursor".into(),
                 display_name: Some("Cursor".into()),
