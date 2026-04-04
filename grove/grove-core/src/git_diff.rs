@@ -221,7 +221,12 @@ pub fn remove_untracked_files_impl(
     worktree_path: &str,
     file_paths: &[String],
 ) -> Result<(), String> {
+    let repo = Repository::open(worktree_path).map_err(|e| e.to_string())?;
     for path in file_paths {
+        let status = repo.status_file(Path::new(path)).map_err(|e| e.to_string())?;
+        if !status.contains(git2::Status::WT_NEW) {
+            return Err(format!("'{}' is not an untracked file", path));
+        }
         let full_path = Path::new(worktree_path).join(path);
         if full_path.exists() {
             remove_path(&full_path)?;

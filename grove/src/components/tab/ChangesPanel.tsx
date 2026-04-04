@@ -405,7 +405,7 @@ function WorkingChangesView({
                       </ContextMenuItem>
                       <ContextMenuSeparator />
                       <ContextMenuItem
-                        className={cn({ "text-destructive focus:text-destructive": true })}
+                        className={cn("text-destructive focus:text-destructive")}
                         onSelect={async () => {
                           const paths = [...selectedPaths];
                           const confirmed = await overlay.confirm({
@@ -423,7 +423,7 @@ function WorkingChangesView({
                       </ContextMenuItem>
                       {allUntracked && (
                         <ContextMenuItem
-                          className={cn({ "text-destructive focus:text-destructive": true })}
+                          className={cn("text-destructive focus:text-destructive")}
                           onSelect={async () => {
                             const paths = [...selectedPaths];
                             const confirmed = await overlay.confirm({
