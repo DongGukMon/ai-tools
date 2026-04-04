@@ -15,6 +15,7 @@ describe("usePreferencesStore", () => {
       terminalLinkOpenMode: "external-with-localhost-internal",
       projectViewMode: "default",
       collapsedProjectOrgs: [],
+      projectOrgOrder: [],
       preferredIde: null,
       loaded: false,
     });
@@ -31,6 +32,7 @@ describe("usePreferencesStore", () => {
     expect(usePreferencesStore.getState()).toMatchObject({
       projectViewMode: "group-by-orgs",
       collapsedProjectOrgs: [],
+      projectOrgOrder: [],
       preferredIde: null,
       loaded: true,
     });
@@ -49,6 +51,22 @@ describe("usePreferencesStore", () => {
     expect(platform.saveGrovePreferences).toHaveBeenCalledWith(
       expect.objectContaining({
         collapsedProjectOrgs: ["sendbird"],
+      }),
+    );
+  });
+
+  it("saves unique org order values", () => {
+    usePreferencesStore
+      .getState()
+      .setProjectOrgOrder(["sendbird", "bang9", "sendbird"]);
+
+    expect(usePreferencesStore.getState().projectOrgOrder).toEqual([
+      "sendbird",
+      "bang9",
+    ]);
+    expect(platform.saveGrovePreferences).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectOrgOrder: ["sendbird", "bang9"],
       }),
     );
   });

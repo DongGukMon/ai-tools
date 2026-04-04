@@ -10,12 +10,14 @@ interface PreferencesStore {
   terminalLinkOpenMode: TerminalLinkOpenMode;
   projectViewMode: ProjectViewMode;
   collapsedProjectOrgs: string[];
+  projectOrgOrder: string[];
   preferredIde: GrovePreferences["preferredIde"];
   loaded: boolean;
   init: () => Promise<void>;
   setTerminalLinkOpenMode: (mode: TerminalLinkOpenMode) => void;
   setProjectViewMode: (mode: ProjectViewMode) => void;
   setProjectOrgCollapsed: (org: string, collapsed: boolean) => void;
+  setProjectOrgOrder: (orgOrder: string[]) => void;
   setPreferredIde: (ide: GrovePreferences["preferredIde"]) => void;
 }
 
@@ -24,6 +26,7 @@ function toSaveable(get: () => PreferencesStore): GrovePreferences {
     terminalLinkOpenMode: get().terminalLinkOpenMode,
     projectViewMode: get().projectViewMode,
     collapsedProjectOrgs: get().collapsedProjectOrgs,
+    projectOrgOrder: get().projectOrgOrder,
     preferredIde: get().preferredIde,
   };
 }
@@ -34,6 +37,7 @@ function normalizePreferences(prefs: GrovePreferences): GrovePreferences {
       prefs.terminalLinkOpenMode ?? "external-with-localhost-internal",
     projectViewMode: prefs.projectViewMode ?? "default",
     collapsedProjectOrgs: prefs.collapsedProjectOrgs ?? [],
+    projectOrgOrder: prefs.projectOrgOrder ?? [],
     preferredIde: prefs.preferredIde ?? null,
   };
 }
@@ -42,6 +46,7 @@ export const usePreferencesStore = create<PreferencesStore>((set, get) => ({
   terminalLinkOpenMode: "external-with-localhost-internal",
   projectViewMode: "default",
   collapsedProjectOrgs: [],
+  projectOrgOrder: [],
   preferredIde: null,
   loaded: false,
 
@@ -66,6 +71,11 @@ export const usePreferencesStore = create<PreferencesStore>((set, get) => ({
         ? Array.from(new Set([...state.collapsedProjectOrgs, org]))
         : state.collapsedProjectOrgs.filter((value) => value !== org),
     }));
+    saveGrovePreferences(toSaveable(get)).catch(() => {});
+  },
+
+  setProjectOrgOrder: (orgOrder) => {
+    set({ projectOrgOrder: Array.from(new Set(orgOrder)) });
     saveGrovePreferences(toSaveable(get)).catch(() => {});
   },
 

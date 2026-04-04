@@ -47,6 +47,7 @@ export interface GrovePreferences {
   terminalLinkOpenMode: TerminalLinkOpenMode;
   projectViewMode: ProjectViewMode;
   collapsedProjectOrgs: string[];
+  projectOrgOrder: string[];
   preferredIde: PreferredIde | null;
 }
 

@@ -91,6 +91,7 @@ interface GrovePreferences {
   terminalLinkOpenMode: TerminalLinkOpenMode;
   projectViewMode: ProjectViewMode;
   collapsedProjectOrgs: string[];
+  projectOrgOrder: string[];
   preferredIde: PreferredIde | null;
 }
 ```
@@ -109,6 +110,7 @@ Current defaults:
 - `terminalLinkOpenMode = "external-with-localhost-internal"`
 - `projectViewMode = "default"`
 - `collapsedProjectOrgs = []`
+- `projectOrgOrder = []`
 - `preferredIde = { "id": "webstorm" }`
 
 This defaulting is applied when older config files are loaded and do not yet contain a `preferences` block.
@@ -143,6 +145,7 @@ Full shape with optional IDE metadata:
     "terminalLinkOpenMode": "internal",
     "projectViewMode": "group-by-orgs",
     "collapsedProjectOrgs": ["sendbird"],
+    "projectOrgOrder": ["bang9", "sendbird"],
     "preferredIde": {
       "id": "cursor",
       "displayName": "Cursor",
@@ -155,6 +158,7 @@ Full shape with optional IDE metadata:
 `preferredIde` may also be `null`.
 
 `collapsedProjectOrgs` is omitted from `config.json` when it is empty.
+`projectOrgOrder` is omitted from `config.json` when it is empty.
 
 ## I/O Interfaces
 

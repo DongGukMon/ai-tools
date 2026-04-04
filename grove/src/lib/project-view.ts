@@ -24,6 +24,29 @@ export function groupProjectsByOrg(projects: Project[]): ProjectOrgGroup[] {
   return Array.from(grouped.values());
 }
 
+export function orderProjectOrgGroups(
+  groups: ProjectOrgGroup[],
+  projectOrgOrder: string[],
+): ProjectOrgGroup[] {
+  const groupedByOrg = new Map(groups.map((group) => [group.org, group]));
+  const ordered: ProjectOrgGroup[] = [];
+
+  for (const org of projectOrgOrder) {
+    const group = groupedByOrg.get(org);
+    if (!group) continue;
+    ordered.push(group);
+    groupedByOrg.delete(org);
+  }
+
+  for (const group of groups) {
+    if (groupedByOrg.has(group.org)) {
+      ordered.push(group);
+    }
+  }
+
+  return ordered;
+}
+
 export function getProjectDisplayName(
   project: Project,
   options: ProjectDisplayNameOptions = {},
@@ -65,4 +88,23 @@ export function applyOrgProjectOrder(
     nextOrgIndex += 1;
     return reorderedId;
   });
+}
+
+export function moveProjectOrg(
+  orderedOrgs: string[],
+  org: string,
+  direction: "up" | "down",
+): string[] {
+  const currentIndex = orderedOrgs.indexOf(org);
+  if (currentIndex === -1) return orderedOrgs;
+
+  const nextIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+  if (nextIndex < 0 || nextIndex >= orderedOrgs.length) {
+    return orderedOrgs;
+  }
+
+  const next = [...orderedOrgs];
+  const [moved] = next.splice(currentIndex, 1);
+  next.splice(nextIndex, 0, moved);
+  return next;
 }

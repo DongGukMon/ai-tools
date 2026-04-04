@@ -1,5 +1,5 @@
-import { useState, useMemo, useCallback } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { useState, useMemo, useCallback, useEffect } from "react";
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight } from "lucide-react";
 import {
   DndContext,
   closestCenter,
@@ -20,10 +20,15 @@ import type { Project, CloningProject } from "../../types";
 import { useProjectStore } from "../../store/project";
 import { usePreferencesStore } from "../../store/preferences";
 import { cn } from "../../lib/cn";
-import { applyOrgProjectOrder, groupProjectsByOrg } from "../../lib/project-view";
+import {
+  applyOrgProjectOrder,
+  groupProjectsByOrg,
+  moveProjectOrg,
+  orderProjectOrgGroups,
+} from "../../lib/project-view";
 import ProjectItem from "./ProjectItem";
 import CloningProjectItem from "./CloningProjectItem";
-import { Button } from "../ui/button";
+import { Button, IconButton } from "../ui/button";
 
 interface Props {
   projects: Project[];
@@ -36,6 +41,10 @@ interface ProjectOrgSectionProps {
   collapsed: boolean;
   onToggle: () => void;
   onReorder: (projectIds: string[]) => void;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
 }
 
 interface SortableProjectListProps {
@@ -122,29 +131,67 @@ function ProjectOrgSection({
   collapsed,
   onToggle,
   onReorder,
+  canMoveUp,
+  canMoveDown,
+  onMoveUp,
+  onMoveDown,
 }: ProjectOrgSectionProps) {
   return (
     <div className={cn("px-1.5")}>
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        className={cn(
-          "group h-auto w-full justify-start gap-2 rounded-lg border-0 px-2.5 py-1.5 text-[13px] transition-all duration-150",
-          "cursor-pointer select-none text-foreground hover:bg-secondary/50 hover:text-foreground",
-        )}
-        onClick={onToggle}
-      >
-        {collapsed ? (
-          <ChevronRight className={cn("h-[15px] w-[15px] shrink-0 text-muted-foreground")} />
-        ) : (
-          <ChevronDown className={cn("h-[15px] w-[15px] shrink-0 text-muted-foreground")} />
-        )}
-        <span className={cn("min-w-0 flex-1 truncate text-left font-medium")}>{org}</span>
-        <span className={cn("shrink-0 text-[11px] text-muted-foreground")}>
-          {projects.length}
-        </span>
-      </Button>
+      <div className={cn("group flex items-center gap-1")}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className={cn(
+            "h-auto min-w-0 flex-1 justify-start gap-2 rounded-lg border-0 px-2.5 py-1.5 text-[13px] transition-all duration-150",
+            "cursor-pointer select-none text-foreground hover:bg-secondary/50 hover:text-foreground",
+          )}
+          onClick={onToggle}
+        >
+          {collapsed ? (
+            <ChevronRight className={cn("h-[15px] w-[15px] shrink-0 text-muted-foreground")} />
+          ) : (
+            <ChevronDown className={cn("h-[15px] w-[15px] shrink-0 text-muted-foreground")} />
+          )}
+          <span className={cn("min-w-0 flex-1 truncate text-left font-medium")}>{org}</span>
+        </Button>
+
+        <div className={cn("flex shrink-0 items-center gap-1 pr-1")}>
+          <span className={cn("shrink-0 text-[11px] text-muted-foreground")}>
+            {projects.length}
+          </span>
+          <div
+            className={cn(
+              "flex w-[44px] items-center justify-end gap-0.5 opacity-0 transition-opacity",
+              "group-hover:opacity-100 group-focus-within:opacity-100",
+            )}
+          >
+            <IconButton
+              className={cn("h-5 w-5 disabled:opacity-30")}
+              onClick={(e) => {
+                e.stopPropagation();
+                onMoveUp();
+              }}
+              disabled={!canMoveUp}
+              title="Move group up"
+            >
+              <ArrowUp className={cn("h-[11px] w-[11px]")} />
+            </IconButton>
+            <IconButton
+              className={cn("h-5 w-5 disabled:opacity-30")}
+              onClick={(e) => {
+                e.stopPropagation();
+                onMoveDown();
+              }}
+              disabled={!canMoveDown}
+              title="Move group down"
+            >
+              <ArrowDown className={cn("h-[11px] w-[11px]")} />
+            </IconButton>
+          </div>
+        </div>
+      </div>
 
       <div
         className={cn("grid transition-[grid-template-rows] duration-200 ease-out", {
@@ -167,15 +214,39 @@ function ProjectOrgSection({
 
 function ProjectTree({ projects, cloningProjects }: Props) {
   const projectViewMode = usePreferencesStore((s) => s.projectViewMode);
+  const preferencesLoaded = usePreferencesStore((s) => s.loaded);
   const collapsedProjectOrgs = usePreferencesStore((s) => s.collapsedProjectOrgs);
+  const projectOrgOrder = usePreferencesStore((s) => s.projectOrgOrder);
   const setProjectOrgCollapsed = usePreferencesStore((s) => s.setProjectOrgCollapsed);
+  const setProjectOrgOrder = usePreferencesStore((s) => s.setProjectOrgOrder);
   const reorderProjects = useProjectStore((s) => s.reorderProjects);
 
   const orgGroups = useMemo(() => groupProjectsByOrg(projects), [projects]);
+  const orderedOrgGroups = useMemo(
+    () => orderProjectOrgGroups(orgGroups, projectOrgOrder),
+    [orgGroups, projectOrgOrder],
+  );
+  const visibleOrgIds = useMemo(
+    () => orderedOrgGroups.map((group) => group.org),
+    [orderedOrgGroups],
+  );
   const collapsedOrgSet = useMemo(
     () => new Set(collapsedProjectOrgs),
     [collapsedProjectOrgs],
   );
+
+  useEffect(() => {
+    if (!preferencesLoaded) return;
+    const nextOrgOrder = projectOrgOrder.filter((org) => visibleOrgIds.includes(org));
+    if (
+      nextOrgOrder.length === projectOrgOrder.length &&
+      nextOrgOrder.every((org, index) => org === projectOrgOrder[index])
+    ) {
+      return;
+    }
+
+    setProjectOrgOrder(nextOrgOrder);
+  }, [preferencesLoaded, projectOrgOrder, setProjectOrgOrder, visibleOrgIds]);
 
   const handleOrgReorder = useCallback(
     (org: string, reorderedOrgProjectIds: string[]) => {
@@ -189,11 +260,22 @@ function ProjectTree({ projects, cloningProjects }: Props) {
     [projects, reorderProjects],
   );
 
+  const handleMoveOrg = useCallback(
+    (org: string, direction: "up" | "down") => {
+      const nextOrder = moveProjectOrg(visibleOrgIds, org, direction);
+      if (nextOrder.every((value, index) => value === visibleOrgIds[index])) {
+        return;
+      }
+      setProjectOrgOrder(nextOrder);
+    },
+    [setProjectOrgOrder, visibleOrgIds],
+  );
+
   return (
     <>
       {projectViewMode === "group-by-orgs" ? (
         <div className={cn("space-y-1 py-0.5")}>
-          {orgGroups.map((group) => (
+          {orderedOrgGroups.map((group, index) => (
             <ProjectOrgSection
               key={group.org}
               org={group.org}
@@ -203,6 +285,10 @@ function ProjectTree({ projects, cloningProjects }: Props) {
                 setProjectOrgCollapsed(group.org, !collapsedOrgSet.has(group.org))
               }
               onReorder={(projectIds) => handleOrgReorder(group.org, projectIds)}
+              canMoveUp={index > 0}
+              canMoveDown={index < orderedOrgGroups.length - 1}
+              onMoveUp={() => handleMoveOrg(group.org, "up")}
+              onMoveDown={() => handleMoveOrg(group.org, "down")}
             />
           ))}
           {cloningProjects.map((cp) => (

@@ -65,6 +65,8 @@ pub struct GrovePreferences {
     pub project_view_mode: ProjectViewMode,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub collapsed_project_orgs: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub project_org_order: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub preferred_ide: Option<PreferredIde>,
 }
@@ -75,6 +77,7 @@ impl Default for GrovePreferences {
             terminal_link_open_mode: TerminalLinkOpenMode::ExternalWithLocalhostInternal,
             project_view_mode: ProjectViewMode::Default,
             collapsed_project_orgs: Vec::new(),
+            project_org_order: Vec::new(),
             preferred_ide: Some(PreferredIde {
                 id: "webstorm".into(),
                 display_name: None,
@@ -571,6 +574,7 @@ mod tests {
             terminal_link_open_mode: TerminalLinkOpenMode::Internal,
             project_view_mode: ProjectViewMode::GroupByOrgs,
             collapsed_project_orgs: vec!["sendbird".into()],
+            project_org_order: vec!["bang9".into(), "sendbird".into()],
             preferred_ide: Some(PreferredIde {
                 id: "cursor".into(),
                 display_name: Some("Cursor".into()),

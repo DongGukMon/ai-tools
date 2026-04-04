@@ -4,6 +4,8 @@ import {
   applyOrgProjectOrder,
   getProjectDisplayName,
   groupProjectsByOrg,
+  moveProjectOrg,
+  orderProjectOrgGroups,
 } from "./project-view";
 
 function makeProject(id: string, org: string, repo: string): Project {
@@ -41,6 +43,22 @@ describe("groupProjectsByOrg", () => {
         org: "bang9",
         projects: [projects[1], projects[3]],
       },
+    ]);
+  });
+});
+
+describe("orderProjectOrgGroups", () => {
+  it("uses saved org order first and appends unseen orgs to the bottom", () => {
+    const groups = groupProjectsByOrg([
+      makeProject("p1", "sendbird", "desk"),
+      makeProject("p2", "bang9", "grove"),
+      makeProject("p3", "openai", "codex"),
+    ]);
+
+    expect(orderProjectOrgGroups(groups, ["bang9", "sendbird"])).toEqual([
+      groups[1],
+      groups[0],
+      groups[2],
     ]);
   });
 });
@@ -91,5 +109,28 @@ describe("applyOrgProjectOrder", () => {
     ];
 
     expect(applyOrgProjectOrder(projects, "sendbird", ["missing"])).toEqual(["p1", "p2"]);
+  });
+});
+
+describe("moveProjectOrg", () => {
+  it("moves an org up and down within the current visible ordering", () => {
+    expect(moveProjectOrg(["sendbird", "bang9", "openai"], "bang9", "up")).toEqual([
+      "bang9",
+      "sendbird",
+      "openai",
+    ]);
+
+    expect(moveProjectOrg(["sendbird", "bang9", "openai"], "bang9", "down")).toEqual([
+      "sendbird",
+      "openai",
+      "bang9",
+    ]);
+  });
+
+  it("returns the existing order at list boundaries", () => {
+    expect(moveProjectOrg(["sendbird", "bang9"], "sendbird", "up")).toEqual([
+      "sendbird",
+      "bang9",
+    ]);
   });
 });
