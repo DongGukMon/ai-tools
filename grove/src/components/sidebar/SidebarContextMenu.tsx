@@ -8,22 +8,36 @@ import {
   ContextMenuTrigger,
 } from "../ui/context-menu";
 import { cn } from "../../lib/cn";
-import { revealInFinder } from "../../lib/platform";
+import { openInIde, revealInFinder } from "../../lib/platform";
 import { usePanelLayoutStore } from "../../store/panel-layout";
+import { usePreferencesStore } from "../../store/preferences";
 import { runCommandSafely } from "../../lib/command";
+import IdeAppIcon from "../ide/IdeAppIcon";
+import {
+  getIdeMenuItemDisplayName,
+  getIdeRegistryEntry,
+} from "../../lib/ide-registry";
 
 interface SidebarContextMenuProps {
-  /** Directory path used by common menu actions */
   path: string;
-  /** The element that triggers the context menu on right-click */
   children: ReactNode;
-  /** Additional menu items rendered above the common items (separator added automatically) */
   extraItems?: ReactNode;
 }
 
 function SidebarContextMenu({ path, children, extraItems }: SidebarContextMenuProps) {
+  const ideMenuItems = usePreferencesStore((s) => s.ideMenuItems);
+
   const handleRevealInFinder = () => {
     void runCommandSafely(() => revealInFinder(path));
+  };
+
+  const handleOpenInIde = (id: string) => {
+    const item = ideMenuItems.find((candidate) => candidate.id === id);
+    if (!item) {
+      return;
+    }
+
+    void runCommandSafely(() => openInIde(path, item));
   };
 
   const handleOpenInGlobalTerminal = () => {
@@ -39,7 +53,7 @@ function SidebarContextMenu({ path, children, extraItems }: SidebarContextMenuPr
       <ContextMenuTrigger asChild>
         {children}
       </ContextMenuTrigger>
-      <ContextMenuContent>
+      <ContextMenuContent className={cn("min-w-[15rem]")}>
         {extraItems}
         {extraItems && <ContextMenuSeparator />}
         <ContextMenuItem onSelect={handleRevealInFinder}>
@@ -50,6 +64,22 @@ function SidebarContextMenu({ path, children, extraItems }: SidebarContextMenuPr
           <Terminal className={cn("mr-1.5 h-3.5 w-3.5")} />
           Open in Global Terminal
         </ContextMenuItem>
+        {ideMenuItems.length > 0 && <ContextMenuSeparator />}
+        {ideMenuItems.map((item) => {
+          const entry = getIdeRegistryEntry(item.id);
+          const label = getIdeMenuItemDisplayName(item);
+
+          return (
+            <ContextMenuItem key={item.id} onSelect={() => handleOpenInIde(item.id)}>
+              <IdeAppIcon
+                iconSrc={entry?.iconSrc}
+                label={label}
+                className={cn("mr-1.5 size-3.5 rounded-[4px]")}
+              />
+              {`Open in ${label}`}
+            </ContextMenuItem>
+          );
+        })}
       </ContextMenuContent>
     </ContextMenu>
   );

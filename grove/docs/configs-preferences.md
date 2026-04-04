@@ -12,9 +12,9 @@ Grove stores app-wide configuration in `~/.grove/config.json`.
 - `terminalTheme` — saved terminal theme override
 - `preferences` — Grove-specific behavior preferences
 
-`preferences` is the home for user-selectable Grove behavior such as link opening policy, project list view mode, and preferred IDE. It is nested under `AppConfig`, but it is intentionally narrower in scope than the full app config.
+`preferences` is the home for user-selectable Grove behavior such as link opening policy, project list view mode, org ordering, and IDE menu shortcuts. It is nested under `AppConfig`, but it is intentionally narrower in scope than the full app config.
 
-The preferences layer provides persistence, I/O, and a Zustand store (`usePreferencesStore`). Terminal link routing is wired via `terminalLinkOpenMode` (see [Terminal Link Open](open-link.md)). Grove now exposes persisted preferences in the Preferences modal under General and Terminal tabs, including project grouping mode for the Projects sidebar. The Developer tab in that modal is diagnostic-only and does not persist to `config.json`. IDE launching has not been wired yet.
+The preferences layer provides persistence, I/O, and a Zustand store (`usePreferencesStore`). Terminal link routing is wired via `terminalLinkOpenMode` (see [Terminal Link Open](open-link.md)). Grove now exposes persisted preferences in the Preferences modal under General and Terminal tabs, including project grouping mode for the Projects sidebar. The Developer tab in that modal is diagnostic-only and does not persist to `config.json`. Sidebar context menus use `ideMenuItems` for ordered `Open in <IDE>` actions.
 
 ## Storage Model
 
@@ -43,9 +43,7 @@ Example:
   "preferences": {
     "terminalLinkOpenMode": "external-with-localhost-internal",
     "projectViewMode": "default",
-    "preferredIde": {
-      "id": "webstorm"
-    }
+    "ideMenuItems": [{ "id": "webstorm" }]
   }
 }
 ```
@@ -81,7 +79,7 @@ type TerminalLinkOpenMode =
 
 type ProjectViewMode = "default" | "group-by-orgs";
 
-interface PreferredIde {
+interface IdeMenuItem {
   id: string;
   displayName?: string;
   openCommand?: string;
@@ -92,7 +90,7 @@ interface GrovePreferences {
   projectViewMode: ProjectViewMode;
   collapsedProjectOrgs: string[];
   projectOrgOrder: string[];
-  preferredIde: PreferredIde | null;
+  ideMenuItems: IdeMenuItem[];
 }
 ```
 
@@ -111,7 +109,7 @@ Current defaults:
 - `projectViewMode = "default"`
 - `collapsedProjectOrgs = []`
 - `projectOrgOrder = []`
-- `preferredIde = { "id": "webstorm" }`
+- `ideMenuItems = [{ "id": "webstorm" }]`
 
 This defaulting is applied when older config files are loaded and do not yet contain a `preferences` block.
 
@@ -125,9 +123,7 @@ Minimal persisted shape with current defaults:
   "preferences": {
     "terminalLinkOpenMode": "external-with-localhost-internal",
     "projectViewMode": "default",
-    "preferredIde": {
-      "id": "webstorm"
-    }
+    "ideMenuItems": [{ "id": "webstorm" }]
   }
 }
 ```
@@ -146,16 +142,16 @@ Full shape with optional IDE metadata:
     "projectViewMode": "group-by-orgs",
     "collapsedProjectOrgs": ["sendbird"],
     "projectOrgOrder": ["bang9", "sendbird"],
-    "preferredIde": {
-      "id": "cursor",
-      "displayName": "Cursor",
-      "openCommand": "cursor"
-    }
+    "ideMenuItems": [
+      { "id": "xcode", "displayName": "Xcode" },
+      { "id": "android-studio", "displayName": "Android Studio" },
+      { "id": "cursor", "displayName": "Cursor", "openCommand": "cursor" }
+    ]
   }
 }
 ```
 
-`preferredIde` may also be `null`.
+`ideMenuItems` may be empty.
 
 `collapsedProjectOrgs` is omitted from `config.json` when it is empty.
 `projectOrgOrder` is omitted from `config.json` when it is empty.
@@ -224,12 +220,26 @@ Persisted and exposed:
 
 - terminal link open policy
 - project view mode selection (`default`, `group-by-orgs`)
-- preferred IDE selection
+- project org ordering
+- ordered IDE menu selection
 - Preferences UI for persisted General and Terminal settings
 
-Not implemented yet:
+Implemented:
 
-- project/worktree `Open in IDE` action using `preferredIde`
+- project/worktree/mission sidebar `Open in <IDE>` actions using `ideMenuItems`
+
+Launcher behavior:
+
+- `ideMenuItems[].openCommand` is used first when present
+- on macOS Grove uses `open -a <AppName>` defaults and `open -b <bundleId>` fallbacks for multi-edition JetBrains IDEs
+- built-in macOS `open` launchers wait for process exit so missing apps or bundle IDs fail loudly and fallback candidates still run
+- on non-macOS platforms Grove uses built-in editor CLI launcher candidates
+
+Preferences UX:
+
+- the General tab shows a curated list of IDE menu items with static product icons
+- users can add multiple IDEs and reorder them
+- sidebar menu order is Finder, Global Terminal, then the chosen IDE order
 
 ## Relevant Files
 
@@ -244,4 +254,6 @@ Not implemented yet:
 | `src/lib/platform/tauri.ts` | Tauri frontend wrappers |
 | `src/lib/platform/electron.ts` | Electron frontend wrappers |
 | `src/store/preferences.ts` | Zustand store with init/save |
+| `src/components/sidebar/SidebarContextMenu.tsx` | Shared sidebar menu with ordered IDE items |
+| `grove-core/src/ide.rs` | IDE launcher resolution and execution |
 | `src/lib/url-open.ts` | Runtime consumer of `terminalLinkOpenMode` |

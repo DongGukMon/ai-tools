@@ -5,6 +5,7 @@ import type {
   TerminalTheme,
   AppConfig,
   GrovePreferences,
+  IdeMenuItem,
   ProcessEnvDiagnostics,
   Project,
   Worktree,
@@ -285,6 +286,10 @@ export async function openExternal(url: string): Promise<void> {
 
 export async function revealInFinder(path: string): Promise<void> {
   return platform.invoke("reveal_in_finder", { path });
+}
+
+export async function openInIde(path: string, ideMenuItem: IdeMenuItem): Promise<void> {
+  return platform.invoke("open_in_ide", { path, ideMenuItem });
 }
 
 // === ENV SYNC COMMANDS ===

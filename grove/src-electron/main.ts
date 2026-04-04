@@ -139,6 +139,13 @@ function serializeArgs(
   }
 
   if (
+    command === "open_in_ide" &&
+    "ideMenuItem" in serialized
+  ) {
+    serialized.ideMenuItem = JSON.stringify(serialized.ideMenuItem);
+  }
+
+  if (
     command === "save_terminal_session_snapshot" &&
     "snapshot" in serialized
   ) {

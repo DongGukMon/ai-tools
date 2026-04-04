@@ -8,8 +8,9 @@ import { useFullscreen } from "./useFullscreen";
  *    `cancelOperation:` on NSWindow, which exits fullscreen. Both WKWebView
  *    (Tauri) and Chromium (Electron) dispatch the DOM keydown event before the
  *    native handler runs, so calling `preventDefault()` in the capture phase is
- *    enough to block the exit. xterm.js terminals are excluded — they already
- *    call `preventDefault()` internally.
+ *    enough to block the exit. xterm.js terminals and Radix overlays such as
+ *    context menus / dialogs are excluded so they can keep their native ESC
+ *    semantics.
  *
  * 2. **Context menu** — The WebView default context menu (Reload, Inspect, etc.)
  *    conflicts with custom Radix context menus. Suppressing the native event
@@ -24,7 +25,13 @@ export function usePreventNativeBehaviors() {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || !ref.current) return;
       const target = e.target as HTMLElement;
-      if (target.closest(".xterm, [data-radix-menu-content]")) return;
+      if (
+        target.closest(
+          ".xterm, [data-radix-menu-content], [data-slot='dialog-content']",
+        )
+      ) {
+        return;
+      }
       e.preventDefault();
     };
 

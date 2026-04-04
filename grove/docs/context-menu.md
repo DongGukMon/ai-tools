@@ -9,7 +9,8 @@ SidebarContextMenu (wrapper)
 ├── extraItems?          — component-specific items (rendered first)
 ├── ContextMenuSeparator — auto-inserted when extraItems present
 ├── Open in Finder       → reveal_in_finder (platform command)
-└── Open in Global Terminal → addGlobalTerminalTab({ cwd })
+├── Open in Global Terminal → addGlobalTerminalTab({ cwd })
+└── Open in <IDE>...     → open_in_ide (ordered IDE menu items)
 ```
 
 ### Key Files
@@ -18,9 +19,10 @@ SidebarContextMenu (wrapper)
 |------|------|
 | `src/components/ui/context-menu.tsx` | Radix primitive wrappers (base components) |
 | `src/components/sidebar/SidebarContextMenu.tsx` | Shared wrapper with common menu items |
-| `src/lib/platform/tauri.ts` · `electron.ts` | `revealInFinder()` platform command |
-| `src-tauri/src/lib.rs` | `reveal_in_finder` Rust command |
-| `src-electron/main.ts` | `reveal_in_finder` Electron handler |
+| `src/lib/platform/tauri.ts` · `electron.ts` | `revealInFinder()` / `openInIde()` platform commands |
+| `src-tauri/src/lib.rs` | `reveal_in_finder` / `open_in_ide` Tauri commands |
+| `src-electron/main.ts` | `reveal_in_finder` Electron handler + native invoke bridge |
+| `grove-core/src/ide.rs` | IDE menu launcher resolution |
 
 ### Applied To
 
@@ -53,6 +55,16 @@ Pass `extraItems` to `SidebarContextMenu`. They render above common items with a
 ### Adding new common items
 
 Add to `SidebarContextMenu.tsx` — all sidebar items get the new action automatically.
+
+## Open in IDE
+
+IDE actions are shown when `preferences.ideMenuItems` contains one or more items.
+
+- menu order is `Open in Finder` → `Open in Global Terminal` → selected IDE order
+- each item renders as `Open in Xcode`, `Open in Android Studio`, etc.
+- `ideMenuItems[].openCommand` takes priority when present
+- on macOS Grove uses `open -a <AppName>` or `open -b <bundleId>` defaults
+- app icons come from static frontend assets, not runtime extraction
 
 ### SidebarLeafItem ref forwarding
 

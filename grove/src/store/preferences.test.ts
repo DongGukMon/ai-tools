@@ -16,7 +16,7 @@ describe("usePreferencesStore", () => {
       projectViewMode: "default",
       collapsedProjectOrgs: [],
       projectOrgOrder: [],
-      preferredIde: null,
+      ideMenuItems: [],
       loaded: false,
     });
   });
@@ -33,7 +33,7 @@ describe("usePreferencesStore", () => {
       projectViewMode: "group-by-orgs",
       collapsedProjectOrgs: [],
       projectOrgOrder: [],
-      preferredIde: null,
+      ideMenuItems: [],
       loaded: true,
     });
   });

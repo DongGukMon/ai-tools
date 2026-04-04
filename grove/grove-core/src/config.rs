@@ -49,7 +49,7 @@ pub enum ProjectViewMode {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(default, rename_all = "camelCase")]
-pub struct PreferredIde {
+pub struct IdeMenuItem {
     pub id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
@@ -57,7 +57,7 @@ pub struct PreferredIde {
     pub open_command: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct GrovePreferences {
     pub terminal_link_open_mode: TerminalLinkOpenMode,
@@ -67,8 +67,40 @@ pub struct GrovePreferences {
     pub collapsed_project_orgs: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub project_org_order: Vec<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub preferred_ide: Option<PreferredIde>,
+    pub ide_menu_items: Vec<IdeMenuItem>,
+    #[serde(rename = "preferredIde", default, skip_serializing)]
+    legacy_preferred_ide: Option<IdeMenuItem>,
+}
+
+impl PartialEq for GrovePreferences {
+    fn eq(&self, other: &Self) -> bool {
+        self.terminal_link_open_mode == other.terminal_link_open_mode
+            && self.project_view_mode == other.project_view_mode
+            && self.collapsed_project_orgs == other.collapsed_project_orgs
+            && self.project_org_order == other.project_org_order
+            && self.ide_menu_items == other.ide_menu_items
+    }
+}
+
+impl Eq for GrovePreferences {}
+
+impl GrovePreferences {
+    pub fn normalized(mut self) -> Self {
+        if self.ide_menu_items.is_empty() {
+            if let Some(legacy_preferred_ide) = self.legacy_preferred_ide.take() {
+                self.ide_menu_items.push(legacy_preferred_ide);
+            }
+        }
+
+        self.project_org_order = self
+            .project_org_order
+            .into_iter()
+            .filter(|org| !org.trim().is_empty())
+            .collect();
+        self.ide_menu_items = normalize_ide_menu_items(self.ide_menu_items);
+        self.legacy_preferred_ide = None;
+        self
+    }
 }
 
 impl Default for GrovePreferences {
@@ -78,11 +110,12 @@ impl Default for GrovePreferences {
             project_view_mode: ProjectViewMode::Default,
             collapsed_project_orgs: Vec::new(),
             project_org_order: Vec::new(),
-            preferred_ide: Some(PreferredIde {
+            ide_menu_items: vec![IdeMenuItem {
                 id: "webstorm".into(),
                 display_name: None,
                 open_command: None,
-            }),
+            }],
+            legacy_preferred_ide: None,
         }
     }
 }
@@ -217,7 +250,7 @@ fn load_app_config_from_path(path: &Path) -> AppConfig {
             .filter(|base_dir| !base_dir.trim().is_empty())
             .unwrap_or_else(default_base_dir),
         terminal_theme: config.terminal_theme,
-        preferences: config.preferences.unwrap_or_default(),
+        preferences: config.preferences.unwrap_or_default().normalized(),
     }
 }
 
@@ -229,7 +262,7 @@ fn save_app_config_to_path(path: &Path, app_config: &AppConfig) -> Result<(), St
     let mut config = load_config_from_path(path);
     config.base_dir = Some(app_config.base_dir.clone());
     config.terminal_theme = app_config.terminal_theme.clone();
-    config.preferences = Some(app_config.preferences.clone());
+    config.preferences = Some(app_config.preferences.clone().normalized());
     save_config_to_path(path, &config)
 }
 
@@ -246,8 +279,41 @@ fn save_grove_preferences_to_path(
     preferences: &GrovePreferences,
 ) -> Result<(), String> {
     let mut config = load_config_from_path(path);
-    config.preferences = Some(preferences.clone());
+    config.preferences = Some(preferences.clone().normalized());
     save_config_to_path(path, &config)
+}
+
+fn is_supported_ide_menu_item_id(id: &str) -> bool {
+    matches!(
+        id,
+        "webstorm" | "vscode" | "xcode" | "android-studio" | "intellij" | "cursor" | "sublime"
+    )
+}
+
+fn normalize_ide_menu_items(items: Vec<IdeMenuItem>) -> Vec<IdeMenuItem> {
+    let mut normalized = Vec::new();
+
+    for item in items {
+        let id = item.id.trim();
+        if id.is_empty() || !is_supported_ide_menu_item_id(id) {
+            continue;
+        }
+
+        if normalized
+            .iter()
+            .any(|existing: &IdeMenuItem| existing.id == id)
+        {
+            continue;
+        }
+
+        normalized.push(IdeMenuItem {
+            id: id.to_string(),
+            display_name: item.display_name,
+            open_command: item.open_command,
+        });
+    }
+
+    normalized
 }
 
 fn terminal_session_snapshots_path() -> Result<PathBuf, String> {
@@ -575,11 +641,12 @@ mod tests {
             project_view_mode: ProjectViewMode::GroupByOrgs,
             collapsed_project_orgs: vec!["sendbird".into()],
             project_org_order: vec!["bang9".into(), "sendbird".into()],
-            preferred_ide: Some(PreferredIde {
+            ide_menu_items: vec![IdeMenuItem {
                 id: "cursor".into(),
                 display_name: Some("Cursor".into()),
                 open_command: None,
-            }),
+            }],
+            legacy_preferred_ide: None,
         }
     }
 
@@ -777,6 +844,38 @@ mod tests {
 
         assert_eq!(app_config.base_dir, default_base_dir());
         assert_eq!(app_config.preferences, GrovePreferences::default());
+
+        let _ = fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn load_app_config_filters_unsupported_ide_menu_items() {
+        let path = temp_config_path();
+        write_fixture(
+            &path,
+            r#"{
+  "preferences": {
+    "ideMenuItems": [
+      { "id": "windsurf" },
+      { "id": "cursor" },
+      { "id": "zed" },
+      { "id": "webstorm" }
+    ]
+  }
+}"#,
+        );
+
+        let app_config = load_app_config_from_path(&path);
+
+        assert_eq!(
+            app_config
+                .preferences
+                .ide_menu_items
+                .into_iter()
+                .map(|item| item.id)
+                .collect::<Vec<_>>(),
+            vec!["cursor", "webstorm"]
+        );
 
         let _ = fs::remove_dir_all(path.parent().unwrap());
     }

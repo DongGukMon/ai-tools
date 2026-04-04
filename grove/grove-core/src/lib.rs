@@ -1,6 +1,7 @@
 pub mod config;
 pub mod git_diff;
 pub mod git_project;
+pub mod ide;
 pub mod logger;
 pub mod mission;
 pub mod process_env;
@@ -16,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 pub use config::{
-    AppConfig, GrovePreferences, PreferredIde, ProjectEnvSyncConfig, TerminalLinkOpenMode,
+    AppConfig, GrovePreferences, IdeMenuItem, ProjectEnvSyncConfig, TerminalLinkOpenMode,
 };
 pub use logger::LogEventSink;
 pub use pty::PtyEventSink;

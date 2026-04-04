@@ -11,14 +11,14 @@ interface PreferencesStore {
   projectViewMode: ProjectViewMode;
   collapsedProjectOrgs: string[];
   projectOrgOrder: string[];
-  preferredIde: GrovePreferences["preferredIde"];
+  ideMenuItems: GrovePreferences["ideMenuItems"];
   loaded: boolean;
   init: () => Promise<void>;
   setTerminalLinkOpenMode: (mode: TerminalLinkOpenMode) => void;
   setProjectViewMode: (mode: ProjectViewMode) => void;
   setProjectOrgCollapsed: (org: string, collapsed: boolean) => void;
   setProjectOrgOrder: (orgOrder: string[]) => void;
-  setPreferredIde: (ide: GrovePreferences["preferredIde"]) => void;
+  setIdeMenuItems: (items: GrovePreferences["ideMenuItems"]) => void;
 }
 
 function toSaveable(get: () => PreferencesStore): GrovePreferences {
@@ -27,7 +27,7 @@ function toSaveable(get: () => PreferencesStore): GrovePreferences {
     projectViewMode: get().projectViewMode,
     collapsedProjectOrgs: get().collapsedProjectOrgs,
     projectOrgOrder: get().projectOrgOrder,
-    preferredIde: get().preferredIde,
+    ideMenuItems: get().ideMenuItems,
   };
 }
 
@@ -38,7 +38,7 @@ function normalizePreferences(prefs: GrovePreferences): GrovePreferences {
     projectViewMode: prefs.projectViewMode ?? "default",
     collapsedProjectOrgs: prefs.collapsedProjectOrgs ?? [],
     projectOrgOrder: prefs.projectOrgOrder ?? [],
-    preferredIde: prefs.preferredIde ?? null,
+    ideMenuItems: prefs.ideMenuItems ?? [],
   };
 }
 
@@ -47,7 +47,7 @@ export const usePreferencesStore = create<PreferencesStore>((set, get) => ({
   projectViewMode: "default",
   collapsedProjectOrgs: [],
   projectOrgOrder: [],
-  preferredIde: null,
+  ideMenuItems: [],
   loaded: false,
 
   init: async () => {
@@ -79,8 +79,8 @@ export const usePreferencesStore = create<PreferencesStore>((set, get) => ({
     saveGrovePreferences(toSaveable(get)).catch(() => {});
   },
 
-  setPreferredIde: (ide) => {
-    set({ preferredIde: ide });
+  setIdeMenuItems: (items) => {
+    set({ ideMenuItems: items });
     saveGrovePreferences(toSaveable(get)).catch(() => {});
   },
 }));

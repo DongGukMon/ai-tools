@@ -1,9 +1,9 @@
 mod eventbus;
 use grove_core::{
     AppConfig, BehindInfo, CloningProject, CommitInfo, CreatePtyRequest, CreatePtyRestore,
-    CreatePtyResult, DetectedThemeResult, FileDiff, FileStatus, GrovePreferences, Project,
-    PtyBellEvent, SaveTerminalSessionSnapshotRequest, TerminalGcReport, TerminalSessionSnapshot,
-    Worktree, WorktreePullRequest,
+    CreatePtyResult, DetectedThemeResult, FileDiff, FileStatus, GrovePreferences, IdeMenuItem,
+    Project, PtyBellEvent, SaveTerminalSessionSnapshotRequest, TerminalGcReport,
+    TerminalSessionSnapshot, Worktree, WorktreePullRequest,
 };
 use serde::{Deserialize, Serialize};
 use tauri::Emitter;
@@ -280,6 +280,11 @@ async fn reveal_in_finder(path: String) -> Result<(), String> {
     .await
 }
 
+#[tauri::command]
+async fn open_in_ide(path: String, ide_menu_item: IdeMenuItem) -> Result<(), String> {
+    blocking(move || grove_core::ide::open_in_ide_menu_item(&path, &ide_menu_item)).await
+}
+
 // === PTY COMMANDS (W3) ===
 
 #[tauri::command]
@@ -524,6 +529,7 @@ pub fn run() {
             remove_project_from_mission,
             open_external,
             reveal_in_finder,
+            open_in_ide,
             // PTY (W3)
             create_pty,
             write_pty,

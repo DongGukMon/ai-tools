@@ -37,7 +37,7 @@ export type TerminalLinkOpenMode =
 
 export type ProjectViewMode = "default" | "group-by-orgs";
 
-export interface PreferredIde {
+export interface IdeMenuItem {
   id: string;
   displayName?: string;
   openCommand?: string;
@@ -48,7 +48,7 @@ export interface GrovePreferences {
   projectViewMode: ProjectViewMode;
   collapsedProjectOrgs: string[];
   projectOrgOrder: string[];
-  preferredIde: PreferredIde | null;
+  ideMenuItems: IdeMenuItem[];
 }
 
 export interface AppConfig {

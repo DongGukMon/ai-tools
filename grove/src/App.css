@@ -245,6 +245,16 @@
   background: transparent;
 }
 
+.menu-preview-scroll {
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.menu-preview-scroll::-webkit-scrollbar {
+  display: none;
+}
+
 ::-webkit-scrollbar-thumb {
   background: oklch(0.84 0 0);
   border-radius: 999px;

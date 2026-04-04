@@ -121,6 +121,12 @@ pub async fn save_grove_preferences(preferences: String) -> Result<()> {
 }
 
 #[napi]
+pub async fn open_in_ide(path: String, ide_menu_item: String) -> Result<()> {
+    let ide_menu_item = from_json::<grove_core::IdeMenuItem>(&ide_menu_item, "IdeMenuItem")?;
+    blocking_core(move || grove_core::ide::open_in_ide_menu_item(&path, &ide_menu_item)).await
+}
+
+#[napi]
 pub async fn save_terminal_layouts(layouts: String) -> Result<()> {
     blocking_core(move || grove_core::config::save_terminal_layouts_impl(&layouts)).await
 }
