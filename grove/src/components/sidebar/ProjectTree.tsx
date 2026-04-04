@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, type CSSProperties } from "react";
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight } from "lucide-react";
 import {
   DndContext,
@@ -52,6 +52,50 @@ interface SortableProjectListProps {
   onReorder: (projectIds: string[]) => void;
   showOrgPrefix?: boolean;
   className?: string;
+}
+
+type DocumentWithViewTransition = Document & {
+  startViewTransition?: (update: () => void) => unknown;
+};
+
+function getProjectOrgTransitionName(org: string): string {
+  const slug = org
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 24) || "org";
+
+  let hash = 0;
+  for (const char of org) {
+    hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  }
+
+  return `project-org-${slug}-${hash.toString(36)}`;
+}
+
+function startProjectOrgReorderTransition(update: () => void) {
+  if (typeof document === "undefined" || typeof window === "undefined") {
+    update();
+    return;
+  }
+
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    update();
+    return;
+  }
+
+  const startViewTransition = (document as DocumentWithViewTransition).startViewTransition;
+  if (!startViewTransition) {
+    update();
+    return;
+  }
+
+  try {
+    startViewTransition.call(document, update);
+  } catch {
+    update();
+  }
 }
 
 function SortableProjectList({
@@ -136,8 +180,12 @@ function ProjectOrgSection({
   onMoveUp,
   onMoveDown,
 }: ProjectOrgSectionProps) {
+  const transitionStyle = {
+    viewTransitionName: getProjectOrgTransitionName(org),
+  } as CSSProperties;
+
   return (
-    <div className={cn("px-1.5")}>
+    <div className={cn("px-1.5")} style={transitionStyle}>
       <div className={cn("group flex items-center gap-1")}>
         <Button
           type="button"
@@ -266,7 +314,9 @@ function ProjectTree({ projects, cloningProjects }: Props) {
       if (nextOrder.every((value, index) => value === visibleOrgIds[index])) {
         return;
       }
-      setProjectOrgOrder(nextOrder);
+      startProjectOrgReorderTransition(() => {
+        setProjectOrgOrder(nextOrder);
+      });
     },
     [setProjectOrgOrder, visibleOrgIds],
   );

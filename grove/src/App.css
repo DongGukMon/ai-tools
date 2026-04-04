@@ -258,6 +258,13 @@
   background: oklch(0.32 0 0);
 }
 
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+}
+
 .dark ::-webkit-scrollbar-thumb:hover {
   background: oklch(0.4 0 0);
 }
