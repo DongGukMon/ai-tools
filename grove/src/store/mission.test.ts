@@ -18,6 +18,14 @@ vi.mock("../lib/platform", () => ({
   addProjectToMission: vi.fn(),
   removeProjectFromMission: vi.fn(),
   setMissionCollapsed: vi.fn().mockResolvedValue(undefined),
+  runTerminalGc: vi.fn().mockResolvedValue({
+    staleWorktreePaths: [],
+    staleSessionNames: [],
+    prunedWorktreePaths: [],
+    killedSessionNames: [],
+    skippedAttachedWorktreePaths: [],
+    leftoverProcessIds: [],
+  }),
 }));
 
 import * as tauri from "../lib/platform";
