@@ -899,21 +899,26 @@ fn collect_restorable_tmux_sessions(
     }
 }
 
-fn recover_missing_hookless_ai_status(
-    session_name: &str,
-    tracked: &Arc<Mutex<PtyRuntimeState>>,
+fn reconcile_hookless_ai_status(
+    current_ai_status: Option<&str>,
+    live_tool: Option<&str>,
+    last_ai_status: Option<&str>,
+    last_output_at: Option<Instant>,
 ) -> Option<String> {
-    let (last_ai_status, last_output_at) = tracked
-        .lock()
-        .ok()
-        .map(|state| (state.last_ai_status.clone(), state.last_output_at))
-        .unwrap_or((None, None));
+    let Some(live_tool) = live_tool else {
+        return current_ai_status.map(str::to_string);
+    };
 
-    let tool = detect_live_hookless_tool_in_session(session_name)?;
-    let recovered = recover_hookless_ai_status(tool, last_ai_status.as_deref(), last_output_at);
+    let current_tool = current_ai_status.and_then(|status| status.split(':').next());
+    if current_tool == Some(live_tool) {
+        return current_ai_status.map(str::to_string);
+    }
 
-    let _ = tmux_set_option(session_name, TMUX_GROVE_AI_STATUS_OPTION, &recovered);
-    Some(recovered)
+    Some(recover_hookless_ai_status(
+        live_tool,
+        last_ai_status,
+        last_output_at,
+    ))
 }
 
 fn recover_hookless_ai_status(
@@ -935,10 +940,12 @@ fn recover_hookless_ai_status(
     }
 }
 
-fn detect_live_hookless_tool_in_session(session_name: &str) -> Option<&'static str> {
+fn detect_live_hookless_tool_in_session_from_processes(
+    session_name: &str,
+    processes: &[ProcessSnapshot],
+) -> Option<&'static str> {
     let pane_pid = tmux_pane_pid(session_name).ok().flatten()?;
-    let processes = list_process_snapshots().ok()?;
-    detect_hookless_tool_from_process_tree(pane_pid, &processes)
+    detect_hookless_tool_from_process_tree(pane_pid, processes)
 }
 
 fn tmux_pane_pid(session_name: &str) -> Result<Option<u32>, String> {
@@ -1045,6 +1052,8 @@ pub fn poll_bell_events() -> Result<Vec<PtyBellEvent>, String> {
     };
 
     let mut events = Vec::new();
+    let mut cached_process_snapshots: Option<Vec<ProcessSnapshot>> = None;
+    let mut process_snapshots_loaded = false;
 
     for (pty_id, session_name, tracked) in tracked_sessions {
         let bell_flag = match tmux_window_bell_flag(&session_name) {
@@ -1061,8 +1070,44 @@ pub fn poll_bell_events() -> Result<Vec<PtyBellEvent>, String> {
             Ok(value) => value,
             Err(_) => None,
         };
-        let ai_status =
-            ai_status.or_else(|| recover_missing_hookless_ai_status(&session_name, &tracked));
+        let current_tool = ai_status
+            .as_deref()
+            .and_then(|status| status.split(':').next());
+        let should_probe_live_hookless_tool = ai_status.is_none()
+            || current_tool.is_some_and(|tool| !tool_hooks::is_hookless_tool(tool));
+
+        let ai_status = if should_probe_live_hookless_tool {
+            if !process_snapshots_loaded {
+                cached_process_snapshots = list_process_snapshots().ok();
+                process_snapshots_loaded = true;
+            }
+
+            let live_tool = cached_process_snapshots.as_deref().and_then(|processes| {
+                detect_live_hookless_tool_in_session_from_processes(&session_name, processes)
+            });
+            let (last_ai_status, last_output_at) = tracked
+                .lock()
+                .ok()
+                .map(|state| (state.last_ai_status.clone(), state.last_output_at))
+                .unwrap_or((None, None));
+
+            let reconciled = reconcile_hookless_ai_status(
+                ai_status.as_deref(),
+                live_tool,
+                last_ai_status.as_deref(),
+                last_output_at,
+            );
+
+            if reconciled.as_deref() != ai_status.as_deref() {
+                if let Some(status) = reconciled.as_deref() {
+                    let _ = tmux_set_option(&session_name, TMUX_GROVE_AI_STATUS_OPTION, status);
+                }
+            }
+
+            reconciled
+        } else {
+            ai_status
+        };
 
         // Hookless tool idle/attention state machine:
         // running → [output idle > 3s] → idle → [30s elapsed] → attention
@@ -2433,6 +2478,45 @@ mod tests {
         assert_eq!(
             recover_hookless_ai_status("codex", Some("codex:idle"), None),
             "codex:idle"
+        );
+    }
+
+    #[test]
+    fn reconcile_hookless_ai_status_recovers_stale_non_hookless_provider() {
+        assert_eq!(
+            reconcile_hookless_ai_status(
+                Some("claude:running"),
+                Some("codex"),
+                Some("claude:running"),
+                Some(Instant::now()),
+            ),
+            Some("codex:running".into())
+        );
+    }
+
+    #[test]
+    fn reconcile_hookless_ai_status_preserves_matching_hookless_status() {
+        assert_eq!(
+            reconcile_hookless_ai_status(
+                Some("codex:attention"),
+                Some("codex"),
+                Some("codex:attention"),
+                None,
+            ),
+            Some("codex:attention".into())
+        );
+    }
+
+    #[test]
+    fn reconcile_hookless_ai_status_keeps_existing_status_without_live_hookless_tool() {
+        assert_eq!(
+            reconcile_hookless_ai_status(
+                Some("claude:running"),
+                None,
+                Some("claude:running"),
+                Some(Instant::now()),
+            ),
+            Some("claude:running".into())
         );
     }
 
