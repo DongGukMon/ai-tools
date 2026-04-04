@@ -18,6 +18,10 @@ interface UseMarqueeResult {
   };
 }
 
+export function isPrimaryMouseButton(button: number): boolean {
+  return button === 0;
+}
+
 export function useMarqueeSelection(
   containerRef: React.RefObject<HTMLElement | null>,
   itemRefs: React.MutableRefObject<Map<string, HTMLElement>>,
@@ -55,6 +59,10 @@ export function useMarqueeSelection(
 
   const onMouseDown = useCallback(
     (e: React.MouseEvent) => {
+      if (!isPrimaryMouseButton(e.button)) {
+        return;
+      }
+
       // Start tracking from anywhere in the container (including file items)
       // Marquee only activates after dragging > 4px threshold
       e.preventDefault(); // Prevent browser text selection during drag
