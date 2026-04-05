@@ -64,6 +64,50 @@ func TestRenderCodeBlockPlain(t *testing.T) {
 	}
 }
 
+func TestRenderTaskListUsesCheckboxMarkers(t *testing.T) {
+	input := "- [x] shipped\n- [ ] pending\n"
+
+	out, err := Render(input, Options{Width: 80, Color: false, Highlight: false})
+	if err != nil {
+		t.Fatalf("Render returned error: %v", err)
+	}
+
+	for _, want := range []string{
+		"☒ shipped",
+		"☐ pending",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected %q in output:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "• shipped") || strings.Contains(out, "• pending") {
+		t.Fatalf("expected task list items to use checkbox markers, got:\n%s", out)
+	}
+}
+
+func TestRenderDetailsSummaryPreservesVisibleLabel(t *testing.T) {
+	input := "<details>\n  <summary>접기 / 펼치기</summary>\n\n  숨겨진 내용입니다.\n</details>\n"
+
+	out, err := Render(input, Options{Width: 80, Color: false, Highlight: false})
+	if err != nil {
+		t.Fatalf("Render returned error: %v", err)
+	}
+
+	for _, want := range []string{
+		"▾ 접기 / 펼치기",
+		"숨겨진 내용입니다.",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected %q in output:\n%s", want, out)
+		}
+	}
+	for _, unwanted := range []string{"<details>", "<summary>", "</summary>", "</details>"} {
+		if strings.Contains(out, unwanted) {
+			t.Fatalf("did not expect %q in output:\n%s", unwanted, out)
+		}
+	}
+}
+
 func TestRepairWrappedMarkdownRepairsParagraphsAndTables(t *testing.T) {
 	input := "• general-purpose wiki보다 도메인 특화 knowledge\n  compiler에 더 가깝습니다.\n\n| 축 | 현재 레포 |\n|---|---|\n| 핵심 산출물 | knowledge를 핵심 산출물로 둡\n  니다. README.md:7 |\n| 시스템의 중심 | 수집 → facts →\n  knowledge → answer |\n\n위키 기반 지식 운영체제\n보다는 배치형 memory pipeline입니다.\n"
 

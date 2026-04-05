@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/alecthomas/chroma/v2/lexers"
@@ -50,6 +51,8 @@ type tableCell struct {
 	plain string
 	align extast.Alignment
 }
+
+var summaryTagPattern = regexp.MustCompile(`(?is)<summary\b[^>]*>(.*?)</summary>`)
 
 func Render(input string, opts Options) (string, error) {
 	if opts.Width <= 0 {
@@ -107,6 +110,8 @@ func (r *renderer) renderBlock(node gast.Node) []string {
 		return r.renderCodeBlock("", string(n.Text(r.source)))
 	case *extast.Table:
 		return r.renderTable(n)
+	case *gast.HTMLBlock:
+		return r.renderHTMLBlock(n)
 	case *gast.ThematicBreak:
 		return []string{strings.Repeat("─", min(r.opts.Width, 40))}
 	default:
@@ -115,6 +120,32 @@ func (r *renderer) renderBlock(node gast.Node) []string {
 		}
 	}
 	return nil
+}
+
+func (r *renderer) renderHTMLBlock(block *gast.HTMLBlock) []string {
+	raw := strings.TrimSpace(string(block.Text(r.source)))
+	if raw == "" {
+		return nil
+	}
+
+	lower := strings.ToLower(raw)
+	if lower == "</details>" {
+		return nil
+	}
+
+	if matches := summaryTagPattern.FindStringSubmatch(raw); len(matches) == 2 {
+		summary := normalizeInlineWhitespace(matches[1])
+		if summary == "" {
+			return nil
+		}
+		return wrappedLinesToStrings(r.wrapSpans([]span{{Text: "▾ " + summary, Style: spanStyle{Bold: true}}}, r.opts.Width))
+	}
+
+	return nil
+}
+
+func normalizeInlineWhitespace(s string) string {
+	return strings.Join(strings.Fields(strings.TrimSpace(s)), " ")
 }
 
 func (r *renderer) renderHeading(node *gast.Heading) []string {
@@ -152,7 +183,9 @@ func (r *renderer) renderList(list *gast.List) []string {
 		}
 
 		marker := "•"
-		if list.IsOrdered() {
+		if taskMarker, ok := leadingTaskMarker(listItem); ok {
+			marker = taskMarker
+		} else if list.IsOrdered() {
 			marker = fmt.Sprintf("%d.", index)
 			index++
 		}
@@ -412,6 +445,9 @@ func (r *renderer) inlineSpans(node gast.Node, style spanStyle) []span {
 			next := style
 			next.Underline = true
 			out = append(out, span{Text: string(n.URL(r.source)), Style: next})
+		case *extast.TaskCheckBox:
+			// Task list markers are rendered as the list item prefix, not inline text.
+			continue
 		default:
 			if child.FirstChild() != nil {
 				out = append(out, r.inlineSpans(child, style)...)
@@ -419,6 +455,21 @@ func (r *renderer) inlineSpans(node gast.Node, style spanStyle) []span {
 		}
 	}
 	return mergeSpans(out)
+}
+
+func leadingTaskMarker(item *gast.ListItem) (string, bool) {
+	firstBlock := item.FirstChild()
+	if firstBlock == nil {
+		return "", false
+	}
+	box, ok := firstBlock.FirstChild().(*extast.TaskCheckBox)
+	if !ok {
+		return "", false
+	}
+	if box.IsChecked {
+		return "☒", true
+	}
+	return "☐", true
 }
 
 func (r *renderer) wrapSpans(spans []span, width int) []wrappedLine {
