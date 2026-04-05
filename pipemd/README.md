@@ -24,7 +24,7 @@
  ██╔═══╝ ██║██╔═══╝ ██╔══╝  ██║╚██╔╝██║██║  ██║
  ██║     ██║██║     ███████╗██║ ╚═╝ ██║██████╔╝
 ╚═╝     ╚═╝╚═╝     ╚══════╝╚═╝     ╚═╝╚═════╝
-        markdown renderer for AI pipes
+markdown renderer for AI pipes
 </pre>
 
 **Fast markdown-to-terminal renderer for pipe-heavy AI workflows.**
