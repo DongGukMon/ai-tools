@@ -1,6 +1,39 @@
-# pipemd
+<div align="center">
 
-Fast markdown-to-terminal renderer for pipe-heavy AI workflows.
+<pre>
+⬜⬜⬜⬜⬛⬛⬛⬛⬛⬛⬛⬛⬜⬜⬜⬜
+⬜⬜⬛⬛🟩🟩🟩🟩🟩🟩🟩🟩⬛⬛⬜⬜
+⬛⬛🟩🟩⬛⬛⬛⬛⬛⬛⬛⬛🟩🟩⬛⬛
+⬛🟩🟩⬛⬛⬛⬛⬛⬛⬛⬛⬛⬛🟩🟩⬛
+⬛🟩🟩🟩⬛⬛⬛⬛⬛⬛⬛⬛🟩🟩🟩⬛
+⬛🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩⬛
+⬜⬛⬛🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩⬛⬛⬜
+⬜⬛🟩⬛⬛🟩🟩🟩🟩🟩🟩⬛⬛🟩⬛⬜
+⬜⬛🟩🟩🟩⬛⬛⬛⬛⬛⬛🟩🟩🟩⬛⬜
+⬜⬛🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩⬛⬜
+⬜⬛🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩⬛⬜
+⬜⬛🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩⬛⬜
+⬜⬛🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩⬛⬜
+⬜⬛⬛🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩⬛⬛⬜
+⬜⬜⬜⬛⬛🟩🟩🟩🟩🟩🟩⬛⬛⬜⬜⬜
+⬜⬜⬜⬜⬜⬛⬛⬛⬛⬛⬛⬜⬜⬜⬜⬜
+
+██████╗ ██╗██████╗ ███████╗███╗   ███╗██████╗
+██╔══██╗██║██╔══██╗██╔════╝████╗ ████║██╔══██╗
+██████╔╝██║██████╔╝█████╗  ██╔████╔██║██║  ██║
+██╔═══╝ ██║██╔═══╝ ██╔══╝  ██║╚██╔╝██║██║  ██║
+██║     ██║██║     ███████╗██║ ╚═╝ ██║██████╔╝
+╚═╝     ╚═╝╚═╝     ╚══════╝╚═╝     ╚═╝╚═════╝
+        markdown renderer for AI pipes
+</pre>
+
+**Fast markdown-to-terminal renderer for pipe-heavy AI workflows.**
+
+`stdin` | box tables | ANSI emphasis | code blocks | width-aware wrapping
+
+---
+
+</div>
 
 `pipemd` reads markdown from stdin or files and renders it for terminal output with:
 
