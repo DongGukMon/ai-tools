@@ -1,0 +1,70 @@
+name: "pipemd: Release"
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Validate release version
+        env:
+          RAW_VERSION: ${{ inputs.version }}
+        run: |
+          version="$RAW_VERSION"
+          semver_tag_pattern='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*)|[0-9A-Za-z-][0-9A-Za-z-]*)(\.((0|[1-9][0-9]*)|[0-9A-Za-z-][0-9A-Za-z-]*))*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'
+          case "$version" in
+            *$'\n'*|*$'\r'*)
+              echo "Invalid release version: must be a single-line semver tag" >&2
+              exit 1
+              ;;
+          esac
+          if ! printf '%s' "$version" | grep -Eq "$semver_tag_pattern"; then
+            echo "Invalid release version: must match semver tag format" >&2
+            exit 1
+          fi
+          printf 'RELEASE_VERSION=%s\n' "$version" >> "$GITHUB_ENV"
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: pipemd/go.mod
+          cache-dependency-path: pipemd/go.sum
+
+      - name: Build binaries
+        run: |
+          cd pipemd
+          VERSION="$RELEASE_VERSION"
+          LDFLAGS="-s -w -X main.version=${VERSION}"
+          mkdir -p dist
+          GOOS=darwin GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o dist/pipemd-darwin-arm64 ./cmd/pipemd
+          GOOS=darwin GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o dist/pipemd-darwin-amd64 ./cmd/pipemd
+          GOOS=linux GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o dist/pipemd-linux-amd64 ./cmd/pipemd
+          GOOS=windows GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o dist/pipemd-windows-amd64.exe ./cmd/pipemd
+
+      - name: Generate checksums
+        run: |
+          cd pipemd/dist
+          sha256sum * > pipemd-checksums.txt
+
+      - name: Upload binaries
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "$RELEASE_VERSION" \
+            pipemd/dist/pipemd-darwin-arm64 \
+            pipemd/dist/pipemd-darwin-amd64 \
+            pipemd/dist/pipemd-linux-amd64 \
+            pipemd/dist/pipemd-windows-amd64.exe \
+            pipemd/dist/pipemd-checksums.txt

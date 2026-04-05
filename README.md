@@ -80,6 +80,18 @@ curl -fsSL https://raw.githubusercontent.com/bang9/ai-tools/main/webform/install
 /plugin install webform
 ```
 
+### [pipemd](./pipemd)
+
+Fast terminal markdown renderer for pipe-heavy AI output. Reads stdin or files and re-renders markdown with box-drawn tables, ANSI emphasis, and syntax-highlighted code fences.
+
+#### Installation
+
+**CLI**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/bang9/ai-tools/main/pipemd/install.sh | bash
+```
+
 ### [rewind](./rewind)
 
 Session transcript timeline viewer for Claude Code and Codex agent sessions. Opens a visual timeline in the browser showing user messages, assistant responses, tool calls, and thinking events.

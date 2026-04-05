@@ -1,0 +1,232 @@
+#!/bin/bash
+set -euo pipefail
+
+REPO="bang9/ai-tools"
+INSTALL_DIR="$HOME/.local/bin"
+BINARY_NAME="pipemd"
+SEMVER_TAG_PATTERN='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*)|[0-9A-Za-z-][0-9A-Za-z-]*)(\.((0|[1-9][0-9]*)|[0-9A-Za-z-][0-9A-Za-z-]*))*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+NC='\033[0m'
+
+info() { echo -e "${GREEN}$1${NC}"; }
+warn() { echo -e "${YELLOW}$1${NC}"; }
+error() { echo -e "${RED}$1${NC}" >&2; exit 1; }
+
+detect_os() {
+    case "$(uname -s)" in
+        Darwin) echo "darwin" ;;
+        Linux)  echo "linux" ;;
+        MINGW*|MSYS*|CYGWIN*) echo "windows" ;;
+        *) error "Unsupported operating system: $(uname -s)" ;;
+    esac
+}
+
+detect_arch() {
+    local arch
+    arch="$(uname -m)"
+
+    if [ "$(uname -s)" = "Darwin" ] && [ "$arch" = "x86_64" ]; then
+        if sysctl -n sysctl.proc_translated 2>/dev/null | grep -q 1; then
+            arch="arm64"
+        fi
+    fi
+
+    case "$arch" in
+        x86_64|amd64) echo "amd64" ;;
+        arm64|aarch64) echo "arm64" ;;
+        *) error "Unsupported architecture: $arch" ;;
+    esac
+}
+
+get_latest_version() {
+    local version
+    version=$(curl -sfSL "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name"' | head -1 | cut -d'"' -f4)
+    if [ -z "$version" ]; then
+        error "Failed to fetch latest version from GitHub"
+    fi
+    case "$version" in
+        *$'\n'*|*$'\r'*)
+            error "Invalid release version: must be a single-line semver tag"
+            ;;
+    esac
+    if ! printf '%s' "$version" | grep -Eq "$SEMVER_TAG_PATTERN"; then
+        error "Invalid release version: must match semver tag format"
+    fi
+    echo "$version"
+}
+
+download_file() {
+    local url="$1" dest="$2"
+    if command -v curl &> /dev/null; then
+        curl -fsSL -o "$dest" "$url"
+        return $?
+    fi
+    if command -v wget &> /dev/null; then
+        wget -q -O "$dest" "$url"
+        return $?
+    fi
+    error "Neither curl nor wget is installed"
+}
+
+sha256_file() {
+    local file="$1"
+    if command -v sha256sum &> /dev/null; then
+        sha256sum "$file" | awk '{print $1}'
+        return $?
+    fi
+    if command -v shasum &> /dev/null; then
+        shasum -a 256 "$file" | awk '{print $1}'
+        return $?
+    fi
+    if command -v openssl &> /dev/null; then
+        openssl dgst -sha256 "$file" | awk '{print $NF}'
+        return $?
+    fi
+    error "No SHA-256 tool found (tried sha256sum, shasum, openssl)"
+}
+
+lookup_checksum() {
+    local manifest="$1" asset_name="$2"
+    awk -v name="$asset_name" '
+        NF >= 2 {
+            file = $2
+            sub(/^\*/, "", file)
+            if (file == name) {
+                print $1
+                exit
+            }
+        }
+    ' "$manifest"
+}
+
+cleanup_install_artifacts() {
+    rm -f "$1" "$2"
+}
+
+install_verified_binary() {
+    local download_url="$1" checksum_url="$2" asset_name="$3" dest="$4"
+    local tmp manifest
+    local expected_checksum actual_checksum
+
+    tmp=$(mktemp "${dest}.tmp.XXXXXX")
+    manifest=$(mktemp "${dest}.checksums.XXXXXX")
+
+    if ! download_file "$checksum_url" "$manifest"; then
+        cleanup_install_artifacts "$tmp" "$manifest"
+        return 1
+    fi
+
+    expected_checksum=$(lookup_checksum "$manifest" "$asset_name")
+    if [ -z "$expected_checksum" ]; then
+        warn "Checksum entry not found for ${asset_name}"
+        cleanup_install_artifacts "$tmp" "$manifest"
+        return 1
+    fi
+
+    if ! download_file "$download_url" "$tmp"; then
+        cleanup_install_artifacts "$tmp" "$manifest"
+        return 1
+    fi
+
+    if ! actual_checksum=$(sha256_file "$tmp"); then
+        cleanup_install_artifacts "$tmp" "$manifest"
+        return 1
+    fi
+
+    if [ "$actual_checksum" != "$expected_checksum" ]; then
+        warn "Checksum mismatch for ${asset_name}"
+        cleanup_install_artifacts "$tmp" "$manifest"
+        return 1
+    fi
+
+    if ! chmod +x "$tmp"; then
+        cleanup_install_artifacts "$tmp" "$manifest"
+        return 1
+    fi
+
+    if ! mv -f "$tmp" "$dest"; then
+        cleanup_install_artifacts "$tmp" "$manifest"
+        return 1
+    fi
+
+    rm -f "$manifest"
+    return 0
+}
+
+ensure_path() {
+    local shell_profile=""
+    local shell_name=""
+
+    if [ -n "${SHELL:-}" ]; then
+        shell_name="$(basename "$SHELL")"
+    fi
+
+    if [ -n "${ZSH_VERSION:-}" ] || [ "$shell_name" = "zsh" ]; then
+        shell_profile="$HOME/.zshrc"
+    elif [ -n "${BASH_VERSION:-}" ] || [ "$shell_name" = "bash" ]; then
+        if [ -f "$HOME/.bash_profile" ]; then
+            shell_profile="$HOME/.bash_profile"
+        else
+            shell_profile="$HOME/.bashrc"
+        fi
+    fi
+
+    if echo "$PATH" | tr ':' '\n' | grep -qx "$INSTALL_DIR"; then
+        return 0
+    fi
+
+    if [ -n "$shell_profile" ]; then
+        if ! grep -q "$INSTALL_DIR" "$shell_profile" 2>/dev/null; then
+            echo "" >> "$shell_profile"
+            echo "# Added by pipemd installer" >> "$shell_profile"
+            echo "export PATH=\"$INSTALL_DIR:\$PATH\"" >> "$shell_profile"
+            warn "Added $INSTALL_DIR to PATH in $shell_profile"
+            warn "Run 'source $shell_profile' or restart your terminal to use pipemd"
+        fi
+    else
+        warn "Could not detect shell profile. Add $INSTALL_DIR to your PATH manually."
+    fi
+}
+
+main() {
+    echo "Setting up pipemd..."
+    echo ""
+
+    local os arch version binary_name checksum_name download_url checksums_url
+
+    os=$(detect_os)
+    arch=$(detect_arch)
+    version=$(get_latest_version)
+
+    binary_name="pipemd-${os}-${arch}"
+    checksum_name="${BINARY_NAME}-checksums.txt"
+    if [ "$os" = "windows" ]; then
+        binary_name="${binary_name}.exe"
+        BINARY_NAME="pipemd.exe"
+    fi
+
+    download_url="https://github.com/${REPO}/releases/download/${version}/${binary_name}"
+    checksums_url="https://github.com/${REPO}/releases/download/${version}/${checksum_name}"
+
+    echo "  Version:      $version"
+    echo "  Platform:     ${os}/${arch}"
+    echo "  Install path: ${INSTALL_DIR}/${BINARY_NAME}"
+    echo ""
+
+    mkdir -p "$INSTALL_DIR"
+
+    info "Downloading ${binary_name}..."
+    if ! install_verified_binary "$download_url" "$checksums_url" "$binary_name" "${INSTALL_DIR}/${BINARY_NAME}"; then
+        error "Download failed. Check if the release exists: https://github.com/${REPO}/releases/tag/${version}"
+    fi
+
+    ensure_path
+
+    echo ""
+    info "pipemd ${version} installed successfully!"
+}
+
+main "$@"

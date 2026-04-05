@@ -1,0 +1,38 @@
+name: "pipemd: Test"
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'pipemd/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'pipemd/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: pipemd/go.mod
+          cache-dependency-path: pipemd/go.sum
+
+      - name: Run tests
+        run: |
+          cd pipemd
+          go test ./...
