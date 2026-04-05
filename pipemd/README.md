@@ -41,6 +41,7 @@ markdown renderer for AI pipes
 - ANSI inline emphasis for bold, italic, bold+italic, and inline code
 - fenced code block syntax highlighting
 - width-aware wrapping for paragraphs and table cells
+- ANSI styling enabled by default (`--color never` for plain text, `--color auto` for TTY-aware behavior)
 
 ## Installation
 
@@ -79,8 +80,11 @@ cat answer.md | pipemd --width 88
 # Disable ANSI styling but keep table rendering
 cat answer.md | pipemd --color never
 
-# Force ANSI styling through a pipe
-cat answer.md | pipemd --color always
+# Use TTY-aware color detection instead of the default always-on ANSI
+cat answer.md | pipemd --color auto
+
+# Upgrade to the latest release
+pipemd upgrade
 ```
 
 ## Help

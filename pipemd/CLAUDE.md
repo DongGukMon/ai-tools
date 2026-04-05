@@ -19,6 +19,9 @@ pipemd output.md
 
 # Keep layout deterministic
 some-command | pipemd --width 96 --color never
+
+# Upgrade to the latest release
+pipemd upgrade
 ```
 
 ## Help
@@ -29,4 +32,5 @@ Run `pipemd --help` for the full command list.
 
 - `pipemd` is a standalone CLI, not a Claude Code plugin.
 - It is optimized for pipe use and terminal readability, not markdown reformatting.
+- ANSI styling is enabled by default. Use `--color never` for plain text or `--color auto` for TTY-aware behavior.
 - If the input is already visually wrapped before `pipemd` receives it, table recovery will still be limited.
