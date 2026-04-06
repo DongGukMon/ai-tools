@@ -37,12 +37,10 @@ const HATS: { value: BuddyHat; label: string }[] = [
 
 export default function BuddyTab() {
   const status = useBuddyStore((s) => s.status);
-  const loading = useBuddyStore((s) => s.loading);
-  const searching = useBuddyStore((s) => s.searching);
+  const applying = useBuddyStore((s) => s.applying);
   const error = useBuddyStore((s) => s.error);
   const init = useBuddyStore((s) => s.init);
-  const search = useBuddyStore((s) => s.search);
-  const apply = useBuddyStore((s) => s.apply);
+  const searchAndApply = useBuddyStore((s) => s.searchAndApply);
   const restore = useBuddyStore((s) => s.restore);
 
   const [selectedSpecies, setSelectedSpecies] = useState<
@@ -91,20 +89,17 @@ export default function BuddyTab() {
       (selectedHat && selectedHat !== status.currentCompanion.hat) ||
       selectedShiny !== status.currentCompanion.shiny);
 
-  const handleSearch = async () => {
-    const result = await search({
+  const handleApply = () => {
+    searchAndApply({
       species: selectedSpecies,
       rarity: selectedRarity,
       eye: selectedEye,
       hat: selectedHat,
       shiny: selectedShiny || undefined,
     });
-    if (result) {
-      await apply(result.salt, result.companion);
-    }
   };
 
-  if (loading && !status) {
+  if (applying && !status) {
     return (
       <div>
         <h3 className={cn("text-sm font-semibold text-foreground mb-6")}>
@@ -285,23 +280,19 @@ export default function BuddyTab() {
         <Button
           variant="default"
           size="sm"
-          onClick={handleSearch}
-          disabled={searching || loading || !selectedSpecies}
+          onClick={handleApply}
+          disabled={applying || !selectedSpecies || !hasChanges}
         >
-          {(() => {
-            if (searching) return "Searching\u2026";
-            if (loading) return "Applying\u2026";
-            return "Find & Apply";
-          })()}
+          {applying ? "Applying\u2026" : "Apply"}
         </Button>
         {status?.savedConfig && (
           <Button
             variant="ghost"
             size="sm"
             onClick={restore}
-            disabled={searching || loading}
+            disabled={applying}
           >
-            {loading && !searching ? "Restoring\u2026" : "Restore Original"}
+            {applying ? "Restoring\u2026" : "Restore Original"}
           </Button>
         )}
       </div>
