@@ -23,6 +23,17 @@ export type {
 } from "./diff";
 export type { AppTab, AppTabType } from "./tab";
 export type {
+  BuddySpecies,
+  BuddyRarity,
+  BuddyEye,
+  BuddyHat,
+  BuddyCompanion,
+  BuddyConfig,
+  BuddyStatus,
+  BuddySearchFilter,
+  BuddySearchResult,
+} from "./buddy";
+export type {
   EnvValueSource,
   PathDiagnostics,
   ProcessEnvDiagnostics,
