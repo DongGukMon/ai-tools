@@ -1,6 +1,7 @@
 mod eventbus;
 use grove_core::{
-    AppConfig, BehindInfo, CloningProject, CommitInfo, CreatePtyRequest, CreatePtyRestore,
+    AppConfig, BehindInfo, BuddyCompanion, BuddySearchFilter, BuddySearchResult, BuddyStatus,
+    CloningProject, CommitInfo, CreatePtyRequest, CreatePtyRestore,
     CreatePtyResult, DetectedThemeResult, FileDiff, FileStatus, GrovePreferences, IdeMenuItem,
     Project, PtyBellEvent, SaveTerminalSessionSnapshotRequest, TerminalGcReport,
     TerminalSessionSnapshot, Worktree, WorktreePullRequest,
@@ -71,6 +72,28 @@ async fn save_panel_layouts(layouts: String) -> Result<(), String> {
 #[tauri::command]
 async fn load_panel_layouts() -> Result<String, String> {
     blocking(grove_core::config::load_panel_layouts_impl).await
+}
+
+// === BUDDY COMMANDS ===
+
+#[tauri::command]
+async fn get_buddy_status() -> Result<BuddyStatus, String> {
+    blocking(grove_core::buddy::get_buddy_status_impl).await
+}
+
+#[tauri::command]
+async fn search_buddy(filter: BuddySearchFilter) -> Result<BuddySearchResult, String> {
+    blocking(move || grove_core::buddy::search_buddy_impl(&filter)).await
+}
+
+#[tauri::command]
+async fn apply_buddy(salt: String, companion: BuddyCompanion) -> Result<u32, String> {
+    blocking(move || grove_core::buddy::apply_buddy_impl(&salt, &companion)).await
+}
+
+#[tauri::command]
+async fn restore_buddy() -> Result<bool, String> {
+    blocking(grove_core::buddy::restore_buddy_impl).await
 }
 
 // === GIT PROJECT COMMANDS (W2) ===
@@ -501,6 +524,11 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             // Config/Theme (W1)
             get_terminal_theme,
+            // Buddy
+            get_buddy_status,
+            search_buddy,
+            apply_buddy,
+            restore_buddy,
             get_app_config,
             get_grove_preferences,
             get_process_env_diagnostics,

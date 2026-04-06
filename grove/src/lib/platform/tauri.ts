@@ -18,6 +18,10 @@ import type {
   MissionProject,
   ProjectEnvSyncConfig,
   StartCloneResult,
+  BuddyStatus,
+  BuddySearchFilter,
+  BuddySearchResult,
+  BuddyCompanion,
 } from "../../types";
 import type { Platform } from "./types";
 
@@ -555,4 +559,22 @@ export async function removeProjectFromMission(
     missionId,
     projectId,
   });
+}
+
+// === BUDDY COMMANDS ===
+
+export async function getBuddyStatus(): Promise<BuddyStatus> {
+  return platform.invoke<BuddyStatus>("get_buddy_status");
+}
+
+export async function searchBuddy(filter: BuddySearchFilter): Promise<BuddySearchResult> {
+  return platform.invoke<BuddySearchResult>("search_buddy", { filter });
+}
+
+export async function applyBuddy(salt: string, companion: BuddyCompanion): Promise<number> {
+  return platform.invoke<number>("apply_buddy", { salt, companion });
+}
+
+export async function restoreBuddy(): Promise<boolean> {
+  return platform.invoke<boolean>("restore_buddy");
 }
