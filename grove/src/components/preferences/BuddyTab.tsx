@@ -4,6 +4,7 @@ import { Button } from "../ui/button";
 import { useBuddyStore } from "../../store/buddy";
 import type { BuddyCompanion, BuddyEye, BuddyHat, BuddyRarity, BuddySpecies } from "../../types";
 import BuddyCard from "./buddy/BuddyCard";
+import { selectionFromStatus } from "./buddy/selection";
 import SpeciesGallery from "./buddy/SpeciesGallery";
 import { RARITY_LABELS } from "./buddy/sprites";
 
@@ -116,24 +117,20 @@ export default function BuddyTab() {
   const [selectedHat, setSelectedHat] = useState<BuddyHat | undefined>();
   const [selectedShiny, setSelectedShiny] = useState(false);
   const [selectedUpgradeRobot, setSelectedUpgradeRobot] = useState(false);
-  const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
     init();
   }, [init]);
 
   useEffect(() => {
-    if (status?.currentCompanion && !initialized) {
-      const c = status.currentCompanion;
-      setSelectedSpecies(c.species);
-      setSelectedRarity(c.rarity);
-      setSelectedEye(c.eye);
-      setSelectedHat(c.hat === "none" ? undefined : c.hat);
-      setSelectedShiny(c.shiny);
-      setSelectedUpgradeRobot(status.robotUpgraded);
-      setInitialized(true);
-    }
-  }, [status, initialized]);
+    const next = selectionFromStatus(status);
+    setSelectedSpecies(next.selectedSpecies);
+    setSelectedRarity(next.selectedRarity);
+    setSelectedEye(next.selectedEye);
+    setSelectedHat(next.selectedHat);
+    setSelectedShiny(next.selectedShiny);
+    setSelectedUpgradeRobot(next.selectedUpgradeRobot);
+  }, [status]);
 
   const previewCompanion = selectedSpecies
     ? {
