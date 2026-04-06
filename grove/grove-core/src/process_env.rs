@@ -583,14 +583,19 @@ fn build_enriched_path(base: String) -> String {
     }
 }
 
+fn merged_path_value(snapshot: &EnvSourceSnapshot) -> Option<String> {
+    let merged = merge_path_candidates(
+        snapshot.process_env.clone(),
+        snapshot.interactive_shell_env.clone(),
+    );
+    merge_path_candidates(merged, snapshot.login_shell_env.clone())
+}
+
 fn path_diagnostics(lookup: &impl EnvSourceLookup) -> PathDiagnostics {
     let snapshot = collect_env_snapshot(lookup, "PATH", false, false, true, true);
     let preferred = preferred_env_var_selection(&snapshot);
-    let merged_base_value = merge_path_candidates(
-        preferred.as_ref().map(|(_, value)| value.clone()),
-        snapshot.login_shell_env.clone(),
-    )
-    .unwrap_or_else(|| env::var("PATH").unwrap_or_default());
+    let merged_base_value =
+        merged_path_value(&snapshot).unwrap_or_else(|| env::var("PATH").unwrap_or_default());
     let final_value = build_enriched_path(merged_base_value.clone());
 
     PathDiagnostics {
@@ -909,11 +914,36 @@ mod tests {
         );
         assert_eq!(
             diagnostics.merged_base_value,
-            "/usr/local/bin:/usr/bin:/bin".to_string()
+            "/usr/local/bin:/usr/bin:/opt/homebrew/bin:/bin".to_string()
         );
         assert!(diagnostics
             .final_value
-            .contains("/usr/local/bin:/usr/bin:/bin"));
+            .contains("/usr/local/bin:/usr/bin:/opt/homebrew/bin:/bin"));
+    }
+
+    #[test]
+    fn path_diagnostics_includes_interactive_shell_when_process_path_is_sparse() {
+        let mut lookup = FakeLookup::default();
+        lookup.process_env.insert(
+            "PATH".to_string(),
+            "/usr/bin:/bin:/usr/sbin:/sbin".to_string(),
+        );
+        lookup.interactive_shell_env.insert(
+            "PATH".to_string(),
+            "/Users/airenkang/.local/bin:/opt/homebrew/bin:/usr/bin".to_string(),
+        );
+        lookup.login_shell_path =
+            Some("/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin".to_string());
+
+        let diagnostics = path_diagnostics(&lookup);
+
+        assert_eq!(
+            diagnostics.merged_base_value,
+            "/usr/bin:/bin:/usr/sbin:/sbin:/Users/airenkang/.local/bin:/opt/homebrew/bin:/usr/local/bin".to_string()
+        );
+        assert!(diagnostics
+            .final_value
+            .contains("/Users/airenkang/.local/bin"));
     }
 
     #[cfg(unix)]

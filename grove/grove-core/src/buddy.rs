@@ -109,15 +109,24 @@ fn path_contains_grove(path: &Path) -> bool {
     path.to_string_lossy().contains(".grove")
 }
 
-fn find_binary_in_path(binary_name: &str, path_value: &str) -> Option<String> {
+fn should_skip_binary_path(path: &Path, skip_grove_paths: bool) -> bool {
+    skip_grove_paths && path_contains_grove(path)
+}
+
+fn find_binary_in_path(
+    binary_name: &str,
+    path_value: &str,
+    skip_grove_paths: bool,
+) -> Option<String> {
     for dir in std::env::split_paths(OsStr::new(path_value)) {
         let candidate = dir.join(binary_name);
-        if !is_executable_file(&candidate) || path_contains_grove(&candidate) {
+        if !is_executable_file(&candidate) || should_skip_binary_path(&candidate, skip_grove_paths)
+        {
             continue;
         }
 
         let resolved = fs::canonicalize(&candidate).unwrap_or(candidate);
-        if path_contains_grove(&resolved) {
+        if should_skip_binary_path(&resolved, skip_grove_paths) {
             continue;
         }
 
@@ -131,7 +140,7 @@ fn find_binary_in_path(binary_name: &str, path_value: &str) -> Option<String> {
 }
 
 pub fn find_claude_binary() -> Result<String, String> {
-    find_binary_in_path("claude", enriched_path())
+    find_binary_in_path("claude", enriched_path(), true)
         .ok_or_else(|| "Claude binary not found in PATH".to_string())
 }
 
@@ -284,16 +293,8 @@ pub fn ensure_buddy() -> Result<Option<String>, String> {
 // ---------------------------------------------------------------------------
 
 pub fn find_bun() -> Result<String, String> {
-    let output = Command::new("which")
-        .arg("bun")
-        .output()
-        .map_err(|e| format!("Failed to run `which bun`: {e}"))?;
-
-    if !output.status.success() {
-        return Err("Bun not found in PATH. Install bun: https://bun.sh".into());
-    }
-
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    find_binary_in_path("bun", enriched_path(), false)
+        .ok_or_else(|| "Bun not found in PATH. Install bun: https://bun.sh".to_string())
 }
 
 /// Spawns `bun --eval` with inline JS that computes `Bun.hash(userId+salt)`,
@@ -775,7 +776,7 @@ mod tests {
             .to_string_lossy()
             .to_string();
 
-        let resolved = find_binary_in_path("claude", &path).unwrap();
+        let resolved = find_binary_in_path("claude", &path, true).unwrap();
         assert_eq!(
             resolved,
             fs::canonicalize(&user_claude).unwrap().to_string_lossy()
@@ -797,7 +798,29 @@ mod tests {
             .to_string_lossy()
             .to_string();
 
-        assert_eq!(find_binary_in_path("claude", &path), None);
+        assert_eq!(find_binary_in_path("claude", &path, true), None);
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn find_binary_in_path_allows_grove_binary_when_skip_is_disabled() {
+        let root = temp_test_dir("grove-buddy-bun");
+        let grove_bin = root.join(".grove").join("bin");
+        let grove_bun = grove_bin.join("bun");
+
+        write_executable(&grove_bun);
+
+        let path = std::env::join_paths([grove_bin.as_path()])
+            .unwrap()
+            .to_string_lossy()
+            .to_string();
+
+        let resolved = find_binary_in_path("bun", &path, false).unwrap();
+        assert_eq!(
+            resolved,
+            fs::canonicalize(&grove_bun).unwrap().to_string_lossy()
+        );
 
         fs::remove_dir_all(root).unwrap();
     }
