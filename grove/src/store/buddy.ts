@@ -2,13 +2,13 @@ import { create } from "zustand";
 import type {
   BuddyStatus,
   BuddySearchFilter,
-  BuddyCompanion,
 } from "../types";
 import {
   getBuddyStatus,
   searchBuddy,
   applyBuddy,
   restoreBuddy,
+  setUpgradeRobot,
 } from "../lib/platform";
 
 interface BuddyStore {
@@ -19,6 +19,7 @@ interface BuddyStore {
   init: () => Promise<void>;
   searchAndApply: (filter: BuddySearchFilter) => Promise<void>;
   restore: () => Promise<void>;
+  toggleUpgradeRobot: (enabled: boolean) => Promise<void>;
 }
 
 export const useBuddyStore = create<BuddyStore>((set, get) => ({
@@ -53,6 +54,17 @@ export const useBuddyStore = create<BuddyStore>((set, get) => ({
     set({ applying: true, error: null });
     try {
       await restoreBuddy();
+      const status = await getBuddyStatus();
+      set({ status, applying: false });
+    } catch (e) {
+      set({ applying: false, error: String(e) });
+    }
+  },
+
+  toggleUpgradeRobot: async (enabled) => {
+    set({ applying: true, error: null });
+    try {
+      await setUpgradeRobot(enabled);
       const status = await getBuddyStatus();
       set({ status, applying: false });
     } catch (e) {

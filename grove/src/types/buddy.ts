@@ -31,6 +31,7 @@ export interface BuddyStatus {
   currentCompanion: BuddyCompanion | null;
   savedConfig: BuddyConfig | null;
   userId: string;
+  robotUpgraded: boolean;
 }
 
 export interface BuddySearchFilter {

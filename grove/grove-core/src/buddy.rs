@@ -23,6 +23,10 @@ pub struct BuddyConfig {
     pub salt: String,
     pub companion: BuddyCompanion,
     pub patched_at: String,
+    #[serde(default)]
+    pub upgrade_robot: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub original_robot_sprite: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -33,6 +37,7 @@ pub struct BuddyStatus {
     pub current_companion: Option<BuddyCompanion>,
     pub saved_config: Option<BuddyConfig>,
     pub user_id: String,
+    pub robot_upgraded: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -268,10 +273,18 @@ pub fn ensure_buddy() -> Result<Option<String>, String> {
         .ok_or("Cannot re-patch: no salt detected in updated binary")?;
 
     let count = patch_binary(&binary_path, &current_salt, &config.salt)?;
-    Ok(Some(format!(
+
+    // Also ensure robot upgrade if enabled
+    let sprite_msg = ensure_robot_upgrade(&binary_path).unwrap_or(None);
+
+    let mut msg = format!(
         "Re-patched binary with {} replacements (salt: {} → {})",
         count, current_salt, config.salt
-    )))
+    );
+    if let Some(s) = sprite_msg {
+        msg.push_str(&format!("; {s}"));
+    }
+    Ok(Some(msg))
 }
 
 // ---------------------------------------------------------------------------
@@ -437,12 +450,15 @@ pub fn get_buddy_status_impl() -> Result<BuddyStatus, String> {
 
     let saved_config = load_buddy_config();
 
+    let robot_upgraded = is_robot_upgraded(&binary_path).unwrap_or(false);
+
     Ok(BuddyStatus {
         binary_path,
         current_salt,
         current_companion,
         saved_config,
         user_id,
+        robot_upgraded,
     })
 }
 
@@ -463,10 +479,14 @@ pub fn apply_buddy_impl(salt: &str, companion: &BuddyCompanion) -> Result<u32, S
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
         .unwrap_or_else(|_| "unknown".into());
 
+    // Preserve existing upgrade_robot and original_robot_sprite from current config
+    let prev = load_buddy_config();
     let config = BuddyConfig {
         salt: salt.to_string(),
         companion: companion.clone(),
         patched_at,
+        upgrade_robot: prev.as_ref().map_or(false, |p| p.upgrade_robot),
+        original_robot_sprite: prev.and_then(|p| p.original_robot_sprite),
     };
 
     save_buddy_config(&config)?;
@@ -543,4 +563,198 @@ pub fn get_user_id() -> String {
     }
 
     "anon".into()
+}
+
+// ---------------------------------------------------------------------------
+// Robot sprite upgrade
+// ---------------------------------------------------------------------------
+
+/// The Claude art sprite section (253 bytes, matches robot section size).
+/// F1: * center, F2: ~ center, F3: ! center. All L0 same width = no jump.
+const CLAUDE_SPRITE: &str = concat!(
+    "[[\" *  \",\" \\u2590\\u259B\\u2588\\u2588\\u2588\\u259C\\u258C \",",
+    "\"\\u259D\\u259C\\u2588\\u2588\\u2588\\u2588\\u2588\\u259B\\u2598\",",
+    "\"\\u2598\\u2598 \\u259D\\u259D\",\"\"],",
+    "[\" ~  \",\" \\u2590\\u259B\\u2588\\u2588\\u2588\\u259C\\u258C \",",
+    "\"\\u259D\\u259C\\u2588\\u2588\\u2588\\u2588\\u2588\\u259B\\u2598\",",
+    "\"\\u2598\\u2598 \\u259D\\u259D\",\"\"],",
+    "[\" !  \",\" \\u2590\\u259B\\u2588\\u2588\\u2588\\u259C\\u258C \",",
+    "\"\\u259D\\u259C\\u2588\\u2588\\u2588\\u2588\\u2588\\u259B\\u2598\",",
+    "\"\\u2598\\u2598 \\u259D\\u259D\",\"\"]]",
+);
+
+/// Check if the binary currently has the Claude sprite in the robot slot.
+pub fn is_robot_upgraded(binary_path: &str) -> Result<bool, String> {
+    let data =
+        fs::read(binary_path).map_err(|e| format!("Failed to read binary: {e}"))?;
+    let claude_bytes = CLAUDE_SPRITE.as_bytes();
+    Ok(data
+        .windows(claude_bytes.len())
+        .any(|w| w == claude_bytes))
+}
+
+/// Find the robot sprite section in the binary. Returns (offset, section_bytes).
+fn find_robot_section(data: &[u8]) -> Option<(usize, Vec<u8>)> {
+    // Search for ik_]:[[  marker followed by robot sprite data
+    let marker = b"ik_]:[[";
+    let mut pos = 0;
+    while let Some(offset) = data[pos..]
+        .windows(marker.len())
+        .position(|w| w == marker)
+    {
+        let abs = pos + offset;
+        let section_start = abs + marker.len() - 2; // start at [[
+        // Find matching ]]
+        let mut depth: i32 = 0;
+        let mut section_end = section_start;
+        for i in section_start..data.len().min(section_start + 500) {
+            if data[i] == b'[' {
+                depth += 1;
+            }
+            if data[i] == b']' {
+                depth -= 1;
+                if depth == 0 {
+                    section_end = i + 1;
+                    break;
+                }
+            }
+        }
+        let section = &data[section_start..section_end];
+        if section.len() == 253 {
+            return Some((section_start, section.to_vec()));
+        }
+        pos = abs + marker.len();
+    }
+    None
+}
+
+/// Replace the robot sprite with the Claude art in the binary buffer.
+/// Returns the original robot section for backup.
+fn replace_sprite_in_buffer(data: &mut [u8], old_section: &[u8], new_section: &[u8]) -> u32 {
+    let mut count = 0u32;
+    let mut pos = 0;
+    while pos + old_section.len() <= data.len() {
+        if &data[pos..pos + old_section.len()] == old_section {
+            data[pos..pos + new_section.len()].copy_from_slice(new_section);
+            count += 1;
+            pos += new_section.len();
+        } else {
+            pos += 1;
+        }
+    }
+    count
+}
+
+/// Atomically write data to binary path and re-sign.
+fn write_and_sign(binary_path: &str, data: &[u8]) -> Result<(), String> {
+    let bin_path = PathBuf::from(binary_path);
+    let temp_path = bin_path.with_extension("buddy-sprite.tmp");
+    fs::write(&temp_path, data).map_err(|e| format!("Failed to write temp: {e}"))?;
+    let metadata =
+        fs::metadata(&bin_path).map_err(|e| format!("Failed to read metadata: {e}"))?;
+    fs::set_permissions(&temp_path, metadata.permissions())
+        .map_err(|e| format!("Failed to set permissions: {e}"))?;
+    fs::rename(&temp_path, &bin_path).map_err(|e| format!("Failed to rename: {e}"))?;
+    let _ = Command::new("codesign")
+        .args(["-f", "-s", "-", binary_path])
+        .output();
+    Ok(())
+}
+
+/// Toggle robot sprite upgrade. When enabled, patches robot → Claude art.
+/// When disabled, restores from saved original.
+pub fn set_upgrade_robot_impl(enabled: bool) -> Result<bool, String> {
+    let binary_path = find_claude_binary()?;
+    let mut data =
+        fs::read(&binary_path).map_err(|e| format!("Failed to read binary: {e}"))?;
+
+    let mut config = load_buddy_config().ok_or("No buddy config found")?;
+    let claude_bytes = CLAUDE_SPRITE.as_bytes();
+
+    if enabled {
+        // Find original robot section
+        let already_upgraded = data
+            .windows(claude_bytes.len())
+            .any(|w| w == claude_bytes);
+        if already_upgraded {
+            config.upgrade_robot = true;
+            save_buddy_config(&config)?;
+            return Ok(true);
+        }
+
+        // Find robot section and save original
+        let (_, original) = find_robot_section(&data)
+            .ok_or("Robot sprite section not found in binary")?;
+
+        config.original_robot_sprite =
+            Some(String::from_utf8_lossy(&original).to_string());
+        config.upgrade_robot = true;
+        save_buddy_config(&config)?;
+
+        let count = replace_sprite_in_buffer(&mut data, &original, claude_bytes);
+        if count == 0 {
+            return Err("Failed to replace robot sprite".into());
+        }
+        write_and_sign(&binary_path, &data)?;
+        Ok(true)
+    } else {
+        // Restore original
+        let original = config
+            .original_robot_sprite
+            .as_ref()
+            .ok_or("No saved original robot sprite to restore")?;
+        let original_bytes = original.as_bytes();
+
+        let has_claude = data
+            .windows(claude_bytes.len())
+            .any(|w| w == claude_bytes);
+        if !has_claude {
+            config.upgrade_robot = false;
+            save_buddy_config(&config)?;
+            return Ok(true);
+        }
+
+        let count = replace_sprite_in_buffer(&mut data, claude_bytes, original_bytes);
+        if count == 0 {
+            return Err("Failed to restore robot sprite".into());
+        }
+        write_and_sign(&binary_path, &data)?;
+
+        config.upgrade_robot = false;
+        save_buddy_config(&config)?;
+        Ok(true)
+    }
+}
+
+/// Ensure robot upgrade is applied after binary update.
+pub fn ensure_robot_upgrade(binary_path: &str) -> Result<Option<String>, String> {
+    let config = match load_buddy_config() {
+        Some(c) => c,
+        None => return Ok(None),
+    };
+    if !config.upgrade_robot {
+        return Ok(None);
+    }
+
+    let mut data =
+        fs::read(binary_path).map_err(|e| format!("Failed to read binary: {e}"))?;
+    let claude_bytes = CLAUDE_SPRITE.as_bytes();
+
+    let already = data
+        .windows(claude_bytes.len())
+        .any(|w| w == claude_bytes);
+    if already {
+        return Ok(None);
+    }
+
+    // Find the (reset) original robot section and patch it
+    let (_, original) = find_robot_section(&data)
+        .ok_or("Robot section not found for re-upgrade")?;
+
+    let count = replace_sprite_in_buffer(&mut data, &original, claude_bytes);
+    if count == 0 {
+        return Ok(None);
+    }
+    write_and_sign(binary_path, &data)?;
+    Ok(Some(format!("Re-upgraded robot sprite ({count} replacements)")))
 }

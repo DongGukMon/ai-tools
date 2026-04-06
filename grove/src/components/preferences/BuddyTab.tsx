@@ -42,6 +42,7 @@ export default function BuddyTab() {
   const init = useBuddyStore((s) => s.init);
   const searchAndApply = useBuddyStore((s) => s.searchAndApply);
   const restore = useBuddyStore((s) => s.restore);
+  const toggleUpgradeRobot = useBuddyStore((s) => s.toggleUpgradeRobot);
 
   const [selectedSpecies, setSelectedSpecies] = useState<
     BuddySpecies | undefined
@@ -251,8 +252,8 @@ export default function BuddyTab() {
         </div>
       </div>
 
-      {/* Shiny */}
-      <div className={cn("mb-4")}>
+      {/* Shiny + Upgrade Robot */}
+      <div className={cn("mb-4 flex items-center gap-3")}>
         <button
           type="button"
           onClick={() => setSelectedShiny(!selectedShiny)}
@@ -268,9 +269,22 @@ export default function BuddyTab() {
         >
           {selectedShiny ? "\u2728 Shiny" : "Shiny"}
         </button>
-        <span className={cn("ml-2 text-[10px] text-muted-foreground/60")}>
-          1% chance — brute-force may take longer
-        </span>
+        <button
+          type="button"
+          onClick={() => toggleUpgradeRobot(!status?.robotUpgraded)}
+          disabled={applying}
+          className={cn(
+            "rounded-md border px-3 py-1 text-[11px] transition-colors",
+            {
+              "border-violet-500/60 bg-violet-500/10 font-medium text-violet-400":
+                status?.robotUpgraded,
+              "border-border text-muted-foreground hover:border-accent/50":
+                !status?.robotUpgraded,
+            },
+          )}
+        >
+          {status?.robotUpgraded ? "\u2728 Robot Upgraded" : "Upgrade Robot"}
+        </button>
       </div>
 
       <div className={cn("border-t border-border mb-4")} />

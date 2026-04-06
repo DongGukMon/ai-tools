@@ -96,6 +96,11 @@ async fn restore_buddy() -> Result<bool, String> {
     blocking(grove_core::buddy::restore_buddy_impl).await
 }
 
+#[tauri::command]
+async fn set_upgrade_robot(enabled: bool) -> Result<bool, String> {
+    blocking(move || grove_core::buddy::set_upgrade_robot_impl(enabled)).await
+}
+
 // === GIT PROJECT COMMANDS (W2) ===
 
 #[tauri::command]
@@ -529,6 +534,7 @@ pub fn run() {
             search_buddy,
             apply_buddy,
             restore_buddy,
+            set_upgrade_robot,
             get_app_config,
             get_grove_preferences,
             get_process_env_diagnostics,

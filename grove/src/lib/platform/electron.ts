@@ -560,3 +560,7 @@ export async function applyBuddy(salt: string, companion: BuddyCompanion): Promi
 export async function restoreBuddy(): Promise<boolean> {
   return platform.invoke<boolean>("restore_buddy");
 }
+
+export async function setUpgradeRobot(enabled: boolean): Promise<boolean> {
+  return platform.invoke<boolean>("set_upgrade_robot", { enabled });
+}
