@@ -47,16 +47,49 @@ export default function BuddyTab() {
 
   const [selectedSpecies, setSelectedSpecies] = useState<
     BuddySpecies | undefined
-  >("cat");
+  >();
   const [selectedRarity, setSelectedRarity] = useState<
     BuddyRarity | undefined
-  >("legendary");
+  >();
   const [selectedEye, setSelectedEye] = useState<BuddyEye | undefined>();
   const [selectedHat, setSelectedHat] = useState<BuddyHat | undefined>();
+  const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
     init();
   }, [init]);
+
+  // Sync selectors from current buddy on first load
+  useEffect(() => {
+    if (status?.currentCompanion && !initialized) {
+      const c = status.currentCompanion;
+      setSelectedSpecies(c.species);
+      setSelectedRarity(c.rarity);
+      setSelectedEye(c.eye);
+      setSelectedHat(c.hat === "none" ? undefined : c.hat);
+      setInitialized(true);
+    }
+  }, [status, initialized]);
+
+  // Preview companion from current selections
+  const previewCompanion = selectedSpecies
+    ? {
+        species: selectedSpecies,
+        rarity: selectedRarity ?? "common",
+        eye: selectedEye ?? "\u00B7",
+        hat: selectedHat ?? "none",
+        shiny: false,
+      }
+    : null;
+
+  // Check if selection differs from current buddy
+  const hasChanges =
+    status?.currentCompanion &&
+    previewCompanion &&
+    (previewCompanion.species !== status.currentCompanion.species ||
+      previewCompanion.rarity !== status.currentCompanion.rarity ||
+      (selectedEye && selectedEye !== status.currentCompanion.eye) ||
+      (selectedHat && selectedHat !== status.currentCompanion.hat));
 
   const handleSearch = async () => {
     const result = await search({
@@ -98,37 +131,28 @@ export default function BuddyTab() {
       )}
 
       {/* Current Buddy */}
-      {status?.currentCompanion && (
-        <div className={cn("mb-6")}>
-          <h4
-            className={cn("text-[12px] font-medium text-foreground mb-1.5")}
-          >
-            Current Buddy
-          </h4>
-          <p className={cn("text-[11px] text-muted-foreground/70 mb-2")}>
-            Active buddy in your Claude Code session
-          </p>
+      <div className={cn("mb-6")}>
+        <h4
+          className={cn("text-[12px] font-medium text-foreground mb-1.5")}
+        >
+          Current Buddy
+        </h4>
+        <p className={cn("text-[11px] text-muted-foreground/70 mb-2")}>
+          {(() => {
+            if (hasChanges) return "Preview \u2014 click Find & Apply to change";
+            if (status?.currentCompanion) return "Active buddy in your Claude Code session";
+            return "Select a species and rarity below to find one";
+          })()}
+        </p>
+        {(previewCompanion || status?.currentCompanion) && (
           <div className={cn("w-[160px]")}>
             <BuddyCard
-              companion={status.currentCompanion}
-              salt={status.currentSalt ?? undefined}
+              companion={previewCompanion ?? status!.currentCompanion!}
+              salt={hasChanges ? undefined : (status?.currentSalt ?? undefined)}
             />
           </div>
-        </div>
-      )}
-
-      {!status?.currentCompanion && status && (
-        <div className={cn("mb-6")}>
-          <h4
-            className={cn("text-[12px] font-medium text-foreground mb-1.5")}
-          >
-            Current Buddy
-          </h4>
-          <p className={cn("text-[11px] text-muted-foreground/70")}>
-            No buddy detected. Select a species and rarity below to find one.
-          </p>
-        </div>
-      )}
+        )}
+      </div>
 
       <div className={cn("border-t border-border mb-6")} />
 
