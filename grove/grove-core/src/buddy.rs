@@ -58,14 +58,12 @@ pub struct BuddySearchResult {
 }
 
 // ---------------------------------------------------------------------------
-// Config I/O
+// Config I/O (reuses grove-core config utilities)
 // ---------------------------------------------------------------------------
 
-pub fn buddy_config_path() -> PathBuf {
-    dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".grove")
-        .join("buddy.json")
+fn buddy_config_path() -> PathBuf {
+    crate::config::grove_data_path("buddy.json")
+        .unwrap_or_else(|_| PathBuf::from(".grove/buddy.json"))
 }
 
 pub fn load_buddy_config() -> Option<BuddyConfig> {
@@ -78,13 +76,7 @@ pub fn load_buddy_config() -> Option<BuddyConfig> {
 }
 
 pub fn save_buddy_config(config: &BuddyConfig) -> Result<(), String> {
-    let path = buddy_config_path();
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| format!("Failed to create dir: {e}"))?;
-    }
-    let content = serde_json::to_string_pretty(config)
-        .map_err(|e| format!("Failed to serialize buddy config: {e}"))?;
-    fs::write(&path, content).map_err(|e| format!("Failed to write buddy config: {e}"))
+    crate::config::save_json_file(&buddy_config_path(), config)
 }
 
 // ---------------------------------------------------------------------------
@@ -129,27 +121,13 @@ pub fn find_claude_binary() -> Result<String, String> {
     Err("No suitable Claude binary found (all paths contain .grove)".into())
 }
 
-/// Reads the binary at `binary_path`, locates the rarity-weights anchor string,
-/// then scans backwards up to 200 bytes for a pattern `="<15 printable ASCII>"`.
-/// Returns the salt if it appears >= 3 times in the binary.
-pub fn detect_salt(binary_path: &str) -> Result<Option<String>, String> {
-    let data =
-        fs::read(binary_path).map_err(|e| format!("Failed to read binary {binary_path}: {e}"))?;
-
+/// Detect salt from an already-loaded binary buffer.
+fn detect_salt_from_buf(data: &[u8]) -> Option<String> {
     let anchor = b"{common:5,uncommon:15,rare:25,epic:35,legendary:50}";
+    let anchor_pos = data.windows(anchor.len()).position(|w| w == anchor)?;
 
-    let Some(anchor_pos) = data
-        .windows(anchor.len())
-        .position(|w| w == anchor)
-    else {
-        return Ok(None);
-    };
-
-    // Scan backwards up to 200 bytes from the anchor looking for ="<15 chars>"
     let scan_start = anchor_pos.saturating_sub(200);
     let region = &data[scan_start..anchor_pos];
-
-    // Look for pattern: =" followed by 15 printable ASCII chars followed by "
     let eq_quote = b"=\"";
     let mut salt: Option<String> = None;
 
@@ -159,96 +137,89 @@ pub fn detect_salt(binary_path: &str) -> Result<Option<String>, String> {
         }
         if &region[i..i + 2] == eq_quote {
             let candidate = &region[i + 2..i + 2 + 15];
-            if candidate.iter().all(|&b| b >= 0x20 && b <= 0x7E && b != b'"') {
-                if i + 2 + 15 < region.len() && region[i + 2 + 15] == b'"' {
-                    let s = String::from_utf8_lossy(candidate).to_string();
-                    salt = Some(s);
-                }
+            if candidate.iter().all(|&b| b >= 0x20 && b <= 0x7E && b != b'"')
+                && i + 2 + 15 < region.len()
+                && region[i + 2 + 15] == b'"'
+            {
+                salt = Some(String::from_utf8_lossy(candidate).to_string());
             }
         }
     }
 
-    let Some(found_salt) = salt else {
-        return Ok(None);
-    };
-
-    // Verify: salt must appear >= 3 times in binary
-    let salt_bytes = found_salt.as_bytes();
+    let found = salt?;
     let count = data
-        .windows(salt_bytes.len())
-        .filter(|w| *w == salt_bytes)
+        .windows(found.len())
+        .filter(|w| *w == found.as_bytes())
         .count();
+    if count >= 3 { Some(found) } else { None }
+}
 
-    if count >= 3 {
-        Ok(Some(found_salt))
-    } else {
-        Ok(None)
+/// Public wrapper: reads binary and detects salt.
+pub fn detect_salt(binary_path: &str) -> Result<Option<String>, String> {
+    let data = read_binary(binary_path)?;
+    Ok(detect_salt_from_buf(&data))
+}
+
+fn read_binary(binary_path: &str) -> Result<Vec<u8>, String> {
+    fs::read(binary_path).map_err(|e| format!("Failed to read binary {binary_path}: {e}"))
+}
+
+/// Atomically write data to path (temp + rename + codesign).
+fn atomic_write_and_sign(binary_path: &str, data: &[u8]) -> Result<(), String> {
+    let bin_path = PathBuf::from(binary_path);
+    let temp_path = bin_path.with_extension("buddy.tmp");
+    fs::write(&temp_path, data).map_err(|e| format!("Failed to write temp: {e}"))?;
+    let meta = fs::metadata(&bin_path).map_err(|e| format!("Failed to read metadata: {e}"))?;
+    fs::set_permissions(&temp_path, meta.permissions())
+        .map_err(|e| format!("Failed to set permissions: {e}"))?;
+    fs::rename(&temp_path, &bin_path).map_err(|e| format!("Failed to rename: {e}"))?;
+    let _ = Command::new("codesign")
+        .args(["-f", "-s", "-", binary_path])
+        .output();
+    Ok(())
+}
+
+/// Replace all occurrences of `old` with `new` in buffer. Returns replacement count.
+fn replace_in_buf(data: &mut [u8], old: &[u8], new: &[u8]) -> u32 {
+    let mut count = 0u32;
+    let mut i = 0;
+    while i + old.len() <= data.len() {
+        if &data[i..i + old.len()] == old {
+            data[i..i + new.len()].copy_from_slice(new);
+            count += 1;
+            i += new.len();
+        } else {
+            i += 1;
+        }
     }
+    count
 }
 
 /// Patches all occurrences of `old_salt` with `new_salt` in the binary.
-/// Backs up to `.buddy-pick.bak` if no backup exists yet.
-/// Uses atomic write (temp file + rename) and macOS codesign.
 pub fn patch_binary(binary_path: &str, old_salt: &str, new_salt: &str) -> Result<u32, String> {
     if old_salt.len() != new_salt.len() {
         return Err("Salt lengths must match".into());
     }
-
     let bin_path = PathBuf::from(binary_path);
-
-    // Backup only if no backup exists
     let backup_path = bin_path.with_extension("buddy-pick.bak");
     if !backup_path.exists() {
         fs::copy(&bin_path, &backup_path)
             .map_err(|e| format!("Failed to create backup: {e}"))?;
     }
 
-    let mut data =
-        fs::read(binary_path).map_err(|e| format!("Failed to read binary: {e}"))?;
-
-    let old_bytes = old_salt.as_bytes();
-    let new_bytes = new_salt.as_bytes();
-    let mut replacements: u32 = 0;
-
-    // Find and replace all occurrences
-    let mut i = 0;
-    while i + old_bytes.len() <= data.len() {
-        if &data[i..i + old_bytes.len()] == old_bytes {
-            data[i..i + old_bytes.len()].copy_from_slice(new_bytes);
-            replacements += 1;
-            i += old_bytes.len();
-        } else {
-            i += 1;
-        }
-    }
-
-    if replacements == 0 {
+    let mut data = read_binary(binary_path)?;
+    let count = replace_in_buf(&mut data, old_salt.as_bytes(), new_salt.as_bytes());
+    if count == 0 {
         return Err("Old salt not found in binary".into());
     }
-
-    // Atomic write via temp file + rename
-    let temp_path = bin_path.with_extension("buddy-pick.tmp");
-    fs::write(&temp_path, &data).map_err(|e| format!("Failed to write temp file: {e}"))?;
-
-    // Preserve permissions
-    let metadata = fs::metadata(&bin_path)
-        .map_err(|e| format!("Failed to read binary metadata: {e}"))?;
-    fs::set_permissions(&temp_path, metadata.permissions())
-        .map_err(|e| format!("Failed to set permissions: {e}"))?;
-
-    fs::rename(&temp_path, &bin_path).map_err(|e| format!("Failed to rename temp file: {e}"))?;
-
-    // macOS codesign
-    let _ = Command::new("codesign")
-        .args(["-f", "-s", "-", binary_path])
-        .output();
-
-    Ok(replacements)
+    atomic_write_and_sign(binary_path, &data)?;
+    Ok(count)
 }
 
 /// Ensures the buddy config is still applied. If the saved salt no longer
 /// appears in the binary (e.g. after a Claude update), re-patches.
 /// Returns `None` if already good, `Some(message)` if re-patched.
+/// Single-read ensure: checks salt + sprite, patches if needed.
 pub fn ensure_buddy() -> Result<Option<String>, String> {
     let config = match load_buddy_config() {
         Some(c) => c,
@@ -256,35 +227,37 @@ pub fn ensure_buddy() -> Result<Option<String>, String> {
     };
 
     let binary_path = find_claude_binary()?;
-    let data = fs::read(&binary_path)
-        .map_err(|e| format!("Failed to read binary: {e}"))?;
+    let mut data = read_binary(&binary_path)?;
+    let mut msgs: Vec<String> = Vec::new();
 
-    let saved_salt_bytes = config.salt.as_bytes();
-    let has_saved_salt = data
-        .windows(saved_salt_bytes.len())
-        .any(|w| w == saved_salt_bytes);
+    // Check salt
+    let has_salt = data
+        .windows(config.salt.len())
+        .any(|w| w == config.salt.as_bytes());
+    if !has_salt {
+        let current_salt = detect_salt_from_buf(&data)
+            .ok_or("Cannot re-patch: no salt detected in updated binary")?;
+        let count = replace_in_buf(&mut data, current_salt.as_bytes(), config.salt.as_bytes());
+        msgs.push(format!("salt: {count} replacements"));
+    }
 
-    if has_saved_salt {
+    // Check sprite upgrade
+    if config.upgrade_robot {
+        let claude_bytes = CLAUDE_SPRITE.as_bytes();
+        let has_claude = data.windows(claude_bytes.len()).any(|w| w == claude_bytes);
+        if !has_claude {
+            if let Some((_, original)) = find_robot_section(&data) {
+                let count = replace_in_buf(&mut data, &original, claude_bytes);
+                msgs.push(format!("sprite: {count} replacements"));
+            }
+        }
+    }
+
+    if msgs.is_empty() {
         return Ok(None);
     }
-
-    // Salt missing — binary was likely updated. Re-detect and re-patch.
-    let current_salt = detect_salt(&binary_path)?
-        .ok_or("Cannot re-patch: no salt detected in updated binary")?;
-
-    let count = patch_binary(&binary_path, &current_salt, &config.salt)?;
-
-    // Also ensure robot upgrade if enabled
-    let sprite_msg = ensure_robot_upgrade(&binary_path).unwrap_or(None);
-
-    let mut msg = format!(
-        "Re-patched binary with {} replacements (salt: {} → {})",
-        count, current_salt, config.salt
-    );
-    if let Some(s) = sprite_msg {
-        msg.push_str(&format!("; {s}"));
-    }
-    Ok(Some(msg))
+    atomic_write_and_sign(&binary_path, &data)?;
+    Ok(Some(msgs.join("; ")))
 }
 
 // ---------------------------------------------------------------------------
@@ -440,23 +413,22 @@ process.exit(1);
 /// saved config, and user ID.
 pub fn get_buddy_status_impl() -> Result<BuddyStatus, String> {
     let binary_path = find_claude_binary()?;
-    let current_salt = detect_salt(&binary_path)?;
+    let data = read_binary(&binary_path)?;
     let user_id = get_user_id();
 
+    let current_salt = detect_salt_from_buf(&data);
     let current_companion = match &current_salt {
         Some(salt) => roll_companion_via_bun(&user_id, salt).ok(),
         None => None,
     };
-
-    let saved_config = load_buddy_config();
-
-    let robot_upgraded = is_robot_upgraded(&binary_path).unwrap_or(false);
+    let claude_bytes = CLAUDE_SPRITE.as_bytes();
+    let robot_upgraded = data.windows(claude_bytes.len()).any(|w| w == claude_bytes);
 
     Ok(BuddyStatus {
         binary_path,
         current_salt,
         current_companion,
-        saved_config,
+        saved_config: load_buddy_config(),
         user_id,
         robot_upgraded,
     })

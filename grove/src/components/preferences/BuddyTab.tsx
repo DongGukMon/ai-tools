@@ -2,17 +2,17 @@ import { useEffect, useState } from "react";
 import { cn } from "../../lib/cn";
 import { Button } from "../ui/button";
 import { useBuddyStore } from "../../store/buddy";
-import type { BuddyEye, BuddyHat, BuddyRarity, BuddySpecies } from "../../types";
+import type { BuddyCompanion, BuddyEye, BuddyHat, BuddyRarity, BuddySpecies } from "../../types";
 import BuddyCard from "./buddy/BuddyCard";
 import SpeciesGallery from "./buddy/SpeciesGallery";
 import { RARITY_LABELS } from "./buddy/sprites";
 
-const RARITIES: BuddyRarity[] = [
-  "common",
-  "uncommon",
-  "rare",
-  "epic",
-  "legendary",
+const RARITIES: { value: BuddyRarity; label: string }[] = [
+  { value: "common", label: RARITY_LABELS.common },
+  { value: "uncommon", label: RARITY_LABELS.uncommon },
+  { value: "rare", label: RARITY_LABELS.rare },
+  { value: "epic", label: RARITY_LABELS.epic },
+  { value: "legendary", label: RARITY_LABELS.legendary },
 ];
 
 const EYES: { value: BuddyEye; label: string }[] = [
@@ -35,6 +35,72 @@ const HATS: { value: BuddyHat; label: string }[] = [
   { value: "tinyduck", label: "Tiny Duck" },
 ];
 
+// --- Shared selector component for Rarity / Eyes / Hat ---
+
+interface SelectorProps<T extends string> {
+  title: string;
+  items: { value: T; label: string }[];
+  selected: T | undefined;
+  onSelect: (value: T | undefined) => void;
+  toggle?: boolean;
+}
+
+function Selector<T extends string>({
+  title,
+  items,
+  selected,
+  onSelect,
+  toggle,
+}: SelectorProps<T>) {
+  return (
+    <div className={cn("mb-3")}>
+      <h4 className={cn("text-[12px] font-medium text-foreground mb-1.5")}>
+        {title}
+      </h4>
+      <div className={cn("flex gap-1.5 flex-wrap")}>
+        {items.map((item) => (
+          <button
+            key={item.value}
+            type="button"
+            onClick={() =>
+              onSelect(toggle && selected === item.value ? undefined : item.value)
+            }
+            className={cn(
+              "rounded-md border px-2.5 py-1 text-[11px] transition-colors",
+              {
+                "border-accent bg-accent/10 font-medium text-foreground":
+                  selected === item.value,
+                "border-border text-muted-foreground hover:border-accent/50":
+                  selected !== item.value,
+              },
+            )}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// --- Change detection ---
+
+function companionChanged(
+  preview: { species: string; rarity: string; eye: string; hat: string; shiny: boolean } | null,
+  current: BuddyCompanion | null,
+): boolean {
+  if (!preview || !current) return !!preview !== !!current;
+  return (
+    preview.species !== current.species ||
+    preview.rarity !== current.rarity ||
+    preview.eye !== current.eye ||
+    preview.hat !== current.hat ||
+    preview.shiny !== current.shiny
+  );
+}
+
+// --- Main component ---
+
 export default function BuddyTab() {
   const status = useBuddyStore((s) => s.status);
   const applying = useBuddyStore((s) => s.applying);
@@ -44,12 +110,8 @@ export default function BuddyTab() {
   const restore = useBuddyStore((s) => s.restore);
   const toggleUpgradeRobot = useBuddyStore((s) => s.toggleUpgradeRobot);
 
-  const [selectedSpecies, setSelectedSpecies] = useState<
-    BuddySpecies | undefined
-  >();
-  const [selectedRarity, setSelectedRarity] = useState<
-    BuddyRarity | undefined
-  >();
+  const [selectedSpecies, setSelectedSpecies] = useState<BuddySpecies | undefined>();
+  const [selectedRarity, setSelectedRarity] = useState<BuddyRarity | undefined>();
   const [selectedEye, setSelectedEye] = useState<BuddyEye | undefined>();
   const [selectedHat, setSelectedHat] = useState<BuddyHat | undefined>();
   const [selectedShiny, setSelectedShiny] = useState(false);
@@ -84,18 +146,11 @@ export default function BuddyTab() {
     : null;
 
   const hasChanges =
-    status &&
+    !!status &&
     (selectedUpgradeRobot !== status.robotUpgraded ||
-      (status.currentCompanion &&
-        previewCompanion &&
-        (previewCompanion.species !== status.currentCompanion.species ||
-          previewCompanion.rarity !== status.currentCompanion.rarity ||
-          (selectedEye && selectedEye !== status.currentCompanion.eye) ||
-          (selectedHat && selectedHat !== status.currentCompanion.hat) ||
-          selectedShiny !== status.currentCompanion.shiny)));
+      companionChanged(previewCompanion, status.currentCompanion ?? null));
 
   const handleApply = async () => {
-    // Apply buddy search + sprite upgrade together
     await searchAndApply({
       species: selectedSpecies,
       rarity: selectedRarity,
@@ -135,9 +190,7 @@ export default function BuddyTab() {
         </div>
       )}
 
-      {/* Top row: Current Buddy | Species Gallery */}
       <div className={cn("flex gap-4 mb-4")}>
-        {/* Left: Current Buddy */}
         <div className={cn("shrink-0 w-[170px]")}>
           <h4
             className={cn("text-[12px] font-medium text-foreground mb-1")}
@@ -160,7 +213,6 @@ export default function BuddyTab() {
           )}
         </div>
 
-        {/* Right: Species Gallery (scrollable) */}
         <div className={cn("flex-1 min-w-0")}>
           <h4 className={cn("text-[12px] font-medium text-foreground mb-1")}>
             Choose Species
@@ -177,92 +229,27 @@ export default function BuddyTab() {
 
       <div className={cn("border-t border-border mb-4")} />
 
-      {/* Rarity */}
-      <div className={cn("mb-3")}>
-        <h4 className={cn("text-[12px] font-medium text-foreground mb-1.5")}>
-          Rarity
-        </h4>
-        <div className={cn("flex gap-1.5 flex-wrap")}>
-          {RARITIES.map((r) => (
-            <button
-              key={r}
-              type="button"
-              onClick={() => setSelectedRarity(r)}
-              className={cn(
-                "rounded-md border px-2.5 py-1 text-[11px] transition-colors",
-                {
-                  "border-accent bg-accent/10 font-medium text-foreground":
-                    selectedRarity === r,
-                  "border-border text-muted-foreground hover:border-accent/50":
-                    selectedRarity !== r,
-                },
-              )}
-            >
-              {RARITY_LABELS[r]}
-            </button>
-          ))}
-        </div>
-      </div>
+      <Selector
+        title="Rarity"
+        items={RARITIES}
+        selected={selectedRarity}
+        onSelect={setSelectedRarity}
+      />
+      <Selector
+        title="Eyes"
+        items={EYES}
+        selected={selectedEye}
+        onSelect={setSelectedEye}
+        toggle
+      />
+      <Selector
+        title="Hat"
+        items={HATS}
+        selected={selectedHat}
+        onSelect={setSelectedHat}
+        toggle
+      />
 
-      {/* Eyes */}
-      <div className={cn("mb-3")}>
-        <h4 className={cn("text-[12px] font-medium text-foreground mb-1.5")}>
-          Eyes
-        </h4>
-        <div className={cn("flex gap-1.5 flex-wrap")}>
-          {EYES.map((e) => (
-            <button
-              key={e.value}
-              type="button"
-              onClick={() =>
-                setSelectedEye(selectedEye === e.value ? undefined : e.value)
-              }
-              className={cn(
-                "rounded-md border px-2.5 py-1 text-[11px] transition-colors",
-                {
-                  "border-accent bg-accent/10 font-medium text-foreground":
-                    selectedEye === e.value,
-                  "border-border text-muted-foreground hover:border-accent/50":
-                    selectedEye !== e.value,
-                },
-              )}
-            >
-              {e.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Hat */}
-      <div className={cn("mb-3")}>
-        <h4 className={cn("text-[12px] font-medium text-foreground mb-1.5")}>
-          Hat
-        </h4>
-        <div className={cn("flex gap-1.5 flex-wrap")}>
-          {HATS.map((h) => (
-            <button
-              key={h.value}
-              type="button"
-              onClick={() =>
-                setSelectedHat(selectedHat === h.value ? undefined : h.value)
-              }
-              className={cn(
-                "rounded-md border px-2.5 py-1 text-[11px] transition-colors",
-                {
-                  "border-accent bg-accent/10 font-medium text-foreground":
-                    selectedHat === h.value,
-                  "border-border text-muted-foreground hover:border-accent/50":
-                    selectedHat !== h.value,
-                },
-              )}
-            >
-              {h.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Shiny + Upgrade Robot */}
       <div className={cn("mb-4")}>
         <div className={cn("flex items-center gap-3")}>
           <button
@@ -304,7 +291,6 @@ export default function BuddyTab() {
 
       <div className={cn("border-t border-border mb-4")} />
 
-      {/* Actions */}
       <div className={cn("flex items-center gap-3")}>
         <Button
           variant="default"
