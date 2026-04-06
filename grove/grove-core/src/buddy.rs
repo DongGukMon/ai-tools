@@ -29,6 +29,8 @@ pub struct BuddyConfig {
     pub upgrade_robot: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub original_robot_sprite: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub original_robot_sprites: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -249,7 +251,7 @@ pub fn patch_binary(binary_path: &str, old_salt: &str, new_salt: &str) -> Result
 /// Returns `None` if already good, `Some(message)` if re-patched.
 /// Single-read ensure: checks salt + sprite, patches if needed.
 pub fn ensure_buddy() -> Result<Option<String>, String> {
-    let config = match load_buddy_config() {
+    let mut config = match load_buddy_config() {
         Some(c) => c,
         None => return Ok(None),
     };
@@ -272,11 +274,17 @@ pub fn ensure_buddy() -> Result<Option<String>, String> {
     // Check sprite upgrade
     if config.upgrade_robot {
         let claude_bytes = CLAUDE_SPRITE.as_bytes();
-        let has_claude = robot_slot_matches(&data, claude_bytes);
-        if !has_claude {
-            if let Some((offset, original)) = find_robot_section(&data) {
-                replace_robot_section_at_offset(&mut data, offset, original.len(), claude_bytes)?;
-                msgs.push("sprite: 1 replacement".to_string());
+        let sections = find_robot_sections(&data);
+        if sections.is_empty() {
+            return Err("Robot sprite section not found in binary".into());
+        }
+
+        if !robot_slots_match(&data, claude_bytes) {
+            let originals = resolve_robot_original_sections(&config, &sections, claude_bytes)?;
+            let replacements = replace_robot_sections(&mut data, &sections, claude_bytes)?;
+            if replacements > 0 {
+                store_robot_original_sections(&mut config, &originals);
+                msgs.push(format!("sprite: {replacements} replacements"));
             }
         }
     }
@@ -285,6 +293,7 @@ pub fn ensure_buddy() -> Result<Option<String>, String> {
         return Ok(None);
     }
     atomic_write_and_sign(&binary_path, &data)?;
+    save_buddy_config(&config)?;
     Ok(Some(msgs.join("; ")))
 }
 
@@ -440,7 +449,7 @@ pub fn get_buddy_status_impl() -> Result<BuddyStatus, String> {
         Some(salt) => roll_companion_via_bun(&user_id, salt).ok(),
         None => None,
     };
-    let robot_upgraded = robot_slot_matches(&data, CLAUDE_SPRITE.as_bytes());
+    let robot_upgraded = robot_slots_match(&data, CLAUDE_SPRITE.as_bytes());
 
     Ok(BuddyStatus {
         binary_path,
@@ -476,7 +485,8 @@ pub fn apply_buddy_impl(salt: &str, companion: &BuddyCompanion) -> Result<u32, S
         companion: companion.clone(),
         patched_at,
         upgrade_robot: prev.as_ref().map_or(false, |p| p.upgrade_robot),
-        original_robot_sprite: prev.and_then(|p| p.original_robot_sprite),
+        original_robot_sprite: prev.as_ref().and_then(|p| p.original_robot_sprite.clone()),
+        original_robot_sprites: prev.map_or_else(Vec::new, |p| p.original_robot_sprites),
     };
 
     save_buddy_config(&config)?;
@@ -575,14 +585,15 @@ const CLAUDE_SPRITE: &str = concat!(
 /// Check if the binary currently has the Claude sprite in the robot slot.
 pub fn is_robot_upgraded(binary_path: &str) -> Result<bool, String> {
     let data = fs::read(binary_path).map_err(|e| format!("Failed to read binary: {e}"))?;
-    Ok(robot_slot_matches(&data, CLAUDE_SPRITE.as_bytes()))
+    Ok(robot_slots_match(&data, CLAUDE_SPRITE.as_bytes()))
 }
 
-/// Find the robot sprite section in the binary. Returns (offset, section_bytes).
-fn find_robot_section(data: &[u8]) -> Option<(usize, Vec<u8>)> {
+/// Find all robot sprite sections in the binary. Returns (offset, section_bytes).
+fn find_robot_sections(data: &[u8]) -> Vec<(usize, Vec<u8>)> {
     // Search for ik_]:[[  marker followed by robot sprite data
     let marker = b"ik_]:[[";
     let mut pos = 0;
+    let mut sections = Vec::new();
     while let Some(offset) = data[pos..].windows(marker.len()).position(|w| w == marker) {
         let abs = pos + offset;
         let section_start = abs + marker.len() - 2; // start at [[
@@ -603,17 +614,85 @@ fn find_robot_section(data: &[u8]) -> Option<(usize, Vec<u8>)> {
         }
         let section = &data[section_start..section_end];
         if section.len() == 253 {
-            return Some((section_start, section.to_vec()));
+            sections.push((section_start, section.to_vec()));
         }
         pos = abs + marker.len();
     }
-    None
+    sections
 }
 
-fn robot_slot_matches(data: &[u8], expected_section: &[u8]) -> bool {
-    find_robot_section(data)
-        .map(|(_, section)| section == expected_section)
-        .unwrap_or(false)
+fn legacy_robot_slot_index(slot_count: usize) -> Option<usize> {
+    if slot_count == 0 {
+        None
+    } else {
+        Some(usize::min(1, slot_count - 1))
+    }
+}
+
+fn stored_robot_original_sections(config: &BuddyConfig, slot_count: usize) -> Vec<Option<Vec<u8>>> {
+    let mut sections = vec![None; slot_count];
+
+    for (index, sprite) in config
+        .original_robot_sprites
+        .iter()
+        .take(slot_count)
+        .enumerate()
+    {
+        sections[index] = Some(sprite.as_bytes().to_vec());
+    }
+
+    if let Some(sprite) = config.original_robot_sprite.as_ref() {
+        if let Some(index) = legacy_robot_slot_index(slot_count) {
+            if sections[index].is_none() {
+                sections[index] = Some(sprite.as_bytes().to_vec());
+            }
+        }
+    }
+
+    sections
+}
+
+fn resolve_robot_original_sections(
+    config: &BuddyConfig,
+    sections: &[(usize, Vec<u8>)],
+    patched_section: &[u8],
+) -> Result<Vec<Vec<u8>>, String> {
+    let saved_sections = stored_robot_original_sections(config, sections.len());
+
+    sections
+        .iter()
+        .enumerate()
+        .map(|(index, (_, current_section))| {
+            if current_section.as_slice() == patched_section {
+                saved_sections[index].clone().ok_or_else(|| {
+                    format!(
+                        "Robot sprite slot {} is already patched but its original sprite is unavailable",
+                        index + 1
+                    )
+                })
+            } else {
+                Ok(current_section.clone())
+            }
+        })
+        .collect()
+}
+
+fn store_robot_original_sections(config: &mut BuddyConfig, originals: &[Vec<u8>]) {
+    config.original_robot_sprites = originals
+        .iter()
+        .map(|sprite| String::from_utf8_lossy(sprite).to_string())
+        .collect();
+    config.original_robot_sprite = legacy_robot_slot_index(originals.len())
+        .and_then(|index| originals.get(index))
+        .map(|sprite| String::from_utf8_lossy(sprite).to_string());
+}
+
+fn robot_slots_match(data: &[u8], expected_section: &[u8]) -> bool {
+    let sections = find_robot_sections(data);
+    !sections.is_empty()
+        && sections
+            .iter()
+            .all(|(_, section)| section.as_slice() == expected_section)
 }
 
 fn replace_robot_section_at_offset(
@@ -634,6 +713,24 @@ fn replace_robot_section_at_offset(
 
     data[offset..end].copy_from_slice(new_section);
     Ok(())
+}
+
+fn replace_robot_sections(
+    data: &mut [u8],
+    sections: &[(usize, Vec<u8>)],
+    new_section: &[u8],
+) -> Result<usize, String> {
+    let mut replacements = 0;
+    for (offset, current_section) in sections {
+        if current_section.as_slice() == new_section {
+            continue;
+        }
+
+        replace_robot_section_at_offset(data, *offset, current_section.len(), new_section)?;
+        replacements += 1;
+    }
+
+    Ok(replacements)
 }
 
 /// Atomically write data to binary path and re-sign.
@@ -659,46 +756,42 @@ pub fn set_upgrade_robot_impl(enabled: bool) -> Result<bool, String> {
 
     let mut config = load_buddy_config().ok_or("No buddy config found")?;
     let claude_bytes = CLAUDE_SPRITE.as_bytes();
+    let sections = find_robot_sections(&data);
+    if sections.is_empty() {
+        return Err("Robot sprite section not found in binary".into());
+    }
 
     if enabled {
-        // Find original robot section
-        let already_upgraded = robot_slot_matches(&data, claude_bytes);
-        if already_upgraded {
-            config.upgrade_robot = true;
-            save_buddy_config(&config)?;
-            return Ok(true);
+        let originals = resolve_robot_original_sections(&config, &sections, claude_bytes)?;
+        let replacements = replace_robot_sections(&mut data, &sections, claude_bytes)?;
+        if replacements > 0 {
+            write_and_sign(&binary_path, &data)?;
         }
 
-        // Find robot section and save original
-        let (offset, original) =
-            find_robot_section(&data).ok_or("Robot sprite section not found in binary")?;
-
-        config.original_robot_sprite = Some(String::from_utf8_lossy(&original).to_string());
+        store_robot_original_sections(&mut config, &originals);
         config.upgrade_robot = true;
         save_buddy_config(&config)?;
-
-        replace_robot_section_at_offset(&mut data, offset, original.len(), claude_bytes)?;
-        write_and_sign(&binary_path, &data)?;
         Ok(true)
     } else {
-        // Restore original
-        let original = config
-            .original_robot_sprite
-            .as_ref()
-            .ok_or("No saved original robot sprite to restore")?;
-        let original_bytes = original.as_bytes();
+        let originals = resolve_robot_original_sections(&config, &sections, claude_bytes)?;
+        let mut replacements = 0;
+        for ((offset, current_section), original_section) in sections.iter().zip(originals.iter()) {
+            if current_section.as_slice() != claude_bytes {
+                continue;
+            }
 
-        let (offset, current_section) =
-            find_robot_section(&data).ok_or("Robot sprite section not found in binary")?;
-        let has_claude = current_section == claude_bytes;
-        if !has_claude {
-            config.upgrade_robot = false;
-            save_buddy_config(&config)?;
-            return Ok(true);
+            replace_robot_section_at_offset(
+                &mut data,
+                *offset,
+                current_section.len(),
+                original_section,
+            )?;
+            replacements += 1;
         }
 
-        replace_robot_section_at_offset(&mut data, offset, current_section.len(), original_bytes)?;
-        write_and_sign(&binary_path, &data)?;
+        if replacements > 0 {
+            write_and_sign(&binary_path, &data)?;
+        }
 
         config.upgrade_robot = false;
         save_buddy_config(&config)?;
@@ -708,7 +801,7 @@ pub fn set_upgrade_robot_impl(enabled: bool) -> Result<bool, String> {
 
 /// Ensure robot upgrade is applied after binary update.
 pub fn ensure_robot_upgrade(binary_path: &str) -> Result<Option<String>, String> {
-    let config = match load_buddy_config() {
+    let mut config = match load_buddy_config() {
         Some(c) => c,
         None => return Ok(None),
     };
@@ -718,26 +811,30 @@ pub fn ensure_robot_upgrade(binary_path: &str) -> Result<Option<String>, String>
 
     let mut data = fs::read(binary_path).map_err(|e| format!("Failed to read binary: {e}"))?;
     let claude_bytes = CLAUDE_SPRITE.as_bytes();
-
-    let already = robot_slot_matches(&data, claude_bytes);
-    if already {
+    let sections = find_robot_sections(&data);
+    if sections.is_empty() {
+        return Err("Robot section not found for re-upgrade".into());
+    }
+    if robot_slots_match(&data, claude_bytes) {
         return Ok(None);
     }
 
-    // Find the (reset) original robot section and patch it
-    let (offset, original) =
-        find_robot_section(&data).ok_or("Robot section not found for re-upgrade")?;
-
-    replace_robot_section_at_offset(&mut data, offset, original.len(), claude_bytes)?;
+    let originals = resolve_robot_original_sections(&config, &sections, claude_bytes)?;
+    let replacements = replace_robot_sections(&mut data, &sections, claude_bytes)?;
     write_and_sign(binary_path, &data)?;
-    Ok(Some("Re-upgraded robot sprite (1 replacement)".to_string()))
+    store_robot_original_sections(&mut config, &originals);
+    save_buddy_config(&config)?;
+    Ok(Some(format!(
+        "Re-upgraded robot sprite ({replacements} replacements)"
+    )))
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        find_binary_in_path, find_robot_section, replace_robot_section_at_offset,
-        robot_slot_matches, CLAUDE_SPRITE,
+        find_binary_in_path, find_robot_sections, replace_robot_section_at_offset,
+        replace_robot_sections, resolve_robot_original_sections, robot_slots_match,
+        store_robot_original_sections, BuddyCompanion, BuddyConfig, CLAUDE_SPRITE,
     };
     use std::fs;
     use std::path::{Path, PathBuf};
@@ -826,39 +923,120 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 
-    fn fake_binary_with_robot_slot(
-        robot_section: &[u8],
-        duplicate_section: &[u8],
+    fn fake_binary_with_robot_slots(
+        first_section: &[u8],
+        second_section: &[u8],
     ) -> (Vec<u8>, usize, usize) {
         let prefix = b"prefix-ik_]:";
-        let middle = b"-middle-";
+        let middle = b"-middle-ik_]:";
         let suffix = b"-suffix";
-        let slot_offset = prefix.len();
-        let duplicate_offset = slot_offset + robot_section.len() + middle.len();
+        let first_offset = prefix.len();
+        let second_offset = first_offset + first_section.len() + middle.len();
 
         let mut data = Vec::new();
         data.extend_from_slice(prefix);
-        data.extend_from_slice(robot_section);
+        data.extend_from_slice(first_section);
         data.extend_from_slice(middle);
-        data.extend_from_slice(duplicate_section);
+        data.extend_from_slice(second_section);
         data.extend_from_slice(suffix);
 
-        (data, slot_offset, duplicate_offset)
+        (data, first_offset, second_offset)
+    }
+
+    fn sprite_variant(first_frame_marker: u8) -> Vec<u8> {
+        let mut sprite = CLAUDE_SPRITE.as_bytes().to_vec();
+        let marker_offset = sprite.iter().position(|byte| *byte == b'*').unwrap();
+        sprite[marker_offset] = first_frame_marker;
+        sprite
     }
 
     #[test]
-    fn replace_robot_section_at_offset_only_updates_detected_slot() {
-        let original = CLAUDE_SPRITE.as_bytes().to_vec();
-        let duplicate = vec![b'X'; original.len()];
+    fn find_robot_sections_returns_all_detected_slots() {
+        let first = sprite_variant(b'X');
+        let second = CLAUDE_SPRITE.as_bytes().to_vec();
+        let (data, first_offset, second_offset) = fake_binary_with_robot_slots(&first, &second);
+
+        let sections = find_robot_sections(&data);
+        assert_eq!(sections.len(), 2);
+        assert_eq!(sections[0].0, first_offset);
+        assert_eq!(sections[0].1, first);
+        assert_eq!(sections[1].0, second_offset);
+        assert_eq!(sections[1].1, second);
+    }
+
+    #[test]
+    fn replace_robot_sections_updates_all_detected_slots() {
+        let first = sprite_variant(b'X');
+        let second = sprite_variant(b'Y');
+        let (mut data, first_offset, second_offset) = fake_binary_with_robot_slots(&first, &second);
+
+        let replacement = sprite_variant(b'Q');
+        let sections = find_robot_sections(&data);
+        let replacements = replace_robot_sections(&mut data, &sections, &replacement).unwrap();
+
+        assert_eq!(replacements, 2);
+        assert_eq!(
+            &data[first_offset..first_offset + first.len()],
+            replacement.as_slice()
+        );
+        assert_eq!(
+            &data[second_offset..second_offset + replacement.len()],
+            replacement.as_slice()
+        );
+    }
+
+    #[test]
+    fn robot_slots_match_requires_all_detected_slots_to_match() {
+        let first = CLAUDE_SPRITE.as_bytes().to_vec();
+        let second = sprite_variant(b'Z');
+        let (data, _, _) = fake_binary_with_robot_slots(&first, &second);
+
+        assert!(!robot_slots_match(&data, CLAUDE_SPRITE.as_bytes()));
+        assert!(!robot_slots_match(&data, &second));
+
+        let (data, _, _) = fake_binary_with_robot_slots(&first, &first);
+        assert!(robot_slots_match(&data, CLAUDE_SPRITE.as_bytes()));
+    }
+
+    #[test]
+    fn resolve_robot_original_sections_uses_saved_backup_for_patched_slot() {
+        let first = sprite_variant(b'X');
+        let second_original = sprite_variant(b'R');
+        let second = CLAUDE_SPRITE.as_bytes().to_vec();
+        let (data, _, _) = fake_binary_with_robot_slots(&first, &second);
+        let sections = find_robot_sections(&data);
+
+        let mut config = BuddyConfig {
+            salt: "salt".into(),
+            companion: BuddyCompanion {
+                species: "robot".into(),
+                rarity: "legendary".into(),
+                eye: "·".into(),
+                hat: "crown".into(),
+                shiny: false,
+            },
+            patched_at: "now".into(),
+            upgrade_robot: true,
+            original_robot_sprite: None,
+            original_robot_sprites: Vec::new(),
+        };
+        store_robot_original_sections(&mut config, &[first.clone(), second_original.clone()]);
+
+        let originals =
+            resolve_robot_original_sections(&config, &sections, CLAUDE_SPRITE.as_bytes()).unwrap();
+
+        assert_eq!(originals, vec![first, second_original]);
+    }
+
+    #[test]
+    fn replace_robot_section_at_offset_updates_exact_region_only() {
+        let original = sprite_variant(b'X');
+        let duplicate = sprite_variant(b'Y');
         let (mut data, slot_offset, duplicate_offset) =
-            fake_binary_with_robot_slot(&original, &duplicate);
+            fake_binary_with_robot_slots(&original, &duplicate);
+        let replacement = sprite_variant(b'Q');
 
-        let (found_offset, found_section) = find_robot_section(&data).unwrap();
-        assert_eq!(found_offset, slot_offset);
-        assert_eq!(found_section, original);
-
-        let replacement = vec![b'Y'; found_section.len()];
-        replace_robot_section_at_offset(&mut data, found_offset, found_section.len(), &replacement)
+        replace_robot_section_at_offset(&mut data, slot_offset, original.len(), &replacement)
             .unwrap();
 
         assert_eq!(
@@ -869,15 +1047,5 @@ mod tests {
             &data[duplicate_offset..duplicate_offset + duplicate.len()],
             duplicate.as_slice()
         );
-    }
-
-    #[test]
-    fn robot_slot_matches_checks_only_detected_robot_slot() {
-        let original = CLAUDE_SPRITE.as_bytes().to_vec();
-        let duplicate = vec![b'Z'; original.len()];
-        let (data, _, _) = fake_binary_with_robot_slot(&original, &duplicate);
-
-        assert!(robot_slot_matches(&data, CLAUDE_SPRITE.as_bytes()));
-        assert!(!robot_slot_matches(&data, &vec![b'Q'; original.len()]));
     }
 }
