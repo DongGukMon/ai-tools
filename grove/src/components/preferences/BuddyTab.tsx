@@ -53,6 +53,7 @@ export default function BuddyTab() {
   const [selectedEye, setSelectedEye] = useState<BuddyEye | undefined>();
   const [selectedHat, setSelectedHat] = useState<BuddyHat | undefined>();
   const [selectedShiny, setSelectedShiny] = useState(false);
+  const [selectedUpgradeRobot, setSelectedUpgradeRobot] = useState(false);
   const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
@@ -67,6 +68,7 @@ export default function BuddyTab() {
       setSelectedEye(c.eye);
       setSelectedHat(c.hat === "none" ? undefined : c.hat);
       setSelectedShiny(c.shiny);
+      setSelectedUpgradeRobot(status.robotUpgraded);
       setInitialized(true);
     }
   }, [status, initialized]);
@@ -82,22 +84,28 @@ export default function BuddyTab() {
     : null;
 
   const hasChanges =
-    status?.currentCompanion &&
-    previewCompanion &&
-    (previewCompanion.species !== status.currentCompanion.species ||
-      previewCompanion.rarity !== status.currentCompanion.rarity ||
-      (selectedEye && selectedEye !== status.currentCompanion.eye) ||
-      (selectedHat && selectedHat !== status.currentCompanion.hat) ||
-      selectedShiny !== status.currentCompanion.shiny);
+    status &&
+    (selectedUpgradeRobot !== status.robotUpgraded ||
+      (status.currentCompanion &&
+        previewCompanion &&
+        (previewCompanion.species !== status.currentCompanion.species ||
+          previewCompanion.rarity !== status.currentCompanion.rarity ||
+          (selectedEye && selectedEye !== status.currentCompanion.eye) ||
+          (selectedHat && selectedHat !== status.currentCompanion.hat) ||
+          selectedShiny !== status.currentCompanion.shiny)));
 
-  const handleApply = () => {
-    searchAndApply({
+  const handleApply = async () => {
+    // Apply buddy search + sprite upgrade together
+    await searchAndApply({
       species: selectedSpecies,
       rarity: selectedRarity,
       eye: selectedEye,
       hat: selectedHat,
       shiny: selectedShiny || undefined,
     });
+    if (selectedUpgradeRobot !== status?.robotUpgraded) {
+      await toggleUpgradeRobot(selectedUpgradeRobot);
+    }
   };
 
   if (applying && !status) {
@@ -271,19 +279,18 @@ export default function BuddyTab() {
         </button>
         <button
           type="button"
-          onClick={() => toggleUpgradeRobot(!status?.robotUpgraded)}
-          disabled={applying}
+          onClick={() => setSelectedUpgradeRobot(!selectedUpgradeRobot)}
           className={cn(
             "rounded-md border px-3 py-1 text-[11px] transition-colors",
             {
               "border-violet-500/60 bg-violet-500/10 font-medium text-violet-400":
-                status?.robotUpgraded,
+                selectedUpgradeRobot,
               "border-border text-muted-foreground hover:border-accent/50":
-                !status?.robotUpgraded,
+                !selectedUpgradeRobot,
             },
           )}
         >
-          {status?.robotUpgraded ? "\u2728 Robot Upgraded" : "Upgrade Robot"}
+          {selectedUpgradeRobot ? "\u2728 Robot Upgraded" : "Upgrade Robot"}
         </button>
       </div>
 
