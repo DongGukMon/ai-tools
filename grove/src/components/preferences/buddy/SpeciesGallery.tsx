@@ -1,6 +1,6 @@
 import { cn } from "../../../lib/cn";
 import type { BuddySpecies } from "../../../types";
-import { BUDDY_SPRITES, CLAUDE_ROBOT_SPRITE, ALL_SPECIES } from "./sprites";
+import { resolveSpecies, ALL_SPECIES } from "./sprites";
 
 interface Props {
   selected: BuddySpecies | undefined;
@@ -12,12 +12,7 @@ export default function SpeciesGallery({ selected, onSelect, upgradeRobot }: Pro
   return (
     <div className={cn("grid grid-cols-6 gap-1.5")}>
       {ALL_SPECIES.map((species) => {
-        const sprite =
-          species === "robot" && upgradeRobot
-            ? CLAUDE_ROBOT_SPRITE
-            : BUDDY_SPRITES[species];
-        const label =
-          species === "robot" && upgradeRobot ? "claude" : species;
+        const { name, sprite } = resolveSpecies(species, upgradeRobot ?? false);
 
         return (
           <button
@@ -49,7 +44,7 @@ export default function SpeciesGallery({ selected, onSelect, upgradeRobot }: Pro
                 },
               )}
             >
-              {label}
+              {name}
             </p>
           </button>
         );

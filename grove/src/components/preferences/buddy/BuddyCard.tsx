@@ -1,8 +1,7 @@
 import { cn } from "../../../lib/cn";
 import type { BuddyCompanion } from "../../../types";
 import {
-  BUDDY_SPRITES,
-  CLAUDE_ROBOT_SPRITE,
+  resolveSpecies,
   RARITY_COLORS,
   RARITY_BORDER_COLORS,
   RARITY_LABELS,
@@ -18,14 +17,13 @@ interface Props {
 }
 
 export default function BuddyCard({ companion, salt, compact, upgradeRobot }: Props) {
-  const rawSprite =
-    companion.species === "robot" && upgradeRobot
-      ? CLAUDE_ROBOT_SPRITE
-      : BUDDY_SPRITES[companion.species];
+  const { name, sprite: rawSprite } = resolveSpecies(
+    companion.species,
+    upgradeRobot ?? false,
+  );
   const rarityColor = RARITY_COLORS[companion.rarity] ?? "text-zinc-400";
   const borderColor = RARITY_BORDER_COLORS[companion.rarity] ?? "border-border";
 
-  // Apply eye + hat to sprite
   const sprite = rawSprite
     ? applyHat(applyEye(rawSprite, companion.eye), companion.hat)
     : null;
@@ -42,7 +40,6 @@ export default function BuddyCard({ companion, salt, compact, upgradeRobot }: Pr
         },
       )}
     >
-      {/* Shiny badge */}
       {companion.shiny && (
         <span
           className={cn(
@@ -54,7 +51,6 @@ export default function BuddyCard({ companion, salt, compact, upgradeRobot }: Pr
         </span>
       )}
 
-      {/* ASCII art */}
       <pre
         className={cn(
           "font-mono text-[11px] leading-tight text-center select-none",
@@ -65,10 +61,9 @@ export default function BuddyCard({ companion, salt, compact, upgradeRobot }: Pr
         {sprite?.join("\n")}
       </pre>
 
-      {/* Info */}
       <div className={cn("mt-2 text-center space-y-0.5")}>
         <p className={cn("text-[11px] font-medium text-foreground capitalize")}>
-          {companion.species}
+          {name}
         </p>
         <p className={cn("text-[10px] font-medium", rarityColor)}>
           {RARITY_LABELS[companion.rarity]}

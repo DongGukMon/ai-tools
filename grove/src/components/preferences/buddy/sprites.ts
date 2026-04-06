@@ -159,11 +159,23 @@ export const RARITY_LABELS: Record<string, string> = {
   legendary: "\u2605\u2605\u2605\u2605\u2605 Legendary",
 };
 
-export const CLAUDE_ROBOT_SPRITE: string[] = [
+const CLAUDE_ROBOT_SPRITE: string[] = [
+  "          ",
   " ▐▛███▜▌ ",
   "▝▜█████▛▘",
   "  ▘▘ ▝▝  ",
 ];
+
+/** Resolve display name and sprite for a species, accounting for robot upgrade. */
+export function resolveSpecies(
+  species: BuddySpecies,
+  upgradeRobot: boolean,
+): { name: string; sprite: string[] } {
+  if (species === "robot" && upgradeRobot) {
+    return { name: "claude", sprite: CLAUDE_ROBOT_SPRITE };
+  }
+  return { name: species, sprite: BUDDY_SPRITES[species] };
+}
 
 export const ALL_SPECIES: BuddySpecies[] = [
   "duck", "goose", "blob", "cat", "dragon", "octopus",
