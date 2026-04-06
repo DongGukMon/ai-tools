@@ -298,53 +298,19 @@ pub fn roll_companion_via_bun(user_id: &str, salt: &str) -> Result<BuddyCompanio
 
     let js = format!(
         r#"
-const SPECIES = [
-  "Bear","Cat","Dog","Fox","Frog","Hamster","Koala","Lion",
-  "Monkey","Mouse","Owl","Panda","Penguin","Rabbit","Raccoon",
-  "Sloth","Tiger","Wolf"
-];
-const RARITIES = ["common","uncommon","rare","epic","legendary"];
-const RARITY_WEIGHTS = [50, 15, 25, 35, 5];
-const EYES = [
-  "normal","happy","sad","angry","cool","wink","dizzy","star",
-  "heart","sleepy","surprised","crying"
-];
-const HATS = [
-  "none","cap","tophat","beanie","crown","wizard","party",
-  "pirate","cowboy","beret","headband","flower"
-];
-
-function mulberry32(seed) {{
-  let s = seed | 0;
-  return function() {{
-    s = (s + 0x6D2B79F5) | 0;
-    let t = Math.imul(s ^ (s >>> 15), 1 | s);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  }};
-}}
-
-function weightedRandom(rng, weights) {{
-  const total = weights.reduce((a, b) => a + b, 0);
-  let r = rng() * total;
-  for (let i = 0; i < weights.length; i++) {{
-    r -= weights[i];
-    if (r <= 0) return i;
-  }}
-  return weights.length - 1;
-}}
-
-const seed = Number(Bun.hash("{user_id}" + "{salt}"));
-const rng = mulberry32(seed);
-
-const rarityIdx = weightedRandom(rng, RARITY_WEIGHTS);
-const rarity = RARITIES[rarityIdx];
-const species = SPECIES[Math.floor(rng() * SPECIES.length)];
-const eye = EYES[Math.floor(rng() * EYES.length)];
-const hat = HATS[Math.floor(rng() * HATS.length)];
-const shiny = rng() < 0.05;
-
-console.log(JSON.stringify({{ species, rarity, eye, hat, shiny }}));
+const SPECIES=["duck","goose","blob","cat","dragon","octopus","owl","penguin","turtle","snail","ghost","axolotl","capybara","cactus","robot","rabbit","mushroom","chonk"];
+const RARITIES=["common","uncommon","rare","epic","legendary"];
+const RW={{common:60,uncommon:25,rare:10,epic:4,legendary:1}};
+const EYES=["\xB7","\u2726","\xD7","\u25C9","@","\xB0"];
+const HATS=["none","crown","tophat","propeller","halo","wizard","beanie","tinyduck"];
+function mb32(s){{let a=s>>>0;return()=>{{a=(a+0x6d2b79f5)|0;let t=Math.imul(a^(a>>>15),1|a);t=(t+Math.imul(t^(t>>>7),61|t))^t;return((t^(t>>>14))>>>0)/4294967296}};}}
+function pick(r,a){{return a[Math.floor(r()*a.length)]}}
+const h=Number(BigInt(Bun.hash("{user_id}{salt}"))&0xffffffffn);
+const r=mb32(h);let roll=r()*100;let rarity="common";
+for(const x of RARITIES){{roll-=RW[x];if(roll<0){{rarity=x;break}}}}
+const species=pick(r,SPECIES);const eye=pick(r,EYES);
+const hat=rarity==="common"?"none":pick(r,HATS);const shiny=r()<0.01;
+console.log(JSON.stringify({{species,rarity,eye,hat,shiny}}));
 "#
     );
 
@@ -396,63 +362,23 @@ pub fn search_buddy_impl(filter: &BuddySearchFilter) -> Result<BuddySearchResult
 
     let js = format!(
         r#"
-const SPECIES = [
-  "Bear","Cat","Dog","Fox","Frog","Hamster","Koala","Lion",
-  "Monkey","Mouse","Owl","Panda","Penguin","Rabbit","Raccoon",
-  "Sloth","Tiger","Wolf"
-];
-const RARITIES = ["common","uncommon","rare","epic","legendary"];
-const RARITY_WEIGHTS = [50, 15, 25, 35, 5];
-const EYES = [
-  "normal","happy","sad","angry","cool","wink","dizzy","star",
-  "heart","sleepy","surprised","crying"
-];
-const HATS = [
-  "none","cap","tophat","beanie","crown","wizard","party",
-  "pirate","cowboy","beret","headband","flower"
-];
-
-const CHARSET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_";
-
-function mulberry32(seed) {{
-  let s = seed | 0;
-  return function() {{
-    s = (s + 0x6D2B79F5) | 0;
-    let t = Math.imul(s ^ (s >>> 15), 1 | s);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  }};
+const SPECIES=["duck","goose","blob","cat","dragon","octopus","owl","penguin","turtle","snail","ghost","axolotl","capybara","cactus","robot","rabbit","mushroom","chonk"];
+const RARITIES=["common","uncommon","rare","epic","legendary"];
+const RW={{common:60,uncommon:25,rare:10,epic:4,legendary:1}};
+const EYES=["\xB7","\u2726","\xD7","\u25C9","@","\xB0"];
+const HATS=["none","crown","tophat","propeller","halo","wizard","beanie","tinyduck"];
+const CHARSET="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_";
+function mb32(s){{let a=s>>>0;return()=>{{a=(a+0x6d2b79f5)|0;let t=Math.imul(a^(a>>>15),1|a);t=(t+Math.imul(t^(t>>>7),61|t))^t;return((t^(t>>>14))>>>0)/4294967296}};}}
+function pick(r,a){{return a[Math.floor(r()*a.length)]}}
+function rollCompanion(userId,salt){{
+  const h=Number(BigInt(Bun.hash(userId+salt))&0xffffffffn);
+  const r=mb32(h);let roll=r()*100;let rarity="common";
+  for(const x of RARITIES){{roll-=RW[x];if(roll<0){{rarity=x;break}}}}
+  const species=pick(r,SPECIES);const eye=pick(r,EYES);
+  const hat=rarity==="common"?"none":pick(r,HATS);const shiny=r()<0.01;
+  return{{species,rarity,eye,hat,shiny}};
 }}
-
-function weightedRandom(rng, weights) {{
-  const total = weights.reduce((a, b) => a + b, 0);
-  let r = rng() * total;
-  for (let i = 0; i < weights.length; i++) {{
-    r -= weights[i];
-    if (r <= 0) return i;
-  }}
-  return weights.length - 1;
-}}
-
-function rollCompanion(userId, salt) {{
-  const seed = Number(Bun.hash(userId + salt));
-  const rng = mulberry32(seed);
-  const rarityIdx = weightedRandom(rng, RARITY_WEIGHTS);
-  const rarity = RARITIES[rarityIdx];
-  const species = SPECIES[Math.floor(rng() * SPECIES.length)];
-  const eye = EYES[Math.floor(rng() * EYES.length)];
-  const hat = HATS[Math.floor(rng() * HATS.length)];
-  const shiny = rng() < 0.05;
-  return {{ species, rarity, eye, hat, shiny }};
-}}
-
-function randomSalt() {{
-  let s = "";
-  for (let i = 0; i < 15; i++) {{
-    s += CHARSET[Math.floor(Math.random() * CHARSET.length)];
-  }}
-  return s;
-}}
+function randomSalt(){{let s="";for(let i=0;i<15;i++)s+=CHARSET[Math.floor(Math.random()*CHARSET.length)];return s;}}
 
 const filterSpecies = {species_filter};
 const filterRarity = {rarity_filter};
