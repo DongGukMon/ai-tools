@@ -263,37 +263,43 @@ export default function BuddyTab() {
       </div>
 
       {/* Shiny + Upgrade Robot */}
-      <div className={cn("mb-4 flex items-center gap-3")}>
-        <button
-          type="button"
-          onClick={() => setSelectedShiny(!selectedShiny)}
-          className={cn(
-            "rounded-md border px-3 py-1 text-[11px] transition-colors",
-            {
-              "border-yellow-500/60 bg-yellow-500/10 font-medium text-yellow-400":
-                selectedShiny,
-              "border-border text-muted-foreground hover:border-accent/50":
-                !selectedShiny,
-            },
-          )}
-        >
-          {selectedShiny ? "\u2728 Shiny" : "Shiny"}
-        </button>
-        <button
-          type="button"
-          onClick={() => setSelectedUpgradeRobot(!selectedUpgradeRobot)}
-          className={cn(
-            "rounded-md border px-3 py-1 text-[11px] transition-colors",
-            {
-              "border-violet-500/60 bg-violet-500/10 font-medium text-violet-400":
-                selectedUpgradeRobot,
-              "border-border text-muted-foreground hover:border-accent/50":
-                !selectedUpgradeRobot,
-            },
-          )}
-        >
-          {selectedUpgradeRobot ? "\u2728 Robot Upgraded" : "Upgrade Robot"}
-        </button>
+      <div className={cn("mb-4")}>
+        <div className={cn("flex items-center gap-3")}>
+          <button
+            type="button"
+            onClick={() => setSelectedShiny(!selectedShiny)}
+            className={cn(
+              "rounded-md border px-3 py-1 text-[11px] transition-colors",
+              {
+                "border-yellow-500/60 bg-yellow-500/10 font-medium text-yellow-400":
+                  selectedShiny,
+                "border-border text-muted-foreground hover:border-accent/50":
+                  !selectedShiny,
+              },
+            )}
+          >
+            {selectedShiny ? "\u2728 Shiny" : "Shiny"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedUpgradeRobot(!selectedUpgradeRobot)}
+            className={cn(
+              "rounded-md border px-3 py-1 text-[11px] transition-colors",
+              {
+                "border-violet-500/60 bg-violet-500/10 font-medium text-violet-400":
+                  selectedUpgradeRobot,
+                "border-border text-muted-foreground hover:border-accent/50":
+                  !selectedUpgradeRobot,
+              },
+            )}
+          >
+            {selectedUpgradeRobot ? "\u2728 Robot Upgraded" : "Upgrade Robot"}
+          </button>
+        </div>
+        <p className={cn("mt-1.5 text-[10px] text-muted-foreground/60")}>
+          Shiny has 1% chance — brute-force may take longer.
+          Upgrade Robot replaces robot sprite with Claude shield.
+        </p>
       </div>
 
       <div className={cn("border-t border-border mb-4")} />
