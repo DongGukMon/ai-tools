@@ -155,6 +155,7 @@ export default function BuddyTab() {
             <BuddyCard
               companion={previewCompanion ?? status!.currentCompanion!}
               salt={hasChanges ? undefined : (status?.currentSalt ?? undefined)}
+              upgradeRobot={selectedUpgradeRobot}
             />
           )}
         </div>
@@ -168,6 +169,7 @@ export default function BuddyTab() {
             <SpeciesGallery
               selected={selectedSpecies}
               onSelect={setSelectedSpecies}
+              upgradeRobot={selectedUpgradeRobot}
             />
           </div>
         </div>

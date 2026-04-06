@@ -2,6 +2,7 @@ import { cn } from "../../../lib/cn";
 import type { BuddyCompanion } from "../../../types";
 import {
   BUDDY_SPRITES,
+  CLAUDE_ROBOT_SPRITE,
   RARITY_COLORS,
   RARITY_BORDER_COLORS,
   RARITY_LABELS,
@@ -13,10 +14,14 @@ interface Props {
   companion: BuddyCompanion;
   salt?: string;
   compact?: boolean;
+  upgradeRobot?: boolean;
 }
 
-export default function BuddyCard({ companion, salt, compact }: Props) {
-  const rawSprite = BUDDY_SPRITES[companion.species];
+export default function BuddyCard({ companion, salt, compact, upgradeRobot }: Props) {
+  const rawSprite =
+    companion.species === "robot" && upgradeRobot
+      ? CLAUDE_ROBOT_SPRITE
+      : BUDDY_SPRITES[companion.species];
   const rarityColor = RARITY_COLORS[companion.rarity] ?? "text-zinc-400";
   const borderColor = RARITY_BORDER_COLORS[companion.rarity] ?? "border-border";
 

@@ -159,6 +159,12 @@ export const RARITY_LABELS: Record<string, string> = {
   legendary: "\u2605\u2605\u2605\u2605\u2605 Legendary",
 };
 
+export const CLAUDE_ROBOT_SPRITE: string[] = [
+  " ▐▛███▜▌ ",
+  "▝▜█████▛▘",
+  "  ▘▘ ▝▝  ",
+];
+
 export const ALL_SPECIES: BuddySpecies[] = [
   "duck", "goose", "blob", "cat", "dragon", "octopus",
   "owl", "penguin", "turtle", "snail", "ghost", "axolotl",
