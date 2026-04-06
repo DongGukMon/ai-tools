@@ -16,8 +16,8 @@ type TabId = "general" | "terminal" | "developer" | "buddy";
 const TABS: { id: TabId; label: string }[] = [
   { id: "general", label: "General" },
   { id: "terminal", label: "Terminal" },
-  { id: "developer", label: "Developer" },
   { id: "buddy", label: "Buddy" },
+  { id: "developer", label: "Developer" },
 ];
 
 interface Props {

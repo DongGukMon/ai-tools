@@ -288,22 +288,21 @@ export default function BuddyTab() {
           onClick={handleSearch}
           disabled={searching || loading || !selectedSpecies}
         >
-          {searching ? "Searching..." : "Find & Apply"}
+          {(() => {
+            if (searching) return "Searching\u2026";
+            if (loading) return "Applying\u2026";
+            return "Find & Apply";
+          })()}
         </Button>
         {status?.savedConfig && (
           <Button
             variant="ghost"
             size="sm"
             onClick={restore}
-            disabled={loading}
+            disabled={searching || loading}
           >
-            Restore Original
+            {loading && !searching ? "Restoring\u2026" : "Restore Original"}
           </Button>
-        )}
-        {searching && (
-          <span className={cn("text-[10px] text-muted-foreground")}>
-            Brute-forcing salt...
-          </span>
         )}
       </div>
     </div>
