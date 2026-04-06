@@ -2171,7 +2171,10 @@ mod tests {
         run_git_ok(source_dir, &["init"]);
         run_git_ok(source_dir, &["remote", "add", "origin", remote_url]);
         fs::write(
-            Repository::open(source_dir).unwrap().path().join("FETCH_HEAD"),
+            Repository::open(source_dir)
+                .unwrap()
+                .path()
+                .join("FETCH_HEAD"),
             "",
         )
         .unwrap();

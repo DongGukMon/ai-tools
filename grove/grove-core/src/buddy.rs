@@ -1,6 +1,8 @@
+use crate::process_env::enriched_path;
 use serde::{Deserialize, Serialize};
+use std::ffi::OsStr;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 // ---------------------------------------------------------------------------
@@ -83,42 +85,54 @@ pub fn save_buddy_config(config: &BuddyConfig) -> Result<(), String> {
 // Binary operations
 // ---------------------------------------------------------------------------
 
-pub fn find_claude_binary() -> Result<String, String> {
-    let output = Command::new("which")
-        .arg("-a")
-        .arg("claude")
-        .output()
-        .map_err(|e| format!("Failed to run `which -a claude`: {e}"))?;
-
-    if !output.status.success() {
-        return Err("Claude binary not found in PATH".into());
+fn is_executable_file(path: &Path) -> bool {
+    let Ok(metadata) = fs::metadata(path) else {
+        return false;
+    };
+    if !metadata.is_file() {
+        return false;
     }
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    for line in stdout.lines() {
-        let path = line.trim();
-        if path.is_empty() || path.contains(".grove") {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        metadata.permissions().mode() & 0o111 != 0
+    }
+
+    #[cfg(not(unix))]
+    {
+        true
+    }
+}
+
+fn path_contains_grove(path: &Path) -> bool {
+    path.to_string_lossy().contains(".grove")
+}
+
+fn find_binary_in_path(binary_name: &str, path_value: &str) -> Option<String> {
+    for dir in std::env::split_paths(OsStr::new(path_value)) {
+        let candidate = dir.join(binary_name);
+        if !is_executable_file(&candidate) || path_contains_grove(&candidate) {
             continue;
         }
 
-        // Resolve symlinks via realpath
-        let resolved = Command::new("realpath")
-            .arg(path)
-            .output()
-            .map_err(|e| format!("Failed to resolve path {path}: {e}"))?;
-
-        if resolved.status.success() {
-            let real = String::from_utf8_lossy(&resolved.stdout).trim().to_string();
-            if !real.is_empty() {
-                return Ok(real);
-            }
+        let resolved = fs::canonicalize(&candidate).unwrap_or(candidate);
+        if path_contains_grove(&resolved) {
+            continue;
         }
 
-        // Fallback to the original path if realpath fails
-        return Ok(path.to_string());
+        let resolved = resolved.to_string_lossy().trim().to_string();
+        if !resolved.is_empty() {
+            return Some(resolved);
+        }
     }
 
-    Err("No suitable Claude binary found (all paths contain .grove)".into())
+    None
+}
+
+pub fn find_claude_binary() -> Result<String, String> {
+    find_binary_in_path("claude", enriched_path())
+        .ok_or_else(|| "Claude binary not found in PATH".to_string())
 }
 
 /// Detect salt from an already-loaded binary buffer.
@@ -137,7 +151,9 @@ fn detect_salt_from_buf(data: &[u8]) -> Option<String> {
         }
         if &region[i..i + 2] == eq_quote {
             let candidate = &region[i + 2..i + 2 + 15];
-            if candidate.iter().all(|&b| b >= 0x20 && b <= 0x7E && b != b'"')
+            if candidate
+                .iter()
+                .all(|&b| b >= 0x20 && b <= 0x7E && b != b'"')
                 && i + 2 + 15 < region.len()
                 && region[i + 2 + 15] == b'"'
             {
@@ -151,7 +167,11 @@ fn detect_salt_from_buf(data: &[u8]) -> Option<String> {
         .windows(found.len())
         .filter(|w| *w == found.as_bytes())
         .count();
-    if count >= 3 { Some(found) } else { None }
+    if count >= 3 {
+        Some(found)
+    } else {
+        None
+    }
 }
 
 /// Public wrapper: reads binary and detects salt.
@@ -203,8 +223,7 @@ pub fn patch_binary(binary_path: &str, old_salt: &str, new_salt: &str) -> Result
     let bin_path = PathBuf::from(binary_path);
     let backup_path = bin_path.with_extension("buddy-pick.bak");
     if !backup_path.exists() {
-        fs::copy(&bin_path, &backup_path)
-            .map_err(|e| format!("Failed to create backup: {e}"))?;
+        fs::copy(&bin_path, &backup_path).map_err(|e| format!("Failed to create backup: {e}"))?;
     }
 
     let mut data = read_binary(binary_path)?;
@@ -311,8 +330,7 @@ console.log(JSON.stringify({{species,rarity,eye,hat,shiny}}));
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    serde_json::from_str(stdout.trim())
-        .map_err(|e| format!("Failed to parse companion JSON: {e}"))
+    serde_json::from_str(stdout.trim()).map_err(|e| format!("Failed to parse companion JSON: {e}"))
 }
 
 /// Spawns `bun --eval` with brute-force JS that generates random 15-char salts
@@ -438,8 +456,8 @@ pub fn get_buddy_status_impl() -> Result<BuddyStatus, String> {
 /// and saves the config with an ISO timestamp.
 pub fn apply_buddy_impl(salt: &str, companion: &BuddyCompanion) -> Result<u32, String> {
     let binary_path = find_claude_binary()?;
-    let current_salt = detect_salt(&binary_path)?
-        .ok_or("No salt detected in binary — cannot patch")?;
+    let current_salt =
+        detect_salt(&binary_path)?.ok_or("No salt detected in binary — cannot patch")?;
 
     let count = patch_binary(&binary_path, &current_salt, salt)?;
 
@@ -478,8 +496,7 @@ pub fn restore_buddy_impl() -> Result<bool, String> {
         return Ok(false);
     }
 
-    fs::copy(&backup_path, &bin_path)
-        .map_err(|e| format!("Failed to restore from backup: {e}"))?;
+    fs::copy(&backup_path, &bin_path).map_err(|e| format!("Failed to restore from backup: {e}"))?;
 
     // Re-sign
     let _ = Command::new("codesign")
@@ -557,12 +574,9 @@ const CLAUDE_SPRITE: &str = concat!(
 
 /// Check if the binary currently has the Claude sprite in the robot slot.
 pub fn is_robot_upgraded(binary_path: &str) -> Result<bool, String> {
-    let data =
-        fs::read(binary_path).map_err(|e| format!("Failed to read binary: {e}"))?;
+    let data = fs::read(binary_path).map_err(|e| format!("Failed to read binary: {e}"))?;
     let claude_bytes = CLAUDE_SPRITE.as_bytes();
-    Ok(data
-        .windows(claude_bytes.len())
-        .any(|w| w == claude_bytes))
+    Ok(data.windows(claude_bytes.len()).any(|w| w == claude_bytes))
 }
 
 /// Find the robot sprite section in the binary. Returns (offset, section_bytes).
@@ -570,13 +584,10 @@ fn find_robot_section(data: &[u8]) -> Option<(usize, Vec<u8>)> {
     // Search for ik_]:[[  marker followed by robot sprite data
     let marker = b"ik_]:[[";
     let mut pos = 0;
-    while let Some(offset) = data[pos..]
-        .windows(marker.len())
-        .position(|w| w == marker)
-    {
+    while let Some(offset) = data[pos..].windows(marker.len()).position(|w| w == marker) {
         let abs = pos + offset;
         let section_start = abs + marker.len() - 2; // start at [[
-        // Find matching ]]
+                                                    // Find matching ]]
         let mut depth: i32 = 0;
         let mut section_end = section_start;
         for i in section_start..data.len().min(section_start + 500) {
@@ -622,8 +633,7 @@ fn write_and_sign(binary_path: &str, data: &[u8]) -> Result<(), String> {
     let bin_path = PathBuf::from(binary_path);
     let temp_path = bin_path.with_extension("buddy-sprite.tmp");
     fs::write(&temp_path, data).map_err(|e| format!("Failed to write temp: {e}"))?;
-    let metadata =
-        fs::metadata(&bin_path).map_err(|e| format!("Failed to read metadata: {e}"))?;
+    let metadata = fs::metadata(&bin_path).map_err(|e| format!("Failed to read metadata: {e}"))?;
     fs::set_permissions(&temp_path, metadata.permissions())
         .map_err(|e| format!("Failed to set permissions: {e}"))?;
     fs::rename(&temp_path, &bin_path).map_err(|e| format!("Failed to rename: {e}"))?;
@@ -637,17 +647,14 @@ fn write_and_sign(binary_path: &str, data: &[u8]) -> Result<(), String> {
 /// When disabled, restores from saved original.
 pub fn set_upgrade_robot_impl(enabled: bool) -> Result<bool, String> {
     let binary_path = find_claude_binary()?;
-    let mut data =
-        fs::read(&binary_path).map_err(|e| format!("Failed to read binary: {e}"))?;
+    let mut data = fs::read(&binary_path).map_err(|e| format!("Failed to read binary: {e}"))?;
 
     let mut config = load_buddy_config().ok_or("No buddy config found")?;
     let claude_bytes = CLAUDE_SPRITE.as_bytes();
 
     if enabled {
         // Find original robot section
-        let already_upgraded = data
-            .windows(claude_bytes.len())
-            .any(|w| w == claude_bytes);
+        let already_upgraded = data.windows(claude_bytes.len()).any(|w| w == claude_bytes);
         if already_upgraded {
             config.upgrade_robot = true;
             save_buddy_config(&config)?;
@@ -655,11 +662,10 @@ pub fn set_upgrade_robot_impl(enabled: bool) -> Result<bool, String> {
         }
 
         // Find robot section and save original
-        let (_, original) = find_robot_section(&data)
-            .ok_or("Robot sprite section not found in binary")?;
+        let (_, original) =
+            find_robot_section(&data).ok_or("Robot sprite section not found in binary")?;
 
-        config.original_robot_sprite =
-            Some(String::from_utf8_lossy(&original).to_string());
+        config.original_robot_sprite = Some(String::from_utf8_lossy(&original).to_string());
         config.upgrade_robot = true;
         save_buddy_config(&config)?;
 
@@ -677,9 +683,7 @@ pub fn set_upgrade_robot_impl(enabled: bool) -> Result<bool, String> {
             .ok_or("No saved original robot sprite to restore")?;
         let original_bytes = original.as_bytes();
 
-        let has_claude = data
-            .windows(claude_bytes.len())
-            .any(|w| w == claude_bytes);
+        let has_claude = data.windows(claude_bytes.len()).any(|w| w == claude_bytes);
         if !has_claude {
             config.upgrade_robot = false;
             save_buddy_config(&config)?;
@@ -708,25 +712,93 @@ pub fn ensure_robot_upgrade(binary_path: &str) -> Result<Option<String>, String>
         return Ok(None);
     }
 
-    let mut data =
-        fs::read(binary_path).map_err(|e| format!("Failed to read binary: {e}"))?;
+    let mut data = fs::read(binary_path).map_err(|e| format!("Failed to read binary: {e}"))?;
     let claude_bytes = CLAUDE_SPRITE.as_bytes();
 
-    let already = data
-        .windows(claude_bytes.len())
-        .any(|w| w == claude_bytes);
+    let already = data.windows(claude_bytes.len()).any(|w| w == claude_bytes);
     if already {
         return Ok(None);
     }
 
     // Find the (reset) original robot section and patch it
-    let (_, original) = find_robot_section(&data)
-        .ok_or("Robot section not found for re-upgrade")?;
+    let (_, original) =
+        find_robot_section(&data).ok_or("Robot section not found for re-upgrade")?;
 
     let count = replace_sprite_in_buffer(&mut data, &original, claude_bytes);
     if count == 0 {
         return Ok(None);
     }
     write_and_sign(binary_path, &data)?;
-    Ok(Some(format!("Re-upgraded robot sprite ({count} replacements)")))
+    Ok(Some(format!(
+        "Re-upgraded robot sprite ({count} replacements)"
+    )))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::find_binary_in_path;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+    use uuid::Uuid;
+
+    fn temp_test_dir(prefix: &str) -> PathBuf {
+        std::env::temp_dir().join(format!("{prefix}-{}", Uuid::new_v4()))
+    }
+
+    fn write_executable(path: &Path) {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).unwrap();
+        }
+        fs::write(path, "#!/bin/sh\nexit 0\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = fs::metadata(path).unwrap().permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(path, perms).unwrap();
+        }
+    }
+
+    #[test]
+    fn find_binary_in_path_skips_grove_wrapper_and_prefers_real_binary() {
+        let root = temp_test_dir("grove-buddy-path");
+        let grove_bin = root.join(".grove").join("bin");
+        let user_bin = root.join("user").join("bin");
+        let grove_claude = grove_bin.join("claude");
+        let user_claude = user_bin.join("claude");
+
+        write_executable(&grove_claude);
+        write_executable(&user_claude);
+
+        let path = std::env::join_paths([grove_bin.as_path(), user_bin.as_path()])
+            .unwrap()
+            .to_string_lossy()
+            .to_string();
+
+        let resolved = find_binary_in_path("claude", &path).unwrap();
+        assert_eq!(
+            resolved,
+            fs::canonicalize(&user_claude).unwrap().to_string_lossy()
+        );
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn find_binary_in_path_returns_none_when_only_grove_wrapper_exists() {
+        let root = temp_test_dir("grove-buddy-wrapper");
+        let grove_bin = root.join(".grove").join("bin");
+        let grove_claude = grove_bin.join("claude");
+
+        write_executable(&grove_claude);
+
+        let path = std::env::join_paths([grove_bin.as_path()])
+            .unwrap()
+            .to_string_lossy()
+            .to_string();
+
+        assert_eq!(find_binary_in_path("claude", &path), None);
+
+        fs::remove_dir_all(root).unwrap();
+    }
 }

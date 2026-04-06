@@ -101,6 +101,19 @@ grove-core/src/            # Shared Rust backend (used by both Tauri and Electro
 
 ## Code Style
 
+### Production subprocess PATH
+
+- Grove production builds run as GUI apps, so backend Rust code cannot assume the ambient process `PATH` matches an interactive shell
+- When backend code spawns user-facing tools or resolves binaries (`claude`, `codex`, `bun`, `gh`, etc.), use `grove_core::process_env::enriched_path()` or `grove_core::process_env::subprocess_env_pairs()`
+- Do not rely on plain `which`, `command -v`, or `Command::new(...)` inheriting the app process `PATH` for production-only flows
+- If the code needs shell-derived values, use the helpers in `grove-core/src/process_env.rs` instead of re-deriving environment state locally
+
+### Formatter output
+
+- If you run the project formatter and it rewrites nearby files, treat those edits as part of your change
+- Do not revert formatter-produced hunks just to keep a commit narrower unless the user explicitly asks for that split
+- Do not describe formatter output from your own command as someone else's change; stage and commit it with the functional fix
+
 ### `cn()` for className composition
 
 - If `className` has multiple classes, wrap it in `cn(...)`

@@ -1,10 +1,10 @@
 mod eventbus;
 use grove_core::{
     AppConfig, BehindInfo, BuddyCompanion, BuddySearchFilter, BuddySearchResult, BuddyStatus,
-    CloningProject, CommitInfo, CreatePtyRequest, CreatePtyRestore,
-    CreatePtyResult, DetectedThemeResult, FileDiff, FileStatus, GrovePreferences, IdeMenuItem,
-    Project, PtyBellEvent, SaveTerminalSessionSnapshotRequest, TerminalGcReport,
-    TerminalSessionSnapshot, Worktree, WorktreePullRequest,
+    CloningProject, CommitInfo, CreatePtyRequest, CreatePtyRestore, CreatePtyResult,
+    DetectedThemeResult, FileDiff, FileStatus, GrovePreferences, IdeMenuItem, Project,
+    PtyBellEvent, SaveTerminalSessionSnapshotRequest, TerminalGcReport, TerminalSessionSnapshot,
+    Worktree, WorktreePullRequest,
 };
 use serde::{Deserialize, Serialize};
 use tauri::Emitter;
