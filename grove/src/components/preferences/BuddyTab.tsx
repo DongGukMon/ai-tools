@@ -53,13 +53,13 @@ export default function BuddyTab() {
   >();
   const [selectedEye, setSelectedEye] = useState<BuddyEye | undefined>();
   const [selectedHat, setSelectedHat] = useState<BuddyHat | undefined>();
+  const [selectedShiny, setSelectedShiny] = useState(false);
   const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
     init();
   }, [init]);
 
-  // Sync selectors from current buddy on first load
   useEffect(() => {
     if (status?.currentCompanion && !initialized) {
       const c = status.currentCompanion;
@@ -67,29 +67,29 @@ export default function BuddyTab() {
       setSelectedRarity(c.rarity);
       setSelectedEye(c.eye);
       setSelectedHat(c.hat === "none" ? undefined : c.hat);
+      setSelectedShiny(c.shiny);
       setInitialized(true);
     }
   }, [status, initialized]);
 
-  // Preview companion from current selections
   const previewCompanion = selectedSpecies
     ? {
         species: selectedSpecies,
         rarity: selectedRarity ?? "common",
         eye: selectedEye ?? "\u00B7",
         hat: selectedHat ?? "none",
-        shiny: false,
+        shiny: selectedShiny,
       }
     : null;
 
-  // Check if selection differs from current buddy
   const hasChanges =
     status?.currentCompanion &&
     previewCompanion &&
     (previewCompanion.species !== status.currentCompanion.species ||
       previewCompanion.rarity !== status.currentCompanion.rarity ||
       (selectedEye && selectedEye !== status.currentCompanion.eye) ||
-      (selectedHat && selectedHat !== status.currentCompanion.hat));
+      (selectedHat && selectedHat !== status.currentCompanion.hat) ||
+      selectedShiny !== status.currentCompanion.shiny);
 
   const handleSearch = async () => {
     const result = await search({
@@ -97,6 +97,7 @@ export default function BuddyTab() {
       rarity: selectedRarity,
       eye: selectedEye,
       hat: selectedHat,
+      shiny: selectedShiny || undefined,
     });
     if (result) {
       await apply(result.salt, result.companion);
@@ -116,7 +117,7 @@ export default function BuddyTab() {
 
   return (
     <div>
-      <h3 className={cn("text-sm font-semibold text-foreground mb-6")}>
+      <h3 className={cn("text-sm font-semibold text-foreground mb-4")}>
         Buddy
       </h3>
 
@@ -130,56 +131,51 @@ export default function BuddyTab() {
         </div>
       )}
 
-      {/* Current Buddy */}
-      <div className={cn("mb-6")}>
-        <h4
-          className={cn("text-[12px] font-medium text-foreground mb-1.5")}
-        >
-          Current Buddy
-        </h4>
-        <p className={cn("text-[11px] text-muted-foreground/70 mb-2")}>
-          {(() => {
-            if (hasChanges) return "Preview \u2014 click Find & Apply to change";
-            if (status?.currentCompanion) return "Active buddy in your Claude Code session";
-            return "Select a species and rarity below to find one";
-          })()}
-        </p>
-        {(previewCompanion || status?.currentCompanion) && (
-          <div className={cn("w-[160px]")}>
+      {/* Top row: Current Buddy | Species Gallery */}
+      <div className={cn("flex gap-4 mb-4")}>
+        {/* Left: Current Buddy */}
+        <div className={cn("shrink-0 w-[170px]")}>
+          <h4
+            className={cn("text-[12px] font-medium text-foreground mb-1")}
+          >
+            Current Buddy
+          </h4>
+          <p className={cn("text-[10px] text-muted-foreground/70 mb-2")}>
+            {(() => {
+              if (hasChanges) return "Preview";
+              if (status?.currentCompanion) return "Active";
+              return "Not set";
+            })()}
+          </p>
+          {(previewCompanion || status?.currentCompanion) && (
             <BuddyCard
               companion={previewCompanion ?? status!.currentCompanion!}
               salt={hasChanges ? undefined : (status?.currentSalt ?? undefined)}
             />
+          )}
+        </div>
+
+        {/* Right: Species Gallery (scrollable) */}
+        <div className={cn("flex-1 min-w-0")}>
+          <h4 className={cn("text-[12px] font-medium text-foreground mb-1")}>
+            Choose Species
+          </h4>
+          <div className={cn("overflow-y-auto max-h-[280px] pr-1")}>
+            <SpeciesGallery
+              selected={selectedSpecies}
+              onSelect={setSelectedSpecies}
+            />
           </div>
-        )}
+        </div>
       </div>
 
-      <div className={cn("border-t border-border mb-6")} />
+      <div className={cn("border-t border-border mb-4")} />
 
-      {/* Species Gallery */}
-      <div className={cn("mb-6")}>
-        <h4 className={cn("text-[12px] font-medium text-foreground mb-1.5")}>
-          Choose Species
-        </h4>
-        <p className={cn("text-[11px] text-muted-foreground/70 mb-2")}>
-          Select the companion species you want
-        </p>
-        <SpeciesGallery
-          selected={selectedSpecies}
-          onSelect={setSelectedSpecies}
-        />
-      </div>
-
-      <div className={cn("border-t border-border mb-6")} />
-
-      {/* Rarity Selector */}
-      <div className={cn("mb-6")}>
+      {/* Rarity */}
+      <div className={cn("mb-3")}>
         <h4 className={cn("text-[12px] font-medium text-foreground mb-1.5")}>
           Rarity
         </h4>
-        <p className={cn("text-[11px] text-muted-foreground/70 mb-2")}>
-          Higher rarity buddies have better stats and hats
-        </p>
         <div className={cn("flex gap-1.5 flex-wrap")}>
           {RARITIES.map((r) => (
             <button
@@ -202,14 +198,11 @@ export default function BuddyTab() {
         </div>
       </div>
 
-      {/* Eye Selector */}
-      <div className={cn("mb-6")}>
+      {/* Eyes */}
+      <div className={cn("mb-3")}>
         <h4 className={cn("text-[12px] font-medium text-foreground mb-1.5")}>
           Eyes
         </h4>
-        <p className={cn("text-[11px] text-muted-foreground/70 mb-2")}>
-          Optional — leave unselected for any
-        </p>
         <div className={cn("flex gap-1.5 flex-wrap")}>
           {EYES.map((e) => (
             <button
@@ -234,14 +227,11 @@ export default function BuddyTab() {
         </div>
       </div>
 
-      {/* Hat Selector */}
-      <div className={cn("mb-6")}>
+      {/* Hat */}
+      <div className={cn("mb-3")}>
         <h4 className={cn("text-[12px] font-medium text-foreground mb-1.5")}>
           Hat
         </h4>
-        <p className={cn("text-[11px] text-muted-foreground/70 mb-2")}>
-          Optional — non-common rarities can wear hats
-        </p>
         <div className={cn("flex gap-1.5 flex-wrap")}>
           {HATS.map((h) => (
             <button
@@ -266,7 +256,29 @@ export default function BuddyTab() {
         </div>
       </div>
 
-      <div className={cn("border-t border-border mb-6")} />
+      {/* Shiny */}
+      <div className={cn("mb-4")}>
+        <button
+          type="button"
+          onClick={() => setSelectedShiny(!selectedShiny)}
+          className={cn(
+            "rounded-md border px-3 py-1 text-[11px] transition-colors",
+            {
+              "border-yellow-500/60 bg-yellow-500/10 font-medium text-yellow-400":
+                selectedShiny,
+              "border-border text-muted-foreground hover:border-accent/50":
+                !selectedShiny,
+            },
+          )}
+        >
+          {selectedShiny ? "\u2728 Shiny" : "Shiny"}
+        </button>
+        <span className={cn("ml-2 text-[10px] text-muted-foreground/60")}>
+          1% chance — brute-force may take longer
+        </span>
+      </div>
+
+      <div className={cn("border-t border-border mb-4")} />
 
       {/* Actions */}
       <div className={cn("flex items-center gap-3")}>
@@ -288,12 +300,12 @@ export default function BuddyTab() {
             Restore Original
           </Button>
         )}
+        {searching && (
+          <span className={cn("text-[10px] text-muted-foreground")}>
+            Brute-forcing salt...
+          </span>
+        )}
       </div>
-      {searching && (
-        <p className={cn("mt-2 text-[11px] text-muted-foreground")}>
-          Brute-forcing salt... This usually takes 1-5 seconds.
-        </p>
-      )}
     </div>
   );
 }
