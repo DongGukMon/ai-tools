@@ -56,7 +56,9 @@ const ProjectItem = memo(function ProjectItem({
   const [worktreeName, setWorktreeName] = useState("");
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState("");
-  const { addWorktree, removeProject, renameProject } = useProjectStore();
+  const addWorktree = useProjectStore((s) => s.addWorktree);
+  const removeProject = useProjectStore((s) => s.removeProject);
+  const renameProject = useProjectStore((s) => s.renameProject);
   const { toast } = useToast();
 
   const handleAddWorktree = async (e: React.FormEvent) => {

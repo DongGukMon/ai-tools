@@ -12,7 +12,7 @@ interface Props {
 function AddProjectDialog({ onClose }: Props) {
   const [url, setUrl] = useState("");
   const [error, setError] = useState("");
-  const { startClone } = useProjectStore();
+  const startClone = useProjectStore((s) => s.startClone);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

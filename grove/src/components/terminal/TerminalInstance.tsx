@@ -24,9 +24,10 @@ function TerminalInstance({ paneId, ptyId }: Props) {
   const isFocused = useTerminalStore((s) => s.focusedPtyId === ptyId);
   const setFocusedPtyId = useTerminalStore((s) => s.setFocusedPtyId);
   const mirrorSession = useBroadcastStore((s) => s.mirrors[ptyId] ?? null);
-  const pipSession = useBroadcastStore((s) =>
-    Object.values(s.pips).find((session) => session.ptyId === ptyId) ?? null,
-  );
+  const pipSession = useBroadcastStore((s) => {
+    const worktreePath = s.pipOwnerByPtyId[ptyId];
+    return worktreePath ? (s.pips[worktreePath] ?? null) : null;
+  });
   const isBroadcasting = Boolean(mirrorSession || pipSession);
   const snapshot = mirrorSession?.snapshot ?? pipSession?.snapshot ?? null;
   const markBellPty = useTerminalStore((s) => s.markBellPty);

@@ -14,7 +14,7 @@ function CreateMissionDialog({ onClose }: Props) {
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const { createMission } = useMissionStore();
+  const createMission = useMissionStore((s) => s.createMission);
   const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {

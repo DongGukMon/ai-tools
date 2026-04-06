@@ -14,6 +14,7 @@ export interface BroadcastSession {
 interface BroadcastState {
   mirrors: Record<string, BroadcastSession>;
   pips: Record<string, BroadcastSession>;
+  pipOwnerByPtyId: Record<string, string>;
 
   /**
    * Start or replace a mirror broadcast for a specific PTY.
@@ -58,6 +59,9 @@ interface BroadcastState {
   /** Get the PiP session for a worktree, or null if none is active. */
   getPip: (worktreePath: string | null | undefined) => BroadcastSession | null;
 
+  /** Get the PiP session that owns this PTY, or null if none is active. */
+  getPipByPty: (ptyId: string) => BroadcastSession | null;
+
   /** Check if a specific ptyId is currently broadcasting. */
   isBroadcasting: (ptyId: string) => boolean;
 
@@ -71,6 +75,7 @@ interface BroadcastState {
 export const useBroadcastStore = create<BroadcastState>((set, get) => ({
   mirrors: {},
   pips: {},
+  pipOwnerByPtyId: {},
 
   startMirror: (ptyId, paneId, originalCols, originalRows, snapshot = null) => {
     set((state) => ({
@@ -109,19 +114,29 @@ export const useBroadcastStore = create<BroadcastState>((set, get) => ({
     originalRows,
     snapshot = null,
   ) => {
-    set((state) => ({
-      pips: {
-        ...state.pips,
-        [worktreePath]: {
-          ptyId,
-          paneId,
-          target: "pip",
-          originalCols,
-          originalRows,
-          snapshot,
+    set((state) => {
+      const previous = state.pips[worktreePath];
+      const nextPipOwnerByPtyId = { ...state.pipOwnerByPtyId };
+      if (previous && previous.ptyId !== ptyId) {
+        delete nextPipOwnerByPtyId[previous.ptyId];
+      }
+      nextPipOwnerByPtyId[ptyId] = worktreePath;
+
+      return {
+        pips: {
+          ...state.pips,
+          [worktreePath]: {
+            ptyId,
+            paneId,
+            target: "pip",
+            originalCols,
+            originalRows,
+            snapshot,
+          },
         },
-      },
-    }));
+        pipOwnerByPtyId: nextPipOwnerByPtyId,
+      };
+    });
   },
 
   stopPip: (worktreePath) => {
@@ -130,22 +145,41 @@ export const useBroadcastStore = create<BroadcastState>((set, get) => ({
 
     set((state) => {
       const nextPips = { ...state.pips };
+      const nextPipOwnerByPtyId = { ...state.pipOwnerByPtyId };
       delete nextPips[worktreePath];
-      return { pips: nextPips };
+      delete nextPipOwnerByPtyId[session.ptyId];
+      return {
+        pips: nextPips,
+        pipOwnerByPtyId: nextPipOwnerByPtyId,
+      };
     });
 
     return session;
   },
 
   stopPipByPty: (ptyId) => {
-    const entry = Object.entries(get().pips).find(([, session]) => session.ptyId === ptyId);
-    if (!entry) return null;
+    const worktreePath = get().pipOwnerByPtyId[ptyId];
+    if (!worktreePath) return null;
 
-    const [worktreePath, session] = entry;
+    const session = get().pips[worktreePath];
+    if (!session) {
+      set((state) => {
+        const nextPipOwnerByPtyId = { ...state.pipOwnerByPtyId };
+        delete nextPipOwnerByPtyId[ptyId];
+        return { pipOwnerByPtyId: nextPipOwnerByPtyId };
+      });
+      return null;
+    }
+
     set((state) => {
       const nextPips = { ...state.pips };
+      const nextPipOwnerByPtyId = { ...state.pipOwnerByPtyId };
       delete nextPips[worktreePath];
-      return { pips: nextPips };
+      delete nextPipOwnerByPtyId[ptyId];
+      return {
+        pips: nextPips,
+        pipOwnerByPtyId: nextPipOwnerByPtyId,
+      };
     });
 
     return { worktreePath, session };
@@ -158,12 +192,19 @@ export const useBroadcastStore = create<BroadcastState>((set, get) => ({
     return get().pips[worktreePath] ?? null;
   },
 
+  getPipByPty: (ptyId) => {
+    const state = get();
+    const worktreePath = state.pipOwnerByPtyId[ptyId];
+    if (!worktreePath) {
+      return null;
+    }
+
+    return state.pips[worktreePath] ?? null;
+  },
+
   isBroadcasting: (ptyId) => {
-    const { mirrors, pips } = get();
-    return Boolean(
-      mirrors[ptyId] ||
-      Object.values(pips).some((session) => session.ptyId === ptyId),
-    );
+    const { mirrors, pipOwnerByPtyId } = get();
+    return Boolean(mirrors[ptyId] || pipOwnerByPtyId[ptyId]);
   },
 
   isMirroring: (ptyId) => {

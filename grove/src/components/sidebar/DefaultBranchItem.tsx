@@ -19,8 +19,10 @@ function DefaultBranchItem({ project }: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const [selectorOpen, setSelectorOpen] = useState(false);
   const switchBtnRef = useRef<HTMLButtonElement>(null);
-  const { selectedWorktree, selectWorktree, refreshProject, setBaseBranch } =
-    useProjectStore();
+  const isSelected = useProjectStore((s) => s.selectedWorktree?.path === project.sourcePath);
+  const selectWorktree = useProjectStore((s) => s.selectWorktree);
+  const refreshProject = useProjectStore((s) => s.refreshProject);
+  const setBaseBranch = useProjectStore((s) => s.setBaseBranch);
   const { toast } = useToast();
 
   const displayBranch = project.baseBranch ?? project.resolvedDefaultBranch;
@@ -30,7 +32,6 @@ function DefaultBranchItem({ project }: Props) {
     path: project.sourcePath,
     branch: displayBranch,
   };
-  const isSelected = selectedWorktree?.path === project.sourcePath;
   const hasBell = useWorktreeBell(project.sourcePath);
   const aiSessions = useAiWorktreeSessions(project.sourcePath);
   const handleActivate = useSidebarLeafActivation({

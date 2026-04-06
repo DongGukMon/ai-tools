@@ -35,6 +35,13 @@ describe("collectTerminalPanes", () => {
       { paneId: "pane-c", ptyId: undefined },
     ]);
   });
+
+  it("reuses cached pane entries for the same immutable layout node", () => {
+    const first = collectTerminalPanes(layout);
+    const second = collectTerminalPanes(layout);
+
+    expect(second).toBe(first);
+  });
 });
 
 describe("buildTerminalPaneTopologySignature", () => {

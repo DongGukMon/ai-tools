@@ -21,21 +21,18 @@ export function selectAiWorktreeSessions(
     return EMPTY_SESSIONS;
   }
 
-  return collectTerminalPanes(session).flatMap(({ ptyId }) => {
+  const result: AiSession[] = [];
+  for (const { ptyId } of collectTerminalPanes(session)) {
     const ai = ptyId ? state.aiSessions[ptyId] : undefined;
-    return ai ? [ai] : EMPTY_SESSIONS;
-  });
+    if (ai) result.push(ai);
+  }
+  return result.length > 0 ? result : EMPTY_SESSIONS;
 }
 
 export function useAiWorktreeSessions(worktreePath: string): AiSession[] {
   return useTerminalStore(
     useShallow((state) => selectAiWorktreeSessions(state, worktreePath)),
   );
-}
-
-/** @deprecated Use useAiWorktreeSessions */
-export function useClaudeWorktreeStatus(worktreePath: string): AiSession[] {
-  return useAiWorktreeSessions(worktreePath);
 }
 
 export function selectWorktreeBell(

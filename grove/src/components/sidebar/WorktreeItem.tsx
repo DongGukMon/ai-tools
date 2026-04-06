@@ -62,10 +62,10 @@ function WorktreeItem({
   projectId,
 }: Props) {
   const [removing, setRemoving] = useState(false);
-  const { selectedWorktree, selectWorktree, removeWorktree } =
-    useProjectStore();
+  const isSelected = useProjectStore((s) => s.selectedWorktree?.path === worktree.path);
+  const selectWorktree = useProjectStore((s) => s.selectWorktree);
+  const removeWorktree = useProjectStore((s) => s.removeWorktree);
   const { toast } = useToast();
-  const isSelected = selectedWorktree?.path === worktree.path;
   const hasBell = useWorktreeBell(worktree.path);
   const aiSessions = useAiWorktreeSessions(worktree.path);
   const displayName = worktree.branch || worktree.name;

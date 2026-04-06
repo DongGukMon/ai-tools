@@ -21,6 +21,8 @@ export interface TerminalRestorePlanEntry {
   scrollbackTruncated: boolean;
 }
 
+const paneEntryCache = new WeakMap<SplitNode, TerminalPaneEntry[]>();
+
 function findPaneSnapshot(
   snapshot: TerminalSessionSnapshot | null,
   paneId: string,
@@ -29,11 +31,23 @@ function findPaneSnapshot(
 }
 
 export function collectTerminalPanes(node: SplitNode): TerminalPaneEntry[] {
-  if (node.type === "leaf") {
-    return [{ paneId: node.id, ptyId: node.ptyId }];
+  const cached = paneEntryCache.get(node);
+  if (cached) {
+    return cached;
   }
 
-  return (node.children ?? []).flatMap(collectTerminalPanes);
+  if (node.type === "leaf") {
+    const panes = [{ paneId: node.id, ptyId: node.ptyId }];
+    paneEntryCache.set(node, panes);
+    return panes;
+  }
+
+  const panes: TerminalPaneEntry[] = [];
+  for (const child of node.children ?? []) {
+    panes.push(...collectTerminalPanes(child));
+  }
+  paneEntryCache.set(node, panes);
+  return panes;
 }
 
 export function findFirstTerminalPane(node: SplitNode): TerminalPaneEntry | null {

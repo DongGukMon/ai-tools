@@ -119,6 +119,7 @@ describe("useProjectStore", () => {
     useBroadcastStore.setState({
       mirrors: {},
       pips: {},
+      pipOwnerByPtyId: {},
     });
   });
 

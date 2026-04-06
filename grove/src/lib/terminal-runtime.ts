@@ -72,9 +72,11 @@ function toXtermTheme(theme: TerminalTheme | null) {
 
 const paneSeeds = new Map<string, TerminalPaneSeed>();
 const runtimes = new Map<string, TerminalPaneRuntime>();
+const runtimesByPtyId = new Map<string, TerminalPaneRuntime>();
 const activityListeners = new Set<(activity: TerminalPaneActivity) => void>();
 const LAYOUT_SYNC_RETRY_FRAMES = 3;
 const RUNTIME_RELEASE_GRACE_MS = 50;
+let ptyOutputListenerStarted = false;
 
 function emitTerminalPaneActivity(activity: TerminalPaneActivity) {
   for (const listener of activityListeners) {
@@ -117,6 +119,7 @@ export function acquireTerminalRuntime(
   paneId: string,
   theme: TerminalTheme | null,
 ) {
+  ensurePtyOutputListener();
   let runtime = runtimes.get(paneId);
   if (!runtime) {
     runtime = new TerminalPaneRuntime(paneId, paneSeeds.get(paneId), theme);
@@ -172,6 +175,23 @@ export function shouldDetachTerminalContainer(
   return ownerContainer === undefined || currentContainer === ownerContainer;
 }
 
+function ensurePtyOutputListener() {
+  if (ptyOutputListenerStarted) {
+    return;
+  }
+
+  ptyOutputListenerStarted = true;
+  void platform.listen<{ id: string; data: string }>(
+    "pty-output",
+    (payload) => {
+      runtimesByPtyId.get(payload.id)?.handlePtyOutput(payload.data);
+    },
+  ).catch((error) => {
+    ptyOutputListenerStarted = false;
+    console.error("pty-output listen failed:", error);
+  });
+}
+
 class TerminalPaneRuntime {
   readonly paneId: string;
   readonly term: Terminal;
@@ -206,8 +226,6 @@ class TerminalPaneRuntime {
   private searchHandler: (() => void) | null = null;
   private ownerDocument: Document | null = null;
   private readonly unlistenLayoutSync: () => void;
-
-  private readonly unlistenPromise: Promise<() => void>;
   private readonly dataDisposable: { dispose(): void };
   private readonly bellDisposable: { dispose(): void };
 
@@ -320,35 +338,7 @@ class TerminalPaneRuntime {
         this.bellHandler?.(this.ptyId);
       }
     });
-
-    this.unlistenPromise = platform.listen<{ id: string; data: string }>(
-      "pty-output",
-      (payload) => {
-        if (payload.id !== this.ptyId) {
-          return;
-        }
-
-        try {
-          const binary = atob(payload.data);
-          const bytes = new Uint8Array(binary.length);
-          for (let i = 0; i < binary.length; i++) {
-            bytes[i] = binary.charCodeAt(i);
-          }
-
-          if (this.hydrated) {
-            this.term.write(bytes);
-          } else {
-            this.pendingOutput.push(bytes);
-          }
-          this.reportActivity("output");
-        } catch (error) {
-          console.error("pty-output decode error:", error);
-        }
-      },
-    ).catch((error) => {
-      this.reportError(`Event listen failed: ${error}`);
-      return () => {};
-    });
+    this.syncPtyOutputRoute("", this.ptyId);
   }
 
   retain() {
@@ -376,7 +366,9 @@ class TerminalPaneRuntime {
   }
 
   applySeed(seed: TerminalPaneSeed) {
-    this.ptyId = seed.ptyId ?? this.ptyId;
+    if (seed.ptyId) {
+      this.setPtyId(seed.ptyId);
+    }
     this.launchCwd = seed.launchCwd ?? this.launchCwd;
     if (!this.hydrationStarted && seed.initialScrollback !== undefined) {
       this.initialScrollback = seed.initialScrollback;
@@ -386,11 +378,40 @@ class TerminalPaneRuntime {
   }
 
   setPtyId(ptyId: string) {
+    if (this.ptyId === ptyId) {
+      return;
+    }
+
+    const previousPtyId = this.ptyId;
     this.ptyId = ptyId;
+    this.syncPtyOutputRoute(previousPtyId, ptyId);
   }
 
   getPtyId() {
     return this.ptyId;
+  }
+
+  handlePtyOutput(data: string) {
+    if (this.disposed) {
+      return;
+    }
+
+    try {
+      const binary = atob(data);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+
+      if (this.hydrated) {
+        this.term.write(bytes);
+      } else {
+        this.pendingOutput.push(bytes);
+      }
+      this.reportActivity("output");
+    } catch (error) {
+      console.error("pty-output decode error:", error);
+    }
   }
 
   setTheme(theme: TerminalTheme | null) {
@@ -664,11 +685,6 @@ class TerminalPaneRuntime {
     });
   }
 
-  private reportError(message: string) {
-    this.lastError = message;
-    this.errorHandler?.(message);
-  }
-
   private finishInitialHydration() {
     const source = this.initialScrollbackSource;
     this.initialScrollback = "";
@@ -690,6 +706,16 @@ class TerminalPaneRuntime {
     });
   }
 
+  private syncPtyOutputRoute(previousPtyId: string, nextPtyId: string) {
+    if (previousPtyId && runtimesByPtyId.get(previousPtyId) === this) {
+      runtimesByPtyId.delete(previousPtyId);
+    }
+
+    if (nextPtyId) {
+      runtimesByPtyId.set(nextPtyId, this);
+    }
+  }
+
   private dispose() {
     if (this.disposed) {
       return;
@@ -700,11 +726,7 @@ class TerminalPaneRuntime {
     this.dataDisposable.dispose();
     this.bellDisposable.dispose();
     this.unlistenLayoutSync();
-    this.unlistenPromise.then((unlisten) => {
-      if (typeof unlisten === "function") {
-        unlisten();
-      }
-    });
+    this.syncPtyOutputRoute(this.ptyId, "");
     this.term.dispose();
     paneSeeds.delete(this.paneId);
     runtimes.delete(this.paneId);

@@ -3,7 +3,7 @@ import { useBroadcastStore } from "./broadcast";
 
 describe("BroadcastStore", () => {
   beforeEach(() => {
-    useBroadcastStore.setState({ mirrors: {}, pips: {} });
+    useBroadcastStore.setState({ mirrors: {}, pips: {}, pipOwnerByPtyId: {} });
   });
 
   describe("state transitions", () => {
@@ -53,6 +53,9 @@ describe("BroadcastStore", () => {
         originalRows: 24,
         snapshot: null,
       });
+      expect(useBroadcastStore.getState().pipOwnerByPtyId).toEqual({
+        "pty-1": "/tmp/a",
+      });
     });
 
     it("mirroring → idle for one pty via stopMirror", () => {
@@ -89,6 +92,9 @@ describe("BroadcastStore", () => {
 
       expect(useBroadcastStore.getState().mirrors["pty-1"]?.target).toBe("mirror");
       expect(useBroadcastStore.getState().pips["/tmp/a"]?.ptyId).toBe("pty-3");
+      expect(useBroadcastStore.getState().pipOwnerByPtyId).toEqual({
+        "pty-3": "/tmp/a",
+      });
     });
 
     it("supports independent pip slots per worktree", () => {
@@ -130,6 +136,9 @@ describe("BroadcastStore", () => {
       });
       expect(useBroadcastStore.getState().pips["/tmp/a"]?.ptyId).toBe("pty-1");
       expect(useBroadcastStore.getState().pips["/tmp/b"]).toBeUndefined();
+      expect(useBroadcastStore.getState().pipOwnerByPtyId).toEqual({
+        "pty-1": "/tmp/a",
+      });
     });
   });
 
@@ -169,6 +178,13 @@ describe("BroadcastStore", () => {
       useBroadcastStore.getState().startPip("/tmp/a", "pty-1", "pane-1", 80, 24);
       expect(useBroadcastStore.getState().getPip("/tmp/a")?.ptyId).toBe("pty-1");
       expect(useBroadcastStore.getState().getPip("/tmp/b")).toBeNull();
+    });
+
+    it("getPipByPty returns the pip session via the PTY index", () => {
+      useBroadcastStore.getState().startPip("/tmp/a", "pty-1", "pane-1", 80, 24);
+
+      expect(useBroadcastStore.getState().getPipByPty("pty-1")?.paneId).toBe("pane-1");
+      expect(useBroadcastStore.getState().getPipByPty("missing")).toBeNull();
     });
   });
 
