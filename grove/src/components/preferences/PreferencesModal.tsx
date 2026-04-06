@@ -9,13 +9,15 @@ import { cn } from "../../lib/cn";
 import GeneralTab from "./GeneralTab";
 import TerminalTab from "./TerminalTab";
 import DeveloperTab from "./DeveloperTab";
+import BuddyTab from "./BuddyTab";
 
-type TabId = "general" | "terminal" | "developer";
+type TabId = "general" | "terminal" | "developer" | "buddy";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "general", label: "General" },
   { id: "terminal", label: "Terminal" },
   { id: "developer", label: "Developer" },
+  { id: "buddy", label: "Buddy" },
 ];
 
 interface Props {
@@ -64,6 +66,7 @@ export default function PreferencesModal({ open, onClose }: Props) {
             {activeTab === "general" && <GeneralTab />}
             {activeTab === "terminal" && <TerminalTab />}
             {activeTab === "developer" && <DeveloperTab />}
+            {activeTab === "buddy" && <BuddyTab />}
           </div>
         </div>
       </DialogContent>
