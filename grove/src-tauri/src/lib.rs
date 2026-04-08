@@ -7,6 +7,7 @@ use grove_core::{
     Worktree, WorktreePullRequest,
 };
 use serde::{Deserialize, Serialize};
+use std::ffi::OsString;
 use tauri::Emitter;
 
 // === Async helper ===
@@ -19,6 +20,38 @@ where
     tokio::task::spawn_blocking(f)
         .await
         .map_err(|e| e.to_string())?
+}
+
+const INTERNAL_BUDDY_ENSURE_ARG: &str = "--grove-buddy-ensure-binary";
+
+pub fn run_internal_cli_if_requested() -> Option<i32> {
+    let mut args = std::env::args_os();
+    let _ = args.next();
+    let Some(command) = args.next() else {
+        return None;
+    };
+    if command != OsString::from(INTERNAL_BUDDY_ENSURE_ARG) {
+        return None;
+    }
+
+    let Some(binary_path) = args.next() else {
+        eprintln!("{INTERNAL_BUDDY_ENSURE_ARG} requires a binary path");
+        return Some(2);
+    };
+    if args.next().is_some() {
+        eprintln!("{INTERNAL_BUDDY_ENSURE_ARG} accepts exactly one binary path");
+        return Some(2);
+    }
+
+    grove_core::tool_hooks::ensure_installed();
+    let binary_path = binary_path.to_string_lossy().into_owned();
+    match grove_core::buddy::ensure_buddy_for_binary(&binary_path) {
+        Ok(_) => Some(0),
+        Err(error) => {
+            eprintln!("Grove buddy ensure failed for {binary_path}: {error}");
+            Some(1)
+        }
+    }
 }
 
 // === CONFIG/THEME COMMANDS (W1) ===
@@ -612,6 +645,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .setup(|app| {
+            grove_core::tool_hooks::ensure_installed();
             if let Err(error) = grove_core::pty::cleanup_stale_tmux_sessions_on_startup() {
                 eprintln!(
                     "Warning: failed to clean up stale Grove tmux sessions on startup: {error}"

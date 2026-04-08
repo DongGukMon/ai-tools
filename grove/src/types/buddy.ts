@@ -23,10 +23,24 @@ export interface BuddyConfig {
   salt: string;
   companion: BuddyCompanion;
   patchedAt: string;
+  upgradeRobot?: boolean;
+  originalRobotSprite?: string | null;
+  originalRobotSprites?: string[];
+  lastEnsuredBinary?: BuddyBinaryIdentity | null;
+  lastEnsuredRevision?: number | null;
+}
+
+export interface BuddyBinaryIdentity {
+  path: string;
+  size: number;
+  modifiedUnixSecs: number;
+  versionHint?: string | null;
 }
 
 export interface BuddyStatus {
   binaryPath: string;
+  supported: boolean;
+  supportReason: string | null;
   currentSalt: string | null;
   currentCompanion: BuddyCompanion | null;
   savedConfig: BuddyConfig | null;

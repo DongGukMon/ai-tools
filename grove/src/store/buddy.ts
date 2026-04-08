@@ -17,7 +17,10 @@ interface BuddyStore {
   error: string | null;
 
   init: () => Promise<void>;
-  searchAndApply: (filter: BuddySearchFilter) => Promise<void>;
+  applySelection: (
+    filter: BuddySearchFilter,
+    options: { applyCompanion: boolean; upgradeRobot: boolean | null },
+  ) => Promise<void>;
   restore: () => Promise<void>;
   toggleUpgradeRobot: (enabled: boolean) => Promise<void>;
 }
@@ -38,11 +41,16 @@ export const useBuddyStore = create<BuddyStore>((set, get) => ({
     }
   },
 
-  searchAndApply: async (filter) => {
+  applySelection: async (filter, options) => {
     set({ applying: true, error: null });
     try {
-      const result = await searchBuddy(filter);
-      await applyBuddy(result.salt, result.companion);
+      if (options.applyCompanion) {
+        const result = await searchBuddy(filter);
+        await applyBuddy(result.salt, result.companion);
+      }
+      if (options.upgradeRobot !== null) {
+        await setUpgradeRobot(options.upgradeRobot);
+      }
       const status = await getBuddyStatus();
       set({ status, applying: false });
     } catch (e) {

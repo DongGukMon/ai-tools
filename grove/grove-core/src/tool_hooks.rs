@@ -60,8 +60,13 @@ fn install() -> Result<(), String> {
     let grove_hook = bin_dir.join("grove-hook");
     write_executable(&grove_hook, grove_hook_script())?;
 
+    let grove_app = std::env::current_exe()
+        .map_err(|error| format!("failed to resolve current executable: {error}"))?;
     let claude_wrapper = bin_dir.join("claude");
-    write_executable(&claude_wrapper, &claude_wrapper_script(&grove_hook))?;
+    write_executable(
+        &claude_wrapper,
+        &claude_wrapper_script(&grove_hook, &grove_app),
+    )?;
 
     let codex_wrapper = bin_dir.join("codex");
     write_executable(&codex_wrapper, &codex_wrapper_script())?;
@@ -194,8 +199,9 @@ tmux set-option -q -t "$GROVE_TMUX_SESSION" @grove_ai_status "{tool}:idle" 2>/de
     )
 }
 
-fn claude_wrapper_script(grove_hook_path: &Path) -> String {
+fn claude_wrapper_script(grove_hook_path: &Path, grove_app_path: &Path) -> String {
     let grove_hook_path = grove_hook_path.to_string_lossy();
+    let grove_app_path = grove_app_path.to_string_lossy();
     let find_fn = find_real_binary_fn("claude");
     let lifecycle = grove_lifecycle_trap("claude");
     format!(
@@ -203,6 +209,14 @@ fn claude_wrapper_script(grove_hook_path: &Path) -> String {
 # Grove-managed Claude Code wrapper — lifecycle tracking + hooks for fine-grained status.
 {find_fn}
 REAL_CLAUDE="$(find_real_claude)" || {{ echo "claude: not found" >&2; exit 127; }}
+maybe_ensure_grove_buddy() {{
+  local buddy_config="$HOME/.grove/buddy.json"
+  local grove_app="{grove_app_path}"
+  [ -f "$buddy_config" ] || return 0
+  [ -x "$grove_app" ] || return 0
+  "$grove_app" --grove-buddy-ensure-binary "$REAL_CLAUDE" >/dev/null 2>&1 || true
+}}
+maybe_ensure_grove_buddy
 [ -z "$GROVE_TMUX_SESSION" ] && exec "$REAL_CLAUDE" "$@"
 {lifecycle}
 GROVE_HOOK="{grove_hook_path}"
@@ -326,9 +340,16 @@ mod tests {
     #[test]
     fn claude_wrapper_script_uses_lifecycle_trap_and_hooks() {
         let hook_path = Path::new("/tmp/grove-hook");
-        let script = claude_wrapper_script(hook_path);
+        let grove_app = Path::new("/Applications/grove.app/Contents/MacOS/grove");
+        let script = claude_wrapper_script(hook_path, grove_app);
 
         assert!(script.contains("GROVE_HOOK=\"/tmp/grove-hook\""));
+        assert!(script.contains("maybe_ensure_grove_buddy"));
+        assert!(script.contains("buddy.json"));
+        assert!(script.contains("local grove_app=\"/Applications/grove.app/Contents/MacOS/grove\""));
+        assert!(script.contains(
+            "\"$grove_app\" --grove-buddy-ensure-binary \"$REAL_CLAUDE\" >/dev/null 2>&1 || true"
+        ));
         assert!(script.contains("grove_ai_cleanup"));
         assert!(script.contains("trap grove_ai_cleanup EXIT INT TERM HUP"));
         assert!(script.contains("claude:idle"));

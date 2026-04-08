@@ -107,9 +107,8 @@ export default function BuddyTab() {
   const applying = useBuddyStore((s) => s.applying);
   const error = useBuddyStore((s) => s.error);
   const init = useBuddyStore((s) => s.init);
-  const searchAndApply = useBuddyStore((s) => s.searchAndApply);
+  const applySelection = useBuddyStore((s) => s.applySelection);
   const restore = useBuddyStore((s) => s.restore);
-  const toggleUpgradeRobot = useBuddyStore((s) => s.toggleUpgradeRobot);
 
   const [selectedSpecies, setSelectedSpecies] = useState<BuddySpecies | undefined>();
   const [selectedRarity, setSelectedRarity] = useState<BuddyRarity | undefined>();
@@ -142,22 +141,28 @@ export default function BuddyTab() {
       }
     : null;
 
+  const companionSelectionChanged = companionChanged(
+    previewCompanion,
+    status?.currentCompanion ?? null,
+  );
+  const companionHasChanges = !!status && companionSelectionChanged;
+  const robotUpgradeChanged =
+    !!status && selectedUpgradeRobot !== status.robotUpgraded;
   const hasChanges =
     !!status &&
-    (selectedUpgradeRobot !== status.robotUpgraded ||
-      companionChanged(previewCompanion, status.currentCompanion ?? null));
+    (robotUpgradeChanged || companionHasChanges);
 
   const handleApply = async () => {
-    await searchAndApply({
+    await applySelection({
       species: selectedSpecies,
       rarity: selectedRarity,
       eye: selectedEye,
       hat: selectedHat,
       shiny: selectedShiny || undefined,
+    }, {
+      applyCompanion: companionHasChanges,
+      upgradeRobot: robotUpgradeChanged ? selectedUpgradeRobot : null,
     });
-    if (selectedUpgradeRobot !== status?.robotUpgraded) {
-      await toggleUpgradeRobot(selectedUpgradeRobot);
-    }
   };
 
   if (applying && !status) {
