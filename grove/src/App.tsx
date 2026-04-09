@@ -8,6 +8,7 @@ import { usePreventNativeBehaviors } from "./hooks/usePreventNativeBehaviors";
 import { checkForUpdates } from "./lib/updater";
 import { usePreferencesStore } from "./store/preferences";
 import { useToastStore } from "./store/toast";
+import { useNoteStore } from "./store/note";
 
 function App() {
   usePreventNativeBehaviors();
@@ -33,6 +34,7 @@ function App() {
   }, []);
 
   useEffect(() => { usePreferencesStore.getState().init(); }, []);
+  useEffect(() => { useNoteStore.getState().init(); }, []);
 
   useEffect(() => {
     checkForUpdates((version) => {
