@@ -90,7 +90,7 @@ function DefaultBranchItem({ project }: Props) {
           }
           label={
             <span className={cn("min-w-0 flex-1 truncate")}>
-              {hasNote && "📝 "}{displayBranch}
+              {displayBranch}{hasNote && " 📝"}
               <span className={cn("ml-1 text-muted-foreground/60")}>{branchLabel}</span>
             </span>
           }

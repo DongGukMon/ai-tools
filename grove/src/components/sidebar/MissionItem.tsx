@@ -97,7 +97,7 @@ function MissionItem({ mission }: Props) {
             "text-accent": isMissionSelected,
           })}
         >
-          {hasNote && "📝 "}{mission.name}
+          {mission.name}{hasNote && " 📝"}
         </span>
         {collapsed && mission.projects.length > 0 && (
           <Badge variant="secondary" className={cn("text-[10px] h-4 px-1.5")}>

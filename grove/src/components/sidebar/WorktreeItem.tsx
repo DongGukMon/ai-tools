@@ -112,7 +112,7 @@ function WorktreeItem({
             "text-orange-500": hasBell,
           })} />
         )}
-        label={hasNote ? `📝 ${displayName}` : displayName}
+        label={hasNote ? `${displayName} 📝` : displayName}
         title={worktree.path}
         isSelected={isSelected}
         disabled={removing}
