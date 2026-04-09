@@ -1,4 +1,3 @@
-pub mod buddy;
 pub mod config;
 pub mod git_diff;
 pub mod git_project;
@@ -18,7 +17,6 @@ pub mod worktree_lifecycle;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-pub use buddy::{BuddyCompanion, BuddyConfig, BuddySearchFilter, BuddySearchResult, BuddyStatus};
 pub use config::{
     AppConfig, GrovePreferences, IdeMenuItem, ProjectEnvSyncConfig, TerminalLinkOpenMode,
 };

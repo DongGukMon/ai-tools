@@ -1,13 +1,11 @@
 mod eventbus;
 use grove_core::{
-    AppConfig, BehindInfo, BuddyCompanion, BuddySearchFilter, BuddySearchResult, BuddyStatus,
-    CloningProject, CommitInfo, CreatePtyRequest, CreatePtyRestore, CreatePtyResult,
-    DetectedThemeResult, FileDiff, FileStatus, GrovePreferences, IdeMenuItem, Project,
-    PtyBellEvent, SaveTerminalSessionSnapshotRequest, TerminalGcReport, TerminalSessionSnapshot,
-    Worktree, WorktreePullRequest,
+    AppConfig, BehindInfo, CloningProject, CommitInfo, CreatePtyRequest, CreatePtyRestore,
+    CreatePtyResult, DetectedThemeResult, FileDiff, FileStatus, GrovePreferences, IdeMenuItem,
+    Project, PtyBellEvent, SaveTerminalSessionSnapshotRequest, TerminalGcReport,
+    TerminalSessionSnapshot, Worktree, WorktreePullRequest,
 };
 use serde::{Deserialize, Serialize};
-use std::ffi::OsString;
 use tauri::Emitter;
 
 // === Async helper ===
@@ -20,38 +18,6 @@ where
     tokio::task::spawn_blocking(f)
         .await
         .map_err(|e| e.to_string())?
-}
-
-const INTERNAL_BUDDY_ENSURE_ARG: &str = "--grove-buddy-ensure-binary";
-
-pub fn run_internal_cli_if_requested() -> Option<i32> {
-    let mut args = std::env::args_os();
-    let _ = args.next();
-    let Some(command) = args.next() else {
-        return None;
-    };
-    if command != OsString::from(INTERNAL_BUDDY_ENSURE_ARG) {
-        return None;
-    }
-
-    let Some(binary_path) = args.next() else {
-        eprintln!("{INTERNAL_BUDDY_ENSURE_ARG} requires a binary path");
-        return Some(2);
-    };
-    if args.next().is_some() {
-        eprintln!("{INTERNAL_BUDDY_ENSURE_ARG} accepts exactly one binary path");
-        return Some(2);
-    }
-
-    grove_core::tool_hooks::ensure_installed();
-    let binary_path = binary_path.to_string_lossy().into_owned();
-    match grove_core::buddy::ensure_buddy_for_binary(&binary_path) {
-        Ok(_) => Some(0),
-        Err(error) => {
-            eprintln!("Grove buddy ensure failed for {binary_path}: {error}");
-            Some(1)
-        }
-    }
 }
 
 // === CONFIG/THEME COMMANDS (W1) ===
@@ -105,33 +71,6 @@ async fn save_panel_layouts(layouts: String) -> Result<(), String> {
 #[tauri::command]
 async fn load_panel_layouts() -> Result<String, String> {
     blocking(grove_core::config::load_panel_layouts_impl).await
-}
-
-// === BUDDY COMMANDS ===
-
-#[tauri::command]
-async fn get_buddy_status() -> Result<BuddyStatus, String> {
-    blocking(grove_core::buddy::get_buddy_status_impl).await
-}
-
-#[tauri::command]
-async fn search_buddy(filter: BuddySearchFilter) -> Result<BuddySearchResult, String> {
-    blocking(move || grove_core::buddy::search_buddy_impl(&filter)).await
-}
-
-#[tauri::command]
-async fn apply_buddy(salt: String, companion: BuddyCompanion) -> Result<u32, String> {
-    blocking(move || grove_core::buddy::apply_buddy_impl(&salt, &companion)).await
-}
-
-#[tauri::command]
-async fn restore_buddy() -> Result<bool, String> {
-    blocking(grove_core::buddy::restore_buddy_impl).await
-}
-
-#[tauri::command]
-async fn set_upgrade_robot(enabled: bool) -> Result<bool, String> {
-    blocking(move || grove_core::buddy::set_upgrade_robot_impl(enabled)).await
 }
 
 // === GIT PROJECT COMMANDS (W2) ===
@@ -579,12 +518,6 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             // Config/Theme (W1)
             get_terminal_theme,
-            // Buddy
-            get_buddy_status,
-            search_buddy,
-            apply_buddy,
-            restore_buddy,
-            set_upgrade_robot,
             get_app_config,
             get_grove_preferences,
             get_process_env_diagnostics,

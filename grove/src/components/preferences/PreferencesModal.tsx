@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -9,15 +9,12 @@ import { cn } from "../../lib/cn";
 import GeneralTab from "./GeneralTab";
 import TerminalTab from "./TerminalTab";
 import DeveloperTab from "./DeveloperTab";
-import BuddyTab from "./BuddyTab";
-import { useBuddyStore } from "../../store/buddy";
 
-type TabId = "general" | "terminal" | "developer" | "buddy";
+type TabId = "general" | "terminal" | "developer";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "general", label: "General" },
   { id: "terminal", label: "Terminal" },
-  { id: "buddy", label: "Buddy" },
   { id: "developer", label: "Developer" },
 ];
 
@@ -28,24 +25,6 @@ interface Props {
 
 export default function PreferencesModal({ open, onClose }: Props) {
   const [activeTab, setActiveTab] = useState<TabId>("general");
-  const buddyStatus = useBuddyStore((s) => s.status);
-  const initBuddy = useBuddyStore((s) => s.init);
-  const buddySupported = buddyStatus?.supported === true;
-  const visibleTabs = buddySupported
-    ? TABS
-    : TABS.filter((tab) => tab.id !== "buddy");
-
-  useEffect(() => {
-    if (open) {
-      void initBuddy();
-    }
-  }, [open, initBuddy]);
-
-  useEffect(() => {
-    if (activeTab === "buddy" && !buddySupported) {
-      setActiveTab("general");
-    }
-  }, [activeTab, buddySupported]);
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
@@ -62,7 +41,7 @@ export default function PreferencesModal({ open, onClose }: Props) {
         <div className={cn("flex h-[720px]")}>
           {/* Left: Tab Navigation */}
           <nav className={cn("flex w-[160px] shrink-0 flex-col gap-0.5 border-r border-border bg-secondary/30 p-2 pt-3")}>
-            {visibleTabs.map((tab) => (
+            {TABS.map((tab) => (
               <button
                 key={tab.id}
                 type="button"
@@ -85,7 +64,6 @@ export default function PreferencesModal({ open, onClose }: Props) {
             {activeTab === "general" && <GeneralTab />}
             {activeTab === "terminal" && <TerminalTab />}
             {activeTab === "developer" && <DeveloperTab />}
-            {activeTab === "buddy" && <BuddyTab />}
           </div>
         </div>
       </DialogContent>
