@@ -104,18 +104,16 @@ export function NoteEditorContent({ noteKey, onClose }: NoteEditorContentProps) 
         onChange={handleChange}
         placeholder="Write a note..."
       />
-      <div className={cn("flex items-center justify-between")}>
-        <span className={cn("text-[10px] text-muted-foreground/60")}>Auto-saved</span>
+      <div className={cn("flex justify-end")}>
         <button
           type="button"
           className={cn(
-            "inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-destructive transition-colors",
+            "inline-flex items-center justify-center h-6 w-6 rounded-sm text-muted-foreground hover:text-destructive transition-colors",
           )}
           onClick={handleDelete}
           title="Delete note"
         >
-          <Trash2 className={cn("h-3 w-3")} />
-          Delete
+          <Trash2 className={cn("h-3.5 w-3.5")} />
         </button>
       </div>
     </div>
