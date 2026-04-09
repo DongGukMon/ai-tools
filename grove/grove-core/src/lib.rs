@@ -5,6 +5,7 @@ pub mod git_project;
 pub mod ide;
 pub mod logger;
 pub mod mission;
+pub mod note;
 pub mod process_env;
 pub mod pty;
 pub mod terminal_theme;
