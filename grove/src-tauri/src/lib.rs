@@ -319,6 +319,23 @@ async fn remove_project_from_mission(mission_id: String, project_id: String) -> 
         .await
 }
 
+// === NOTE COMMANDS ===
+
+#[tauri::command]
+async fn list_notes() -> Result<std::collections::HashMap<String, String>, String> {
+    blocking(|| Ok(grove_core::note::load_notes()?.notes)).await
+}
+
+#[tauri::command]
+async fn save_note(key: String, content: String) -> Result<(), String> {
+    blocking(move || grove_core::note::save_note(&key, &content)).await
+}
+
+#[tauri::command]
+async fn delete_note(key: String) -> Result<(), String> {
+    blocking(move || grove_core::note::delete_note(&key)).await
+}
+
 #[tauri::command]
 async fn open_external(url: String) -> Result<(), String> {
     blocking(move || {
@@ -605,6 +622,10 @@ pub fn run() {
             set_mission_collapsed,
             add_project_to_mission,
             remove_project_from_mission,
+            // Note
+            list_notes,
+            save_note,
+            delete_note,
             open_external,
             reveal_in_finder,
             open_in_ide,

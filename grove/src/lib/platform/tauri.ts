@@ -561,6 +561,20 @@ export async function removeProjectFromMission(
   });
 }
 
+// === NOTE COMMANDS ===
+
+export async function listNotes(): Promise<Record<string, string>> {
+  return platform.invoke<Record<string, string>>("list_notes");
+}
+
+export async function saveNote(key: string, content: string): Promise<void> {
+  return platform.invoke("save_note", { key, content });
+}
+
+export async function deleteNote(key: string): Promise<void> {
+  return platform.invoke("delete_note", { key });
+}
+
 // === BUDDY COMMANDS ===
 
 export async function getBuddyStatus(): Promise<BuddyStatus> {
