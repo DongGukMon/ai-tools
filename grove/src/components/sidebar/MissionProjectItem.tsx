@@ -8,6 +8,11 @@ import { overlay } from "../../lib/overlay";
 import { useSidebarLeafActivation } from "../../hooks/useSidebarLeafActivation";
 import SidebarLeafItem from "./SidebarLeafItem";
 import SidebarContextMenu from "./SidebarContextMenu";
+import { AiStatusIcons } from "./WorktreeItem";
+import {
+  useAiWorktreeSessions,
+  useWorktreeBell,
+} from "./worktree-status";
 
 interface Props {
   missionId: string;
@@ -36,6 +41,8 @@ function MissionProjectItem({ missionId, project }: Props) {
     : projectData && `${projectData.org}/${projectData.repo}`;
   const displayName = projectLabel ?? project.branch;
   const disabled = deletingMission || deletingProject;
+  const hasBell = useWorktreeBell(project.path);
+  const aiSessions = useAiWorktreeSessions(project.path);
   const handleActivate = useSidebarLeafActivation({
     disabled,
     isSelected,
@@ -61,12 +68,19 @@ function MissionProjectItem({ missionId, project }: Props) {
   return (
     <SidebarContextMenu path={project.path}>
       <SidebarLeafItem
-        icon={<FolderGit2 className={cn("h-[13px] w-[13px] shrink-0")} />}
+        icon={(
+          <FolderGit2
+            className={cn("h-[13px] w-[13px] shrink-0", {
+              "text-orange-500": hasBell,
+            })}
+          />
+        )}
         label={displayName}
         title={project.path}
         isSelected={isSelected}
         disabled={disabled}
         onActivate={handleActivate}
+        status={<AiStatusIcons sessions={aiSessions} />}
         action={deletingProject ? (
           <Loader2 className={cn("h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground")} />
         ) : (
