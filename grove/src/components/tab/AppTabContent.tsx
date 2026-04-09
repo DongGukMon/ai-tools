@@ -18,6 +18,10 @@ import {
 import { collectTerminalPanes } from "../../lib/terminal-session";
 import { shouldStartPipBroadcast } from "../../lib/broadcast-policy";
 import { cn } from "../../lib/cn";
+import {
+  MIN_PIP_WIDTH,
+  type PipPresentationState,
+} from "../../lib/pip-floating";
 import { requestTerminalLayoutSync } from "../../lib/terminal-layout-sync";
 import TerminalPanel from "../terminal/TerminalPanel";
 import ChangesPanel from "./ChangesPanel";
@@ -45,6 +49,13 @@ function findPaneIdForPty(ptyId: string): string | null {
   return null;
 }
 
+const DEFAULT_PIP_PRESENTATION: PipPresentationState = {
+  dockSide: "right",
+  hidden: false,
+  requestedWidth: MIN_PIP_WIDTH,
+  y: null,
+};
+
 function AppTabContent() {
   const { worktreePath } = useResolvedSidebarSelection();
   const setActiveWorktree = useTabStore((s) => s.setActiveWorktree);
@@ -71,9 +82,12 @@ function AppTabContent() {
   const startPip = useBroadcastStore((s) => s.startPip);
   const stopPip = useBroadcastStore((s) => s.stopPip);
 
-  const [pipDismissedByWorktree, setPipDismissedByWorktree] = useState<Record<string, boolean>>({});
+  const [pipPresentationByWorktree, setPipPresentationByWorktree] = useState<
+    Record<string, PipPresentationState>
+  >({});
   const prevIsTerminalRef = useRef(isTerminal);
   const prevWorktreePathRef = useRef(worktreePath);
+  const pipBoundsRef = useRef<HTMLDivElement>(null);
   const pipContainerRef = useRef<HTMLDivElement>(null);
   const pipRuntimeMapRef = useRef(
     new Map<
@@ -88,9 +102,9 @@ function AppTabContent() {
   );
   const attachedPipSessionRef = useRef<{ worktreePath: string; sessionKey: string } | null>(null);
 
-  const pipDismissed = worktreePath
-    ? (pipDismissedByWorktree[worktreePath] ?? true)
-    : true;
+  const pipPresentation = worktreePath
+    ? (pipPresentationByWorktree[worktreePath] ?? DEFAULT_PIP_PRESENTATION)
+    : DEFAULT_PIP_PRESENTATION;
 
   // PiP broadcast policy
   useEffect(() => {
@@ -279,23 +293,13 @@ function AppTabContent() {
 
   const setActiveTab = useTabStore((s) => s.setActiveTab);
 
-  const handlePipDismiss = useCallback(() => {
+  const updatePipPresentation = useCallback((next: PipPresentationState) => {
     if (!worktreePath) {
       return;
     }
-    setPipDismissedByWorktree((state) => ({
+    setPipPresentationByWorktree((state) => ({
       ...state,
-      [worktreePath]: true,
-    }));
-  }, [worktreePath]);
-
-  const handlePipRestore = useCallback(() => {
-    if (!worktreePath) {
-      return;
-    }
-    setPipDismissedByWorktree((state) => ({
-      ...state,
-      [worktreePath]: false,
+      [worktreePath]: next,
     }));
   }, [worktreePath]);
 
@@ -306,11 +310,11 @@ function AppTabContent() {
   const pipElement = hasPipBroadcast && (
     <PipTerminal
       key={activePipKey ?? "pip"}
+      boundaryRef={pipBoundsRef}
       containerRef={pipContainerRef}
-      dismissed={pipDismissed}
-      onDismiss={handlePipDismiss}
-      onRestore={handlePipRestore}
-      onClickHeader={() => setActiveTab("terminal")}
+      presentation={pipPresentation}
+      onPresentationChange={updatePipPresentation}
+      onOpenTerminal={() => setActiveTab("terminal")}
     />
   );
 
@@ -343,7 +347,10 @@ function AppTabContent() {
   if (!hasGlobalPanel || collapsed) {
     return (
       <div className={cn("flex flex-col flex-1 min-h-0")}>
-        <div className={cn("flex-1 relative overflow-hidden")}>
+        <div
+          ref={pipBoundsRef}
+          className={cn("flex-1 relative overflow-hidden")}
+        >
           {tabContent}
         </div>
         {globalPanel}
@@ -362,7 +369,10 @@ function AppTabContent() {
       onCommit={handleRatioCommit}
     >
       <ResizablePanelGroup.Pane>
-        <div className={cn("relative h-full overflow-hidden")}>
+        <div
+          ref={pipBoundsRef}
+          className={cn("relative h-full overflow-hidden")}
+        >
           {tabContent}
         </div>
       </ResizablePanelGroup.Pane>
