@@ -78,7 +78,11 @@ export function NoteEditorContent({ noteKey, onClose }: NoteEditorContentProps) 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    textareaRef.current?.focus();
+    const el = textareaRef.current;
+    if (el) {
+      el.focus();
+      el.selectionStart = el.selectionEnd = el.value.length;
+    }
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
