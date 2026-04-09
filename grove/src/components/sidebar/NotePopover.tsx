@@ -108,7 +108,7 @@ export function NoteEditorContent({ noteKey, onClose }: NoteEditorContentProps) 
         <button
           type="button"
           className={cn(
-            "inline-flex items-center justify-center h-6 w-6 rounded-sm text-muted-foreground hover:text-destructive transition-colors",
+            "inline-flex items-center justify-center h-6 w-6 rounded-sm cursor-pointer text-muted-foreground hover:text-destructive transition-colors",
           )}
           onClick={handleDelete}
           title="Delete note"
