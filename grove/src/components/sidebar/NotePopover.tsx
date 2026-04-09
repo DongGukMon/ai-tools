@@ -49,7 +49,7 @@ export function NoteIndicator({ noteKey, label }: NoteIndicatorProps) {
           className={cn(
             "shrink-0 inline-flex items-center justify-center transition-colors",
             hasNote || open
-              ? "text-yellow-500/70 hover:text-yellow-500"
+              ? "text-amber-500/70 hover:text-amber-500"
               : "pointer-events-none w-0 overflow-hidden",
           )}
           onClick={(e) => {
