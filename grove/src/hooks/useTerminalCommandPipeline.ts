@@ -13,6 +13,7 @@ import { useBroadcastStore } from "../store/broadcast";
 import { getRuntimeSize, captureRuntimeSnapshot } from "../lib/terminal-runtime";
 import { collectTerminalPanes } from "../lib/terminal-session";
 import { TERMINAL_TOOLBAR_COMMANDS } from "../lib/terminal-command-registry";
+import { getGlobalTerminalMirrorTitle } from "../lib/global-terminal-title";
 import { useTerminal } from "./useTerminal";
 import { countLeaves } from "../lib/split-tree";
 
@@ -65,11 +66,7 @@ export function useTerminalCommandPipeline() {
 
     const worktree = useProjectStore.getState().selectedWorktree;
     const projects = useProjectStore.getState().projects;
-    const project = worktree
-      ? projects.find((p) => p.worktrees.some((w) => w.path === worktree.path))
-      : null;
-    const label = project ? `${project.org}/${project.repo}` : "Terminal";
-    const title = worktree ? `${label} > ${worktree.name}` : label;
+    const title = getGlobalTerminalMirrorTitle(projects, worktree);
 
     const { cols, rows } = getRuntimeSize(paneId);
     const snapshot = captureRuntimeSnapshot(paneId);
