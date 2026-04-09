@@ -61,8 +61,9 @@ export function NoteIndicator({ noteKey, label }: NoteIndicatorProps) {
         </button>
       </PopoverAnchor>
       <PopoverContent
-        side="right"
+        side="bottom"
         align="start"
+        sideOffset={8}
         className={cn("w-72")}
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
