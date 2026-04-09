@@ -72,15 +72,6 @@ function SidebarContextMenu({ path, children, extraItems, noteKey }: SidebarCont
           <Terminal className={cn("mr-1.5 h-3.5 w-3.5")} />
           Open in Global Terminal
         </ContextMenuItem>
-        {noteKey && (
-          <>
-            <ContextMenuSeparator />
-            <ContextMenuItem onSelect={handleOpenNote}>
-              <StickyNote className={cn("mr-1.5 h-3.5 w-3.5")} />
-              Note
-            </ContextMenuItem>
-          </>
-        )}
         {ideMenuItems.length > 0 && <ContextMenuSeparator />}
         {ideMenuItems.map((item) => {
           const entry = getIdeRegistryEntry(item.id);
@@ -97,6 +88,15 @@ function SidebarContextMenu({ path, children, extraItems, noteKey }: SidebarCont
             </ContextMenuItem>
           );
         })}
+        {noteKey && (
+          <>
+            <ContextMenuSeparator />
+            <ContextMenuItem onSelect={handleOpenNote}>
+              <StickyNote className={cn("mr-1.5 h-3.5 w-3.5")} />
+              Note
+            </ContextMenuItem>
+          </>
+        )}
       </ContextMenuContent>
     </ContextMenu>
   );

@@ -110,17 +110,17 @@ function WorktreeItem({
             "text-orange-500": hasBell,
           })} />
         )}
-        label={
-          <span className={cn("min-w-0 flex-1 truncate")}>
-            {displayName}
-            <NoteIndicator noteKey={noteKey} label={displayName} />
-          </span>
-        }
+        label={displayName}
         title={worktree.path}
         isSelected={isSelected}
         disabled={removing}
         onActivate={handleActivate}
-        status={<AiStatusIcons sessions={aiSessions} />}
+        status={
+          <>
+            <NoteIndicator noteKey={noteKey} label={displayName} />
+            <AiStatusIcons sessions={aiSessions} />
+          </>
+        }
         action={removing ? (
           <Loader2 className={cn("h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground")} />
         ) : (

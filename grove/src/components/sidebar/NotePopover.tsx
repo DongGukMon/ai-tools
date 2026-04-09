@@ -44,22 +44,21 @@ export function NoteIndicator({ noteKey, label }: NoteIndicatorProps) {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverAnchor asChild>
-        <span className={cn("inline-flex shrink-0 items-center")}>
-          {hasNote && (
-            <button
-              type="button"
-              className={cn(
-                "ml-1 inline-flex items-center text-yellow-500/80 hover:text-yellow-500 transition-colors",
-              )}
-              onClick={(e) => {
-                e.stopPropagation();
-                setOpen(true);
-              }}
-            >
-              <StickyNote className={cn("h-3 w-3")} />
-            </button>
+        <button
+          type="button"
+          className={cn(
+            "shrink-0 inline-flex items-center justify-center transition-colors",
+            hasNote || open
+              ? "text-yellow-500/70 hover:text-yellow-500"
+              : "pointer-events-none w-0 overflow-hidden",
           )}
-        </span>
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen(true);
+          }}
+        >
+          <StickyNote className={cn("h-[13px] w-[13px]")} />
+        </button>
       </PopoverAnchor>
       <PopoverContent
         side="right"

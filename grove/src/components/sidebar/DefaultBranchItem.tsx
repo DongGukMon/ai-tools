@@ -90,14 +90,18 @@ function DefaultBranchItem({ project }: Props) {
             <span className={cn("min-w-0 flex-1 truncate")}>
               {displayBranch}
               <span className={cn("ml-1 text-muted-foreground/60")}>{branchLabel}</span>
-              <NoteIndicator noteKey={noteKey} label={`${project.repo} (SOT)`} />
             </span>
           }
           title={project.sourcePath}
           isSelected={isSelected}
           disabled={refreshing}
           onActivate={handleActivate}
-          status={<AiStatusIcons sessions={aiSessions} />}
+          status={
+            <>
+              <NoteIndicator noteKey={noteKey} label={`${project.repo} (SOT)`} />
+              <AiStatusIcons sessions={aiSessions} />
+            </>
+          }
           forceShowAction={project.sourceBehindRemote}
           action={
             refreshing ? (

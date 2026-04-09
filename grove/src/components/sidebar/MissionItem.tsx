@@ -103,7 +103,14 @@ function MissionItem({ mission }: Props) {
             {mission.projects.length}
           </Badge>
         )}
-        <div className={cn("ml-auto flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity")}>
+        <div className={cn(
+          "ml-auto flex shrink-0 items-center gap-0.5 overflow-hidden transition-all duration-150",
+          {
+            "max-w-0 opacity-0": !isMissionSelected,
+            "max-w-[50px] opacity-100": isMissionSelected,
+            "group-hover:max-w-[50px] group-hover:opacity-100": true,
+          },
+        )}>
           <IconButton
             onClick={(e) => {
               e.stopPropagation();
