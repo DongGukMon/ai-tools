@@ -7,26 +7,29 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "../ui/context-menu";
+import { Dialog } from "../ui/dialog";
 import { cn } from "../../lib/cn";
 import { openInIde, revealInFinder } from "../../lib/platform";
 import { usePanelLayoutStore } from "../../store/panel-layout";
 import { usePreferencesStore } from "../../store/preferences";
 import { runCommandSafely } from "../../lib/command";
+import { overlay } from "../../lib/overlay";
 import IdeAppIcon from "../ide/IdeAppIcon";
 import {
   getIdeMenuItemDisplayName,
   getIdeRegistryEntry,
 } from "../../lib/ide-registry";
-import { useNoteStore } from "../../store/note";
+import { NoteEditorContent } from "./NotePopover";
 
 interface SidebarContextMenuProps {
   path: string;
   children: ReactNode;
   extraItems?: ReactNode;
   noteKey?: string;
+  noteLabel?: string;
 }
 
-function SidebarContextMenu({ path, children, extraItems, noteKey }: SidebarContextMenuProps) {
+function SidebarContextMenu({ path, children, extraItems, noteKey, noteLabel }: SidebarContextMenuProps) {
   const ideMenuItems = usePreferencesStore((s) => s.ideMenuItems);
 
   const handleRevealInFinder = () => {
@@ -52,7 +55,11 @@ function SidebarContextMenu({ path, children, extraItems, noteKey }: SidebarCont
 
   const handleOpenNote = () => {
     if (noteKey) {
-      useNoteStore.getState().setActiveNoteKey(noteKey);
+      overlay.open<void>(({ close }) => (
+        <Dialog open onClose={close} title={noteLabel ?? "Note"} className="max-w-sm">
+          <NoteEditorContent noteKey={noteKey} onClose={close} />
+        </Dialog>
+      ));
     }
   };
 

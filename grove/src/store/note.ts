@@ -4,14 +4,12 @@ import { runCommandSafely } from "../lib/command";
 
 interface NoteState {
   notes: Record<string, string>;
-  activeNoteKey: string | null;
 
   init: () => Promise<void>;
   saveNote: (key: string, content: string) => void;
   deleteNote: (key: string) => void;
   getNote: (key: string) => string | undefined;
   hasNote: (key: string) => boolean;
-  setActiveNoteKey: (key: string | null) => void;
 }
 
 const saveTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -30,7 +28,6 @@ function debouncedSaveToBackend(key: string, content: string) {
 
 export const useNoteStore = create<NoteState>((set, get) => ({
   notes: {},
-  activeNoteKey: null,
 
   init: async () => {
     const notes = await runCommandSafely(() => platform.listNotes(), {
@@ -70,5 +67,4 @@ export const useNoteStore = create<NoteState>((set, get) => ({
     return note !== undefined && note.trim().length > 0;
   },
 
-  setActiveNoteKey: (key: string | null) => set({ activeNoteKey: key }),
 }));

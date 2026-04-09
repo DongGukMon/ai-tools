@@ -16,7 +16,8 @@ import AddProjectToMissionDialog from "./AddProjectToMissionDialog";
 import { cn } from "../../lib/cn";
 import { overlay } from "../../lib/overlay";
 import SidebarContextMenu from "./SidebarContextMenu";
-import { getNoteKey, NoteIndicator } from "./NotePopover";
+import { getNoteKey } from "./NotePopover";
+import { useNoteStore } from "../../store/note";
 
 interface Props {
   mission: Mission;
@@ -34,6 +35,7 @@ function MissionItem({ mission }: Props) {
 
   const [showAddProject, setShowAddProject] = useState(false);
   const noteKey = getNoteKey({ type: "mission", missionId: mission.id });
+  const hasNote = useNoteStore((s) => s.hasNote(noteKey));
 
   const isMissionSelected =
     selectedItem?.missionId === mission.id && !selectedItem?.projectId;
@@ -64,7 +66,7 @@ function MissionItem({ mission }: Props) {
   };
 
   return (
-    <SidebarContextMenu path={mission.missionDir} noteKey={noteKey}>
+    <SidebarContextMenu path={mission.missionDir} noteKey={noteKey} noteLabel={mission.name}>
     <div className={cn("px-1.5")}>
       <div
         className={cn(
@@ -95,9 +97,8 @@ function MissionItem({ mission }: Props) {
             "text-accent": isMissionSelected,
           })}
         >
-          {mission.name}
+          {hasNote && "📝 "}{mission.name}
         </span>
-        <NoteIndicator noteKey={noteKey} label={mission.name} />
         {collapsed && mission.projects.length > 0 && (
           <Badge variant="secondary" className={cn("text-[10px] h-4 px-1.5")}>
             {mission.projects.length}

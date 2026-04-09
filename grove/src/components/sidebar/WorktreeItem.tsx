@@ -15,7 +15,8 @@ import {
   useWorktreeBell,
 } from "./worktree-status";
 import SidebarContextMenu from "./SidebarContextMenu";
-import { getNoteKey, NoteIndicator } from "./NotePopover";
+import { getNoteKey } from "./NotePopover";
+import { useNoteStore } from "../../store/note";
 
 // ── Icon mapping ──
 
@@ -71,6 +72,7 @@ function WorktreeItem({
   const aiSessions = useAiWorktreeSessions(worktree.path);
   const displayName = worktree.branch || worktree.name;
   const noteKey = getNoteKey({ type: "worktree", projectId, worktreeName: worktree.name });
+  const hasNote = useNoteStore((s) => s.hasNote(noteKey));
   const handleActivate = useSidebarLeafActivation({
     disabled: removing,
     isSelected,
@@ -103,24 +105,19 @@ function WorktreeItem({
   };
 
   return (
-    <SidebarContextMenu path={worktree.path} noteKey={noteKey}>
+    <SidebarContextMenu path={worktree.path} noteKey={noteKey} noteLabel={displayName}>
       <SidebarLeafItem
         icon={(
           <GitBranch className={cn("h-[13px] w-[13px] shrink-0", {
             "text-orange-500": hasBell,
           })} />
         )}
-        label={displayName}
+        label={hasNote ? `📝 ${displayName}` : displayName}
         title={worktree.path}
         isSelected={isSelected}
         disabled={removing}
         onActivate={handleActivate}
-        status={
-          <>
-            <NoteIndicator noteKey={noteKey} label={displayName} />
-            <AiStatusIcons sessions={aiSessions} />
-          </>
-        }
+        status={<AiStatusIcons sessions={aiSessions} />}
         action={removing ? (
           <Loader2 className={cn("h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground")} />
         ) : (
