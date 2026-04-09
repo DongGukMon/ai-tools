@@ -5,6 +5,7 @@ import {
   GitBranch,
   Pencil,
   Settings,
+  Github,
 } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -12,6 +13,8 @@ import type { Project } from "../../types";
 import { useProjectStore } from "../../store/project";
 import { useToast } from "../../store/toast";
 import { overlay } from "../../lib/overlay";
+import { runCommand } from "../../lib/command";
+import { openExternal } from "../../lib/platform";
 import ProjectSettingsDialog from "./ProjectSettingsDialog";
 import {
   ContextMenu,
@@ -25,6 +28,7 @@ import { IconButton } from "../ui/button";
 import { cn } from "../../lib/cn";
 import { sanitizeBranchName } from "../../lib/git-utils";
 import { getProjectDisplayName } from "../../lib/project-view";
+import { getGitHubRepoUrl } from "../../lib/project-remote";
 
 interface Props {
   project: Project;
@@ -79,6 +83,7 @@ const ProjectItem = memo(function ProjectItem({
   };
 
   const displayName = getProjectDisplayName(project, { showOrgPrefix });
+  const githubRepoUrl = getGitHubRepoUrl(project.url);
 
   const handleStartRename = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -101,6 +106,16 @@ const ProjectItem = memo(function ProjectItem({
     overlay.open<boolean>(({ resolve, close }) => (
       <ProjectSettingsDialog projectId={project.id} resolve={resolve} close={close} />
     ));
+  };
+
+  const handleOpenInGitHub = () => {
+    if (!githubRepoUrl) {
+      return;
+    }
+
+    void runCommand(() => openExternal(githubRepoUrl), {
+      errorToast: "Failed to open GitHub repository",
+    });
   };
 
   const handleRemoveProject = async (e: React.MouseEvent) => {
@@ -199,6 +214,12 @@ const ProjectItem = memo(function ProjectItem({
           <Settings className={cn("mr-1.5 h-3.5 w-3.5")} />
           Project Settings
         </ContextMenuItem>
+        {githubRepoUrl && (
+          <ContextMenuItem onSelect={handleOpenInGitHub}>
+            <Github className={cn("mr-1.5 h-3.5 w-3.5")} />
+            Open in GitHub
+          </ContextMenuItem>
+        )}
       </ContextMenuContent>
       </ContextMenu>
 
