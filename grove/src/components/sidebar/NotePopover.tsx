@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Trash2 } from "lucide-react";
+import { Trash2, X } from "lucide-react";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useNoteStore } from "../../store/note";
 import { overlay } from "../../lib/overlay";
-import { Dialog } from "../ui/dialog";
 import { cn } from "../../lib/cn";
 
 // ── Note key helpers ──
@@ -21,13 +21,6 @@ export function getNoteKey(target: NoteTarget): string {
     case "mission":
       return `mission::${target.missionId}`;
   }
-}
-
-// ── NoteEditorContent (for use inside Dialog/overlay) ──
-
-interface NoteEditorContentProps {
-  noteKey: string;
-  onClose: () => void;
 }
 
 // ── NoteEmoji (clickable 📝 that opens note dialog) ──
@@ -62,15 +55,19 @@ export function NoteEmoji({ noteKey, label }: NoteEmojiProps) {
 
 export function openNoteDialog(noteKey: string, label: string) {
   overlay.open<void>(({ close }) => (
-    <Dialog open onClose={close} title={label} className="max-w-sm">
-      <NoteEditorContent noteKey={noteKey} onClose={close} />
-    </Dialog>
+    <NoteDialog noteKey={noteKey} label={label} onClose={close} />
   ));
 }
 
-// ── NoteEditorContent ──
+// ── NoteDialog (flat inline style) ──
 
-export function NoteEditorContent({ noteKey, onClose }: NoteEditorContentProps) {
+interface NoteDialogProps {
+  noteKey: string;
+  label: string;
+  onClose: () => void;
+}
+
+function NoteDialog({ noteKey, label, onClose }: NoteDialogProps) {
   const note = useNoteStore((s) => s.getNote(noteKey));
   const saveNote = useNoteStore((s) => s.saveNote);
   const deleteNote = useNoteStore((s) => s.deleteNote);
@@ -97,29 +94,66 @@ export function NoteEditorContent({ noteKey, onClose }: NoteEditorContentProps) 
   };
 
   return (
-    <div className={cn("flex flex-col gap-2")}>
-      <textarea
-        ref={textareaRef}
-        className={cn(
-          "min-h-[120px] w-full resize-y rounded-md border border-border bg-background px-2 py-1.5 text-xs leading-relaxed",
-          "placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-ring",
-        )}
-        value={value}
-        onChange={handleChange}
-        placeholder="Write a note..."
-      />
-      <div className={cn("flex justify-end")}>
-        <button
-          type="button"
+    <DialogPrimitive.Root open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay
           className={cn(
-            "inline-flex items-center justify-center h-6 w-6 rounded-sm cursor-pointer text-muted-foreground hover:text-destructive transition-colors",
+            "fixed inset-0 z-50 bg-black/35 backdrop-blur-[2px]",
+            "data-[state=open]:animate-in data-[state=closed]:animate-out",
+            "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
           )}
-          onClick={handleDelete}
-          title="Delete note"
+        />
+        <DialogPrimitive.Content
+          className={cn(
+            "fixed top-[50%] left-[50%] z-50 w-full max-w-sm translate-x-[-50%] translate-y-[-50%]",
+            "rounded-lg border border-border bg-popover shadow-lg",
+            "data-[state=open]:animate-in data-[state=closed]:animate-out",
+            "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+            "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
+          )}
         >
-          <Trash2 className={cn("h-3.5 w-3.5")} />
-        </button>
-      </div>
-    </div>
+          <DialogPrimitive.Title className={cn("sr-only")}>{label}</DialogPrimitive.Title>
+          <div className={cn("flex items-center justify-between px-3.5 pt-3 pb-1.5")}>
+            <span className={cn("text-xs font-medium text-accent")}>{label}</span>
+            <div className={cn("flex items-center gap-1")}>
+              <button
+                type="button"
+                className={cn(
+                  "inline-flex items-center justify-center h-5 w-5 rounded-sm cursor-pointer",
+                  "text-muted-foreground/60 hover:text-destructive transition-colors",
+                )}
+                onClick={handleDelete}
+                title="Delete note"
+              >
+                <Trash2 className={cn("h-3 w-3")} />
+              </button>
+              <DialogPrimitive.Close asChild>
+                <button
+                  type="button"
+                  className={cn(
+                    "inline-flex items-center justify-center h-5 w-5 rounded-sm cursor-pointer",
+                    "text-muted-foreground/60 hover:text-foreground transition-colors",
+                  )}
+                >
+                  <X className={cn("h-3.5 w-3.5")} />
+                </button>
+              </DialogPrimitive.Close>
+            </div>
+          </div>
+          <div className={cn("px-3.5 pb-3.5")}>
+            <textarea
+              ref={textareaRef}
+              className={cn(
+                "min-h-[120px] w-full resize-y border-t border-border bg-transparent px-0 pt-2.5 text-xs leading-relaxed",
+                "placeholder:text-muted-foreground/40 focus:outline-none",
+              )}
+              value={value}
+              onChange={handleChange}
+              placeholder="Write a note..."
+            />
+          </div>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 }
