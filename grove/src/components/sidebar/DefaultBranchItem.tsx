@@ -77,7 +77,7 @@ function DefaultBranchItem({ project }: Props) {
 
   return (
     <div>
-      <SidebarContextMenu path={project.sourcePath} noteKey={noteKey} noteLabel={`${project.repo} (SOT)`}>
+      <SidebarContextMenu path={project.sourcePath} noteKey={noteKey} noteLabel={project.repo}>
         <SidebarLeafItem
           icon={
             <GitBranch
@@ -90,7 +90,7 @@ function DefaultBranchItem({ project }: Props) {
             <span className={cn("min-w-0 flex-1 truncate")}>
               {displayBranch}
               <span className={cn("ml-1 text-muted-foreground/60")}>{branchLabel}</span>
-              <NoteEmoji noteKey={noteKey} label={`${project.repo} (SOT)`} />
+              <NoteEmoji noteKey={noteKey} label={project.repo} />
             </span>
           }
           title={project.sourcePath}
