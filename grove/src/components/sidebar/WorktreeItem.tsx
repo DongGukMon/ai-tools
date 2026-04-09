@@ -15,6 +15,7 @@ import {
   useWorktreeBell,
 } from "./worktree-status";
 import SidebarContextMenu from "./SidebarContextMenu";
+import { getNoteKey, NoteIndicator } from "./NotePopover";
 
 // ── Icon mapping ──
 
@@ -69,6 +70,7 @@ function WorktreeItem({
   const hasBell = useWorktreeBell(worktree.path);
   const aiSessions = useAiWorktreeSessions(worktree.path);
   const displayName = worktree.branch || worktree.name;
+  const noteKey = getNoteKey({ type: "worktree", projectId, worktreeName: worktree.name });
   const handleActivate = useSidebarLeafActivation({
     disabled: removing,
     isSelected,
@@ -101,14 +103,19 @@ function WorktreeItem({
   };
 
   return (
-    <SidebarContextMenu path={worktree.path}>
+    <SidebarContextMenu path={worktree.path} noteKey={noteKey}>
       <SidebarLeafItem
         icon={(
           <GitBranch className={cn("h-[13px] w-[13px] shrink-0", {
             "text-orange-500": hasBell,
           })} />
         )}
-        label={displayName}
+        label={
+          <span className={cn("min-w-0 flex-1 truncate")}>
+            {displayName}
+            <NoteIndicator noteKey={noteKey} label={displayName} />
+          </span>
+        }
         title={worktree.path}
         isSelected={isSelected}
         disabled={removing}

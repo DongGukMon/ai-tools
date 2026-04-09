@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { FolderOpen, Terminal } from "lucide-react";
+import { FolderOpen, StickyNote, Terminal } from "lucide-react";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -17,14 +17,16 @@ import {
   getIdeMenuItemDisplayName,
   getIdeRegistryEntry,
 } from "../../lib/ide-registry";
+import { useNoteStore } from "../../store/note";
 
 interface SidebarContextMenuProps {
   path: string;
   children: ReactNode;
   extraItems?: ReactNode;
+  noteKey?: string;
 }
 
-function SidebarContextMenu({ path, children, extraItems }: SidebarContextMenuProps) {
+function SidebarContextMenu({ path, children, extraItems, noteKey }: SidebarContextMenuProps) {
   const ideMenuItems = usePreferencesStore((s) => s.ideMenuItems);
 
   const handleRevealInFinder = () => {
@@ -48,6 +50,12 @@ function SidebarContextMenu({ path, children, extraItems }: SidebarContextMenuPr
     });
   };
 
+  const handleOpenNote = () => {
+    if (noteKey) {
+      useNoteStore.getState().setActiveNoteKey(noteKey);
+    }
+  };
+
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
@@ -64,6 +72,15 @@ function SidebarContextMenu({ path, children, extraItems }: SidebarContextMenuPr
           <Terminal className={cn("mr-1.5 h-3.5 w-3.5")} />
           Open in Global Terminal
         </ContextMenuItem>
+        {noteKey && (
+          <>
+            <ContextMenuSeparator />
+            <ContextMenuItem onSelect={handleOpenNote}>
+              <StickyNote className={cn("mr-1.5 h-3.5 w-3.5")} />
+              Note
+            </ContextMenuItem>
+          </>
+        )}
         {ideMenuItems.length > 0 && <ContextMenuSeparator />}
         {ideMenuItems.map((item) => {
           const entry = getIdeRegistryEntry(item.id);

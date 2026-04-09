@@ -10,6 +10,7 @@ import SidebarLeafItem from "./SidebarLeafItem";
 import { useAiWorktreeSessions, useWorktreeBell } from "./worktree-status";
 import { BranchSelector } from "./BranchSelector";
 import SidebarContextMenu from "./SidebarContextMenu";
+import { getNoteKey, NoteIndicator } from "./NotePopover";
 
 interface Props {
   project: Project;
@@ -34,6 +35,7 @@ function DefaultBranchItem({ project }: Props) {
   };
   const hasBell = useWorktreeBell(project.sourcePath);
   const aiSessions = useAiWorktreeSessions(project.sourcePath);
+  const noteKey = getNoteKey({ type: "sot", projectId: project.id });
   const handleActivate = useSidebarLeafActivation({
     disabled: refreshing,
     isSelected,
@@ -75,7 +77,7 @@ function DefaultBranchItem({ project }: Props) {
 
   return (
     <div>
-      <SidebarContextMenu path={project.sourcePath}>
+      <SidebarContextMenu path={project.sourcePath} noteKey={noteKey}>
         <SidebarLeafItem
           icon={
             <GitBranch
@@ -88,6 +90,7 @@ function DefaultBranchItem({ project }: Props) {
             <span className={cn("min-w-0 flex-1 truncate")}>
               {displayBranch}
               <span className={cn("ml-1 text-muted-foreground/60")}>{branchLabel}</span>
+              <NoteIndicator noteKey={noteKey} label={`${project.repo} (SOT)`} />
             </span>
           }
           title={project.sourcePath}
