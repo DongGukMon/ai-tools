@@ -15,8 +15,7 @@ import {
   useWorktreeBell,
 } from "./worktree-status";
 import SidebarContextMenu from "./SidebarContextMenu";
-import { getNoteKey } from "./NotePopover";
-import { useNoteStore } from "../../store/note";
+import { getNoteKey, NoteEmoji } from "./NotePopover";
 
 // ── Icon mapping ──
 
@@ -72,7 +71,6 @@ function WorktreeItem({
   const aiSessions = useAiWorktreeSessions(worktree.path);
   const displayName = worktree.branch || worktree.name;
   const noteKey = getNoteKey({ type: "worktree", projectId, worktreeName: worktree.name });
-  const hasNote = useNoteStore((s) => s.hasNote(noteKey));
   const handleActivate = useSidebarLeafActivation({
     disabled: removing,
     isSelected,
@@ -112,7 +110,12 @@ function WorktreeItem({
             "text-orange-500": hasBell,
           })} />
         )}
-        label={hasNote ? `${displayName} 📝` : displayName}
+        label={
+          <span className={cn("min-w-0 flex-1 truncate")}>
+            {displayName}
+            <NoteEmoji noteKey={noteKey} label={displayName} />
+          </span>
+        }
         title={worktree.path}
         isSelected={isSelected}
         disabled={removing}

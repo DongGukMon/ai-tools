@@ -10,8 +10,7 @@ import SidebarLeafItem from "./SidebarLeafItem";
 import { useAiWorktreeSessions, useWorktreeBell } from "./worktree-status";
 import { BranchSelector } from "./BranchSelector";
 import SidebarContextMenu from "./SidebarContextMenu";
-import { getNoteKey } from "./NotePopover";
-import { useNoteStore } from "../../store/note";
+import { getNoteKey, NoteEmoji } from "./NotePopover";
 
 interface Props {
   project: Project;
@@ -37,7 +36,6 @@ function DefaultBranchItem({ project }: Props) {
   const hasBell = useWorktreeBell(project.sourcePath);
   const aiSessions = useAiWorktreeSessions(project.sourcePath);
   const noteKey = getNoteKey({ type: "sot", projectId: project.id });
-  const hasNote = useNoteStore((s) => s.hasNote(noteKey));
   const handleActivate = useSidebarLeafActivation({
     disabled: refreshing,
     isSelected,
@@ -90,8 +88,9 @@ function DefaultBranchItem({ project }: Props) {
           }
           label={
             <span className={cn("min-w-0 flex-1 truncate")}>
-              {displayBranch}{hasNote && " 📝"}
+              {displayBranch}
               <span className={cn("ml-1 text-muted-foreground/60")}>{branchLabel}</span>
+              <NoteEmoji noteKey={noteKey} label={`${project.repo} (SOT)`} />
             </span>
           }
           title={project.sourcePath}

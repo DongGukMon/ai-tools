@@ -7,19 +7,17 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "../ui/context-menu";
-import { Dialog } from "../ui/dialog";
 import { cn } from "../../lib/cn";
 import { openInIde, revealInFinder } from "../../lib/platform";
 import { usePanelLayoutStore } from "../../store/panel-layout";
 import { usePreferencesStore } from "../../store/preferences";
 import { runCommandSafely } from "../../lib/command";
-import { overlay } from "../../lib/overlay";
 import IdeAppIcon from "../ide/IdeAppIcon";
 import {
   getIdeMenuItemDisplayName,
   getIdeRegistryEntry,
 } from "../../lib/ide-registry";
-import { NoteEditorContent } from "./NotePopover";
+import { openNoteDialog } from "./NotePopover";
 
 interface SidebarContextMenuProps {
   path: string;
@@ -55,11 +53,7 @@ function SidebarContextMenu({ path, children, extraItems, noteKey, noteLabel }: 
 
   const handleOpenNote = () => {
     if (noteKey) {
-      overlay.open<void>(({ close }) => (
-        <Dialog open onClose={close} title={noteLabel ?? "Note"} className="max-w-sm">
-          <NoteEditorContent noteKey={noteKey} onClose={close} />
-        </Dialog>
-      ));
+      openNoteDialog(noteKey, noteLabel ?? "Note");
     }
   };
 
