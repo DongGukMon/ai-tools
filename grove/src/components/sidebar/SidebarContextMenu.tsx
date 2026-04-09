@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { FolderOpen, StickyNote, Terminal } from "lucide-react";
+import { FileText, FolderOpen, Terminal } from "lucide-react";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -92,7 +92,7 @@ function SidebarContextMenu({ path, children, extraItems, noteKey }: SidebarCont
           <>
             <ContextMenuSeparator />
             <ContextMenuItem onSelect={handleOpenNote}>
-              <StickyNote className={cn("mr-1.5 h-3.5 w-3.5")} />
+              <FileText className={cn("mr-1.5 h-3.5 w-3.5")} />
               Note
             </ContextMenuItem>
           </>

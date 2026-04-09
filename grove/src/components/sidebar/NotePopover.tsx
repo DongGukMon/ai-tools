@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { StickyNote, Trash2 } from "lucide-react";
+import { FileText, Trash2 } from "lucide-react";
 import { Popover, PopoverAnchor, PopoverContent } from "../ui/popover";
 import { useNoteStore } from "../../store/note";
 import { cn } from "../../lib/cn";
@@ -57,7 +57,7 @@ export function NoteIndicator({ noteKey, label }: NoteIndicatorProps) {
             setOpen(true);
           }}
         >
-          <StickyNote className={cn("h-[13px] w-[13px]")} />
+          <FileText className={cn("h-[13px] w-[13px]")} />
         </button>
       </PopoverAnchor>
       <PopoverContent
