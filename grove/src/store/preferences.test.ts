@@ -17,6 +17,7 @@ describe("usePreferencesStore", () => {
       collapsedProjectOrgs: [],
       projectOrgOrder: [],
       ideMenuItems: [],
+      gitGuiMenuItems: [],
       loaded: false,
     });
   });
@@ -34,6 +35,7 @@ describe("usePreferencesStore", () => {
       collapsedProjectOrgs: [],
       projectOrgOrder: [],
       ideMenuItems: [],
+      gitGuiMenuItems: [],
       loaded: true,
     });
   });

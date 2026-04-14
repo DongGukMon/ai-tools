@@ -15,7 +15,7 @@ enum MacOsLaunchTarget {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct IdeDefinition {
+struct MenuItemDefinition {
     id: &'static str,
     macos_targets: &'static [MacOsLaunchTarget],
     non_macos_commands: &'static [&'static str],
@@ -43,6 +43,14 @@ const CURSOR_MACOS_TARGETS: &[MacOsLaunchTarget] = &[MacOsLaunchTarget::AppName(
 const VSCODE_MACOS_TARGETS: &[MacOsLaunchTarget] =
     &[MacOsLaunchTarget::AppName("Visual Studio Code")];
 const SUBLIME_MACOS_TARGETS: &[MacOsLaunchTarget] = &[MacOsLaunchTarget::AppName("Sublime Text")];
+const SOURCETREE_MACOS_TARGETS: &[MacOsLaunchTarget] = &[
+    MacOsLaunchTarget::AppName("Sourcetree"),
+    MacOsLaunchTarget::BundleId("com.torusknot.SourceTreeNotMAS"),
+];
+const FORK_MACOS_TARGETS: &[MacOsLaunchTarget] = &[
+    MacOsLaunchTarget::AppName("Fork"),
+    MacOsLaunchTarget::BundleId("com.DanPristupov.Fork"),
+];
 const WEBSTORM_MACOS_TARGETS: &[MacOsLaunchTarget] = &[
     MacOsLaunchTarget::AppName("WebStorm"),
     MacOsLaunchTarget::BundleId("com.jetbrains.WebStorm"),
@@ -54,41 +62,51 @@ const INTELLIJ_MACOS_TARGETS: &[MacOsLaunchTarget] = &[
     MacOsLaunchTarget::AppName("IntelliJ IDEA CE"),
 ];
 
-const IDE_DEFINITIONS: &[IdeDefinition] = &[
-    IdeDefinition {
+const MENU_ITEM_DEFINITIONS: &[MenuItemDefinition] = &[
+    MenuItemDefinition {
         id: "webstorm",
         macos_targets: WEBSTORM_MACOS_TARGETS,
         non_macos_commands: &["webstorm"],
     },
-    IdeDefinition {
+    MenuItemDefinition {
         id: "vscode",
         macos_targets: VSCODE_MACOS_TARGETS,
         non_macos_commands: &["code"],
     },
-    IdeDefinition {
+    MenuItemDefinition {
         id: "xcode",
         macos_targets: XCODE_MACOS_TARGETS,
         non_macos_commands: &[],
     },
-    IdeDefinition {
+    MenuItemDefinition {
         id: "android-studio",
         macos_targets: ANDROID_STUDIO_MACOS_TARGETS,
         non_macos_commands: &["studio"],
     },
-    IdeDefinition {
+    MenuItemDefinition {
         id: "intellij",
         macos_targets: INTELLIJ_MACOS_TARGETS,
         non_macos_commands: &["idea", "intellij-idea-ultimate", "intellij-idea-community"],
     },
-    IdeDefinition {
+    MenuItemDefinition {
         id: "cursor",
         macos_targets: CURSOR_MACOS_TARGETS,
         non_macos_commands: &["cursor"],
     },
-    IdeDefinition {
+    MenuItemDefinition {
         id: "sublime",
         macos_targets: SUBLIME_MACOS_TARGETS,
         non_macos_commands: &["subl"],
+    },
+    MenuItemDefinition {
+        id: "sourcetree",
+        macos_targets: SOURCETREE_MACOS_TARGETS,
+        non_macos_commands: &[],
+    },
+    MenuItemDefinition {
+        id: "fork",
+        macos_targets: FORK_MACOS_TARGETS,
+        non_macos_commands: &[],
     },
 ];
 
@@ -104,11 +122,11 @@ pub fn open_in_ide_menu_item(path: &str, ide_menu_item: &IdeMenuItem) -> Result<
     }
 
     Err(last_error
-        .unwrap_or_else(|| format!("Failed to launch IDE menu item '{}'", ide_menu_item.id)))
+        .unwrap_or_else(|| format!("Failed to launch menu item '{}'", ide_menu_item.id)))
 }
 
-fn ide_definition(id: &str) -> Option<IdeDefinition> {
-    IDE_DEFINITIONS
+fn menu_item_definition(id: &str) -> Option<MenuItemDefinition> {
+    MENU_ITEM_DEFINITIONS
         .iter()
         .copied()
         .find(|definition| definition.id == id)
@@ -192,8 +210,8 @@ fn resolve_macos_launch_commands(
     ide_menu_item: &IdeMenuItem,
     path: &str,
 ) -> Result<Vec<LaunchCommand>, String> {
-    let definition = ide_definition(&ide_menu_item.id)
-        .ok_or_else(|| format!("Unsupported IDE menu item '{}'", ide_menu_item.id))?;
+    let definition = menu_item_definition(&ide_menu_item.id)
+        .ok_or_else(|| format!("Unsupported menu item '{}'", ide_menu_item.id))?;
 
     Ok(definition
         .macos_targets
@@ -209,12 +227,12 @@ fn resolve_non_macos_launch_commands(
     ide_menu_item: &IdeMenuItem,
     path: &str,
 ) -> Result<Vec<LaunchCommand>, String> {
-    let definition = ide_definition(&ide_menu_item.id)
-        .ok_or_else(|| format!("Unsupported IDE menu item '{}'", ide_menu_item.id))?;
+    let definition = menu_item_definition(&ide_menu_item.id)
+        .ok_or_else(|| format!("Unsupported menu item '{}'", ide_menu_item.id))?;
 
     if definition.non_macos_commands.is_empty() {
         return Err(format!(
-            "IDE menu item '{}' is only supported on macOS",
+            "Menu item '{}' is only supported on macOS",
             ide_menu_item.id
         ));
     }
@@ -255,10 +273,10 @@ fn cli_command(program: &str, path: &str) -> LaunchCommand {
 
 fn parse_open_command(open_command: &str, path: &str) -> Result<LaunchCommand, String> {
     let parts = shlex::split(open_command)
-        .ok_or_else(|| format!("Invalid IDE menu item openCommand: {open_command}"))?;
+        .ok_or_else(|| format!("Invalid menu item openCommand: {open_command}"))?;
     let (program, args) = parts
         .split_first()
-        .ok_or_else(|| "IDE menu item openCommand cannot be empty".to_string())?;
+        .ok_or_else(|| "Menu item openCommand cannot be empty".to_string())?;
     let mut full_args = args.to_vec();
     full_args.push(path.to_string());
     Ok(LaunchCommand {
@@ -425,6 +443,62 @@ mod tests {
                         "/tmp/project".into()
                     ],
                     display: r#"open -a "IntelliJ IDEA CE""#.into(),
+                    wait_for_exit: true,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn resolve_launch_commands_supports_sourcetree_on_macos() {
+        assert_eq!(
+            resolve_launch_commands(
+                &ide_menu_item("sourcetree"),
+                IdeLaunchPlatform::MacOs,
+                "/tmp/project"
+            )
+            .unwrap(),
+            vec![
+                LaunchCommand {
+                    program: "open".into(),
+                    args: vec!["-a".into(), "Sourcetree".into(), "/tmp/project".into()],
+                    display: r#"open -a "Sourcetree""#.into(),
+                    wait_for_exit: true,
+                },
+                LaunchCommand {
+                    program: "open".into(),
+                    args: vec![
+                        "-b".into(),
+                        "com.torusknot.SourceTreeNotMAS".into(),
+                        "/tmp/project".into()
+                    ],
+                    display: "open -b com.torusknot.SourceTreeNotMAS".into(),
+                    wait_for_exit: true,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn resolve_launch_commands_supports_fork_on_macos() {
+        assert_eq!(
+            resolve_launch_commands(&ide_menu_item("fork"), IdeLaunchPlatform::MacOs, "/tmp/project")
+                .unwrap(),
+            vec![
+                LaunchCommand {
+                    program: "open".into(),
+                    args: vec!["-a".into(), "Fork".into(), "/tmp/project".into()],
+                    display: r#"open -a "Fork""#.into(),
+                    wait_for_exit: true,
+                },
+                LaunchCommand {
+                    program: "open".into(),
+                    args: vec![
+                        "-b".into(),
+                        "com.DanPristupov.Fork".into(),
+                        "/tmp/project".into()
+                    ],
+                    display: "open -b com.DanPristupov.Fork".into(),
                     wait_for_exit: true,
                 },
             ]

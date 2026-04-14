@@ -67,6 +67,8 @@ pub struct GrovePreferences {
     pub collapsed_project_orgs: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub project_org_order: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub git_gui_menu_items: Vec<IdeMenuItem>,
     pub ide_menu_items: Vec<IdeMenuItem>,
     #[serde(rename = "preferredIde", default, skip_serializing)]
     legacy_preferred_ide: Option<IdeMenuItem>,
@@ -78,6 +80,7 @@ impl PartialEq for GrovePreferences {
             && self.project_view_mode == other.project_view_mode
             && self.collapsed_project_orgs == other.collapsed_project_orgs
             && self.project_org_order == other.project_org_order
+            && self.git_gui_menu_items == other.git_gui_menu_items
             && self.ide_menu_items == other.ide_menu_items
     }
 }
@@ -97,6 +100,7 @@ impl GrovePreferences {
             .into_iter()
             .filter(|org| !org.trim().is_empty())
             .collect();
+        self.git_gui_menu_items = normalize_git_gui_menu_items(self.git_gui_menu_items);
         self.ide_menu_items = normalize_ide_menu_items(self.ide_menu_items);
         self.legacy_preferred_ide = None;
         self
@@ -110,6 +114,11 @@ impl Default for GrovePreferences {
             project_view_mode: ProjectViewMode::Default,
             collapsed_project_orgs: Vec::new(),
             project_org_order: Vec::new(),
+            git_gui_menu_items: vec![IdeMenuItem {
+                id: "sourcetree".into(),
+                display_name: None,
+                open_command: None,
+            }],
             ide_menu_items: vec![IdeMenuItem {
                 id: "webstorm".into(),
                 display_name: None,
@@ -290,12 +299,19 @@ fn is_supported_ide_menu_item_id(id: &str) -> bool {
     )
 }
 
-fn normalize_ide_menu_items(items: Vec<IdeMenuItem>) -> Vec<IdeMenuItem> {
+fn is_supported_git_gui_menu_item_id(id: &str) -> bool {
+    matches!(id, "sourcetree" | "fork")
+}
+
+fn normalize_menu_items(
+    items: Vec<IdeMenuItem>,
+    is_supported_id: fn(&str) -> bool,
+) -> Vec<IdeMenuItem> {
     let mut normalized = Vec::new();
 
     for item in items {
         let id = item.id.trim();
-        if id.is_empty() || !is_supported_ide_menu_item_id(id) {
+        if id.is_empty() || !is_supported_id(id) {
             continue;
         }
 
@@ -314,6 +330,14 @@ fn normalize_ide_menu_items(items: Vec<IdeMenuItem>) -> Vec<IdeMenuItem> {
     }
 
     normalized
+}
+
+fn normalize_ide_menu_items(items: Vec<IdeMenuItem>) -> Vec<IdeMenuItem> {
+    normalize_menu_items(items, is_supported_ide_menu_item_id)
+}
+
+fn normalize_git_gui_menu_items(items: Vec<IdeMenuItem>) -> Vec<IdeMenuItem> {
+    normalize_menu_items(items, is_supported_git_gui_menu_item_id)
 }
 
 fn terminal_session_snapshots_path() -> Result<PathBuf, String> {
@@ -641,6 +665,11 @@ mod tests {
             project_view_mode: ProjectViewMode::GroupByOrgs,
             collapsed_project_orgs: vec!["sendbird".into()],
             project_org_order: vec!["bang9".into(), "sendbird".into()],
+            git_gui_menu_items: vec![IdeMenuItem {
+                id: "sourcetree".into(),
+                display_name: Some("Sourcetree".into()),
+                open_command: None,
+            }],
             ide_menu_items: vec![IdeMenuItem {
                 id: "cursor".into(),
                 display_name: Some("Cursor".into()),
@@ -875,6 +904,38 @@ mod tests {
                 .map(|item| item.id)
                 .collect::<Vec<_>>(),
             vec!["cursor", "webstorm"]
+        );
+
+        let _ = fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn load_app_config_filters_unsupported_git_gui_menu_items() {
+        let path = temp_config_path();
+        write_fixture(
+            &path,
+            r#"{
+  "preferences": {
+    "gitGuiMenuItems": [
+      { "id": "tower" },
+      { "id": "sourcetree" },
+      { "id": "fork" },
+      { "id": "zed" }
+    ]
+  }
+}"#,
+        );
+
+        let app_config = load_app_config_from_path(&path);
+
+        assert_eq!(
+            app_config
+                .preferences
+                .git_gui_menu_items
+                .into_iter()
+                .map(|item| item.id)
+                .collect::<Vec<_>>(),
+            vec!["sourcetree", "fork"]
         );
 
         let _ = fs::remove_dir_all(path.parent().unwrap());

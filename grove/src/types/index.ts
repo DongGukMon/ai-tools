@@ -43,12 +43,15 @@ export interface IdeMenuItem {
   openCommand?: string;
 }
 
+export type GitGuiMenuItem = IdeMenuItem;
+
 export interface GrovePreferences {
   terminalLinkOpenMode: TerminalLinkOpenMode;
   projectViewMode: ProjectViewMode;
   collapsedProjectOrgs: string[];
   projectOrgOrder: string[];
   ideMenuItems: IdeMenuItem[];
+  gitGuiMenuItems: GitGuiMenuItem[];
 }
 
 export interface AppConfig {

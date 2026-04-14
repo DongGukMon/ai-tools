@@ -1,5 +1,5 @@
 import type { IdeMenuItem } from "../types";
-import webstormIcon from "../assets/ide-icons/webstorm.png";
+import webstormIcon from "../assets/ide-icons/webstorm.svg";
 import vscodeIcon from "../assets/ide-icons/vscode.png";
 import xcodeIcon from "../assets/ide-icons/xcode.png";
 import androidStudioIcon from "../assets/ide-icons/android-studio.svg";

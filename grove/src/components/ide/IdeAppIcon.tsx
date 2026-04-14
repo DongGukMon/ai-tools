@@ -1,13 +1,20 @@
 import { Code2 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { cn } from "../../lib/cn";
 
 interface IdeAppIconProps {
   iconSrc?: string;
   label: string;
   className?: string;
+  fallbackIcon?: LucideIcon;
 }
 
-export default function IdeAppIcon({ iconSrc, label, className }: IdeAppIconProps) {
+export default function IdeAppIcon({
+  iconSrc,
+  label,
+  className,
+  fallbackIcon: FallbackIcon = Code2,
+}: IdeAppIconProps) {
   if (iconSrc) {
     return (
       <img
@@ -28,7 +35,7 @@ export default function IdeAppIcon({ iconSrc, label, className }: IdeAppIconProp
         className,
       )}
     >
-      <Code2 className={cn("size-[70%]")} />
+      <FallbackIcon className={cn("size-[70%]")} />
     </div>
   );
 }

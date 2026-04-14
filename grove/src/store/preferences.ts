@@ -12,6 +12,7 @@ interface PreferencesStore {
   collapsedProjectOrgs: string[];
   projectOrgOrder: string[];
   ideMenuItems: GrovePreferences["ideMenuItems"];
+  gitGuiMenuItems: GrovePreferences["gitGuiMenuItems"];
   loaded: boolean;
   init: () => Promise<void>;
   setTerminalLinkOpenMode: (mode: TerminalLinkOpenMode) => void;
@@ -19,6 +20,7 @@ interface PreferencesStore {
   setProjectOrgCollapsed: (org: string, collapsed: boolean) => void;
   setProjectOrgOrder: (orgOrder: string[]) => void;
   setIdeMenuItems: (items: GrovePreferences["ideMenuItems"]) => void;
+  setGitGuiMenuItems: (items: GrovePreferences["gitGuiMenuItems"]) => void;
 }
 
 function toSaveable(get: () => PreferencesStore): GrovePreferences {
@@ -28,6 +30,7 @@ function toSaveable(get: () => PreferencesStore): GrovePreferences {
     collapsedProjectOrgs: get().collapsedProjectOrgs,
     projectOrgOrder: get().projectOrgOrder,
     ideMenuItems: get().ideMenuItems,
+    gitGuiMenuItems: get().gitGuiMenuItems,
   };
 }
 
@@ -39,6 +42,7 @@ function normalizePreferences(prefs: GrovePreferences): GrovePreferences {
     collapsedProjectOrgs: prefs.collapsedProjectOrgs ?? [],
     projectOrgOrder: prefs.projectOrgOrder ?? [],
     ideMenuItems: prefs.ideMenuItems ?? [],
+    gitGuiMenuItems: prefs.gitGuiMenuItems ?? [],
   };
 }
 
@@ -48,6 +52,7 @@ export const usePreferencesStore = create<PreferencesStore>((set, get) => ({
   collapsedProjectOrgs: [],
   projectOrgOrder: [],
   ideMenuItems: [],
+  gitGuiMenuItems: [],
   loaded: false,
 
   init: async () => {
@@ -81,6 +86,11 @@ export const usePreferencesStore = create<PreferencesStore>((set, get) => ({
 
   setIdeMenuItems: (items) => {
     set({ ideMenuItems: items });
+    saveGrovePreferences(toSaveable(get)).catch(() => {});
+  },
+
+  setGitGuiMenuItems: (items) => {
+    set({ gitGuiMenuItems: items });
     saveGrovePreferences(toSaveable(get)).catch(() => {});
   },
 }));
